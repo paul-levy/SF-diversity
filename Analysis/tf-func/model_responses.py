@@ -430,19 +430,15 @@ def setModel(cellNum, fitIter, subsetFrac):
     # 09 = early additive noise
     # 10 = late additive noise
     # 11 = variance of response gain    
-    # 12 = asymmetry suppressive signal
-    #n_params = 13;
-    #mod_params  = tf.Variable(tf.zeros(n_params));
-    
-    # initial values for cell 5 #4...
+    # 12 = asymmetry suppressive signal    
     curr_params = S['sfm']['mod']['fit']['params'];
     
     pref_ori = curr_params[0]; #121.41963; #99.72;
     pref_sf = curr_params[1]; #3.6611717; #4.2243;
     aRatSp = curr_params[2]; #4.3432555; #0.1111;
     dOrdSp = curr_params[3]; #1.7537324; #1.0288;
-    ds = curr_params[4]; 0.93644625; #0.0890;
-    gainInh = curr_params[5] #;-0.0027404986; #-0.0484;
+    ds = curr_params[4]; #0.93644625; #0.0890;
+    gainInh = curr_params[5]; #-0.0027404986; #-0.0484;
     normConst = curr_params[6]; #-0.34451148; #0.1295;
     respExp = curr_params[7];# 1.0000211; #1.1786;
     respScal = curr_params[8]; #285.66949; #1.2363e+03;
@@ -507,9 +503,10 @@ def setModel(cellNum, fitIter, subsetFrac):
     #########
     # Set up the network!
     #########
-    subsetShape = [fixedTf.shape[0], round(fixedTf.shape[-1]*subsetFrac)];
+    #subsetShape = [fixedTf.shape[0], round(fixedTf.shape[-1]*subsetFrac)];
     ph_stimOr = tf.placeholder(tf.float32);
-    ph_stimTf = tf.placeholder(tf.float32, shape=subsetShape);
+    ph_stimTf = tf.placeholder(tf.float32, shape=fixedTf.shape);
+    #ph_stimTf = tf.placeholder(tf.float32, shape=subsetShape);
     ph_stimCo = tf.placeholder(tf.float32);
     ph_stimSf = tf.placeholder(tf.float32);
     ph_stimPh = tf.placeholder(tf.float32);
@@ -537,6 +534,7 @@ def setModel(cellNum, fitIter, subsetFrac):
     for i in range(fitIter):
         
         # resample data...
+        '''
         trialsToPick = numpy.random.randint(0, fixedOr.shape[-1], subsetShape[-1]);
         subsetOr = fixedOr[:,trialsToPick];
         subsetTf = fixedTf[:,trialsToPick];
@@ -546,11 +544,17 @@ def setModel(cellNum, fitIter, subsetFrac):
         subsetSpikes = spikes[trialsToPick];
         subsetDur = stim_dur[trialsToPick];
         subsetNormResp = normResp[trialsToPick,:,:];
+        '''
         
         opt = \
-                m.run(optimizer, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
-                            ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, \
-                            ph_stimDur: subsetDur, ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
+                m.run(optimizer, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
+                            ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
+                            ph_stimDur: stim_dur, ph_normResp: normResp, ph_normCentSf: normCentSf});
+        
+#        opt = \
+#                m.run(optimizer, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
+#                            ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, \
+#                            ph_stimDur: subsetDur, ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
             
     # Now get "true" model parameters and NLL
     # HACKY - IMPROVE: why re-establish network? because we require shape of ph_stimTf to be specified, and now we
