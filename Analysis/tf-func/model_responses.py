@@ -1,8 +1,11 @@
-import math, cmath, numpy, os
+import math
+import numpy
+import os
 from makeStimulus import makeStimulus 
 from scipy.stats import norm, mode, lognorm, nbinom
 from numpy.matlib import repmat
 import time
+import sys
 
 import tensorflow as tf
 
@@ -407,8 +410,9 @@ def setModel(cellNum, fitIter, subsetFrac):
     ########
     # Load cell
     ########
-    loc_data = '/e/3.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/';
-    #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/';
+    #loc_data = '/e/3.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # CNS machine
+    #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal machine
+    loc_data = '/home/pl1465/pythonGit/SF_diversity/Analysis/Structures/'; # Mercer cluster
  
     dataList = numpy.load(loc_data + 'dataList.npy').item();
     dataNames = dataList['unitName'];
@@ -532,7 +536,6 @@ def setModel(cellNum, fitIter, subsetFrac):
     m.run(init);
     
     for i in range(fitIter):
-        
         # resample data...
         '''
         trialsToPick = numpy.random.randint(0, fixedOr.shape[-1], subsetShape[-1]);
@@ -545,7 +548,6 @@ def setModel(cellNum, fitIter, subsetFrac):
         subsetDur = stim_dur[trialsToPick];
         subsetNormResp = normResp[trialsToPick,:,:];
         '''
-        
         opt = \
                 m.run(optimizer, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
                             ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
@@ -555,7 +557,7 @@ def setModel(cellNum, fitIter, subsetFrac):
 #                m.run(optimizer, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
 #                            ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, \
 #                            ph_stimDur: subsetDur, ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
-            
+   
     # Now get "true" model parameters and NLL
     # HACKY - IMPROVE: why re-establish network? because we require shape of ph_stimTf to be specified, and now we
     # want to run on full (not subsampled) dataset...
@@ -578,4 +580,15 @@ def setModel(cellNum, fitIter, subsetFrac):
     numpy.save(loc_data + dataNames[cellNum-1] + '_sfm.npy', S);   
    
     return NLL, x;    
-    
+
+
+if __name__ == '__main__':
+
+    if len(sys.argv) < 4:
+      print('uhoh...you need three arguments here'); # and one is the script itself...
+      print('First should be cell number, second is number of fit iterations/updates, third is fraction of data to be used in subsample...currently ignored, anyway');
+      exit();
+
+    #print('hello');
+    #print('Running cell ' + str(sys.argv[1]) + ' for ' + str(sys.argv[2]) + ' iterations...');
+    setModel(int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]));
