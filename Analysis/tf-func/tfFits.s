@@ -9,6 +9,7 @@
 #SBATCH --job-name=princeTF
 
 #SBATCH --mail-user=pl1465@nyu.edu
+#SBATCH --mail-type=ALL
 
 #SBATCH --output=tf_%A_%a.out
 #SBATCH --error=tf_%A_%a.err
