@@ -412,8 +412,9 @@ def setModel(cellNum, fitIter, subsetFrac):
     ########
     #loc_data = '/e/3.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # CNS machine
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal machine
-    loc_data = '/home/pl1465/pythonGit/SF_diversity/Analysis/Structures/'; # Mercer cluster
- 
+    #loc_data = '/home/pl1465/pythonGit/SF_diversity/Analysis/Structures/'; # Mercer cluster
+    loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
+
     dataList = numpy.load(loc_data + 'dataList.npy').item();
     dataNames = dataList['unitName'];
     S = numpy.load(loc_data + dataNames[cellNum-1] + '_sfm.npy').item(); # why -1? 0 indexing...
