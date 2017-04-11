@@ -404,9 +404,10 @@ def negBinom(x, r, p):
     
     return tf.add(naGam, haanGam);
     
-def setModel(cellNum, fitIter, subsetFrac):
+def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     # Given just a cell number, will fit the Robbe V1 model to the data
-    
+    # LR is learning rate
+ 
     ########
     # Load cell
     ########
@@ -418,7 +419,11 @@ def setModel(cellNum, fitIter, subsetFrac):
     dataList = numpy.load(loc_data + 'dataList.npy').item();
     dataNames = dataList['unitName'];
     S = numpy.load(loc_data + dataNames[cellNum-1] + '_sfm.npy').item(); # why -1? 0 indexing...
-    
+    trial_inf = S['sfm']['exp']['trial'];
+    prefOrEst = mode(trial_inf['ori'][1]).mode;
+    trialsToCheck = trial_inf['con'][0] == 0.01;
+    prefSfEst = mode(trial_inf['sf'][0][trialsToCheck==True]).mode;
+
     ########
     # Set up model parameters - i.e. trainable variables!
     ########
@@ -438,19 +443,19 @@ def setModel(cellNum, fitIter, subsetFrac):
     # 12 = asymmetry suppressive signal    
     curr_params = S['sfm']['mod']['fit']['params'];
     
-    pref_ori = 120; #curr_params[0]; #121.41963; #99.72;
-    pref_sf = 3.7; #curr_params[1]; #3.6611717; #4.2243;
-    aRatSp = 4.3; #curr_params[2]; #4.3432555; #0.1111;
-    dOrdSp = 1.75; #curr_params[3]; #1.7537324; #1.0288;
-    ds = 0.9; #curr_params[4]; #0.93644625; #0.0890;
-    gainInh = -0.03; #curr_params[5]; #-0.0027404986; #-0.0484;
-    normConst = -0.34; #curr_params[6]; #-0.34451148; #0.1295;
-    respExp = 1.4; #curr_params[7];# 1.0000211; #1.1786;
-    respScal = 286.0; #curr_params[8]; #285.66949; #1.2363e+03;
-    noiseEarly = 0.004; #curr_params[9]; #0.0038524803; #0.0222;
-    noiseLate = 0.22; #curr_params[10]; #0.21894296; #0.3468;
-    varGain = 0.28; #curr_params[11]; #0.27506411; #0.2024;
-    inhAsym = 0; #curr_params[12]; #0.0; #0;
+    pref_ori = float(prefOrEst) if initFromCurr==0 else curr_params[0];
+    pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[1];
+    aRatSp = numpy.random.uniform(0.5, 3) if initFromCurr==0 else curr_params[2];
+    dOrdSp = numpy.random.uniform(1, 3) if initFromCurr==0 else curr_params[3];
+    ds = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[4];
+    gainInh = numpy.random.uniform(-1, 0) if initFromCurr==0 else curr_params[5];
+    normConst = numpy.random.uniform(-1, 0) if initFromCurr==0 else curr_params[6];
+    respExp = numpy.random.uniform(1, 3) if initFromCurr==0 else curr_params[7];
+    respScal = numpy.random.uniform(10, 1000) if initFromCurr==0 else curr_params[8];
+    noiseEarly = numpy.random.uniform(0.001, 0.1) if initFromCurr==0 else curr_params[9];
+    noiseLate = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[10];
+    varGain = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[11];
+    inhAsym = numpy.random.uniform(-0.3, 0.3) if initFromCurr==0 else curr_params[12];
     
     v_prefOr = tf.Variable(pref_ori, dtype=tf.float32);    
     v_prefSf = tf.Variable(pref_sf, dtype=tf.float32);
@@ -470,7 +475,6 @@ def setModel(cellNum, fitIter, subsetFrac):
     # Now get all the data we need for tf_placeholders 
     #########    
     # stimulus information
-    trial_inf = S['sfm']['exp']['trial'];
     
     # vstack to turn into array (not array of arrays!)
     stimOr = numpy.vstack(trial_inf['ori']);
@@ -508,10 +512,13 @@ def setModel(cellNum, fitIter, subsetFrac):
     #########
     # Set up the network!
     #########
-    #subsetShape = [fixedTf.shape[0], round(fixedTf.shape[-1]*subsetFrac)];
+    subsetShape = [fixedTf.shape[0], round(fixedTf.shape[-1]*subset_frac)];
+    
     ph_stimOr = tf.placeholder(tf.float32);
-    ph_stimTf = tf.placeholder(tf.float32, shape=fixedTf.shape);
-    #ph_stimTf = tf.placeholder(tf.float32, shape=subsetShape);
+    if subset_frac > 0:
+      ph_stimTf = tf.placeholder(tf.float32, shape=subsetShape);
+    else:
+      ph_stimTf = tf.placeholder(tf.float32, shape=fixedTf.shape);
     ph_stimCo = tf.placeholder(tf.float32);
     ph_stimSf = tf.placeholder(tf.float32);
     ph_stimPh = tf.placeholder(tf.float32);
@@ -528,59 +535,83 @@ def setModel(cellNum, fitIter, subsetFrac):
     okok = SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, \
               ph_normResp, ph_normCentSf, v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
                       v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym);
+
+    if subset_frac > 0:  
+      ph_stimTfFull = tf.placeholder(tf.float32, shape=fixedTf.shape);
+      full = SFMGiveBof(ph_stimOr, ph_stimTfFull, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, \
+              ph_normResp, ph_normCentSf, v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
+                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym);
     
-    grd = tf.gradients(okok, [v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym]);
+    
     print('Setting optimizer');
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.1).minimize(okok); #[0] 0th return value NLL
-    
+    optimizer = tf.train.AdamOptimizer(learning_rate=lr).minimize(okok);
 
     m = tf.Session();
     init = tf.global_variables_initializer();
     m.run(init);
     
+    currNLL = S['sfm']['mod']['fit']['NLL'];
+
     for i in range(fitIter):
         # resample data...
-        '''
-        trialsToPick = numpy.random.randint(0, fixedOr.shape[-1], subsetShape[-1]);
-        subsetOr = fixedOr[:,trialsToPick];
-        subsetTf = fixedTf[:,trialsToPick];
-        subsetCo = fixedCo[:,trialsToPick];
-        subsetSf = fixedSf[:,trialsToPick];
-        subsetPh = fixedPh[:,trialsToPick];
-        subsetSpikes = spikes[trialsToPick];
-        subsetDur = stim_dur[trialsToPick];
-        subsetNormResp = normResp[trialsToPick,:,:];
-        '''
-        opt = \
+        if subset_frac > 0:
+          trialsToPick = numpy.random.randint(0, fixedOr.shape[-1], subsetShape[-1]);
+          subsetOr = fixedOr[:,trialsToPick];
+          subsetTf = fixedTf[:,trialsToPick];
+          subsetCo = fixedCo[:,trialsToPick];
+          subsetSf = fixedSf[:,trialsToPick];
+          subsetPh = fixedPh[:,trialsToPick];
+          subsetSpikes = spikes[trialsToPick];
+          subsetDur = stim_dur[trialsToPick];
+          subsetNormResp = normResp[trialsToPick,:,:];
+
+          opt = m.run(optimizer, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
+                          ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, ph_stimDur: subsetDur, \
+                          ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
+        
+          if (i/500.0) == round(i/500.0):
+            NLL = m.run(full, feed_dict={ph_stimOr: fixedOr, ph_stimTfFull: fixedTf, ph_stimCo: fixedCo, \
+                        ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
+                        ph_stimDur: stim_dur, ph_normResp: normResp, ph_normCentSf: normCentSf});
+
+        else:
+	  opt = \
                 m.run(optimizer, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
                             ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
                             ph_stimDur: stim_dur, ph_normResp: normResp, ph_normCentSf: normCentSf});
 
-        if (i/500.0) == round(i/500.0): # save every once in a while!!!
-          NLL = m.run(okok, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
+        
+          if (i/500.0) == round(i/500.0):
+            NLL = m.run(okok, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
                         ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
                         ph_stimDur: stim_dur, ph_normResp: normResp, ph_normCentSf: normCentSf});
 
+        if (i/500.0) == round(i/500.0): # save every once in a while!!!
           
-          real_params = m.run(applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
+          print('iteration ' + str(i));
+          
+          if NLL < currNLL:
+
+       	    real_params = m.run(applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
                                 v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym));
 
-          print('iteration ' + str(i));
-          S['sfm']['mod']['fit']['NLL'] = NLL;
-          S['sfm']['mod']['fit']['params'] = real_params;
+            currNLL = NLL;
+            S['sfm']['mod']['fit']['NLL'] = NLL;
+            S['sfm']['mod']['fit']['params'] = real_params;
+            numpy.save(loc_data + dataNames[cellNum-1] + '_sfm.npy', S);   
 
-        
+    # Now the fitting is done    
     # Now get "true" model parameters and NLL
-    ph_stimTf = ph_stimTf = tf.placeholder(tf.float32, shape=fixedTf.shape);
-    full = SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, \
-              ph_normResp, ph_normCentSf, v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym);
-    
-    
-    NLL = m.run(full, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
+    if subset_frac > 0:
+      NLL = m.run(full, feed_dict={ph_stimOr: fixedOr, ph_stimTfFull: fixedTf, ph_stimCo: fixedCo, \
                             ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
                             ph_stimDur: stim_dur, ph_normResp: normResp, ph_normCentSf: normCentSf});
+    else:
+      NLL = m.run(okok, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
+                            ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
+                            ph_stimDur: stim_dur, ph_normResp: normResp, ph_normCentSf: normCentSf});
+
+
     x = m.run(applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
                 v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym));
     
@@ -588,9 +619,9 @@ def setModel(cellNum, fitIter, subsetFrac):
     S['sfm']['mod']['fit']['NLL'] = NLL;
     S['sfm']['mod']['fit']['params'] = x;
     
-    numpy.save(loc_data + dataNames[cellNum-1] + '_sfm.npy', S);   
+    numpy.save(loc_data + dataNames[cellNum-1] + '_sfm.npy', S);
    
-    return NLL, x;    
+    return NLL, x;
 
 
 if __name__ == '__main__':
@@ -600,5 +631,10 @@ if __name__ == '__main__':
       print('First should be cell number, second is number of fit iterations/updates, third is fraction of data to be used in subsample...currently ignored, anyway');
       exit();
 
-    print('Running cell ' + str(sys.argv[1]) + ' for ' + str(sys.argv[2]) + ' iterations...');
-    setModel(int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]));
+    print('Running cell ' + str(sys.argv[1]) + ' for ' + str(sys.argv[2]) + ' iterations...with learning rate ' + str(sys.argv[3]));
+
+    if len(sys.argv) > 4: # subsample data for each iteration
+      print('Additonally, each iteration will have ' + str(sys.argv[4]) + ' of the data (subsample fraction)');
+      setModel(int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]), int(sys.argv[5]));
+    else: # all trials in each iteration
+      setModel(int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]));
