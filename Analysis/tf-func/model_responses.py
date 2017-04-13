@@ -617,11 +617,12 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     x = m.run(applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
                 v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym));
     
-    # Put those into fitList and save
-    fitList[cellNum-1]['NLL'] = NLL;
-    fitList[cellNum-1]['params'] = x;
+    # Put those into fitList and save...ONLY if better than before
+    if NLL < currNLL:
+      fitList[cellNum-1]['NLL'] = NLL;
+      fitList[cellNum-1]['params'] = x;
 
-    numpy.save(loc_data + 'fitList.npy', fitList);   
+      numpy.save(loc_data + 'fitList.npy', fitList);
     
     return NLL, x;
 
@@ -633,10 +634,10 @@ if __name__ == '__main__':
       print('First should be cell number, second is number of fit iterations/updates, third is fraction of data to be used in subsample...currently ignored, anyway');
       exit();
 
-    print('Running cell {} for {} iterations with learning rate {}'.format(sys.argv[1], sys.argv[2], str(sys.argv[3])));
+    print('Running cell ' + sys.argv[1] + ' for ' + sys.argv[2] + ' iterations with learning rate ' + sys.argv[3]);
 
     if len(sys.argv) > 4: # subsample data for each iteration
-      print('Additonally, each iteration will have {} of the data (subsample fraction)'.format(str(sys.argv[4])));
+      print('Additionally, each iteration will have ' + sys.argv[4] ' of the data (subsample fraction)');
       setModel(int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]), int(sys.argv[5]));
     else: # all trials in each iteration
       setModel(int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]));
