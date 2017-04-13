@@ -416,8 +416,10 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     #loc_data = '/home/pl1465/pythonGit/SF_diversity/Analysis/Structures/'; # Mercer cluster
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
+    fitList = numpy.load(loc_data + 'fitList.npy'); # no .item() needed...
     dataList = numpy.load(loc_data + 'dataList.npy').item();
     dataNames = dataList['unitName'];
+
     S = numpy.load(loc_data + dataNames[cellNum-1] + '_sfm.npy').item(); # why -1? 0 indexing...
     trial_inf = S['sfm']['exp']['trial'];
     prefOrEst = mode(trial_inf['ori'][1]).mode;
@@ -441,8 +443,8 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     # 10 = late additive noise
     # 11 = variance of response gain    
     # 12 = asymmetry suppressive signal    
-    curr_params = S['sfm']['mod']['fit']['params'];
-    
+    curr_params = fitList[cellNum-1]['params']; # load parameters from the fitList! this is what actually gets updated...
+     
     pref_ori = float(prefOrEst) if initFromCurr==0 else curr_params[0];
     pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[1];
     aRatSp = numpy.random.uniform(0.5, 3) if initFromCurr==0 else curr_params[2];
@@ -596,9 +598,9 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
                                 v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym));
 
             currNLL = NLL;
-            S['sfm']['mod']['fit']['NLL'] = NLL;
-            S['sfm']['mod']['fit']['params'] = real_params;
-            numpy.save(loc_data + dataNames[cellNum-1] + '_sfm.npy', S);   
+            fitList[cellNum-1]['NLL'] = NLL;
+            fitList[cellNum-1]['params'] = real_params;
+            numpy.save(loc_data + 'fitList.npy', fitList);   
 
     # Now the fitting is done    
     # Now get "true" model parameters and NLL
@@ -615,12 +617,12 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     x = m.run(applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
                 v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym));
     
-    # Put those into model and save
-    S['sfm']['mod']['fit']['NLL'] = NLL;
-    S['sfm']['mod']['fit']['params'] = x;
+    # Put those into fitList and save
+    fitList[cellNum-1]['NLL'] = NLL;
+    fitList[cellNum-1]['params'] = x;
+
+    numpy.save(loc_data + 'fitList.npy', fitList);   
     
-    numpy.save(loc_data + dataNames[cellNum-1] + '_sfm.npy', S);
-   
     return NLL, x;
 
 
@@ -631,10 +633,10 @@ if __name__ == '__main__':
       print('First should be cell number, second is number of fit iterations/updates, third is fraction of data to be used in subsample...currently ignored, anyway');
       exit();
 
-    print('Running cell ' + str(sys.argv[1]) + ' for ' + str(sys.argv[2]) + ' iterations...with learning rate ' + str(sys.argv[3]));
+    print('Running cell {} for {} iterations with learning rate {}'.format(sys.argv[1], sys.argv[2], str(sys.argv[3])));
 
     if len(sys.argv) > 4: # subsample data for each iteration
-      print('Additonally, each iteration will have ' + str(sys.argv[4]) + ' of the data (subsample fraction)');
+      print('Additonally, each iteration will have {} of the data (subsample fraction)'.format(str(sys.argv[4])));
       setModel(int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]), int(sys.argv[5]));
     else: # all trials in each iteration
       setModel(int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]));
