@@ -637,7 +637,7 @@ if __name__ == '__main__':
     print('Running cell ' + sys.argv[1] + ' for ' + sys.argv[2] + ' iterations with learning rate ' + sys.argv[3]);
 
     if len(sys.argv) > 4: # subsample data for each iteration
-      print('Additionally, each iteration will have ' + sys.argv[4] ' of the data (subsample fraction)');
+      print('Additionally, each iteration will have ' + sys.argv[4] + ' of the data (subsample fraction)');
       setModel(int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]), int(sys.argv[5]));
     else: # all trials in each iteration
       setModel(int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]));
