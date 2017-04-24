@@ -1,4 +1,5 @@
 import math, numpy, random
+from scipy.special import loggamma as lgamma
 
 sqrt = math.sqrt
 log = math.log
@@ -123,4 +124,14 @@ def random_in_range(lims, size = 1):
 
     return [random.uniform(lims[0], lims[1]) for i in range(size)]
 
+def nbinpdf_log(x, r, p):
+    # We assume that r & p are tf placeholders/variables; x is a constant
+    # Negative binomial is:
+        # gamma(x+r) * (1-p)^x * p^r / (gamma(x+1) * gamma(r))
+    
+    # Here we return the log negBinomial:
+    noGamma = x * numpy.log(1-p) + (r * numpy.log(p));
+    withGamma = lgamma(x + r) - lgamma(x + 1) - lgamma(r);
+    
+    return numpy.real(noGamma + withGamma);
     
