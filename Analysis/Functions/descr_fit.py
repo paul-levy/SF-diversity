@@ -1,8 +1,11 @@
 import numpy as np
-import helper_functions as hfunc
-import os
-from scipy.stats import norm, mode, lognorm, nbinom
+import helper_fcns as hfunc
+import scipy.optimize as opt
+from scipy.stats import norm, mode, lognorm, nbinom, poisson
 from numpy.matlib import repmat
+import os.path
+
+import pdb
 
 def flexible_Gauss(params, stim_sf):
     # The descriptive model used to fit cell tuning curves - in this way, we
@@ -32,40 +35,131 @@ def descr_loss(params, data, family, contrast):
     trial = data['sfm']['exp']['trial'];
 
     # get indices for trials we want to look at
-    center_con = hfunc.get_center_con(family, contrast_hi);
-    ori_pref = mode(trial.ori{1}(:));
+    center_con = hfunc.get_center_con(family+1, contrast+1);
+    ori_pref = mode(trial['ori'][0]).mode;
 
-    con_check = abs(trial.con{1}(:) - center_con) < epsilon;
-    ori_check = abs(trial.ori{1}(:) - ori_pref) < epsilon;
+    con_check = abs(trial['con'][0] - center_con) < epsilon;
+    ori_check = abs(trial['ori'][0] - ori_pref) < epsilon;
 
-    sf_check = zeros(size(con_check));
+    sf_check = np.zeros_like(con_check);
 
-    sf_centers  = data.sf{1}{1};
+    # get all the possible sf centers (at high contrast...but same at low, anyway)
+    sf_centers = data['sfm']['exp']['sf'][0][0];
 
-    for sf_i = 1 : length(sf_centers)
-        sf_check = (trial.sf{1}(:) == sf_centers(sf_i)) | sf_check;
-    end
+    for sf_i in sf_centers:
+        sf_check[trial['sf'][0] == sf_i] = 1;
 
-    indices = find(con_check & ori_check & sf_check);
-
-    obs_count = spike_counts(indices);
-    pred_rate = eval(sprintf('%s(params, data.trial.sf{1}(indices))', model));
+    indices = np.where(con_check & ori_check & sf_check); 
     
+    obs_count = trial['spikeCount'][indices];
 
-    stim_dur = trial.duration(indices);
+    pred_rate = flexible_Gauss(params, trial['sf'][0][indices]);
+    stim_dur = trial['duration'][indices];
+
+    # poisson model of spiking
+    NLL = sum(-np.log(poisson.pmf(obs_count, pred_rate * stim_dur)));
     
-end
+    return NLL;
 
+def fit_descr(cell_num, data_loc, n_repeats = 4):
+    
+    nFam = 5;
+    nCon = 2;
+    nParam = 5;
+    
+    # load cell information
+    dataList = np.load(data_loc + 'dataList.npy').item();
+    if os.path.isfile(data_loc + 'descrFits.npy'):
+        descrFits = np.load(data_loc + 'descrFits.npy').item();
+    else:
+        descrFits = dict();
+    data = np.load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy').item();
+    
+    if cell_num in descrFits:
+        bestNLL = descrFits[cell_num]['NLL'];
+        currParams = descrFits[cell_num]['params'];
+    else: # set values to NaN...
+        bestNLL = np.empty((nFam, nCon)) * np.nan;
+        currParams = np.empty((nFam, nCon, nParam)) * np.nan;
+        descrFits[cell_num-1] = dict();
+    
+    print('Doing the work, now');
+    for family in range(nFam):
+        for con in range(nCon):    
+           
+            # set initial parameters - a range from which we will pick!
+            base_rate = data['sfm']['exp']['sponRateMean']
+            if base_rate <= 3:
+                range_baseline = (0, 3);
+            else:
+                range_baseline = (0.5 * base_rate, 1.5 * base_rate);
 
-% % Get predicted spike count distributions
-% mu  = max(.1, stim_dur .* pred_rate);                                  % The predicted mean spike count
-% var = mu + (varGain*(mu.^2));                                          % The corresponding variance of the spike count
-% r   = (mu.^2)./(var - mu);                                             % The parameters r and p of the negative binomial distribution
-% p   = r./(r + mu);
-% 
-% % Evaluate the model
-% llh = nbinpdf(obs_count, r, p);                                        % The likelihood for each pass under the doubly stochastic model
-% 
-% NLL = sum(-log(llh));                                                  % The negative log-likelihood of the whole data-set      
+            max_resp = np.amax(data['sfm']['exp']['sfRateMean'][family][con]);
+            range_amp = (0.5 * max_resp, 1.5);
+            
+            theSfCents = data['sfm']['exp']['sf'][family][con];
+            
+            max_sf_index = np.argmax(data['sfm']['exp']['sfRateMean'][family][con]); # what sf index gives peak response?
+            mu_init = theSfCents[max_sf_index];
+            
+            if max_sf_index == 0: # i.e. smallest SF center gives max response...
+                range_mu = (mu_init/2,theSfCents[max_sf_index + 3]);
+            elif max_sf_index+1 == len(theSfCents): # i.e. highest SF center is max
+                range_mu = (theSfCents[max_sf_index-3], mu_init);
+            else:
+                range_mu = (theSfCents[max_sf_index-1], theSfCents[max_sf_index+1]); # go +-1 indices from center
+                
+            log_bw_lo = 0.75; # 0.75 octave bandwidth...
+            log_bw_hi = 2; # 2 octave bandwidth...
+            denom_lo = hfunc.bw_log_to_lin(log_bw_lo, mu_init)[0]; # get linear bandwidth
+            denom_hi = hfunc.bw_log_to_lin(log_bw_hi, mu_init)[0]; # get lin. bw (cpd)
+            range_denom = (denom_lo, denom_hi); 
+                
+            # set bounds for parameters
+            min_bw = 1/4; max_bw = 10; # ranges in octave bandwidth
 
-NLL = sum(-log(poisspdf(obs_count, pred_rate .* stim_dur)));
+            bound_baseline = (0, None);
+            bound_range = (0, 1.5*max_resp);
+            bound_mu = (0.01, 10);
+            bound_sig = (min_bw/(2*np.sqrt(2*np.log(2))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
+            
+            all_bounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
+
+            for n_try in range(n_repeats):
+                
+                # pick initial params
+                init_base = hfunc.random_in_range(range_baseline);
+                init_amp = hfunc.random_in_range(range_amp);
+                init_mu = hfunc.random_in_range(range_mu);
+                init_sig_left = hfunc.random_in_range(range_denom);
+                init_sig_right = hfunc.random_in_range(range_denom);
+                         
+                init_params = [init_base, init_amp, init_mu, init_sig_left, init_sig_right];
+                         
+                # choose optimization method
+                if np.mod(n_try, 2) == 0:
+                    methodStr = 'L-BFGS-B';
+                else:
+                    methodStr = 'TNC';
+                
+                obj = lambda params: descr_loss(params, data, family, con);
+                wax = opt.minimize(obj, init_params, method=methodStr, bounds=all_bounds);
+                
+                # compare
+                NLL = wax['fun'];
+                params = wax['x'];
+
+                #pdb.set_trace();
+                
+                if np.isnan(bestNLL[family, con]) or NLL < bestNLL[family, con]:
+                    bestNLL[family, con] = NLL;
+                    currParams[family, con, :] = params;
+
+            # now outside of loop for attempts, but still within family/con loop
+            # update stuff
+            descrFits[cell_num-1]['NLL'] = bestNLL;
+            descrFits[cell_num-1]['params'] = currParams;
+
+    # save it all (outside both loops...)
+    np.save(data_loc + 'descrFits.npy', descrFits);
+                

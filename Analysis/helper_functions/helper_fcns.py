@@ -1,6 +1,5 @@
 import math, numpy, random
 from scipy.special import loggamma as lgamma
-
 sqrt = math.sqrt
 log = math.log
 exp = math.exp
@@ -88,6 +87,8 @@ def get_center_con(family, contrast):
     # hardcoded - based on sfMix as run in 2015/2016 (m657, m658, m660); given
     # the stimulus family and contrast level, returns the expected contrast of
     # the center frequency.
+    
+    # contrast = 1 means high contrast...otherwise, low contrast
 
 
     con = math.nan
