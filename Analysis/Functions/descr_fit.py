@@ -4,6 +4,7 @@ import scipy.optimize as opt
 from scipy.stats import norm, mode, lognorm, nbinom, poisson
 from numpy.matlib import repmat
 import os.path
+import sys
 
 import pdb
 
@@ -16,7 +17,7 @@ def flexible_Gauss(params, stim_sf):
     sfPref          = params[2];
     sigmaLow        = params[3];
     sigmaHigh       = params[4];
-
+ 
     # Tuning function
     sf0   = stim_sf / sfPref;
 
@@ -34,12 +35,20 @@ def descr_loss(params, data, family, contrast):
     epsilon = 1e-4;
     trial = data['sfm']['exp']['trial'];
 
+    # find NaN trials...
+    mask = np.isnan(trial['ori'][0]); # sum over all stim components...if there are any nans in that trial, we know
+    fixedOr = trial['ori'][0][~mask];
+    fixedCon = trial['con'][0][~mask];
+    fixedSf = trial['sf'][0][~mask];
+    fixedSpikes = trial['spikeCount'][~mask];
+    fixedDur = trial['duration'][~mask];
+
     # get indices for trials we want to look at
     center_con = hfunc.get_center_con(family+1, contrast+1);
-    ori_pref = mode(trial['ori'][0]).mode;
+    ori_pref = mode(fixedOr).mode;
 
-    con_check = abs(trial['con'][0] - center_con) < epsilon;
-    ori_check = abs(trial['ori'][0] - ori_pref) < epsilon;
+    con_check = abs(fixedCon - center_con) < epsilon;
+    ori_check = abs(fixedOr - ori_pref) < epsilon;
 
     sf_check = np.zeros_like(con_check);
 
@@ -47,17 +56,21 @@ def descr_loss(params, data, family, contrast):
     sf_centers = data['sfm']['exp']['sf'][0][0];
 
     for sf_i in sf_centers:
-        sf_check[trial['sf'][0] == sf_i] = 1;
+        sf_check[fixedSf == sf_i] = 1;
 
     indices = np.where(con_check & ori_check & sf_check); 
     
-    obs_count = trial['spikeCount'][indices];
+    obs_count = fixedSpikes[indices];
 
-    pred_rate = flexible_Gauss(params, trial['sf'][0][indices]);
-    stim_dur = trial['duration'][indices];
+    pred_rate = flexible_Gauss(params, fixedSf[indices]);
+    stim_dur = fixedDur[indices];
 
     # poisson model of spiking
-    NLL = sum(-np.log(poisson.pmf(obs_count, pred_rate * stim_dur)));
+    poiss = poisson.pmf(obs_count, pred_rate * stim_dur);
+    ps = np.sum(poiss == 0);
+    if ps > 0:
+      poiss = np.maximum(poiss, 1e-6); # anything, just so we avoid log(0)
+    NLL = sum(-np.log(poiss));
     
     return NLL;
 
@@ -75,18 +88,18 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
         descrFits = dict();
     data = np.load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy').item();
     
-    if cell_num in descrFits:
-        bestNLL = descrFits[cell_num]['NLL'];
-        currParams = descrFits[cell_num]['params'];
+    if cell_num-1 in descrFits:
+        bestNLL = descrFits[cell_num-1]['NLL'];
+        currParams = descrFits[cell_num-1]['params'];
     else: # set values to NaN...
-        bestNLL = np.empty((nFam, nCon)) * np.nan;
-        currParams = np.empty((nFam, nCon, nParam)) * np.nan;
-        descrFits[cell_num-1] = dict();
+        bestNLL = np.ones((nFam, nCon)) * np.nan;
+        currParams = np.ones((nFam, nCon, nParam)) * np.nan;
     
     print('Doing the work, now');
     for family in range(nFam):
         for con in range(nCon):    
-           
+
+            print('.');           
             # set initial parameters - a range from which we will pick!
             base_rate = data['sfm']['exp']['sponRateMean']
             if base_rate <= 3:
@@ -113,15 +126,15 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
             log_bw_hi = 2; # 2 octave bandwidth...
             denom_lo = hfunc.bw_log_to_lin(log_bw_lo, mu_init)[0]; # get linear bandwidth
             denom_hi = hfunc.bw_log_to_lin(log_bw_hi, mu_init)[0]; # get lin. bw (cpd)
-            range_denom = (denom_lo, denom_hi); 
+            range_denom = (denom_lo, denom_hi); # don't want 0 in sigma 
                 
             # set bounds for parameters
             min_bw = 1/4; max_bw = 10; # ranges in octave bandwidth
 
-            bound_baseline = (0, None);
+            bound_baseline = (0, max_resp);
             bound_range = (0, 1.5*max_resp);
             bound_mu = (0.01, 10);
-            bound_sig = (min_bw/(2*np.sqrt(2*np.log(2))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
+            bound_sig = (np.maximum(0.01, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
             
             all_bounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
 
@@ -149,17 +162,36 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
                 NLL = wax['fun'];
                 params = wax['x'];
 
-                #pdb.set_trace();
-                
                 if np.isnan(bestNLL[family, con]) or NLL < bestNLL[family, con]:
                     bestNLL[family, con] = NLL;
                     currParams[family, con, :] = params;
 
-            # now outside of loop for attempts, but still within family/con loop
-            # update stuff
-            descrFits[cell_num-1]['NLL'] = bestNLL;
-            descrFits[cell_num-1]['params'] = currParams;
+    # update stuff - load again in case some other run has saved/made changes
+    if os.path.isfile(data_loc + 'descrFits.npy'):
+      print('reloading descrFits...');
+      descrFits = np.load(data_loc + 'descrFits.npy').item();
+    if cell_num-1 not in descrFits:
+      descrFits[cell_num-1] = dict();
+    descrFits[cell_num-1]['NLL'] = bestNLL;
+    descrFits[cell_num-1]['params'] = currParams;
 
-    # save it all (outside both loops...)
     np.save(data_loc + 'descrFits.npy', descrFits);
+    print('saving for cell ' + str(cell_num));
                 
+if __name__ == '__main__':
+
+    data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
+
+    if len(sys.argv) < 2:
+      print('uhoh...you need at least one argument here'); # and one is the script itself...
+      print('First should be cell number, second [optional] is number of fit iterations');
+      exit();
+
+    print('Running cell ' + sys.argv[1] + '...');
+
+    if len(sys.argv) > 2: # specificy number of fit iterations
+      print(' for ' + sys.argv[2] + ' iterations');
+      fit_descr(int(sys.argv[1]), data_loc, int(sys.argv[2]));
+    else: # all trials in each iteration
+      fit_descr(int(sys.argv[1]), data_loc);
+
