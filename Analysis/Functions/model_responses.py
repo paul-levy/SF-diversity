@@ -13,7 +13,6 @@ def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
     
     # returns a spatial filter which is dth-order derivate of 2-D Gaussian
 
-
     # imSizeDeg  = image size in degrees
     # pixSizeDeg = pixel size in degrees
     # prefSf     = peak spatial frequency in cycles/deg
@@ -39,6 +38,8 @@ def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
     
     filt = fft.fftshift(fft.ifft2(fft.ifftshift(ffilt)));
     return filt.real;
+
+#def 
 
 # SFMSimpleResp - Used in Robbe V1 model - excitatory, linear filter response
 def SFMSimpleResp(S, channel, stimParams = []):
@@ -678,5 +679,5 @@ def SFMGiveBof(params, structureSFM):
     # Combine data and prior
     NLL = NLLtempSFM + NLLExp; # sum over NLLtempSFM if you allow it to be d>1
 
-    return NLL;
+    return NLL, respModel;
     #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};
