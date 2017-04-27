@@ -8,6 +8,14 @@ import sys
 
 import pdb
 
+def invalid(params, bounds):
+# given parameters and bounds, are the parameters valid?
+  for p in range(len(params)):
+    if params[p] < bounds[p][0] or params[p] > bounds[p][1]:
+      return True;
+  return False;
+    
+
 def flexible_Gauss(params, stim_sf):
     # The descriptive model used to fit cell tuning curves - in this way, we
     # can read off preferred SF, octave bandwidth, and response amplitude
@@ -162,7 +170,7 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
                 NLL = wax['fun'];
                 params = wax['x'];
 
-                if np.isnan(bestNLL[family, con]) or NLL < bestNLL[family, con]:
+                if np.isnan(bestNLL[family, con]) or NLL < bestNLL[family, con] or invalid(currParams[family, con, :], all_bounds):
                     bestNLL[family, con] = NLL;
                     currParams[family, con, :] = params;
 
