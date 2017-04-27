@@ -134,7 +134,7 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
             bound_baseline = (0, max_resp);
             bound_range = (0, 1.5*max_resp);
             bound_mu = (0.01, 10);
-            bound_sig = (np.maximum(0.01, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
+            bound_sig = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
             
             all_bounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
 
