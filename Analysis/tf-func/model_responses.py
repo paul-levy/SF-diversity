@@ -592,10 +592,13 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
           
           print('iteration ' + str(i));
           
-          if NLL < currNLL:
+          if NLL < currNLL or numpy.any(numpy.isnan(curr_params)): # if the saved params are NaN, overwrite them
 
        	    real_params = m.run(applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
                                 v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym));
+
+            if numpy.any(numpy.isnan(real_params)): # don't save a fit with NaN!
+              continue;
 
             currNLL = NLL;
             fitList[cellNum-1]['NLL'] = NLL;

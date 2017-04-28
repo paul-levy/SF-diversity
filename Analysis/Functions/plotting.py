@@ -17,13 +17,16 @@ import sys
 import numpy as np
 from helper_fcns import organize_modResp, flexible_Gauss, getSuppressiveSFtuning
 import model_responses as mod_resp
+import matplotlib
+matplotlib.use('Agg') # why? so that we can get around having no GUI on cluster
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
 
 cellNum = int(sys.argv[1]);
 
-save_loc = '/ser/1.2/p2/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Figures/'# CNS
-data_loc = '/ser/1.2/p2/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/' # CNS
+save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
+#save_loc = '/ser/1.2/p2/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Figures/'# CNS
+data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 expName = 'dataList.npy'
 fitName = 'fitList.npy'
 descrName = 'descrFits.npy'
@@ -165,7 +168,7 @@ fDetails.suptitle('SF mixture - details', fontsize=25);
 
 # and now save it
 bothFigs = [f, fDetails];
-saveName = "cell%d.pdf" % cellNum
+saveName = "cell_%d.pdf" % cellNum
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(bothFigs)): ## will open an empty extra figure :(
     pdf.savefig(bothFigs[fig])
