@@ -22,6 +22,8 @@ matplotlib.use('Agg') # why? so that we can get around having no GUI on cluster
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
 
+import pdb
+
 cellNum = int(sys.argv[1]);
 
 save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
@@ -50,7 +52,6 @@ descrFit = descrFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 
 a, modResp = mod_resp.SFMGiveBof(modFit, expData);
 oriModResp, conModResp, sfmixModResp = organize_modResp(modResp, expData['sfm']['exp']['trial'])
-
 
 # #### Plot the main stuff - sfMix experiment with model predictions and descriptive fits
 

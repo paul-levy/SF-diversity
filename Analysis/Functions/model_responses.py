@@ -115,7 +115,7 @@ def SFMSimpleResp(S, channel, stimParams = []):
     
     # set it zero
     M['simpleResp'] = numpy.zeros((nFrames, nTrials));
-        
+
     # Compute simple cell response for all trials
     for p in range(nTrials): 
     
@@ -203,8 +203,6 @@ def SFMSimpleResp(S, channel, stimParams = []):
             
             computeSum = 0; # important constant: if stimulus contrast or filter sensitivity equals zero there is no point in computing the response
 
-            #pdb.set_trace();
-            
             for c in range(nGratings): # there are up to nine stimulus components
                 selSi = selOr[c]*selSf[c]*selTf[c]; # filter sensitivity for the sinusoid in the frequency domain
 
@@ -212,7 +210,7 @@ def SFMSimpleResp(S, channel, stimParams = []):
                     computeSum = 1;
                                    
                     # Use the effective number of frames displayed/stimulus duration
-                    stimPos = numpy.asarray(range(nFrames))/nFrames + \
+                    stimPos = numpy.asarray(range(nFrames))/float(nFrames) + \
                                             stimPh[c] / (2*math.pi*stimTf[c]); # 120 frames + the appropriate phase-offset
                     P3Temp  = numpy.full_like(P[:, 1], stimPos);
                     #P3Temp  = repmat(stimPos, 1, len(xCo));
@@ -248,6 +246,8 @@ def SFMSimpleResp(S, channel, stimParams = []):
                                 + pow(respSimple3, 2) + pow(respSimple4, 2); 
                             respSimple[iF, :] = numpy.sqrt(respComplex);
                         
+        #pdb.set_trace();
+            
         # Store response in desired format
         M['simpleResp'][:,p] = respSimple;
         
@@ -650,6 +650,8 @@ def SFMGiveBof(params, structureSFM):
 
         # Get simple cell response for excitatory channel
         E = SFMSimpleResp(structureSFM, excChannel);  
+
+        #pdb.set_trace();
 
         # Extract simple cell response (half-rectified linear filtering)
         Lexc = E['simpleResp'];
