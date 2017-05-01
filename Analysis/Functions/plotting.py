@@ -25,20 +25,14 @@ import matplotlib.backends.backend_pdf as pltSave
 import pdb
 
 cellNum = int(sys.argv[1]);
-if len(sys.argv) > 2:
-  modFits = sys.argv[2];
-else:
-  modFits = 0;
 
 save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 #save_loc = '/ser/1.2/p2/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Figures/'# CNS
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 expName = 'dataList.npy'
 fitName = 'fitList.npy'
-if modFits:
-  descrName = 'descrFitsModel.npy'
-else:
-  descrName = 'descrFits.npy';
+descrName = 'descrFits.npy';
+descrModName = 'descrFitsModel.npy';
 
 nFam = 5;
 nCon = 2;
@@ -48,6 +42,7 @@ sfPlot = np.logspace(-1, 1, plotSteps);
 dL = np.load(data_loc + expName).item();
 fitList = np.load(data_loc + fitName, encoding='latin1'); # no '.item()' because this is array of dictionaries...
 descrFits = np.load(data_loc + descrName, encoding='latin1').item();
+descrModFits = np.load(data_loc + descrModName, encoding='latin1').item();
 
 # #### Load data
 
@@ -56,6 +51,7 @@ descrFits = np.load(data_loc + descrName, encoding='latin1').item();
 expData = np.load(str(data_loc + dL['unitName'][cellNum-1] + '_sfm.npy')).item();
 modFit = fitList[cellNum-1]['params']; # 
 descrFit = descrFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
+descrModFit = descrModFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 
 a, modResp = mod_resp.SFMGiveBof(modFit, expData);
 oriModResp, conModResp, sfmixModResp = organize_modResp(modResp, expData['sfm']['exp']['trial'])
@@ -73,7 +69,8 @@ expResponses = expData['sfm']['exp']['sfRateMean'];
 # plot experiment and models
 for con in range(nCon): # contrast
     for fam in range(nFam): # family
-        dfit = all_plots[con, fam].semilogx(sfPlot, flexible_Gauss(descrFit[fam, con, :], sfPlot), 'k-'); # descriptive
+        dfit = all_plots[con, fam].semilogx(sfPlot, hfunc.flexible_Gauss(descrFit[fam, con, :], sfPlot), 'k-'); # descriptive
+        dfitMod = all_plots[con, fam].semilogx(sfPlot, hfunc.flexible_Gauss(descrModFit[fam, con, :], sfPlot), 'k--'); 
         expPoints = all_plots[con, fam].semilogx(expSfCent, expResponses[fam][con], 'o'); # exp responses
         modPoints = all_plots[con, fam].semilogx(expSfCent, sfmixModResp[fam, con, :], 'ro'); # model responses
         
@@ -85,9 +82,8 @@ for con in range(nCon): # contrast
         if fam == 0:
             all_plots[con, fam].set_ylabel('Response (ips)', fontsize=20);
             
-f.legend((dfit[0], expPoints[0], modPoints[0]), ('descriptive', 'experiment', 'model'), fontsize = 15, loc='right');
+f.legend((dfit[0], dfitMod[0], expPoints[0], modPoints[0]), ('descriptive - data', 'descriptive - model', 'experiment', 'model'), fontsize = 15, loc='right');
 f.suptitle('SF mixture experiment', fontsize=25);
-
 
 # In[439]:
 
@@ -176,10 +172,7 @@ fDetails.suptitle('SF mixture - details', fontsize=25);
 
 # and now save it
 bothFigs = [f, fDetails];
-if modFits:
-  saveName = "cellModel_%d.pdf" % cellNum
-else:
-  saveName  = "cell_%d.pdf" % cellNum
+saveName = "cellComplete_%d.pdf" % cellNum
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(bothFigs)): ## will open an empty extra figure :(
     pdf.savefig(bothFigs[fig])
