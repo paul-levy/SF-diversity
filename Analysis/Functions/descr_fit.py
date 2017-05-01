@@ -1,4 +1,5 @@
 import numpy as np
+import model_responses as mod_resp
 import helper_fcns as hfunc
 import scipy.optimize as opt
 from scipy.stats import norm, mode, lognorm, nbinom, poisson
@@ -82,7 +83,7 @@ def descr_loss(params, data, family, contrast):
     
     return NLL;
 
-def fit_descr(cell_num, data_loc, n_repeats = 4):
+def fit_descr(cell_num, data_loc, n_repeats = 4, fromModelSim = 0):
     
     nFam = 5;
     nCon = 2;
@@ -90,12 +91,24 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
     
     # load cell information
     dataList = np.load(data_loc + 'dataList.npy').item();
-    if os.path.isfile(data_loc + 'descrFits.npy'):
-        descrFits = np.load(data_loc + 'descrFits.npy').item();
+    if fromModelSim:
+      if os.path.isfile(data_loc + 'descrFitsModel.npy'):
+          descrFits = np.load(data_loc + 'descrFitsModel.npy').item();
+      else:
+          descrFits = dict();
     else:
-        descrFits = dict();
+      if os.path.isfile(data_loc + 'descrFits.npy'):
+          descrFits = np.load(data_loc + 'descrFits.npy').item();
+      else:
+          descrFits = dict();
     data = np.load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy').item();
     
+    if fromModelSim: # then we'll 'sneak' in the model responses in the place of the real data
+        modFits = np.load(data_loc + 'fitList.npy', encoding='latin1');
+        modFit = modFits[cell_num-1]['params'];
+        a, modResp = mod_resp.SFMGiveBof(modFit, data);
+    	data['sfm']['exp']['trial']['spikeCount'] = np.round(modResp * data['sfm']['exp']['trial']['duration']); 
+
     if cell_num-1 in descrFits:
         bestNLL = descrFits[cell_num-1]['NLL'];
         currParams = descrFits[cell_num-1]['params'];
@@ -175,15 +188,23 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
                     currParams[family, con, :] = params;
 
     # update stuff - load again in case some other run has saved/made changes
-    if os.path.isfile(data_loc + 'descrFits.npy'):
-      print('reloading descrFits...');
-      descrFits = np.load(data_loc + 'descrFits.npy').item();
+    if fromModelSim:
+      if os.path.isfile(data_loc + 'descrFitsModel.npy'):
+        print('reloading descrFitsModel...');
+        descrFits = np.load(data_loc + 'descrFitsModel.npy').item();
+    else:
+      if os.path.isfile(data_loc + 'descrFits.npy'):
+        print('reloading descrFits...');
+        descrFits = np.load(data_loc + 'descrFits.npy').item();
     if cell_num-1 not in descrFits:
       descrFits[cell_num-1] = dict();
     descrFits[cell_num-1]['NLL'] = bestNLL;
     descrFits[cell_num-1]['params'] = currParams;
 
-    np.save(data_loc + 'descrFits.npy', descrFits);
+    if fromModelSim:
+      np.save(data_loc + 'descrFitsModel.npy', descrFits);
+    else:
+      np.save(data_loc + 'descrFits.npy', descrFits);
     print('saving for cell ' + str(cell_num));
                 
 if __name__ == '__main__':
@@ -197,7 +218,10 @@ if __name__ == '__main__':
 
     print('Running cell ' + sys.argv[1] + '...');
 
-    if len(sys.argv) > 2: # specificy number of fit iterations
+    if len(sys.argv) > 3:
+      print(' for ' + sys.argv[2] + ' iterations on model data? ' + sys.argv[3]);
+      fit_descr(int(sys.argv[1]), data_loc, int(sys.argv[2]), int(sys.argv[3]));      
+    elif len(sys.argv) > 2: # specify number of fit iterations
       print(' for ' + sys.argv[2] + ' iterations');
       fit_descr(int(sys.argv[1]), data_loc, int(sys.argv[2]));
     else: # all trials in each iteration

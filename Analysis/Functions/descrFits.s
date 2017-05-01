@@ -17,7 +17,7 @@
 module purge
 module load tensorflow/python2.7/20170218
 
-python descr_fit.py $SLURM_ARRAY_TASK_ID 25
- 
+python descr_fit.py $SLURM_ARRAY_TASK_ID 25 1
+  
 # leave a blank line at the end
 

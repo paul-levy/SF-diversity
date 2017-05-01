@@ -25,13 +25,20 @@ import matplotlib.backends.backend_pdf as pltSave
 import pdb
 
 cellNum = int(sys.argv[1]);
+if len(sys.argv) > 2:
+  modFits = sys.argv[2];
+else:
+  modFits = 0;
 
 save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 #save_loc = '/ser/1.2/p2/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Figures/'# CNS
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 expName = 'dataList.npy'
 fitName = 'fitList.npy'
-descrName = 'descrFits.npy'
+if modFits:
+  descrName = 'descrFitsModel.npy'
+else:
+  descrName = 'descrFits.npy';
 
 nFam = 5;
 nCon = 2;
@@ -169,7 +176,10 @@ fDetails.suptitle('SF mixture - details', fontsize=25);
 
 # and now save it
 bothFigs = [f, fDetails];
-saveName = "cell_%d.pdf" % cellNum
+if modFits:
+  saveName = "cellModel_%d.pdf" % cellNum
+else:
+  saveName  = "cell_%d.pdf" % cellNum
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(bothFigs)): ## will open an empty extra figure :(
     pdf.savefig(bothFigs[fig])

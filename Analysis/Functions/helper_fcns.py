@@ -89,8 +89,7 @@ def get_center_con(family, contrast):
     
     # contrast = 1 means high contrast...otherwise, low contrast
 
-
-    con = math.nan
+    con = numpy.nan
     
     if family == 1:
         if contrast == 1:
