@@ -68,11 +68,14 @@ expResponses = expData['sfm']['exp']['sfRateMean'];
 
 # plot experiment and models
 for con in range(nCon): # contrast
-    for fam in range(nFam): # family
-        dfit = all_plots[con, fam].semilogx(sfPlot, hfunc.flexible_Gauss(descrFit[fam, con, :], sfPlot), 'k-'); # descriptive
-        dfitMod = all_plots[con, fam].semilogx(sfPlot, hfunc.flexible_Gauss(descrModFit[fam, con, :], sfPlot), 'k--'); 
-        expPoints = all_plots[con, fam].semilogx(expSfCent, expResponses[fam][con], 'o'); # exp responses
+    for fam in range(nFam): # family        
+        expPoints = all_plots[con, fam].errorbar(expSfCent, expResponses[fam][con], allExpVars[fam, con, :],\
+                                                 linestyle='None', marker='o', color='b');
         modPoints = all_plots[con, fam].semilogx(expSfCent, sfmixModResp[fam, con, :], 'ro'); # model responses
+        modRange = all_plots[con, fam].fill_between(expSfCent, sfmixModResp[fam, con, :], modLow[fam,con,:], \
+                                                    modHigh[fam, con,:], color='r', alpha=0.2)
+        all_plots[con,fam].set_xscale('log');
+
         
         # pretty
         all_plots[con,fam].tick_params(labelsize=15, width=1, length=8);
@@ -82,7 +85,7 @@ for con in range(nCon): # contrast
         if fam == 0:
             all_plots[con, fam].set_ylabel('Response (ips)', fontsize=20);
             
-f.legend((dfit[0], dfitMod[0], expPoints[0], modPoints[0]), ('descriptive - data', 'descriptive - model', 'experiment', 'model'), fontsize = 15, loc='right');
+f.legend((expPoints[0], modPoints[0], modRange), ('data', 'model', 'model range'), fontsize = 15, loc='right');
 f.suptitle('SF mixture experiment', fontsize=25);
 
 # In[439]:
