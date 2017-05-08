@@ -413,7 +413,6 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     ########
     #loc_data = '/e/3.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # CNS machine
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal machine
-    #loc_data = '/home/pl1465/pythonGit/SF_diversity/Analysis/Structures/'; # Mercer cluster
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
     fitList = numpy.load(loc_data + 'fitList.npy'); # no .item() needed...
@@ -552,7 +551,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     init = tf.global_variables_initializer();
     m.run(init);
     
-    currNLL = S['sfm']['mod']['fit']['NLL'];
+    currNLL = fitList[cellNum-1]['NLL'];
 
     for i in range(fitIter):
         # resample data...
