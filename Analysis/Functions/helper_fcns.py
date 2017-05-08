@@ -141,6 +141,7 @@ def organize_modResp(modResp, expStructure):
     nFam = 5;
     nCon = 2;
     nCond = 11; # 11 sfCenters for sfMix
+    nReps = 10;
     
     # Analyze the stimulus-driven responses for the orientation tuning curve
     oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
@@ -165,6 +166,7 @@ def organize_modResp(modResp, expStructure):
 
     # Initialize Variables        
     rateSfMix = numpy.ones((nFam, nCon, nCond)) * numpy.nan;
+    allSfMix = numpy.ones((nFam, nCon, nCond, nReps)) * numpy.nan;
     for iE in range(nCon):
         for iW in range(nFam):
 
@@ -179,9 +181,10 @@ def organize_modResp(modResp, expStructure):
                 if len(indCond[0]) > 0:
                     #print('setting up ' + str((iE, iW, iC)) + ' with ' + str(len(indCond[0])) + 'trials');
                     rateSfMix[iW, iE, iC] = numpy.nanmean(modResp[indCond]);
+                    allSfMix[iW, iE, iC, :] = modResp[indCond];
                     iC         = iC+1;
                  
-    return rateOr, rateCo, rateSfMix;
+    return rateOr, rateCo, rateSfMix, allSfMix;
 
 def getSuppressiveSFtuning(): # written when still new to python. Probably to matlab-y...
     # normPool details are fixed, ya?
