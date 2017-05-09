@@ -54,8 +54,14 @@ descrFit = descrFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 descrModFit = descrModFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 
 a, modResp = mod_resp.SFMGiveBof(modFit, expData);
-oriModResp, conModResp, sfmixModResp = organize_modResp(modResp, expData['sfm']['exp']['trial'])
-
+expResp = expData
+oriModResp, conModResp, sfmixModResp, allSfMix = hfunc.organize_modResp(modResp, expData['sfm']['exp']['trial'])
+oriExpResp, conExpResp, sfmixExpResp, allSfMixExp = hfunc.organize_modResp(expData['sfm']['exp']['trial']['spikeCount'], \
+                                                                           expData['sfm']['exp']['trial'])
+allModVars = np.std(allSfMix, axis=3)
+modLow = np.amin(allSfMix, axis=3)
+modHigh = np.amax(allSfMix, axis=3)
+allExpVars = np.std(allSfMixExp, axis=3)
 # #### Plot the main stuff - sfMix experiment with model predictions and descriptive fits
 
 # In[281]:
