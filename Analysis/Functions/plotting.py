@@ -55,13 +55,16 @@ descrModFit = descrModFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 
 a, modResp = mod_resp.SFMGiveBof(modFit, expData);
 expResp = expData
-oriModResp, conModResp, sfmixModResp, allSfMix = hfunc.organize_modResp(modResp, expData['sfm']['exp']['trial'])
-oriExpResp, conExpResp, sfmixExpResp, allSfMixExp = hfunc.organize_modResp(expData['sfm']['exp']['trial']['spikeCount'], \
+oriModResp, conModResp, sfmixModResp, allSfMix = organize_modResp(modResp, expData['sfm']['exp']['trial'])
+oriExpResp, conExpResp, sfmixExpResp, allSfMixExp = organize_modResp(expData['sfm']['exp']['trial']['spikeCount'], \
                                                                            expData['sfm']['exp']['trial'])
-allModVars = np.std(allSfMix, axis=3)
-modLow = np.amin(allSfMix, axis=3)
-modHigh = np.amax(allSfMix, axis=3)
-allExpVars = np.std(allSfMixExp, axis=3)
+modLow = np.nanmin(allSfMix, axis=3)
+modHigh = np.nanmax(allSfMix, axis=3)
+
+findNan = np.isnan(allSfMixExp);
+nonNan = np.sum(findNan == False, axis=3); # how many valid trials are there for each fam x con x center combination?
+allExpSEM = np.nanstd(allSfMixExp, axis=3) / np.sqrt(nonNan); # SEM
+
 # #### Plot the main stuff - sfMix experiment with model predictions and descriptive fits
 
 # In[281]:
@@ -75,10 +78,9 @@ expResponses = expData['sfm']['exp']['sfRateMean'];
 # plot experiment and models
 for con in range(nCon): # contrast
     for fam in range(nFam): # family        
-        expPoints = all_plots[con, fam].errorbar(expSfCent, expResponses[fam][con], allExpVars[fam, con, :],\
+        expPoints = all_plots[con, fam].errorbar(expSfCent, expResponses[fam][con], allExpSEM[fam, con, :],\
                                                  linestyle='None', marker='o', color='b');
-        modPoints = all_plots[con, fam].semilogx(expSfCent, sfmixModResp[fam, con, :], 'ro'); # model responses
-        modRange = all_plots[con, fam].fill_between(expSfCent, sfmixModResp[fam, con, :], modLow[fam,con,:], \
+        modRange = all_plots[con, fam].fill_between(expSfCent, modLow[fam,con,:], \
                                                     modHigh[fam, con,:], color='r', alpha=0.2)
         all_plots[con,fam].set_xscale('log');
 
@@ -91,7 +93,7 @@ for con in range(nCon): # contrast
         if fam == 0:
             all_plots[con, fam].set_ylabel('Response (ips)', fontsize=20);
             
-f.legend((expPoints[0], modPoints[0], modRange), ('data', 'model', 'model range'), fontsize = 15, loc='right');
+f.legend((expPoints[0], modRange), ('data', 'model range'), fontsize = 15, loc='right');
 f.suptitle('SF mixture experiment', fontsize=25);
 
 # In[439]:
@@ -181,7 +183,7 @@ fDetails.suptitle('SF mixture - details', fontsize=25);
 
 # and now save it
 bothFigs = [f, fDetails];
-saveName = "cellComplete_%d.pdf" % cellNum
+saveName = "cellSimple_%d.pdf" % cellNum
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(bothFigs)): ## will open an empty extra figure :(
     pdf.savefig(bothFigs[fig])

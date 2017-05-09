@@ -141,7 +141,7 @@ def organize_modResp(modResp, expStructure):
     nFam = 5;
     nCon = 2;
     nCond = 11; # 11 sfCenters for sfMix
-    nReps = 10;
+    nReps = 20; # never more than 20 reps per stim. condition
     
     # Analyze the stimulus-driven responses for the orientation tuning curve
     oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
@@ -181,7 +181,7 @@ def organize_modResp(modResp, expStructure):
                 if len(indCond[0]) > 0:
                     #print('setting up ' + str((iE, iW, iC)) + ' with ' + str(len(indCond[0])) + 'trials');
                     rateSfMix[iW, iE, iC] = numpy.nanmean(modResp[indCond]);
-                    allSfMix[iW, iE, iC, :] = modResp[indCond];
+                    allSfMix[iW, iE, iC, 0:len(indCond[0])] = modResp[indCond];
                     iC         = iC+1;
                  
     return rateOr, rateCo, rateSfMix, allSfMix;
