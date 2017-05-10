@@ -15,7 +15,7 @@
 
 import sys
 import numpy as np
-from helper_fcns import organize_modResp, flexible_Gauss, getSuppressiveSFtuning
+from helper_fcns import organize_modResp, flexible_Gauss, getSuppressiveSFtuning, compute_SF_BW
 import model_responses as mod_resp
 import matplotlib
 matplotlib.use('Agg') # why? so that we can get around having no GUI on cluster
@@ -31,7 +31,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 expName = 'dataList.npy'
 fitName = 'fitList.npy'
-descrName = 'descrFits.npy';
+descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
 
 nFam = 5;
@@ -39,9 +39,14 @@ nCon = 2;
 plotSteps = 100; # how many steps for plotting descriptive functions?
 sfPlot = np.logspace(-1, 1, plotSteps);
 
+# for bandwidth/prefSf descriptive stuff
+muLoc = 2; # mu is in location '2' of parameter arrays
+height = 1/2.; # measure BW at half-height
+sf_range = [0.01, 10]; # allowed values of 'mu' for fits - see descr_fit.py for details
+
 dL = np.load(data_loc + expName).item();
 fitList = np.load(data_loc + fitName, encoding='latin1'); # no '.item()' because this is array of dictionaries...
-descrFits = np.load(data_loc + descrName, encoding='latin1').item();
+descrExpFits = np.load(data_loc + descrExpName, encoding='latin1').item();
 descrModFits = np.load(data_loc + descrModName, encoding='latin1').item();
 
 # #### Load data
@@ -50,7 +55,7 @@ descrModFits = np.load(data_loc + descrModName, encoding='latin1').item();
 
 expData = np.load(str(data_loc + dL['unitName'][cellNum-1] + '_sfm.npy')).item();
 modFit = fitList[cellNum-1]['params']; # 
-descrFit = descrFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
+descrExpFit = descrExpFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 descrModFit = descrModFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 
 a, modResp = mod_resp.SFMGiveBof(modFit, expData);
@@ -64,6 +69,25 @@ modHigh = np.nanmax(allSfMix, axis=3)
 findNan = np.isnan(allSfMixExp);
 nonNan = np.sum(findNan == False, axis=3); # how many valid trials are there for each fam x con x center combination?
 allExpSEM = np.nanstd(allSfMixExp, axis=3) / np.sqrt(nonNan); # SEM
+
+# Do some analysis of bandwidth, prefSf
+
+bwMod = np.ones((nFam, nCon)) * np.nan;
+bwExp = np.ones((nFam, nCon)) * np.nan;
+pSfMod = np.ones((nFam, nCon)) * np.nan;
+pSfExp = np.ones((nFam, nCon)) * np.nan;
+
+for f in range(nFam):
+        
+      ignore, bwMod[f,0] = compute_SF_BW(descrModFit[f, 0, :], height, sf_range)
+      ignore, bwMod[f,1] = compute_SF_BW(descrModFit[f, 1, :], height, sf_range)
+      pSfMod[f,0] = descrModFit[f, 0, muLoc]
+      pSfMod[f,1] = descrModFit[f, 1, muLoc]
+
+      ignore, bwExp[f, 0] = compute_SF_BW(descrExpFit[f, 0, :], height, sf_range)
+      ignore, bwExp[f, 1] = compute_SF_BW(descrExpFit[f, 1, :], height, sf_range)
+      pSfExp[f, 0] = descrExpFit[f, 0, muLoc]
+      pSfExp[f, 1] = descrExpFit[f, 1, muLoc]
 
 # #### Plot the main stuff - sfMix experiment with model predictions and descriptive fits
 
@@ -92,8 +116,11 @@ for con in range(nCon): # contrast
             all_plots[con, fam].set_xlabel('sf center (cpd)', fontsize=20);
         if fam == 0:
             all_plots[con, fam].set_ylabel('Response (ips)', fontsize=20);
+       
+        all_plots[con,fam].text(0.5,1.05, 'mod: {:.2f} cpd | {:.2f} oct'.format(pSfMod[fam, con], bwMod[fam, con]), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[con,fam].transAxes); 
+        all_plots[con,fam].text(0.5,1.10, 'exp: {:.2f} cpd | {:.2f} oct'.format(pSfExp[fam, con], bwExp[fam, con]), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[con,fam].transAxes); 
             
-f.legend((expPoints[0], modRange), ('data', 'model range'), fontsize = 15, loc='right');
+f.legend((expPoints[0], modRange), ('data +- 1 s.e.m.', 'model range'), fontsize = 15, loc='right');
 f.suptitle('SF mixture experiment', fontsize=25);
 
 # In[439]:

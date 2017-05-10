@@ -31,9 +31,9 @@ def compute_SF_BW(fit, height, sf_range):
     # Height is defined RELATIVE to baseline
     # i.e. baseline = 10, peak = 50, then half height is NOT 25 but 30
     
-    bw_log = math.nan;
+    bw_log = numpy.nan;
     SF = numpy.empty((2, 1));
-    SF[:] = math.nan;
+    SF[:] = numpy.nan;
 
     # left-half
     left_full_bw = 2 * (fit[3] * sqrt(2*log(1/height)));
