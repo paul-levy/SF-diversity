@@ -146,7 +146,7 @@ prefOri   = np.pi/180 * modFit[0];
 dOrder    = modFit[3]
 aRatio    = modFit[2];
 filtTemp  = mod_resp.oriFilt(imSizeDeg, pixSize, prefSf, prefOri, dOrder, aRatio);
-filt      = (filtTemp - filtTemp[0])/ np.amax(np.abs(filtTemp - filtTemp[0]));
+filt      = (filtTemp - filtTemp[0,0])/ np.amax(np.abs(filtTemp - filtTemp[0,0]));
 all_plots[1,0].imshow(filt, cmap='gray');
 all_plots[1,0].axis('off');
 all_plots[1,0].set_title('Filter in space', fontsize=20)
@@ -162,7 +162,7 @@ sfExc = s/sMax;
 inhSfTuning = getSuppressiveSFtuning();
 
 # Compute weights for suppressive signals
-inhChannel = {'gain': modFit[4], 'asym': modFit[11]};
+inhChannel = {'gain': modFit[5], 'asym': modFit[12]};
 nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
 inhWeight = [];
 for iP in range(len(nInhChan)):
