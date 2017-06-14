@@ -584,7 +584,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
 
         if (i/500.0) == round(i/500.0): # save every once in a while!!!
           
-          print('iteration ' + str(i));
+          print('iteration ' + str(i) + '...NLL is ' + str(NLL) + ' and params are ' + str(curr_params));
           
           if NLL < currNLL or numpy.any(numpy.isnan(curr_params)): # if the saved params are NaN, overwrite them
 
@@ -596,7 +596,10 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
               continue;
 
             print('.update.');
+            print('.params.'); print(real_params);
             currNLL = NLL;
+	    # reload fitlist in case changes have been made with the file elsewhere!
+            fitList = numpy.load(loc_data + fitListName); # no .item() needed...
             fitList[cellNum-1]['NLL'] = NLL;
             fitList[cellNum-1]['params'] = real_params;
             numpy.save(loc_data + fitListName, fitList);   
@@ -618,6 +621,8 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     
     # Put those into fitList and save...ONLY if better than before
     if NLL < currNLL:
+      # reload (as above) to avoid overwriting changes made with the file elsewhere
+      fitList = numpy.load(loc_data + fitListName); # no .item() needed...
       fitList[cellNum-1]['NLL'] = NLL;
       fitList[cellNum-1]['params'] = x;
 
