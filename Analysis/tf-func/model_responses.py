@@ -249,12 +249,12 @@ def SFMSimpleResp(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, mod_par
         
 def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, \
                ph_normResp, ph_normCenteredSf, v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym):
+                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym, v_normStr):
     
     # Computes the negative log likelihood for the LN-LN model
 
     params = applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym);
+                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym, v_normStr);
     
     # 00 = preferred direction of motion (degrees)
     # 01 = preferred spatial frequency   (cycles per degree)
@@ -269,6 +269,7 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     # 10 = late additive noise
     # 11 = variance of response gain    
     # 12 = asymmetry suppressive signal 
+    # 13 = strength of normalization - why scaled? Shooner et al result that normalization is variable in strength by neuron
 
     nFrames = 120; # hashtag always
     
@@ -283,6 +284,7 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     # Inhibitory channel
     inhGain = params[5];
     inhAsym = params[12];
+    normStr = params[13]; 
 
      # Other (nonlinear) model components
     sigma    = tf.pow(tf.constant(10, dtype=tf.float32), params[6]); # normalization constant
@@ -322,8 +324,9 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     uno = tf.add(noiseEarly, tf.cast(Lexc, dtype=tf.float32));
-    numerator     = tf.add(uno, inhGain*Linh);
-    denominator   = tf.square(sigma) + Linh;
+    numerator     = tf.add(uno, inhGain); # just a constant for subtractive suppression
+    # numerator     = tf.add(uno, inhGain*Linh);
+    denominator   = tf.square(sigma) + normStr*Linh;
     # ratio will be nTrials x nTrials
     ratio         = tf.pow(tf.maximum(tf.constant(0, dtype=tf.float32), tf.divide(numerator,denominator)), respExp);
     meanRate      = tf.reduce_mean(ratio, axis=1);
@@ -338,17 +341,12 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
 
     log_lh = negBinom(ph_spikeCount, r, p);
      
-    #return respModel, E, ph_spikeCount, r, p;
-    #NLL = log_lh;
     NLL = tf.reduce_mean(-1*log_lh);
-    #NLL = tf.add(tf.reduce_mean(-log_lh), NLLExp);
     
     return NLL;
-    #return NLL, respModel;
-    #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};
 
 def applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym):
+                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym, v_normStr):
         
         # 00 = preferred direction of motion (degrees) || [unconstrained]
         # 01 = preferred spatial frequency   (cycles per degree) || [>0.05]
@@ -363,33 +361,24 @@ def applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_no
         # 10 = late additive noise || >0
         # 11 = variance of response gain || >1e-3     
         # 12 = asymmetry suppressive signal || [-0.35, 0.35]
+        # 13 = strength of normalization || [0.5, 1.5]
 
     zero = v_prefOr;
-    #zero = tf.clip_by_value(params[0], -180, 440);
     one = tf.add(tf.nn.softplus(v_prefSf), 0.05);
-    #one = tf.add(tf.square(v_prefSf), 0.05);
     two = tf.add(tf.nn.softplus(v_aRat), 0.1);
-    #two = tf.add(tf.square(v_aRat), 0.1);
     three = tf.add(tf.nn.softplus(v_dOrdSp), 0.1);
-    #three = tf.add(tf.square(v_dOrdSp), 0.1);
     four = tf.sigmoid(v_DS);
-    five = -tf.sigmoid(v_inhGain);
+    five = -50*tf.sigmoid(v_inhGain); # 50? Why not...
     six = v_normConst;
     seven = tf.add(tf.nn.softplus(v_respExp), 1);
-    #seven = tf.add(tf.square(v_respExp), 1);
-    #eight = tf.clip_by_value(params[8], 1e-3, 1e6);
     eight = tf.add(tf.nn.softplus(v_respScalar), 1e-3);
-    #eight = tf.add(tf.square(v_respScalar), 1e-3);
     nine = tf.sigmoid(v_noiseEarly);
-    #nine = tf.square(params[9]);
     ten = tf.nn.softplus(v_noiseLate);
-    #ten = tf.square(v_noiseLate);
     eleven = tf.add(tf.nn.softplus(v_varGain), 1e-3);
-    #eleven = tf.add(tf.square(v_varGain), 1e-3);
-    twelve = .7*tf.sigmoid(v_inhAsym) - 0.35;
-    
-    return zero,one,two,three,four,five,six,seven,eight,nine,ten,eleven,twelve;
-
+    twelve = tf.constant(0, tf.float32); #.7*tf.sigmoid(v_inhAsym) - 0.35;
+    thirteen = tf.sigmoid(v_normStr) + 0.5;
+    # NOTE: You are just setting asymmetry to 0 (twelve = 0)    
+    return [zero,one,two,three,four,five,six,seven,eight,nine,ten,eleven,twelve,thirteen];
 
 def negBinom(x, r, p):
     # We assume that r & p are tf placeholders/variables; x is a constant
@@ -415,7 +404,9 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal machine
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fitList = numpy.load(loc_data + 'fitList.npy'); # no .item() needed...
+    fitListName = 'fitListVarNorm.npy';
+
+    fitList = numpy.load(loc_data + fitListName); # no .item() needed...
     dataList = numpy.load(loc_data + 'dataList.npy').item();
     dataNames = dataList['unitName'];
 
@@ -442,6 +433,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     # 10 = late additive noise
     # 11 = variance of response gain    
     # 12 = asymmetry suppressive signal    
+    # 13 = strength of normalization
     curr_params = fitList[cellNum-1]['params']; # load parameters from the fitList! this is what actually gets updated...
      
     pref_ori = float(prefOrEst) if initFromCurr==0 else curr_params[0];
@@ -457,6 +449,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     noiseLate = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[10];
     varGain = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[11];
     inhAsym = numpy.random.uniform(-0.3, 0.3) if initFromCurr==0 else curr_params[12];
+    normStr = numpy.random.uniform(0.5, 1.5) if initFromCurr==0 else curr_params[13];
     
     v_prefOr = tf.Variable(pref_ori, dtype=tf.float32);    
     v_prefSf = tf.Variable(pref_sf, dtype=tf.float32);
@@ -470,7 +463,9 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     v_noiseEarly = tf.Variable(noiseEarly, dtype=tf.float32);
     v_noiseLate = tf.Variable(noiseLate, dtype=tf.float32);
     v_varGain = tf.Variable(varGain, dtype=tf.float32);
-    v_inhAsym = tf.Variable(inhAsym, dtype=tf.float32);
+    v_inhAsym = tf.Variable(0, dtype=tf.float32);
+    # v_inhAsym = tf.Variable(inhAsym, dtype=tf.float32);
+    v_normStr = tf.Variable(normStr, dtype=tf.float32);
  
     #########
     # Now get all the data we need for tf_placeholders 
@@ -535,13 +530,13 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     # Set up model here - we return the NLL
     okok = SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, \
               ph_normResp, ph_normCentSf, v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym);
+                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym, v_normStr);
 
     if subset_frac > 0:  
       ph_stimTfFull = tf.placeholder(tf.float32, shape=fixedTf.shape);
       full = SFMGiveBof(ph_stimOr, ph_stimTfFull, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, \
               ph_normResp, ph_normCentSf, v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym);
+                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym, v_normStr);
     
     
     print('Setting optimizer');
@@ -594,15 +589,17 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
           if NLL < currNLL or numpy.any(numpy.isnan(curr_params)): # if the saved params are NaN, overwrite them
 
        	    real_params = m.run(applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
-                                v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym));
+                                v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym, v_normStr));
 
             if numpy.any(numpy.isnan(real_params)): # don't save a fit with NaN!
+              print('.nanParam.');
               continue;
 
+            print('.update.');
             currNLL = NLL;
             fitList[cellNum-1]['NLL'] = NLL;
             fitList[cellNum-1]['params'] = real_params;
-            numpy.save(loc_data + 'fitList.npy', fitList);   
+            numpy.save(loc_data + fitListName, fitList);   
 
     # Now the fitting is done    
     # Now get "true" model parameters and NLL
@@ -617,14 +614,14 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
 
 
     x = m.run(applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_inhGain, v_normConst, \
-                v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym));
+                v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_inhAsym, v_normStr));
     
     # Put those into fitList and save...ONLY if better than before
     if NLL < currNLL:
       fitList[cellNum-1]['NLL'] = NLL;
       fitList[cellNum-1]['params'] = x;
 
-      numpy.save(loc_data + 'fitList.npy', fitList);
+      numpy.save(loc_data + fitListName, fitList);
     
     return NLL, x;
 
