@@ -586,19 +586,20 @@ def SFMGiveBof(params, structureSFM):
     # Computes the negative log likelihood for the LN-LN model
     # Returns NLL ###, respModel, E
 
-    # 01 = preferred direction of motion (degrees)
-    # 02 = preferred spatial frequency   (cycles per degree)
-    # 03 = aspect ratio 2-D Gaussian
-    # 04 = derivative order in space
-    # 05 = directional selectivity
-    # 06 = gain inhibitory channel
-    # 07 = normalization constant        (log10 basis)
-    # 08 = response exponent
-    # 09 = response scalar
-    # 10 = early additive noise
-    # 11 = late additive noise
-    # 12 = variance of response gain    
-    # 13 = asymmetry suppressive signal 
+    # 00 = preferred direction of motion (degrees)
+    # 01 = preferred spatial frequency   (cycles per degree)
+    # 02 = aspect ratio 2-D Gaussian
+    # 03 = derivative order in space
+    # 04 = directional selectivity
+    # 05 = gain inhibitory channel
+    # 06 = normalization constant        (log10 basis)
+    # 07 = response exponent
+    # 08 = response scalar
+    # 09 = early additive noise
+    # 10 = late additive noise
+    # 11 = variance of response gain    
+    # 12 = asymmetry suppressive signal 
+    # 13 = strength of normalization
 
     print('ha!');
     
@@ -613,6 +614,10 @@ def SFMGiveBof(params, structureSFM):
 
     # Inhibitory channel
     inhChannel = {'gain': params[5], 'asym': params[12]};
+    if len(params) > 13:
+      normStr = params[13];
+    else:
+      normStr = 1;
 
      # Other (nonlinear) model components
     sigma    = pow(10, params[6]); # normalization constant
@@ -651,8 +656,6 @@ def SFMGiveBof(params, structureSFM):
         # Get simple cell response for excitatory channel
         E = SFMSimpleResp(structureSFM, excChannel);  
 
-        #pdb.set_trace();
-
         # Extract simple cell response (half-rectified linear filtering)
         Lexc = E['simpleResp'];
 
@@ -660,8 +663,9 @@ def SFMGiveBof(params, structureSFM):
         Linh = numpy.sqrt((inhWeightMat*T['mod']['normalization']['normResp']).sum(1)).transpose();
 
         # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
-        numerator     = noiseEarly + Lexc + inhChannel['gain']*Linh;
-        denominator   = pow(sigma, 2) + Linh;
+        numerator     = noiseEarly + Lexc + inhChannel['gain'];
+        # numerator     = noiseEarly + Lexc + inhChannel['gain']*Linh;
+        denominator   = pow(sigma, 2) + normStr*Linh;
         ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
         meanRate      = ratio.mean(0);
         respModel     = noiseLate + scale*meanRate; # respModel[iR]

@@ -30,7 +30,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 #save_loc = '/ser/1.2/p2/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Figures/'# CNS
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 expName = 'dataList.npy'
-fitName = 'fitList.npy'
+fitName = 'fitListVarNorm.npy'
 descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
 
@@ -93,21 +93,21 @@ for f in range(nFam):
 
 # In[281]:
 
-# f, all_plots = plt.subplots(nCon+2, nFam, figsize=(25,25))
 f, all_plots = plt.subplots(nCon, nFam, sharex='col', sharey='row', figsize=(25,8))
-# why con+2 for number of rows? Want to plot ori/con tuning, model details, too
 expSfCent = expData['sfm']['exp']['sf'][0][0];
 expResponses = expData['sfm']['exp']['sfRateMean'];
 
 # plot experiment and models
 for con in range(nCon): # contrast
+    yMax = 1.25*np.maximum(np.amax(expResponses[0][con]), np.amax(modHigh[0, con, :])); # we assume that 1.25x Max response for single grating will be enough
+    all_plots[con, 0].set_ylim([-1, yMax]);
     for fam in range(nFam): # family        
         expPoints = all_plots[con, fam].errorbar(expSfCent, expResponses[fam][con], allExpSEM[fam, con, :],\
                                                  linestyle='None', marker='o', color='b');
         modRange = all_plots[con, fam].fill_between(expSfCent, modLow[fam,con,:], \
                                                     modHigh[fam, con,:], color='r', alpha=0.2)
+        sponRate = all_plots[con, fam].axhline(expData['sfm']['exp']['sponRateMean'], color='k', linestyle='dashed');
         all_plots[con,fam].set_xscale('log');
-
         
         # pretty
         all_plots[con,fam].tick_params(labelsize=15, width=1, length=8);
@@ -120,7 +120,7 @@ for con in range(nCon): # contrast
         all_plots[con,fam].text(0.5,1.05, 'mod: {:.2f} cpd | {:.2f} oct'.format(pSfMod[fam, con], bwMod[fam, con]), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[con,fam].transAxes); 
         all_plots[con,fam].text(0.5,1.10, 'exp: {:.2f} cpd | {:.2f} oct'.format(pSfExp[fam, con], bwExp[fam, con]), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[con,fam].transAxes); 
             
-f.legend((expPoints[0], modRange), ('data +- 1 s.e.m.', 'model range'), fontsize = 15, loc='right');
+f.legend((expPoints[0], modRange, sponRate), ('data +- 1 s.e.m.', 'model range', 'spontaneous f.r.'), fontsize = 15, loc='right');
 f.suptitle('SF mixture experiment', fontsize=25);
 
 # In[439]:
@@ -159,6 +159,11 @@ s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
 sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
 sfExc = s/sMax;
 
+if len(modFit) > 13:
+  varNorm = modFit[13];
+else:
+  varNorm = 1;
+
 inhSfTuning = getSuppressiveSFtuning();
 
 # Compute weights for suppressive signals
@@ -166,25 +171,26 @@ inhChannel = {'gain': modFit[5], 'asym': modFit[12]};
 nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
 inhWeight = [];
 for iP in range(len(nInhChan)):
-    inhWeight = np.append(inhWeight, 1 + inhChannel['asym']*                           (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP])                             - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
+    inhWeight = np.append(inhWeight, 1 + inhChannel['asym'] * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
            
-sfInh  = np.sum(0.5*modFit[5]*(inhWeight*np.square(inhSfTuning)), 1); # sum is over all filters
+sfInh = modFit[5] * np.ones(omega.shape) / np.amax(modHigh);
+#sfInh  = np.sum(0.5*modFit[5]*(inhWeight*np.square(inhSfTuning)), 1); # sum is over all filters
 sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
-sfNorm = sfNorm/np.amax(np.abs(sfNorm));
+sfNorm = varNorm * sfNorm/np.amax(np.abs(sfNorm));
 
 # just setting up lines
 all_plots[1,1].semilogx([omega[0], omega[-1]], [0, 0], 'k--')
-all_plots[1,1].semilogx([.01, .01], [-1, 1], 'k--')
-all_plots[1,1].semilogx([.1, .1], [-1, 1], 'k--')
-all_plots[1,1].semilogx([1, 1], [-1, 1], 'k--')
-all_plots[1,1].semilogx([10, 10], [-1, 1], 'k--')
-all_plots[1,1].semilogx([100, 100], [-1, 1], 'k--')
+all_plots[1,1].semilogx([.01, .01], [-1.5, 1], 'k--')
+all_plots[1,1].semilogx([.1, .1], [-1.5, 1], 'k--')
+all_plots[1,1].semilogx([1, 1], [-1.5, 1], 'k--')
+all_plots[1,1].semilogx([10, 10], [-1.5, 1], 'k--')
+all_plots[1,1].semilogx([100, 100], [-1.5, 1], 'k--')
 # now the real stuff
 all_plots[1,1].semilogx(omega, sfExc, 'k-')
 all_plots[1,1].semilogx(omega, sfInh, 'r--', linewidth=2);
 all_plots[1,1].semilogx(omega, sfNorm, 'r-', linewidth=1);
 all_plots[1,1].set_xlim([omega[0], omega[-1]]);
-all_plots[1,1].set_ylim([-1, 1]);
+all_plots[1,1].set_ylim([-1.5, 1]);
 all_plots[1, 1].set_xlabel('SF (cpd)', fontsize=20);
 all_plots[1, 1].set_ylabel('Normalized response (a.u.)', fontsize=20);
 
@@ -210,7 +216,7 @@ fDetails.suptitle('SF mixture - details', fontsize=25);
 
 # and now save it
 bothFigs = [f, fDetails];
-saveName = "cellSimple_%d.pdf" % cellNum
+saveName = "cellVN_%d.pdf" % cellNum
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(bothFigs)): ## will open an empty extra figure :(
     pdf.savefig(bothFigs[fig])

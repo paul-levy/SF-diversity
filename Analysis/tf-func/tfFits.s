@@ -17,13 +17,11 @@
 module purge
 module load tensorflow/python2.7/20170218
 
-python model_responses.py $SLURM_ARRAY_TASK_ID 5000 0.1 0.25 0
-python model_responses.py $SLURM_ARRAY_TASK_ID 5000 0.1 0.25 0
-python model_responses.py $SLURM_ARRAY_TASK_ID 5000 0.1 0.25 0
-python model_responses.py $SLURM_ARRAY_TASK_ID 5000 0.1 0.25 0
-python model_responses.py $SLURM_ARRAY_TASK_ID 5000 0.1 0.25 0
-python model_responses.py $SLURM_ARRAY_TASK_ID 50000 0.1 0.25 1
-python model_responses.py $SLURM_ARRAY_TASK_ID 50000 0.05 0.5 1
+python model_responses.py $SLURM_ARRAY_TASK_ID 15000 0.1 0.1 0
+python model_responses.py $SLURM_ARRAY_TASK_ID 15000 0.1 0.1 0
+python model_responses.py $SLURM_ARRAY_TASK_ID 15000 0.1 0.1 0
+python model_responses.py $SLURM_ARRAY_TASK_ID 15000 0.1 0.1 0
+python model_responses.py $SLURM_ARRAY_TASK_ID 100000 0.1 0.1 1
  
 # leave a blank line at the end
 

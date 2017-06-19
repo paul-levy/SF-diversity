@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 
 #SBATCH --time=00:05:00
-#SBATCH --mem=1500MB
+#SBATCH --mem=1500M0B
 
 #SBATCH --job-name=princeDescr
 
