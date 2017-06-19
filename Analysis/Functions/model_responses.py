@@ -687,3 +687,112 @@ def SFMGiveBof(params, structureSFM):
 
     return NLL, respModel;
     #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};
+
+def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
+    # Computes the negative log likelihood for the LN-LN model
+    # Returns NLL ###, respModel, E
+
+    # 00 = preferred direction of motion (degrees)
+    # 01 = preferred spatial frequency   (cycles per degree)
+    # 02 = aspect ratio 2-D Gaussian
+    # 03 = derivative order in space
+    # 04 = directional selectivity
+    # 05 = gain inhibitory channel
+    # 06 = normalization constant        (log10 basis)
+    # 07 = response exponent
+    # 08 = response scalar
+    # 09 = early additive noise
+    # 10 = late additive noise
+    # 11 = variance of response gain    
+    # 12 = asymmetry suppressive signal 
+    # 13 = strength of normalization
+
+    print('simulate!');
+    
+    T = structureSFM['sfm'];
+
+    # Get parameter values
+    # Excitatory channel
+    pref = {'or': params[0], 'sf': params[1]};
+    arat = {'sp': params[2]};
+    dord = {'sp': params[3], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
+    excChannel = {'pref': pref, 'arat': arat, 'dord': dord, 'ds': params[4]};
+
+    # Inhibitory channel
+    inhChannel = {'gain': params[5], 'asym': params[12]};
+    if len(params) > 13:
+      normStr = params[13];
+    else:
+      normStr = 1;
+
+     # Other (nonlinear) model components
+    sigma    = pow(10, params[6]); # normalization constant
+    # respExp  = 2; # response exponent
+    respExp  = params[7]; # response exponent
+    scale    = params[8]; # response scalar
+
+    # Noise parameters
+    noiseEarly = params[9];   # early additive noise
+    noiseLate  = params[10];  # late additive noise
+    varGain    = params[11];  # multiplicative noise
+
+    # Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
+    priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15)); # matlab: lognpdf(respExp, 1.15, 0.3);
+    NLLExp   = -numpy.log(priorExp);
+
+    # Compute weights for suppressive signals
+    nInhChan = T['mod']['normalization']['pref']['sf'];
+    nTrials = len(T['exp']['trial']['num']);
+    inhWeight = [];
+    nFrames = 120; # always
+    for iP in range(len(nInhChan)):
+        inhWeight = numpy.append(inhWeight, 1 + inhChannel['asym']*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
+                                            - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
+
+    # assumption (made by Robbe) - only two normalization pools
+    inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
+    inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
+    inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
+    inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
+                              
+    # Evaluate sfmix experiment
+    T = structureSFM['sfm']; # [iR]
+
+    # Get stimulus structure ready...
+    stimParams = dict();
+    stimParams['stimFamily'] = stimFamily;
+    stimParams['conLevel'] = con;
+    
+    # Get simple cell response for excitatory channel
+    E = SFMSimpleResp(structureSFM, excChannel);  
+
+    # Extract simple cell response (half-rectified linear filtering)
+    Lexc = E['simpleResp'];
+
+    # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to         bring everything in linear contrast scale again)
+    Linh = numpy.sqrt((inhWeightMat*T['mod']['normalization']['normResp']).sum(1)).transpose();
+
+    # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
+    numerator     = noiseEarly + Lexc + inhChannel['gain'];
+    # numerator     = noiseEarly + Lexc + inhChannel['gain']*Linh;
+    denominator   = pow(sigma, 2) + normStr*Linh;
+    ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
+    meanRate      = ratio.mean(0);
+    respModel     = noiseLate + scale*meanRate; # respModel[iR]
+
+    # Get predicted spike count distributions
+    mu  = numpy.maximum(.01, T['exp']['trial']['duration']*respModel); # The predicted mean spike count; respModel[iR]
+    var = mu + (varGain*pow(mu,2));                        # The corresponding variance of the spike count
+    r   = pow(mu,2)/(var - mu);                           # The parameters r and p of the negative binomial distribution
+    p   = r/(r + mu);
+
+    # Evaluate the model
+    llh = nbinom.pmf(T['exp']['trial']['spikeCount'], r, p); # Likelihood for each pass under doubly stochastic model
+
+    NLLtempSFM = sum(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]      
+
+    # Combine data and prior
+    NLL = NLLtempSFM + NLLExp; # sum over NLLtempSFM if you allow it to be d>1
+
+    return NLL, respModel;
+    #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};

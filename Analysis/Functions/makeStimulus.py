@@ -62,9 +62,11 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
         total_contrast = 1;
     elif conLevel == 2:
         total_contrast = 1/3;
+    elif conLevel>=0 and conLevel<=1:
+        total_contrast = conLevel;
     else:
         #warning('Contrast should be given as 1 [full] or 2 [low/one-third]; setting contrast to 1 (full)');
-        total_contrast = 1;
+        total_contrast = 1; # default to that
         
     spread     = spreadVec[stimFamily-1];
     profTemp = norm.pdf(octSeries, 0, spread);
