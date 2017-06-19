@@ -1,5 +1,6 @@
 import math, cmath, numpy, os
-from makeStimulus import makeStimulus 
+from helper_fcns import makeStimulus
+#from makeStimulus import makeStimulus 
 from scipy.stats import norm, mode, lognorm, nbinom
 from numpy.matlib import repmat
 import time
@@ -39,8 +40,6 @@ def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
     filt = fft.fftshift(fft.ifft2(fft.ifftshift(ffilt)));
     return filt.real;
 
-#def 
-
 # SFMSimpleResp - Used in Robbe V1 model - excitatory, linear filter response
 def SFMSimpleResp(S, channel, stimParams = []):
     # returns object (class?) with simpleResp and other things
@@ -57,10 +56,10 @@ def SFMSimpleResp(S, channel, stimParams = []):
     make_own_stim = 0;
     if stimParams: # i.e. if we actually have non-empty stimParams
         make_own_stim = 1;
-        if not stimParams.haskey('template'):
-            stimParams.setdefault('template', S);
-        if not stimParams.haskey('repeats'):
-            stimParams.setdefault('repeats', 10); # why 10? To match experimental
+        if not 'template' in stimParams:
+            stimParams['template'] = S;
+        if not 'repeats' in stimParams:
+            stimParams['repeats'] = 10; # why 10? To match experimental #repetitions
 
     # Load the data structure
     T = S.get('sfm');
@@ -293,10 +292,10 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
         S = unitName;
         
     if make_own_stim:
-        if not stimParams.haskey('template'): 
-            stimParams.setdefault('template', S);
-        if not stimParams.haskey('repeats'):
-            stimParams.setdefault('repeats', 10); # why 10? To match experimental
+        if not 'template' in stimParams:
+            stimParams['template'] = S;
+        if not 'repeats' in stimParams:
+            stimParams['repeats'] = 10; # why 10? To match experimental #repetitions
     
     T = S['sfm']; # we assume first sfm if there exists more than one
         
@@ -354,7 +353,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
         nSf = 1;
     
     if make_own_stim == 1:
-        nTrials = stimParams.repeats; # keep consistent with 10 repeats per stim. condition
+        nTrials = stimParams['repeats']; # keep consistent with 10 repeats per stim. condition
     else:
         nTrials  = len(z.get('num'));
 
@@ -379,7 +378,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
             # trials exist
             # if there are enough for the trial 'p' we are at now, then
             # grab that one; otherwise get the first
-            if stimParams.haskey('trial_used'):
+            if 'trial_used' in stimParams:
                 if stimParams.get('trial_used') >= p:
                     stimParams['template']['trial_used'] = stimParams.get('trial_used')[p];
                 else:
@@ -689,8 +688,8 @@ def SFMGiveBof(params, structureSFM):
     #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};
 
 def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
-    # Computes the negative log likelihood for the LN-LN model
-    # Returns NLL ###, respModel, E
+    # Currently, will get slightly different stimuli for excitatory and inhibitory/normalization pools
+    # But differences are just in phase/TF, but for TF, drawn from same distribution, anyway...
 
     # 00 = preferred direction of motion (degrees)
     # 01 = preferred spatial frequency   (cycles per degree)
@@ -735,14 +734,17 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     noiseEarly = params[9];   # early additive noise
     noiseLate  = params[10];  # late additive noise
     varGain    = params[11];  # multiplicative noise
-
-    # Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
-    priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15)); # matlab: lognpdf(respExp, 1.15, 0.3);
-    NLLExp   = -numpy.log(priorExp);
-
+    
+    # Get stimulus structure ready...
+    stimParams = dict();
+    stimParams['stimFamily'] = stimFamily;
+    stimParams['conLevel'] = con;
+    stimParams['sf_c'] = sf_c;
+    stimParams['repeats'] = 10; # defaults to 10 anyway, in makeStimulus.py
+    
     # Compute weights for suppressive signals
     nInhChan = T['mod']['normalization']['pref']['sf'];
-    nTrials = len(T['exp']['trial']['num']);
+    nTrials = stimParams['repeats'];
     inhWeight = [];
     nFrames = 120; # always
     for iP in range(len(nInhChan)):
@@ -757,20 +759,16 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
                               
     # Evaluate sfmix experiment
     T = structureSFM['sfm']; # [iR]
-
-    # Get stimulus structure ready...
-    stimParams = dict();
-    stimParams['stimFamily'] = stimFamily;
-    stimParams['conLevel'] = con;
     
     # Get simple cell response for excitatory channel
-    E = SFMSimpleResp(structureSFM, excChannel);  
+    E = SFMSimpleResp(structureSFM, excChannel, stimParams);  
 
     # Extract simple cell response (half-rectified linear filtering)
     Lexc = E['simpleResp'];
 
     # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to         bring everything in linear contrast scale again)
-    Linh = numpy.sqrt((inhWeightMat*T['mod']['normalization']['normResp']).sum(1)).transpose();
+    normResp = GetNormResp(structureSFM, stimParams);
+    Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     numerator     = noiseEarly + Lexc + inhChannel['gain'];
@@ -780,19 +778,4 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     meanRate      = ratio.mean(0);
     respModel     = noiseLate + scale*meanRate; # respModel[iR]
 
-    # Get predicted spike count distributions
-    mu  = numpy.maximum(.01, T['exp']['trial']['duration']*respModel); # The predicted mean spike count; respModel[iR]
-    var = mu + (varGain*pow(mu,2));                        # The corresponding variance of the spike count
-    r   = pow(mu,2)/(var - mu);                           # The parameters r and p of the negative binomial distribution
-    p   = r/(r + mu);
-
-    # Evaluate the model
-    llh = nbinom.pmf(T['exp']['trial']['spikeCount'], r, p); # Likelihood for each pass under doubly stochastic model
-
-    NLLtempSFM = sum(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]      
-
-    # Combine data and prior
-    NLL = NLLtempSFM + NLLExp; # sum over NLLtempSFM if you allow it to be d>1
-
-    return NLL, respModel;
-    #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};
+    return respModel;
