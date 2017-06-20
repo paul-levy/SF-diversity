@@ -125,7 +125,7 @@ f.suptitle('SF mixture experiment', fontsize=25);
 
 # In[439]:
 
-fDetails, all_plots = plt.subplots(2,3, figsize=(25, 15))
+fDetails, all_plots = plt.subplots(3,5, figsize=(40, 25))
 # plot ori, CRF tuning
 modPlt=all_plots[0, 0].plot(expData['sfm']['exp']['ori'], oriModResp, 'ro'); # Model responses
 expPlt=all_plots[0, 0].plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-'); # Exp responses
@@ -199,7 +199,7 @@ for i in range(len(all_plots)):
         all_plots[i,j].tick_params(labelsize=15, width=1, length=8);
         all_plots[i,j].tick_params(width=1, length=4, which='minor'); # minor ticks, too...
 
-# last but not least, response nonlinearity
+# last but not least...and not last... response nonlinearity
 all_plots[1,2].plot([-1, 1], [0, 0], 'k--')
 all_plots[1,2].plot([0, 0], [-.1, 1], 'k--')
 all_plots[1,2].plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modFit[7]), 'k-', linewidth=2)
@@ -207,7 +207,25 @@ all_plots[1,2].plot(np.linspace(-1,1,100), np.maximum(0, np.linspace(-1,1,100)),
 all_plots[1,2].set_xlim([-1, 1]);
 all_plots[1,2].set_ylim([-.1, 1]);
     
-    
+# actually last - CRF at different dispersion levels
+crf_row = len(all_plots)-1;
+crf_sfIndex = np.argmin(abs(expSfCent - descrFit[0][0][2]));
+crf_sfVal = expSfCent[crf_sfIndex];
+crf_cons = expData['sfm']['exp']['con'];
+crf_sim = np.zeros((nFam, len(crf_cons)));
+# first, run the CRFs...
+for i in range(nFam):
+    print('simulating CRF for family ' + str(i+1));
+    for j in range(len(crf_cons)):
+        crf_sim[i, j] = np.mean(mod_resp.SFMsimulate(modFit, expData, i+1, crf_cons[j], crf_sfVal));
+
+# now plot!
+for i in range(len(all_plots[0])):
+    all_plots[crf_row, i].semilogx(1, expResponses[i][0][crf_sfIndex], 'ro'); # exp response - high con
+    all_plots[crf_row, i].semilogx(1/3, expResponses[i][1][crf_sfIndex], 'ro'); # exp response - low con
+    all_plots[crf_row, i].semilogx(crf_cons, crf_sim[i, :], 'bo-'); # model resposes - range of cons
+    all_plots[crf_row, i].set_xlabel('Con (%)', fontsize=20);    
+
 fDetails.legend((modPlt[0], expPlt[0]), ('model', 'experiment'), fontsize = 15, loc='center left');
 fDetails.suptitle('SF mixture - details', fontsize=25);
 
