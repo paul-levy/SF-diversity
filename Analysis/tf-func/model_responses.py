@@ -299,7 +299,7 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
 
     ### Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
     #priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15));
-    NLLExp = 0; # SUPER FUCKING HACKY!!!!!
+    NLLExp = 0; # should use priorExp and NLLExp lines commented out below, but not for now
     #NLLExp   = tf.constant(-numpy.log(priorExp) / ph_stimOr.shape[1]);
     # why divide by number of trials? because we take mean of NLLs, so this way it's fair to add them
 

@@ -552,7 +552,8 @@ def GetNormResp(iU, stimParams = []):
     M = dict();
     
     # Set paths
-    base = '/e/3.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
+    base = '/home/pl1465/SF_diversity/'; # prince 
+    #base = '/e/3.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
     currentPath  = base + 'Analysis/Scripts/';
     loadPath     = base + 'Analysis/Structures/';
     functionPath = base + 'Analysis/Functions/';

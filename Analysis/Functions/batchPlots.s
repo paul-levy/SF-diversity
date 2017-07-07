@@ -3,16 +3,16 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 
-#SBATCH --time=00:05:00
+#SBATCH --time=00:15:00
 #SBATCH --mem=1500M0B
 
-#SBATCH --job-name=princeDescr
+#SBATCH --job-name=sfPlots
 
 #SBATCH --mail-user=pl1465@nyu.edu
 #SBATCH --mail-type=ALL
 
-#SBATCH --output=df_%A_%a.out
-#SBATCH --error=df_%A_%a.err
+#SBATCH --output=plt_%A_%a.out
+#SBATCH --error=plt_%A_%a.err
 
 module purge
 module load tensorflow/python2.7/20170218

@@ -125,7 +125,7 @@ f.suptitle('SF mixture experiment', fontsize=25);
 
 # In[439]:
 
-fDetails, all_plots = plt.subplots(3,5, figsize=(40, 25))
+fDetails, all_plots = plt.subplots(3,5, figsize=(25,10))
 # plot ori, CRF tuning
 modPlt=all_plots[0, 0].plot(expData['sfm']['exp']['ori'], oriModResp, 'ro'); # Model responses
 expPlt=all_plots[0, 0].plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-'); # Exp responses
@@ -137,6 +137,10 @@ all_plots[0, 1].semilogx(expData['sfm']['exp']['con'], expData['sfm']['exp']['co
 all_plots[0, 1].set_xlabel('Con (%)', fontsize=20);
 
 all_plots[0,2].axis('off');
+all_plots[0,3].axis('off');
+all_plots[0,4].axis('off');
+all_plots[1,3].axis('off');
+all_plots[1,4].axis('off');
 
 # plot model details - filter
 imSizeDeg = expData['sfm']['exp']['size'];
@@ -208,23 +212,27 @@ all_plots[1,2].set_xlim([-1, 1]);
 all_plots[1,2].set_ylim([-.1, 1]);
     
 # actually last - CRF at different dispersion levels
-crf_row = len(all_plots)-1;
-crf_sfIndex = np.argmin(abs(expSfCent - descrFit[0][0][2]));
-crf_sfVal = expSfCent[crf_sfIndex];
-crf_cons = expData['sfm']['exp']['con'];
-crf_sim = np.zeros((nFam, len(crf_cons)));
+crf_row = len(all_plots)-1; # we're putting the CRFs in the last row of this plot
+crf_sfIndex = np.argmin(abs(expSfCent - descrExpFit[0][0][2])); # get mu (i.e. prefSf) as measured at high contrast, single grating and find closest presented SF (index)
+crf_sfVal = expSfCent[crf_sfIndex]; # what's the closest SF to the pref that was presented?
+crf_cons = expData['sfm']['exp']['con']; # what contrasts to sim. from model? Same ones used in exp
+crf_sim = np.zeros((nFam, len(crf_cons))); # create nparray for results
 # first, run the CRFs...
 for i in range(nFam):
     print('simulating CRF for family ' + str(i+1));
     for j in range(len(crf_cons)):
-        crf_sim[i, j] = np.mean(mod_resp.SFMsimulate(modFit, expData, i+1, crf_cons[j], crf_sfVal));
+        crf_sim[i, j] = np.mean(mod_resp.SFMsimulate(modFit, expData, i+1, crf_cons[j], crf_sfVal)); # take mean of the returned simulations (10 repetitions per stim. condition)
 
 # now plot!
 for i in range(len(all_plots[0])):
-    all_plots[crf_row, i].semilogx(1, expResponses[i][0][crf_sfIndex], 'ro'); # exp response - high con
-    all_plots[crf_row, i].semilogx(1/3, expResponses[i][1][crf_sfIndex], 'ro'); # exp response - low con
-    all_plots[crf_row, i].semilogx(crf_cons, crf_sim[i, :], 'bo-'); # model resposes - range of cons
+    all_plots[crf_row, i].semilogx(1, expResponses[i][0][crf_sfIndex], 'bo'); # exp response - high con
+    all_plots[crf_row, i].semilogx(0.33, expResponses[i][1][crf_sfIndex], 'bo'); # exp response - low con
+    all_plots[crf_row, i].semilogx(crf_cons, crf_sim[i, :], 'ro-'); # model resposes - range of cons
     all_plots[crf_row, i].set_xlabel('Con (%)', fontsize=20);    
+    all_plots[crf_row, i].set_xlim([1e-2, 1e0]);
+    all_plots[crf_row, i].set_ylim([0, 1.05*np.amax(np.maximum(crf_sim[0, :], expResponses[0][0][crf_sfIndex]))]);
+    if i == 0:
+      all_plots[crf_row, i].set_ylabel('Resp. amp (sps)');
 
 fDetails.legend((modPlt[0], expPlt[0]), ('model', 'experiment'), fontsize = 15, loc='center left');
 fDetails.suptitle('SF mixture - details', fontsize=25);
