@@ -591,15 +591,12 @@ def SFMGiveBof(params, structureSFM):
     # 02 = aspect ratio 2-D Gaussian
     # 03 = derivative order in space
     # 04 = directional selectivity
-    # 05 = gain inhibitory channel
-    # 06 = normalization constant        (log10 basis)
-    # 07 = response exponent
-    # 08 = response scalar
-    # 09 = early additive noise
-    # 10 = late additive noise
-    # 11 = variance of response gain    
-    # 12 = asymmetry suppressive signal 
-    # 13 = strength of normalization
+    # 05 = normalization constant        (log10 basis)
+    # 06 = response exponent
+    # 07 = response scalar
+    # 08 = early additive noise
+    # 09 = late additive noise
+    # 10 = variance of response gain    
 
     print('ha!');
     
@@ -613,22 +610,18 @@ def SFMGiveBof(params, structureSFM):
     excChannel = {'pref': pref, 'arat': arat, 'dord': dord, 'ds': params[4]};
 
     # Inhibitory channel
-    inhChannel = {'gain': params[5], 'asym': params[12]};
-    if len(params) > 13:
-      normStr = params[13];
-    else:
-      normStr = 1;
+    # nothing in this current iteration - 7/7/17
 
      # Other (nonlinear) model components
-    sigma    = pow(10, params[6]); # normalization constant
+    sigma    = pow(10, params[5]); # normalization constant
     # respExp  = 2; # response exponent
-    respExp  = params[7]; # response exponent
-    scale    = params[8]; # response scalar
+    respExp  = params[6]; # response exponent
+    scale    = params[7]; # response scalar
 
     # Noise parameters
-    noiseEarly = params[9];   # early additive noise
-    noiseLate  = params[10];  # late additive noise
-    varGain    = params[11];  # multiplicative noise
+    noiseEarly = params[8];   # early additive noise
+    noiseLate  = params[9];  # late additive noise
+    varGain    = params[10];  # multiplicative noise
 
     # Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
     priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15)); # matlab: lognpdf(respExp, 1.15, 0.3);
@@ -640,7 +633,8 @@ def SFMGiveBof(params, structureSFM):
     inhWeight = [];
     nFrames = 120; # always
     for iP in range(len(nInhChan)):
-        inhWeight = numpy.append(inhWeight, 1 + inhChannel['asym']*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
+        # if you reintroduce asymmetry, put that asymmetry parameter where the '0' is now!
+        inhWeight = numpy.append(inhWeight, 1 + 0*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                             - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
 
     # assumption (made by Robbe) - only two normalization pools
@@ -663,9 +657,8 @@ def SFMGiveBof(params, structureSFM):
         Linh = numpy.sqrt((inhWeightMat*T['mod']['normalization']['normResp']).sum(1)).transpose();
 
         # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
-        numerator     = noiseEarly + Lexc + inhChannel['gain'];
-        # numerator     = noiseEarly + Lexc + inhChannel['gain']*Linh;
-        denominator   = pow(sigma, 2) + normStr*Linh;
+        numerator     = noiseEarly + Lexc;
+        denominator   = pow(sigma, 2) + Linh;
         ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
         meanRate      = ratio.mean(0);
         respModel     = noiseLate + scale*meanRate; # respModel[iR]
@@ -697,15 +690,12 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     # 02 = aspect ratio 2-D Gaussian
     # 03 = derivative order in space
     # 04 = directional selectivity
-    # 05 = gain inhibitory channel
-    # 06 = normalization constant        (log10 basis)
-    # 07 = response exponent
-    # 08 = response scalar
-    # 09 = early additive noise
-    # 10 = late additive noise
-    # 11 = variance of response gain    
-    # 12 = asymmetry suppressive signal 
-    # 13 = strength of normalization
+    # 05 = normalization constant        (log10 basis)
+    # 06 = response exponent
+    # 07 = response scalar
+    # 08 = early additive noise
+    # 09 = late additive noise
+    # 10 = variance of response gain    
 
     print('simulate!');
     
@@ -719,22 +709,18 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     excChannel = {'pref': pref, 'arat': arat, 'dord': dord, 'ds': params[4]};
 
     # Inhibitory channel
-    inhChannel = {'gain': params[5], 'asym': params[12]};
-    if len(params) > 13:
-      normStr = params[13];
-    else:
-      normStr = 1;
+    # nothing for this iteration - 7/7/17
 
      # Other (nonlinear) model components
-    sigma    = pow(10, params[6]); # normalization constant
+    sigma    = pow(10, params[5]); # normalization constant
     # respExp  = 2; # response exponent
-    respExp  = params[7]; # response exponent
-    scale    = params[8]; # response scalar
+    respExp  = params[6]; # response exponent
+    scale    = params[7]; # response scalar
 
     # Noise parameters
-    noiseEarly = params[9];   # early additive noise
-    noiseLate  = params[10];  # late additive noise
-    varGain    = params[11];  # multiplicative noise
+    noiseEarly = params[8];   # early additive noise
+    noiseLate  = params[9];  # late additive noise
+    varGain    = params[10];  # multiplicative noise
     
     # Get stimulus structure ready...
     stimParams = dict();
@@ -749,7 +735,8 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     inhWeight = [];
     nFrames = 120; # always
     for iP in range(len(nInhChan)):
-        inhWeight = numpy.append(inhWeight, 1 + inhChannel['asym']*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
+        # if asym, put where '0' is
+        inhWeight = numpy.append(inhWeight, 1 + 0*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                             - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
 
     # assumption (made by Robbe) - only two normalization pools
@@ -772,9 +759,8 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
-    numerator     = noiseEarly + Lexc + inhChannel['gain'];
-    # numerator     = noiseEarly + Lexc + inhChannel['gain']*Linh;
-    denominator   = pow(sigma, 2) + normStr*Linh;
+    numerator     = noiseEarly + Lexc;
+    denominator   = pow(sigma, 2) + Linh;
     ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
     meanRate      = ratio.mean(0);
     respModel     = noiseLate + scale*meanRate; # respModel[iR]

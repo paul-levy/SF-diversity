@@ -3,6 +3,21 @@
 
 # # Plotting
 
+    # parameters
+    # 00 = preferred direction of motion (degrees)
+    # 01 = preferred spatial frequency   (cycles per degree)
+    # 02 = aspect ratio 2-D Gaussian
+    # 03 = derivative order in space
+    # 04 = directional selectivity
+    # 05 = normalization constant        (log10 basis)
+    # 06 = response exponent
+    # 07 = response scalar
+    # 08 = early additive noise
+    # 09 = late additive noise
+    # 10 = variance of response gain
+
+
+
 # ### SF Diversity Project - plotting data, descriptive fits, and functional model fits
 
 # #### Pick your cell
@@ -30,7 +45,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 #save_loc = '/ser/1.2/p2/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Figures/'# CNS
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 expName = 'dataList.npy'
-fitName = 'fitListVarNorm.npy'
+fitName = 'fitListSimplified.npy'
 descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
 
@@ -163,24 +178,18 @@ s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
 sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
 sfExc = s/sMax;
 
-if len(modFit) > 13:
-  varNorm = modFit[13];
-else:
-  varNorm = 1;
-
 inhSfTuning = getSuppressiveSFtuning();
 
 # Compute weights for suppressive signals
-inhChannel = {'gain': modFit[5], 'asym': modFit[12]};
 nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
 inhWeight = [];
 for iP in range(len(nInhChan)):
-    inhWeight = np.append(inhWeight, 1 + inhChannel['asym'] * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
+    # '0' because no asymmetry
+    inhWeight = np.append(inhWeight, 1 + 0 * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
            
-sfInh = modFit[5] * np.ones(omega.shape) / np.amax(modHigh);
-#sfInh  = np.sum(0.5*modFit[5]*(inhWeight*np.square(inhSfTuning)), 1); # sum is over all filters
+sfInh = np.ones(omega.shape) / np.amax(modHigh);
 sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
-sfNorm = varNorm * sfNorm/np.amax(np.abs(sfNorm));
+sfNorm = sfNorm/np.amax(np.abs(sfNorm));
 
 # just setting up lines
 all_plots[1,1].semilogx([omega[0], omega[-1]], [0, 0], 'k--')
@@ -206,7 +215,7 @@ for i in range(len(all_plots)):
 # last but not least...and not last... response nonlinearity
 all_plots[1,2].plot([-1, 1], [0, 0], 'k--')
 all_plots[1,2].plot([0, 0], [-.1, 1], 'k--')
-all_plots[1,2].plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modFit[7]), 'k-', linewidth=2)
+all_plots[1,2].plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modFit[6]), 'k-', linewidth=2)
 all_plots[1,2].plot(np.linspace(-1,1,100), np.maximum(0, np.linspace(-1,1,100)), 'k--', linewidth=1)
 all_plots[1,2].set_xlim([-1, 1]);
 all_plots[1,2].set_ylim([-.1, 1]);
@@ -242,7 +251,7 @@ fDetails.suptitle('SF mixture - details', fontsize=25);
 
 # and now save it
 bothFigs = [f, fDetails];
-saveName = "cellVN_%d.pdf" % cellNum
+saveName = "cellSimpMod_%d.pdf" % cellNum
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(bothFigs)): ## will open an empty extra figure :(
     pdf.savefig(bothFigs[fig])
