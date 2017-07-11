@@ -575,6 +575,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
 
             print('.update.');
             print('.params.'); print(real_params);
+            print('.NLL|fullData.'); print(NLL);
             currNLL = NLL;
             currParams = real_params;
 	    # reload fitlist in case changes have been made with the file elsewhere!
