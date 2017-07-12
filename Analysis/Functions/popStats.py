@@ -6,6 +6,7 @@
 import sys
 import numpy as np
 from helper_fcns import organize_modResp, flexible_Gauss, getSuppressiveSFtuning, compute_SF_BW
+from scipy.stats.mstats import gmean
 import model_responses as mod_resp
 import matplotlib
 matplotlib.use('Agg') # why? so that we can get around having no GUI on cluster
@@ -57,35 +58,61 @@ for c in range(nCells):
 # start the plotting
 
 nPlotTypes = 4;
-fig, all_plots = plt.subplots(nPlotTypes, nFam, sharex='col', sharey='row', figsize=(25,8))
+fig, all_plots = plt.subplots(nPlotTypes, nFam, sharey='row', figsize=(25,16))
 
 # first plot - prefSf by dispersion level, plotted at high & low contrast
+# ...then, ratio of prefSf at high con to that at low contrast, for each dispersion level
 nBinsPSF = 15;
 pSfBins = np.logspace(np.log2(0.1), np.log2(10), nBinsPSF, base=2);
 
 #pdb.set_trace();
 
 for f in range(nFam):
+  # simple plots of prefSf at high and low con
   all_plots[0, f].hist(pSfExp[:, f, 0], pSfBins, label='high con', alpha=0.5, rwidth=0.8);   
   all_plots[0, f].hist(pSfExp[:, f, 1], pSfBins, label='low con', alpha=0.5, rwidth=0.8);   
   all_plots[0, f].set_xscale('log');
-  all_plots[0, f].tick_params(labelsize=15, width=1, length=8, which='major', direction='out');
-  all_plots[0, f].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
-  all_plots[0, f].text(0.5,1.1, 'median (hi/lo): {:.2f} | {:.2f} cpd'.format(np.median(pSfExp[:, f, 0]), np.median(pSfExp[:, f, 1])), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[0, f].transAxes);
+  all_plots[0, f].tick_params(labelsize=15, width=1, length=8, which='major', direction='out', top='off', right='off');
+  all_plots[0, f].tick_params(width=1, length=4, which='minor', direction='out', top='off', right='off'); # minor ticks, too...
+  all_plots[0, f].text(0.5,1.05, 'median prefSf (hi/lo): {:.2f} | {:.2f} cpd'.format(np.median(pSfExp[:, f, 0]), np.median(pSfExp[:, f, 1])), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[0, f].transAxes);
+  if f == 0:
+    all_plots[0, f].legend(loc="upper left");
+
+  # ratio of prefSf (high/low) con
+  ratioPref = pSfExp[:, f, 0] / pSfExp[:, f, 1];
+  all_plots[2, f].hist(ratioPref, pSfBins, rwidth=0.8);
+  all_plots[2, f].set_xscale('log');
+  all_plots[2, f].tick_params(labelsize=15, width=1, length=8, which='major', direction='out', top='off', right='off');
+  all_plots[2, f].tick_params(width=1, length=4, which='minor', direction='out', top='off', right='off'); # minor ticks, too...
+  all_plots[2, f].text(0.5,1.05, 'median ratio (hi/lo): {:.2f}'.format(np.median(ratioPref)), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[2, f].transAxes);
 
 # second plot - sfBW by dispersion level, plotted at high & low contrast
-nBinsBW = 15;
+nBinsBW = 21;
+nDiffBinsBW = 11;
 bwExpBins = np.linspace(0, 10, nBinsBW);
+bwDiffBins = np.linspace(-3, 3, nDiffBinsBW);
 
 #pdb.set_trace();
 
 for f in range(nFam):
-  valid = np.logical_and(~np.isnan(bwExp[:, f, 0]), ~np.isnan(bwExp[:, f, 1]));
-  all_plots[1, f].hist(bwExp[valid, f, 0], pSfBins, label='high con', alpha=0.5, rwidth=0.8);   
-  all_plots[1, f].hist(bwExp[valid, f, 1], pSfBins, label='low con', alpha=0.5, rwidth=0.8);   
-  all_plots[1, f].tick_params(labelsize=15, width=1, length=8, which='major', direction='out');
-  all_plots[1, f].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
-  all_plots[1, f].text(0.5,1.1, 'median (hi/lo): {:.2f} | {:.2f} oct'.format(np.median(bwExp[valid, f, 0]), np.median(bwExp[valid, f, 1])), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[1, f].transAxes);
+  valid_hi = ~np.isnan(bwExp[:, f, 0]);  
+  valid_lo = ~np.isnan(bwExp[:, f, 1]);  
+  valid = np.logical_and(valid_hi, valid_lo);
+  all_plots[1, f].hist(bwExp[valid_hi, f, 0], bwExpBins, label='high con', alpha=0.5, rwidth=0.8);   
+  all_plots[1, f].hist(bwExp[valid_lo, f, 1], bwExpBins, label='low con', alpha=0.5, rwidth=0.8);   
+  all_plots[1, f].tick_params(labelsize=15, width=1, length=8, which='major', direction='out', top='off');
+  all_plots[1, f].tick_params(width=1, length=4, which='minor', direction='out', top='off'); # minor ticks, too...
+  all_plots[1, f].text(0.5,1.05, 'median bw (hi/lo): {:.2f} | {:.2f} oct'.format(np.median(bwExp[valid_hi, f, 0]), np.median(bwExp[valid_lo, f, 1])), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[1, f].transAxes);
+  if f == 0:
+    all_plots[1, f].legend(loc="upper right");
+
+  # ratio of sfBW (high/low) con
+  diffBW = bwExp[valid, f, 0] - bwExp[valid, f, 1];
+  all_plots[3, f].hist(diffBW, bwDiffBins, rwidth=0.8);
+  all_plots[3, f].tick_params(labelsize=15, width=1, length=8, which='major', direction='out', top='off', right='off');
+  all_plots[3, f].tick_params(width=1, length=4, which='minor', direction='out', top='off', right='off'); # minor ticks, too...
+  all_plots[3, f].text(0.5,1.05, 'median difference (hi-lo): {:.2f}'.format(np.median(diffBW)), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[3, f].transAxes);
+
 
 # and now save it
 bothFigs = [fig];
