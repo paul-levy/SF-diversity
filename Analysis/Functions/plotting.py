@@ -4,17 +4,14 @@
 # # Plotting
 
     # parameters
-    # 00 = preferred direction of motion (degrees)
-    # 01 = preferred spatial frequency   (cycles per degree)
-    # 02 = aspect ratio 2-D Gaussian
-    # 03 = derivative order in space
-    # 04 = directional selectivity
-    # 05 = normalization constant        (log10 basis)
-    # 06 = response exponent
-    # 07 = response scalar
-    # 08 = early additive noise
-    # 09 = late additive noise
-    # 10 = variance of response gain
+    # 00 = preferred spatial frequency   (cycles per degree)
+    # 01 = derivative order in space
+    # 02 = normalization constant        (log10 basis)
+    # 03 = response exponent
+    # 04 = response scalar
+    # 05 = early additive noise
+    # 06 = late additive noise
+    # 07 = variance of response gain
 
 
 

@@ -75,36 +75,29 @@ def SFMSimpleResp(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, mod_par
     # mixture stimuli used in sfMix. The cell's receptive field is the n-th
     # derivative of a 2-D Gaussian that need not be circularly symmetric.
 
-    # 00 = preferred direction of motion (degrees)
-    # 01 = preferred spatial frequency   (cycles per degree)
-    # 02 = aspect ratio 2-D Gaussian
-    # 03 = derivative order in space
-    # 04 = directional selectivity
-    # 05 = gain inhibitory channel
-    # 06 = normalization constant        (log10 basis)
-    # 07 = response exponent
-    # 08 = response scalar
-    # 09 = early additive noise
-    # 10 = late additive noise
-    # 11 = variance of response gain    
+    # 00 = preferred spatial frequency   (cycles per degree)
+    # 01 = derivative order in space
+    # 02 = normalization constant        (log10 basis)
+    # 03 = response exponent
+    # 04 = response scalar
+    # 05 = early additive noise
+    # 06 = late additive noise
+    # 07 = variance of response gain    
 
     # Get preferred stimulus values
-    prefOr = tf_pi/180 * mod_params[0];               # in radians
-    prefSf = mod_params[1];                           # in cycles per degree
+    prefSf = mod_params[0];                           # in cycles per degree
     #nan_trials = tf.is_nan(ph_stimTf[0]);
     #masked_stimTf = tf.boolean_mask(ph_stimTf[0], ~nan_trials);
     #prefTf = tf.round(tf.reduce_mean(masked_stimTf));     # in cycles per second
     prefTf = tf.round(tf.reduce_mean(ph_stimTf[0]));
     
-    # Get directional selectivity
-    ds = mod_params[4];
+    # Get directional selectivity - removed 7/18/17
 
     # Get derivative order in space and time
-    dOrdSp = mod_params[3];
+    dOrdSp = mod_params[1];
     dOrdTi = 0.25; # fixed....
 
-    # Get aspect ratio in space
-    aRatSp = mod_params[2];
+    # Get aspect ratio in space - removed 7/18/17
 
     # Get spatial coordinates
     xCo = 0;                                                              # in visual degrees, centered on stimulus center
@@ -113,20 +106,16 @@ def SFMSimpleResp(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, mod_par
     # Store some results in M
     M = dict();
     pref = dict();
-    arat = dict();
     dord = dict();
     pref.setdefault('sf', prefSf);
     pref.setdefault('tf', prefTf);
     pref.setdefault('xCo', xCo);
     pref.setdefault('yCo', yCo);
-    arat.setdefault('sp', aRatSp);
     dord.setdefault('sp', dOrdSp);
     dord.setdefault('ti', dOrdTi);
     
     M.setdefault('pref', pref);
-    M.setdefault('arat', arat);
     M.setdefault('dord', dord);
-    M.setdefault('ds', ds);
     
     # Pre-allocate memory
     nDims         = 3; # x, y, t
@@ -143,20 +132,9 @@ def SFMSimpleResp(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, mod_par
     stimSf = ph_stimSf;                       # in cycles per degree
         
     # Compute simple cell response for all trials
-                
+
     # I. Orientation, spatial frequency and temporal frequency
-    diffOr = tf.subtract(prefOr, stimOr);
-    # matrix size: will be 9 x nTrials
-    o = tf.pow(tf.square(tf.cos(diffOr)) * tf.exp((tf.square(aRatSp)-1) * tf.square(tf.cos(diffOr))), dOrdSp/2);
-    oMax   = tf.pow(tf.exp(tf.square(aRatSp) -1), dOrdSp/2);
-    oNl    = tf.divide(o, oMax);
-    e      = 1 + (ds*.5*(-1+(tf.sign(diffOr + tf_pi/2))));
-    selOr  = tf.multiply(oNl, e);
-
-    # ASSUMPTION: dOrdSp will never be zero...
-    #  if dOrdSp == 0:
-    #    selOr = tf.ones(selOr.shape);
-
+                
     # Compute spatial frequency tuning - will be 9 x nTrials
     sfRel = tf.divide(stimSf, prefSf);
     s     = tf.multiply(tf.pow(stimSf, dOrdSp), tf.exp(-dOrdSp/2 * tf.square(sfRel)));
@@ -170,6 +148,13 @@ def SFMSimpleResp(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, mod_par
     tMax  = tf.multiply(tf.pow(prefTf, dOrdTi), tf.exp(-dOrdTi/2));
     tNl   = tf.divide(t, tMax);
     selTf = tNl;
+
+    # Compute orientation tuning 
+    # removed ori selectivity 7/18/17 - just set to 1
+
+    # ASSUMPTION: dOrdSp will never be zero...
+    #  if dOrdSp == 0:
+    #    selOr = tf.ones(selOr.shape);
 
     # II. Phase, space and time - will be 9 x nTrials
     omegaX = tf.multiply(stimSf, tf.cos(stimOr)); # the stimulus in frequency space
@@ -217,7 +202,7 @@ def SFMSimpleResp(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, mod_par
     rComplex_part = tf.transpose(rCmplx_part, perm=[0, 2, 1]);
         
     # selSi (& interAgain) will be stimComp x nTrials
-    selSi = tf.multiply(selOr, tf.multiply(selSf, selTf)); # filter sensitivity for the sinusoid in the frequency domain
+    selSi =tf.multiply(selSf, selTf); # filter sensitivity for the sinusoid in the frequency domain
     intAgn = tf.multiply(selSi, stimCo);
     
     interAgn = tf.expand_dims(intAgn, axis=-1);
@@ -241,55 +226,49 @@ def SFMSimpleResp(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, mod_par
     respSimple4 = tf.maximum(compZero, linR4);
 
     # well, we just take simple response for now, unless we are modelling complex cells
-    #return tf.reduce_sum(selOr);
     return respSimple1;
     #return {'AllAhDem': rComplex, 'selectivity': selSi, 'selWithCon': interAgain, 'expPart': rComplex_part, \
         #'P': Ps, 'omega': omegaAll};
         
 def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, \
-               ph_normResp, ph_normCenteredSf, v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_normConst, \
+               ph_normResp, ph_normCenteredSf, v_prefSf, v_dOrdSp, v_normConst, \
                       v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain):
     
     # Computes the negative log likelihood for the LN-LN model
 
-    params = applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_normConst, \
+    params = applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
                       v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain);
     
-    # 00 = preferred direction of motion (degrees)
-    # 01 = preferred spatial frequency   (cycles per degree)
-    # 02 = aspect ratio 2-D Gaussian
-    # 03 = derivative order in space
-    # 04 = directional selectivity
-    # 05 = normalization constant        (log10 basis)
-    # 06 = response exponent
-    # 07 = response scalar
-    # 08 = early additive noise
-    # 09 = late additive noise
-    # 10 = variance of response gain    
+    # 00 = preferred spatial frequency   (cycles per degree)
+    # 01 = derivative order in space
+    # 02 = normalization constant        (log10 basis)
+    # 03 = response exponent
+    # 04 = response scalar
+    # 05 = early additive noise
+    # 06 = late additive noise
+    # 07 = variance of response gain    
 
     nFrames = 120; # hashtag always
     
     ### Get parameter values
     # Excitatory channel
-    prefOr = params[0]; prefSf = params[1];
-    aRatSp = params[2];
-    dordSp = params[3]; dOrdTi = tf.constant(0.25); 
+    prefSf = params[0];
+    dordSp = params[1]; dOrdTi = tf.constant(0.25); 
     # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
-    dirSel = params[4];
 
     # Inhibitory channel
     # no extra inh params in this formulation - 7/7/17
 
      # Other (nonlinear) model components
-    sigma    = tf.pow(tf.constant(10, dtype=tf.float32), params[5]); # normalization constant
+    sigma    = tf.pow(tf.constant(10, dtype=tf.float32), params[2]); # normalization constant
     # respExp  = 2; # response exponent
-    respExp  = params[6]; # response exponent
-    scale    = params[7]; # response scalar
+    respExp  = params[3]; # response exponent
+    scale    = params[4]; # response scalar
 
     # Noise parameters
-    noiseEarly = params[8];   # early additive noise
-    noiseLate  = params[9];  # late additive noise
-    varGain    = params[10];  # multiplicative noise
+    noiseEarly = params[5];   # early additive noise
+    noiseLate  = params[6];  # late additive noise
+    varGain    = params[7];  # multiplicative noise
 
     ### Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
     #priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15));
@@ -337,33 +316,27 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     
     return NLL;
 
-def applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_normConst, \
+def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
                       v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain):
         
-        # 00 = preferred direction of motion (degrees) || [unconstrained]
-        # 01 = preferred spatial frequency   (cycles per degree) || [>0.05]
-        # 02 = aspect ratio 2-D Gaussian || [>0.1]
-        # 03 = derivative order in space || [>0.1]
-        # 04 = directional selectivity || [0, 1]
-        # 05 = normalization constant (log10 basis) || unconstrained
-        # 06 = response exponent || >1
-        # 07 = response scalar || >1e-3
-        # 08 = early additive noise || [0,1]
-        # 09 = late additive noise || >0
-        # 10 = variance of response gain || >1e-3     
+        # 00 = preferred spatial frequency   (cycles per degree) || [>0.05]
+        # 01 = derivative order in space || [>0.1]
+        # 02 = normalization constant (log10 basis) || unconstrained
+        # 03 = response exponent || >1
+        # 04 = response scalar || >1e-3
+        # 05 = early additive noise || [0,1]
+        # 06 = late additive noise || >0
+        # 07 = variance of response gain || >1e-3     
 
-    zero = v_prefOr;
-    one = tf.add(tf.nn.softplus(v_prefSf), 0.05);
-    two = tf.add(tf.nn.softplus(v_aRat), 0.1);
-    three = tf.add(tf.nn.softplus(v_dOrdSp), 0.1);
-    four = tf.sigmoid(v_DS);
-    five = v_normConst;
-    six = tf.add(tf.nn.softplus(v_respExp), 1);
-    seven = tf.add(tf.nn.softplus(v_respScalar), 1e-3);
-    eight = tf.sigmoid(v_noiseEarly);
-    nine = tf.nn.softplus(v_noiseLate);
-    ten = tf.add(tf.nn.softplus(v_varGain), 1e-3);
-    return [zero,one,two,three,four,five,six,seven,eight,nine,ten];
+    zero = tf.add(tf.nn.softplus(v_prefSf), 0.05);
+    one = tf.add(tf.nn.softplus(v_dOrdSp), 0.1);
+    two = v_normConst;
+    three = tf.add(tf.nn.softplus(v_respExp), 1);
+    four = tf.add(tf.nn.softplus(v_respScalar), 1e-3);
+    five = tf.sigmoid(v_noiseEarly);
+    six = tf.nn.softplus(v_noiseLate);
+    seven = tf.add(tf.nn.softplus(v_varGain), 1e-3);
+    return [zero,one,two,three,four,five,six,seven];
 
 def negBinom(x, r, p):
     # We assume that r & p are tf placeholders/variables; x is a constant
@@ -389,7 +362,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal machine
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fitListName = 'fitListSimplified.npy';
+    fitListName = 'fitListStrip.npy';
 
     fitList = numpy.load(loc_data + fitListName); # no .item() needed...
     dataList = numpy.load(loc_data + 'dataList.npy').item();
@@ -405,37 +378,28 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     # Set up model parameters - i.e. trainable variables!
     ########
     
-    # 00 = preferred direction of motion (degrees)
-    # 01 = preferred spatial frequency   (cycles per degree)
-    # 02 = aspect ratio 2-D Gaussian
-    # 03 = derivative order in space
-    # 04 = directional selectivity
-    # 05 = normalization constant        (log10 basis)
-    # 06 = response exponent
-    # 07 = response scalar
-    # 08 = early additive noise
-    # 09 = late additive noise
-    # 10 = variance of response gain
+    # 00 = preferred spatial frequency   (cycles per degree)
+    # 01 = derivative order in space
+    # 02 = normalization constant        (log10 basis)
+    # 03 = response exponent
+    # 04 = response scalar
+    # 05 = early additive noise
+    # 06 = late additive noise
+    # 07 = variance of response gain
     
     curr_params = fitList[cellNum-1]['params']; # load parameters from the fitList! this is what actually gets updated...
      
-    pref_ori = float(prefOrEst) if initFromCurr==0 else curr_params[0];
-    pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[1];
-    aRatSp = numpy.random.uniform(0.5, 3) if initFromCurr==0 else curr_params[2];
-    dOrdSp = numpy.random.uniform(1, 3) if initFromCurr==0 else curr_params[3];
-    ds = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[4];
-    normConst = numpy.random.uniform(-1, 0) if initFromCurr==0 else curr_params[5];
-    respExp = numpy.random.uniform(1, 3) if initFromCurr==0 else curr_params[6];
-    respScal = numpy.random.uniform(10, 1000) if initFromCurr==0 else curr_params[7];
-    noiseEarly = numpy.random.uniform(0.001, 0.1) if initFromCurr==0 else curr_params[8];
-    noiseLate = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[9];
-    varGain = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[10];
+    pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
+    dOrdSp = numpy.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
+    normConst = numpy.random.uniform(-1, 0) if initFromCurr==0 else curr_params[2];
+    respExp = numpy.random.uniform(1, 3) if initFromCurr==0 else curr_params[3];
+    respScal = numpy.random.uniform(10, 1000) if initFromCurr==0 else curr_params[4];
+    noiseEarly = numpy.random.uniform(0.001, 0.1) if initFromCurr==0 else curr_params[5];
+    noiseLate = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[6];
+    varGain = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[7];
     
-    v_prefOr = tf.Variable(pref_ori, dtype=tf.float32);
     v_prefSf = tf.Variable(pref_sf, dtype=tf.float32);
-    v_aRat = tf.Variable(aRatSp, dtype=tf.float32);
     v_dOrdSp = tf.Variable(dOrdSp, dtype=tf.float32);
-    v_DS = tf.Variable(ds, dtype=tf.float32);
     v_normConst = tf.Variable(normConst, dtype=tf.float32);
     v_respExp = tf.Variable(respExp, dtype=tf.float32);
     v_respScalar = tf.Variable(respScal, dtype=tf.float32);
@@ -505,13 +469,13 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
      
     # Set up model here - we return the NLL
     okok = SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, \
-              ph_normResp, ph_normCentSf, v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_normConst, \
+              ph_normResp, ph_normCentSf, v_prefSf, v_dOrdSp, v_normConst, \
                       v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain);
 
     if subset_frac > 0:  
       ph_stimTfFull = tf.placeholder(tf.float32, shape=fixedTf.shape);
       full = SFMGiveBof(ph_stimOr, ph_stimTfFull, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, \
-              ph_normResp, ph_normCentSf, v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_normConst, \
+              ph_normResp, ph_normCentSf, v_prefSf, v_dOrdSp, v_normConst, \
                       v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain);
     
     
@@ -566,7 +530,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
           
           if NLL < currNLL or numpy.any(numpy.isnan(curr_params)): # if the saved params are NaN, overwrite them
 
-       	    real_params = m.run(applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_normConst, \
+       	    real_params = m.run(applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
                                 v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain));
 
             if numpy.any(numpy.isnan(real_params)): # don't save a fit with NaN!
@@ -596,7 +560,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
                             ph_stimDur: stim_dur, ph_normResp: normResp, ph_normCentSf: normCentSf});
 
 
-    x = m.run(applyConstraints(v_prefOr, v_prefSf, v_aRat, v_dOrdSp, v_DS, v_normConst, \
+    x = m.run(applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
                 v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain));
 
     # Put those into fitList and save...ONLY if better than before

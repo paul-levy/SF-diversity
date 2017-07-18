@@ -65,20 +65,17 @@ def SFMSimpleResp(S, channel, stimParams = []):
     T = S.get('sfm');
 
     # Get preferred stimulus values
-    prefOr = math.pi/180 * channel.get('pref').get('or');                # in radians
     prefSf = channel.get('pref').get('sf');                              # in cycles per degree
     # CHECK LINE BELOW
     prefTf = round(numpy.nanmean(T.get('exp').get('trial').get('tf')[0]));     # in cycles per second
 
-    # Get directional selectivity
-    ds = channel.get('ds');
+    # Get directional selectivity - removed 7/18/17
 
     # Get derivative order in space and time
     dOrdSp = channel.get('dord').get('sp');
     dOrdTi = channel.get('dord').get('ti');
 
-    # Get aspect ratio in space
-    aRatSp = channel.get('arat').get('sp');
+    # Get aspect ratio in space - removed 7/18/17
 
     # Get spatial coordinates
     xCo = 0;                                                              # in visual degrees, centered on stimulus center
@@ -87,20 +84,16 @@ def SFMSimpleResp(S, channel, stimParams = []):
     # Store some results in M
     M = dict();
     pref = dict();
-    arat = dict();
     dord = dict();
     pref.setdefault('sf', prefSf);
     pref.setdefault('tf', prefTf);
     pref.setdefault('xCo', xCo);
     pref.setdefault('yCo', yCo);
-    arat.setdefault('sp', aRatSp);
     dord.setdefault('sp', dOrdSp);
     dord.setdefault('ti', dOrdTi);
     
     M.setdefault('pref', pref);
-    M.setdefault('arat', arat);
     M.setdefault('dord', dord);
-    M.setdefault('ds', ds);
     
     # Pre-allocate memory
     z             = T.get('exp').get('trial');
@@ -149,16 +142,7 @@ def SFMSimpleResp(S, channel, stimParams = []):
         #pdb.set_trace();
                 
         # I. Orientation, spatial frequency and temporal frequency
-        diffOr = prefOr - stimOr; 
-        # matrix size: 9 x nFilt (i.e., number of stimulus components by number of orientation filters)
-        o      = pow(pow(numpy.cos(diffOr), 2) * numpy.exp(pow(aRatSp, 2)-1 * pow(numpy.cos(diffOr), 2)), dOrdSp/2);
-        oMax   = pow(numpy.exp(pow(aRatSp, 2) -1), dOrdSp/2);
-        oNl    = o/oMax;
-        e      = 1 + (ds*.5*(-1+(numpy.sign(diffOr + math.pi/2))));
-        selOr  = oNl*e;
-
-        if channel.get('dord').get('sp') == 0:
-            selOr[:] = 1;
+        # Compute orientation tuning - removed 7/18/17
 
         # Compute spatial frequency tuning
         sfRel = stimSf / prefSf;
@@ -203,7 +187,7 @@ def SFMSimpleResp(S, channel, stimParams = []):
             computeSum = 0; # important constant: if stimulus contrast or filter sensitivity equals zero there is no point in computing the response
 
             for c in range(nGratings): # there are up to nine stimulus components
-                selSi = selOr[c]*selSf[c]*selTf[c]; # filter sensitivity for the sinusoid in the frequency domain
+                selSi = selSf[c]*selTf[c]; # filter sensitivity for the sinusoid in the frequency domain
 
                 if selSi != 0 and stimCo[c] != 0:
                     computeSum = 1;
@@ -685,17 +669,14 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     # Currently, will get slightly different stimuli for excitatory and inhibitory/normalization pools
     # But differences are just in phase/TF, but for TF, drawn from same distribution, anyway...
 
-    # 00 = preferred direction of motion (degrees)
-    # 01 = preferred spatial frequency   (cycles per degree)
-    # 02 = aspect ratio 2-D Gaussian
-    # 03 = derivative order in space
-    # 04 = directional selectivity
-    # 05 = normalization constant        (log10 basis)
-    # 06 = response exponent
-    # 07 = response scalar
-    # 08 = early additive noise
-    # 09 = late additive noise
-    # 10 = variance of response gain    
+    # 00 = preferred spatial frequency   (cycles per degree)
+    # 01 = derivative order in space
+    # 02 = normalization constant        (log10 basis)
+    # 03 = response exponent
+    # 04 = response scalar
+    # 05 = early additive noise
+    # 06 = late additive noise
+    # 07 = variance of response gain    
 
     print('simulate!');
     
@@ -703,24 +684,23 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
 
     # Get parameter values
     # Excitatory channel
-    pref = {'or': params[0], 'sf': params[1]};
-    arat = {'sp': params[2]};
-    dord = {'sp': params[3], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
-    excChannel = {'pref': pref, 'arat': arat, 'dord': dord, 'ds': params[4]};
+    pref = {'sf': params[0]};
+    dord = {'sp': params[1], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
+    excChannel = {'pref': pref, 'dord': dord};
 
     # Inhibitory channel
     # nothing for this iteration - 7/7/17
 
      # Other (nonlinear) model components
-    sigma    = pow(10, params[5]); # normalization constant
+    sigma    = pow(10, params[2]); # normalization constant
     # respExp  = 2; # response exponent
-    respExp  = params[6]; # response exponent
-    scale    = params[7]; # response scalar
+    respExp  = params[3]; # response exponent
+    scale    = params[4]; # response scalar
 
     # Noise parameters
-    noiseEarly = params[8];   # early additive noise
-    noiseLate  = params[9];  # late additive noise
-    varGain    = params[10];  # multiplicative noise
+    noiseEarly = params[5];   # early additive noise
+    noiseLate  = params[6];  # late additive noise
+    varGain    = params[7];  # multiplicative noise
     
     # Get stimulus structure ready...
     stimParams = dict();
