@@ -318,7 +318,7 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     uno = tf.add(noiseEarly, tf.cast(Lexc, dtype=tf.float32));
     numerator     = uno;
-    denominator   = tf.square(sigma) + Linh;
+    denominator   = tf.square(sigma) + tf.square(Linh); # squaring Linh - edit 7/17
     # ratio will be nTrials x nTrials
     ratio         = tf.pow(tf.maximum(tf.constant(0, dtype=tf.float32), tf.divide(numerator,denominator)), respExp);
     meanRate      = tf.reduce_mean(ratio, axis=1);

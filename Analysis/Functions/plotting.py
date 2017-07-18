@@ -108,15 +108,15 @@ for f in range(nFam):
 
 # In[281]:
 
-f, all_plots = plt.subplots(nCon, nFam, sharex='col', sharey='row', figsize=(25,8))
+f, all_plots = plt.subplots(nCon, nFam, sharex=True, sharey=True, figsize=(25,8))
 expSfCent = expData['sfm']['exp']['sf'][0][0];
 expResponses = expData['sfm']['exp']['sfRateMean'];
 
 # plot experiment and models
-for con in range(nCon): # contrast
+for con in reversed(range(nCon)): # contrast
     yMax = 1.25*np.maximum(np.amax(expResponses[0][con]), np.amax(modHigh[0, con, :])); # we assume that 1.25x Max response for single grating will be enough
     all_plots[con, 0].set_ylim([-1, yMax]);
-    for fam in range(nFam): # family        
+    for fam in reversed(range(nFam)): # family        
         expPoints = all_plots[con, fam].errorbar(expSfCent, expResponses[fam][con], allExpSEM[fam, con, :],\
                                                  linestyle='None', marker='o', color='b');
         modRange = all_plots[con, fam].fill_between(expSfCent, modLow[fam,con,:], \
@@ -153,7 +153,7 @@ all_plots[0, 1].set_xlabel('Con (%)', fontsize=20);
 
 all_plots[0,2].axis('off');
 all_plots[0,3].axis('off');
-all_plots[0,4].axis('off');
+#all_plots[0,4].axis('off');
 all_plots[1,3].axis('off');
 all_plots[1,4].axis('off');
 
@@ -246,6 +246,13 @@ for i in range(len(all_plots[0])):
 fDetails.legend((modPlt[0], expPlt[0]), ('model', 'experiment'), fontsize = 15, loc='center left');
 fDetails.suptitle('SF mixture - details', fontsize=25);
 
+# print, in text, model parameters:
+all_plots[0, 4].text(0.5, 0.6, 'prefOri: {:.3f}'.format(modFit[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.5, 'dir. selectivity: {:.3f}'.format(modFit[3]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.4, 'prefSf: {:.3f}'.format(modFit[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.3, 'aspect ratio: {:.3f}'.format(modFit[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.2, 'response scalar: {:.3f}'.format(modFit[7]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.1, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modFit[5]), modFit[5]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
 # In[444]:
 
