@@ -13,8 +13,6 @@
     # 06 = late additive noise
     # 07 = variance of response gain
 
-
-
 # ### SF Diversity Project - plotting data, descriptive fits, and functional model fits
 
 # #### Pick your cell
@@ -41,8 +39,9 @@ cellNum = int(sys.argv[1]);
 save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 #save_loc = '/ser/1.2/p2/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Figures/'# CNS
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
+
 expName = 'dataList.npy'
-fitName = 'fitListSimplified.npy'
+fitName = 'fitListStrip.npy'
 descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
 
@@ -157,10 +156,10 @@ all_plots[1,4].axis('off');
 # plot model details - filter
 imSizeDeg = expData['sfm']['exp']['size'];
 pixSize   = 0.0028; # fixed from Robbe
-prefSf    = modFit[1];
-prefOri   = np.pi/180 * modFit[0];
-dOrder    = modFit[3]
-aRatio    = modFit[2];
+prefSf    = modFit[0];
+dOrder    = modFit[1]
+prefOri = 0; # just fixed value since no model param for this
+aRatio = 1; # just fixed value since no model param for this
 filtTemp  = mod_resp.oriFilt(imSizeDeg, pixSize, prefSf, prefOri, dOrder, aRatio);
 filt      = (filtTemp - filtTemp[0,0])/ np.amax(np.abs(filtTemp - filtTemp[0,0]));
 all_plots[1,0].imshow(filt, cmap='gray');
@@ -184,7 +183,7 @@ for iP in range(len(nInhChan)):
     # '0' because no asymmetry
     inhWeight = np.append(inhWeight, 1 + 0 * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
            
-sfInh = np.ones(omega.shape) / np.amax(modHigh);
+sfInh = 0 * np.ones(omega.shape) / np.amax(modHigh); # mult by 0 because we aren't including a subtractive inhibition in model for now 7/19/17
 sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
 sfNorm = sfNorm/np.amax(np.abs(sfNorm));
 
@@ -212,10 +211,11 @@ for i in range(len(all_plots)):
 # last but not least...and not last... response nonlinearity
 all_plots[1,2].plot([-1, 1], [0, 0], 'k--')
 all_plots[1,2].plot([0, 0], [-.1, 1], 'k--')
-all_plots[1,2].plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modFit[6]), 'k-', linewidth=2)
+all_plots[1,2].plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modFit[3]), 'k-', linewidth=2)
 all_plots[1,2].plot(np.linspace(-1,1,100), np.maximum(0, np.linspace(-1,1,100)), 'k--', linewidth=1)
 all_plots[1,2].set_xlim([-1, 1]);
 all_plots[1,2].set_ylim([-.1, 1]);
+all_plots[1,2].text(0.5, 1.1, 'respExp: {:.2f}'.format(modFit[3]), fontsize=12, horizontalalignment='center', verticalalignment='center');
     
 # actually last - CRF at different dispersion levels
 crf_row = len(all_plots)-1; # we're putting the CRFs in the last row of this plot
@@ -244,12 +244,10 @@ fDetails.legend((modPlt[0], expPlt[0]), ('model', 'experiment'), fontsize = 15, 
 fDetails.suptitle('SF mixture - details', fontsize=25);
 
 # print, in text, model parameters:
-all_plots[0, 4].text(0.5, 0.6, 'prefOri: {:.3f}'.format(modFit[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-all_plots[0, 4].text(0.5, 0.5, 'dir. selectivity: {:.3f}'.format(modFit[3]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-all_plots[0, 4].text(0.5, 0.4, 'prefSf: {:.3f}'.format(modFit[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-all_plots[0, 4].text(0.5, 0.3, 'aspect ratio: {:.3f}'.format(modFit[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-all_plots[0, 4].text(0.5, 0.2, 'response scalar: {:.3f}'.format(modFit[7]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-all_plots[0, 4].text(0.5, 0.1, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modFit[5]), modFit[5]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.4, 'prefSf: {:.3f}'.format(modFit[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.3, 'derivative order: {:.3f}'.format(modFit[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.2, 'response scalar: {:.3f}'.format(modFit[4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.1, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modFit[2]), modFit[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
 # In[444]:
 

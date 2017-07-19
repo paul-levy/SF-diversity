@@ -570,17 +570,14 @@ def SFMGiveBof(params, structureSFM):
     # Computes the negative log likelihood for the LN-LN model
     # Returns NLL ###, respModel, E
 
-    # 00 = preferred direction of motion (degrees)
-    # 01 = preferred spatial frequency   (cycles per degree)
-    # 02 = aspect ratio 2-D Gaussian
-    # 03 = derivative order in space
-    # 04 = directional selectivity
-    # 05 = normalization constant        (log10 basis)
-    # 06 = response exponent
-    # 07 = response scalar
-    # 08 = early additive noise
-    # 09 = late additive noise
-    # 10 = variance of response gain    
+    # 00 = preferred spatial frequency   (cycles per degree)
+    # 01 = derivative order in space
+    # 02 = normalization constant        (log10 basis)
+    # 03 = response exponent
+    # 04 = response scalar
+    # 05 = early additive noise
+    # 06 = late additive noise
+    # 07 = variance of response gain    
 
     print('ha!');
     
@@ -588,24 +585,23 @@ def SFMGiveBof(params, structureSFM):
 
     # Get parameter values
     # Excitatory channel
-    pref = {'or': params[0], 'sf': params[1]};
-    arat = {'sp': params[2]};
-    dord = {'sp': params[3], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
-    excChannel = {'pref': pref, 'arat': arat, 'dord': dord, 'ds': params[4]};
+    pref = {'sf': params[0]};
+    dord = {'sp': params[1], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
+    excChannel = {'pref': pref, 'dord': dord};
 
     # Inhibitory channel
     # nothing in this current iteration - 7/7/17
 
      # Other (nonlinear) model components
-    sigma    = pow(10, params[5]); # normalization constant
+    sigma    = pow(10, params[2]); # normalization constant
     # respExp  = 2; # response exponent
-    respExp  = params[6]; # response exponent
-    scale    = params[7]; # response scalar
+    respExp  = params[3]; # response exponent
+    scale    = params[4]; # response scalar
 
     # Noise parameters
-    noiseEarly = params[8];   # early additive noise
-    noiseLate  = params[9];  # late additive noise
-    varGain    = params[10];  # multiplicative noise
+    noiseEarly = params[5];   # early additive noise
+    noiseLate  = params[6];  # late additive noise
+    varGain    = params[7];  # multiplicative noise
 
     # Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
     priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15)); # matlab: lognpdf(respExp, 1.15, 0.3);

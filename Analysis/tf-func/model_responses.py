@@ -331,7 +331,7 @@ def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
     zero = tf.add(tf.nn.softplus(v_prefSf), 0.05);
     one = tf.add(tf.nn.softplus(v_dOrdSp), 0.1);
     two = v_normConst;
-    three = tf.add(tf.nn.softplus(v_respExp), 1);
+    three = tf.constant(2, dtype=tf.float32); #tf.add(tf.nn.softplus(v_respExp), 1);
     four = tf.add(tf.nn.softplus(v_respScalar), 1e-3);
     five = tf.sigmoid(v_noiseEarly);
     six = tf.nn.softplus(v_noiseLate);
@@ -362,7 +362,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal machine
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fitListName = 'fitListStrip.npy';
+    fitListName = 'fitListExp2.npy';
 
     fitList = numpy.load(loc_data + fitListName); # no .item() needed...
     dataList = numpy.load(loc_data + 'dataList.npy').item();
@@ -421,6 +421,25 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     
     #purge of NaNs...
     mask = numpy.isnan(numpy.sum(stimOr, 0)); # sum over all stim components...if there are any nans in that trial, we know
+    # and get rid of orientation tuning curve trials
+    oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
+
+    oriInds = numpy.empty((0,));
+    for iB in oriBlockIDs:
+        indCond = numpy.where(trial_inf['blockID'] == iB);
+        if len(indCond[0]) > 0:
+            oriInds = numpy.append(oriInds, indCond);
+
+    # get rid of CRF trials, too? Not yet...
+    # conBlockIDs = numpy.arange(138, 156+1, 2);
+    #rateCo = numpy.empty((0,));
+    # for iB in conBlockIDs:
+        # indCond = numpy.where(expStructure['blockID'] == iB);
+        # if len(indCond[0]) > 0:
+            # rateCo = numpy.append(rateCo, numpy.mean(modResp[indCond]));
+
+    mask[oriInds.astype(numpy.int64)] = True; # as in, don't include those trials either!
+
     fixedOr = stimOr[:,~mask];
     fixedTf = stimTf[:,~mask];
     fixedCo = stimCo[:,~mask];
