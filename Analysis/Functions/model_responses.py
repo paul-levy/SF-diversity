@@ -730,7 +730,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     # Extract simple cell response (half-rectified linear filtering)
     Lexc = E['simpleResp'];
 
-    # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to         bring everything in linear contrast scale again)
+    # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to bring everything in linear contrast scale again)
     normResp = GetNormResp(structureSFM, stimParams);
     Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
 
@@ -741,4 +741,4 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     meanRate      = ratio.mean(0);
     respModel     = noiseLate + scale*meanRate; # respModel[iR]
 
-    return respModel;
+    return respModel, Linh;
