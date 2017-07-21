@@ -74,6 +74,8 @@ expResp = expData
 oriModResp, conModResp, sfmixModResp, allSfMix = organize_modResp(modResp, expData['sfm']['exp']['trial'])
 oriExpResp, conExpResp, sfmixExpResp, allSfMixExp = organize_modResp(expData['sfm']['exp']['trial']['spikeCount'], \
                                                                            expData['sfm']['exp']['trial'])
+#pdb.set_trace();
+
 modLow = np.nanmin(allSfMix, axis=3)
 modHigh = np.nanmax(allSfMix, axis=3)
 
@@ -100,7 +102,9 @@ for f in range(nFam):
       pSfExp[f, 0] = descrExpFit[f, 0, muLoc]
       pSfExp[f, 1] = descrExpFit[f, 1, muLoc]
 
-# #### Plot the main stuff - sfMix experiment with model predictions and descriptive fits
+#########
+# Plot the main stuff - sfMix experiment with model predictions and descriptive fits
+#########
 
 # In[281]:
 
@@ -134,7 +138,9 @@ for con in reversed(range(nCon)): # contrast
 f.legend((expPoints[0], modRange, sponRate), ('data +- 1 s.e.m.', 'model range', 'spontaneous f.r.'), fontsize = 15, loc='right');
 f.suptitle('SF mixture experiment', fontsize=25);
 
-# In[439]:
+#########
+# Plot secondary things - CRF, filter, normalization, nonlinearity, etc
+#########
 
 fDetails, all_plots = plt.subplots(3,5, figsize=(25,10))
 # plot ori, CRF tuning
@@ -227,7 +233,7 @@ crf_sim = np.zeros((nFam, len(crf_cons))); # create nparray for results
 for i in range(nFam):
     print('simulating CRF for family ' + str(i+1));
     for j in range(len(crf_cons)):
-        crf_sim[i, j] = np.mean(mod_resp.SFMsimulate(modFit, expData, i+1, crf_cons[j], crf_sfVal)); # take mean of the returned simulations (10 repetitions per stim. condition)
+        crf_sim[i, j], ignore = np.mean(mod_resp.SFMsimulate(modFit, expData, i+1, crf_cons[j], crf_sfVal)); # take mean of the returned simulations (10 repetitions per stim. condition)
 
 # now plot!
 for i in range(len(all_plots[0])):
@@ -249,7 +255,12 @@ all_plots[0, 4].text(0.5, 0.3, 'derivative order: {:.3f}'.format(modFit[1]), fon
 all_plots[0, 4].text(0.5, 0.2, 'response scalar: {:.3f}'.format(modFit[4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 all_plots[0, 4].text(0.5, 0.1, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modFit[2]), modFit[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
-# In[444]:
+#########
+# Normalization pool simulations
+#########
+
+# why nFam x nFam - will simulate at all 5 dispersion leves and 5 different contrast levels
+f, all_plots = plt.subplots(nFam, nFam, sharex=True, sharey=True, figsize=(25,25))
 
 # and now save it
 bothFigs = [f, fDetails];
