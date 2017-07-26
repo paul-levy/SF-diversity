@@ -230,10 +230,12 @@ crf_sfVal = expSfCent[crf_sfIndex]; # what's the closest SF to the pref that was
 crf_cons = expData['sfm']['exp']['con']; # what contrasts to sim. from model? Same ones used in exp
 crf_sim = np.zeros((nFam, len(crf_cons))); # create nparray for results
 # first, run the CRFs...
+'''
 for i in range(nFam):
     print('simulating CRF for family ' + str(i+1));
     for j in range(len(crf_cons)):
-        crf_sim[i, j], ignore = np.mean(mod_resp.SFMsimulate(modFit, expData, i+1, crf_cons[j], crf_sfVal)); # take mean of the returned simulations (10 repetitions per stim. condition)
+        simResp, ignore = mod_resp.SFMsimulate(modFit, expData, i+1, crf_cons[j], crf_sfVal);
+        crf_sim[i, j] = np.mean(simResp); # take mean of the returned simulations (10 repetitions per stim. condition)
 
 # now plot!
 for i in range(len(all_plots[0])):
@@ -248,6 +250,8 @@ for i in range(len(all_plots[0])):
 
 fDetails.legend((modPlt[0], expPlt[0]), ('model', 'experiment'), fontsize = 15, loc='center left');
 fDetails.suptitle('SF mixture - details', fontsize=25);
+'''
+
 
 # print, in text, model parameters:
 all_plots[0, 4].text(0.5, 0.4, 'prefSf: {:.3f}'.format(modFit[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
@@ -259,14 +263,40 @@ all_plots[0, 4].text(0.5, 0.1, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modF
 # Normalization pool simulations
 #########
 
-# why nFam x nFam - will simulate at all 5 dispersion leves and 5 different contrast levels
-f, all_plots = plt.subplots(nFam, nFam, sharex=True, sharey=True, figsize=(25,25))
+conLevels = [1, 0.75, 0.5, 0.33, 0.1];
+nCons = len(conLevels);
+sfCenters = expSfCent;
+fNorm, conDisp_plots = plt.subplots(nFam, nCons, sharey=True, figsize=(45,25))
+norm_sim = np.nan * np.empty((nFam, nCons, len(expSfCent)));
+
+# simulations
+for disp in range(nFam):
+    for conLvl in range(nCons):
+      print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
+      for sfCent in range(len(sfCenters)):
+          #ignore, normResp = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+          
+          pdb.set_trace();
+          ignore, normResp, nRstr = mod_resp.SFMsimulate(modFit, expData, 1, conLevels[conLvl], sfCenters[sfCent]);
+          ignore, normResp, nRstr = mod_resp.SFMsimulate(modFit, expData, 5, conLevels[conLvl], sfCenters[sfCent]);
+          norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
+      
+      conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b');
+      conDisp_plots[conLvl, disp].set_xlim([1e-1, 1e1]);
+      conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}'.format(conLevels[conLvl], disp+1), fontsize=12, horizontalalignment='center', verticalalignment='center');
+
+      conDisp_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8);
+      conDisp_plots[conLvl, disp].tick_params(width=1, length=4, which='minor'); # minor ticks, too...
+      if conLvl == 0:
+          conDisp_plots[conLvl, disp].set_xlabel('sf center (cpd)', fontsize=20);
+      if disp == 0:
+          conDisp_plots[conLvl, disp].set_ylabel('Response (ips)', fontsize=20);
 
 # and now save it
-bothFigs = [f, fDetails];
+allFigs = [f, fDetails, fNorm];
 saveName = "cellSimpMod_%d.pdf" % cellNum
 pdf = pltSave.PdfPages(str(save_loc + saveName))
-for fig in range(len(bothFigs)): ## will open an empty extra figure :(
-    pdf.savefig(bothFigs[fig])
+for fig in range(len(allFigs)): ## will open an empty extra figure :(
+    pdf.savefig(allFigs[fig])
 pdf.close()
 

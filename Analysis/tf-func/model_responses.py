@@ -440,6 +440,8 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
 
     mask[oriInds.astype(numpy.int64)] = True; # as in, don't include those trials either!
 
+    #pdb.set_trace();
+
     fixedOr = stimOr[:,~mask];
     fixedTf = stimTf[:,~mask];
     fixedCo = stimCo[:,~mask];

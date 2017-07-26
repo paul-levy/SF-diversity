@@ -3,6 +3,7 @@ from scipy.stats import norm, mode
 sqrt = math.sqrt
 log = math.log
 exp = math.exp
+import pdb
 
 def bw_lin_to_log( lin_low, lin_high ):
     # Given the low/high sf in cpd, returns number of octaves separating the
@@ -152,6 +153,10 @@ def organize_modResp(modResp, expStructure):
         indCond = numpy.where(expStructure['blockID'] == iB);
         if len(indCond[0]) > 0:
             rateOr = numpy.append(rateOr, numpy.mean(modResp[indCond]));
+        else:
+            rateOr = numpy.append(rateOr, numpy.nan);
+
+    #pdb.set_trace();
 
     # Analyze the stimulus-driven responses for the contrast response function
     conBlockIDs = numpy.arange(138, 156+1, 2);
@@ -162,6 +167,8 @@ def organize_modResp(modResp, expStructure):
         indCond = numpy.where(expStructure['blockID'] == iB);   
         if len(indCond[0]) > 0:
             rateCo = numpy.append(rateCo, numpy.mean(modResp[indCond]));
+        else:
+            rateCo = numpy.append(rateCo, numpy.nan);
 
     # Analyze the stimulus-driven responses for the spatial frequency mixtures
 
