@@ -296,10 +296,10 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     uno = tf.add(noiseEarly, tf.cast(Lexc, dtype=tf.float32));
-    numerator     = uno;
-    denominator   = tf.square(sigma) + tf.square(Linh); # squaring Linh - edit 7/17
+    numerator     = tf.pow(uno, respExp);
+    denominator   = tf.pow(tf.square(sigma), respExp) + tf.pow(tf.square(Linh), respExp); # squaring Linh - edit 7/17
     # ratio will be nTrials x nTrials
-    ratio         = tf.pow(tf.maximum(tf.constant(0, dtype=tf.float32), tf.divide(numerator,denominator)), respExp);
+    ratio         = tf.maximum(tf.constant(0, dtype=tf.float32), tf.divide(numerator,denominator));
     meanRate      = tf.reduce_mean(ratio, axis=1);
     respModel     = noiseLate + (scale * meanRate);
 
@@ -331,7 +331,7 @@ def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
     zero = tf.add(tf.nn.softplus(v_prefSf), 0.05);
     one = tf.add(tf.nn.softplus(v_dOrdSp), 0.1);
     two = v_normConst;
-    three = tf.constant(2, dtype=tf.float32); #tf.add(tf.nn.softplus(v_respExp), 1);
+    three = tf.add(tf.nn.softplus(v_respExp), 1);
     four = tf.add(tf.nn.softplus(v_respScalar), 1e-3);
     five = tf.sigmoid(v_noiseEarly);
     six = tf.nn.softplus(v_noiseLate);
@@ -362,7 +362,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal machine
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fitListName = 'fitListExp2.npy';
+    fitListName = 'fitListRGexp.npy';
 
     fitList = numpy.load(loc_data + fitListName); # no .item() needed...
     dataList = numpy.load(loc_data + 'dataList.npy').item();

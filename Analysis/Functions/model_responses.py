@@ -733,8 +733,9 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     numerator     = noiseEarly + Lexc;
-    denominator   = pow(sigma, 2) + pow(Linh, 2); # squaring Linh - edit 7/17
-    ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
+    num           = pow(numerator, respExp);
+    denominator   = pow(pow(sigma, 2), respExp) + pow(pow(Linh, 2), respExp); # squaring Linh - edit 7/17
+    ratio         = numpy.maximum(0, num/denominator);
     meanRate      = ratio.mean(0);
     respModel     = noiseLate + scale*meanRate; # respModel[iR]
 
