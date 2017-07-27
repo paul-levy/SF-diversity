@@ -349,11 +349,6 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
     if not make_own_stim:
         print('Computing normalization response for ' + unitName + ' ...');
 
-    allLinR1 = numpy.zeros((nTrials, nSf, nFrames*len(xCo), nStimComp));
-    allLinR2 = numpy.zeros((nTrials, nSf, nFrames*len(xCo), nStimComp));
-    allLinR3 = numpy.zeros((nTrials, nSf, nFrames*len(xCo), nStimComp));
-    allLinR4 = numpy.zeros((nTrials, nSf, nFrames*len(xCo), nStimComp));
-
     for p in range(nTrials):
         
         #pdb.set_trace();
@@ -436,7 +431,6 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
                
         # Pre-allocate some variables
         respComplex = numpy.zeros((nSf, len(xCo), 120));
-        ArespComplex = numpy.zeros((nSf, len(xCo), 120));
         
         selSfVec = numpy.zeros((nStimComp, nSf));
         where = 0;
@@ -489,46 +483,27 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
                     linR2[:,c] = -1*rComplex.real.reshape(linR2[:,c].shape);
                     linR3[:,c] = rComplex.imag.reshape(linR3[:,c].shape);
                     linR4[:,c] = -1*rComplex.imag.reshape(linR4[:,c].shape);
- 
-                    allLinR1[p, iF, :, c] = linR1[:, c];
-                    allLinR2[p, iF, :, c] = linR2[:, c];
-                    allLinR3[p, iF, :, c] = linR3[:, c];
-                    allLinR4[p, iF, :, c] = linR4[:, c];
             
             if computeSum == 1:
                 respSimple1 = pow(numpy.maximum(0, linR1.sum(1)), 2); # superposition and half-wave rectification,...
                 respSimple2 = pow(numpy.maximum(0, linR2.sum(1)), 2);
                 respSimple3 = pow(numpy.maximum(0, linR3.sum(1)), 2);
                 respSimple4 = pow(numpy.maximum(0, linR4.sum(1)), 2);
-
-                ArespSimple1 = pow(numpy.maximum(0, linR1.sum(1)), 1); # superposition and thresholding
-                ArespSimple2 = pow(numpy.maximum(0, linR2.sum(1)), 1);
-                ArespSimple3 = pow(numpy.maximum(0, linR3.sum(1)), 1);
-                ArespSimple4 = pow(numpy.maximum(0, linR4.sum(1)), 1);
                 
                 respComplex[iF,:,:] = numpy.reshape(respSimple1 + respSimple2 + respSimple3 + respSimple4, [len(xCo), 120]);
-                ArespComplex[iF,:,:] = numpy.reshape(ArespSimple1 + ArespSimple2 + ArespSimple3 + ArespSimple4, [len(xCo), 120]);
         
                 if numpy.count_nonzero(numpy.isnan(respComplex[iF,:,:])) > 0:
                     pdb.set_trace();
                 
         # integration over space (compute average response across space, normalize by number of spatial frequency channels)
-        # pdb.set_trace();        
 
         respInt = respComplex.mean(1) / len(normPool.get('n'));
-        ArespInt = ArespComplex.mean(1) / len(normPool.get('n'));
 
         # square root to bring everything in linear contrast scale again
-        M['normResp'][p,:,:] = ArespInt;   
-        #M['AnormResp'][p,:,:] = ArespInt;   
+        M['normResp'][p,:,:] = respInt;   
 
     M.setdefault('trial_used', trial_used);
  
-    M['linR1'] = allLinR1;
-    M['linR2'] = allLinR2;
-    M['linR3'] = allLinR3;
-    M['linR4'] = allLinR4;
-    
     # if you make/use your own stimuli, just return the output, M;
     # otherwise, save the responses
    
@@ -754,8 +729,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
 
     # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to bring everything in linear contrast scale again)
     normResp = GetNormResp(structureSFM, stimParams);
-    Linh = (inhWeightMat*normResp['normResp']).sum(1).transpose(); 
-    #Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
+    Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     numerator     = noiseEarly + Lexc;
@@ -764,4 +738,4 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     meanRate      = ratio.mean(0);
     respModel     = noiseLate + scale*meanRate; # respModel[iR]
 
-    return respModel, Linh, normResp;
+    return respModel, Linh;

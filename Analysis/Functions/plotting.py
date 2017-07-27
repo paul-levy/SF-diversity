@@ -274,11 +274,7 @@ for disp in range(nFam):
     for conLvl in range(nCons):
       print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
       for sfCent in range(len(sfCenters)):
-          #ignore, normResp = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
-          
-          pdb.set_trace();
-          ignore, normResp, nRstr = mod_resp.SFMsimulate(modFit, expData, 1, conLevels[conLvl], sfCenters[sfCent]);
-          ignore, normResp, nRstr = mod_resp.SFMsimulate(modFit, expData, 5, conLevels[conLvl], sfCenters[sfCent]);
+          ignore, normResp = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
           norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
       
       conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b');
