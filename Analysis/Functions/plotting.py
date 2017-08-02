@@ -41,7 +41,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitName = 'fitListStrip.npy'
+fitName = 'fitListCHMe2.npy'
 descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
 
@@ -76,8 +76,10 @@ oriExpResp, conExpResp, sfmixExpResp, allSfMixExp = organize_modResp(expData['sf
                                                                            expData['sfm']['exp']['trial'])
 #pdb.set_trace();
 
-modLow = np.nanmin(allSfMix, axis=3)
-modHigh = np.nanmax(allSfMix, axis=3)
+# allSfMix is (nFam, nCon, nCond, nReps) where nCond is 11, # of SF centers and nReps is usually 10
+modLow = np.nanmin(allSfMix, axis=3);
+modHigh = np.nanmax(allSfMix, axis=3);
+modAvg = np.nanmean(allSfMix, axis=3);
 
 findNan = np.isnan(allSfMixExp);
 nonNan = np.sum(findNan == False, axis=3); # how many valid trials are there for each fam x con x center combination?
@@ -120,7 +122,8 @@ for con in reversed(range(nCon)): # contrast
         expPoints = all_plots[con, fam].errorbar(expSfCent, expResponses[fam][con], allExpSEM[fam, con, :],\
                                                  linestyle='None', marker='o', color='b');
         modRange = all_plots[con, fam].fill_between(expSfCent, modLow[fam,con,:], \
-                                                    modHigh[fam, con,:], color='r', alpha=0.2)
+                                                    modHigh[fam, con,:], color='r', alpha=0.2);
+        modAvgPlt = all_plots[con, fam].plot(expSfCent, modAvg[fam, con,:], 'ro', alpha=0.2);
         sponRate = all_plots[con, fam].axhline(expData['sfm']['exp']['sponRateMean'], color='k', linestyle='dashed');
         all_plots[con,fam].set_xscale('log');
         
@@ -135,7 +138,7 @@ for con in reversed(range(nCon)): # contrast
         all_plots[con,fam].text(0.5,1.05, 'mod: {:.2f} cpd | {:.2f} oct'.format(pSfMod[fam, con], bwMod[fam, con]), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[con,fam].transAxes); 
         all_plots[con,fam].text(0.5,1.10, 'exp: {:.2f} cpd | {:.2f} oct'.format(pSfExp[fam, con], bwExp[fam, con]), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[con,fam].transAxes); 
             
-f.legend((expPoints[0], modRange, sponRate), ('data +- 1 s.e.m.', 'model range', 'spontaneous f.r.'), fontsize = 15, loc='right');
+f.legend((expPoints[0], modRange, modAvgPlt[0], sponRate), ('data +- 1 s.e.m.', 'model range', 'model average', 'spontaneous f.r.'), fontsize = 15, loc='right');
 f.suptitle('SF mixture experiment', fontsize=25);
 
 #########
@@ -143,14 +146,20 @@ f.suptitle('SF mixture experiment', fontsize=25);
 #########
 
 fDetails, all_plots = plt.subplots(3,5, figsize=(25,10))
-# plot ori, CRF tuning
+# plot ori tuning
 modPlt=all_plots[0, 0].plot(expData['sfm']['exp']['ori'], oriModResp, 'ro'); # Model responses
 expPlt=all_plots[0, 0].plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-'); # Exp responses
 all_plots[0, 0].set_xlabel('Ori (deg)', fontsize=20);
 all_plots[0, 0].set_ylabel('Response (ips)', fontsize=20);
 
-all_plots[0, 1].semilogx(expData['sfm']['exp']['con'], conModResp, 'ro'); # Model responses
-all_plots[0, 1].semilogx(expData['sfm']['exp']['con'], expData['sfm']['exp']['conRateMean'], 'o-'); # Model responses
+# CRF - with values from TF simulation and the broken down (i.e. numerator, denominator separately) values from resimulated conditions
+consUse = expData['sfm']['exp']['con'];
+base = np.amin(conModResp);
+amp = np.amax(conModResp) - base;
+all_plots[0, 1].semilogx(consUse, conModResp, 'ro'); # Model responses
+all_plots[0, 1].semilogx(consUse, expData['sfm']['exp']['conRateMean'], 'o-'); # Model responses
+crf = lambda con, base, amp, sig, rExp: base + amp*np.power((con / np.sqrt(np.power(sig, 2) + np.power(con, 2))), rExp);
+all_plots[0, 1].semilogx(consUse, crf(consUse, base, amp, np.power(10, modFit[2]), modFit[3]), '--');
 all_plots[0, 1].set_xlabel('Con (%)', fontsize=20);
 
 all_plots[0,2].axis('off');
@@ -234,7 +243,7 @@ crf_sim = np.zeros((nFam, len(crf_cons))); # create nparray for results
 for i in range(nFam):
     print('simulating CRF for family ' + str(i+1));
     for j in range(len(crf_cons)):
-        simResp, ignore = mod_resp.SFMsimulate(modFit, expData, i+1, crf_cons[j], crf_sfVal);
+        simResp, ignore, ignore = mod_resp.SFMsimulate(modFit, expData, i+1, crf_cons[j], crf_sfVal);
         crf_sim[i, j] = np.mean(simResp); # take mean of the returned simulations (10 repetitions per stim. condition)
 
 # now plot!
@@ -259,6 +268,7 @@ all_plots[0, 4].text(0.5, 0.3, 'derivative order: {:.3f}'.format(modFit[1]), fon
 all_plots[0, 4].text(0.5, 0.2, 'response scalar: {:.3f}'.format(modFit[4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 all_plots[0, 4].text(0.5, 0.1, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modFit[2]), modFit[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
+'''
 #########
 # Normalization pool simulations
 #########
@@ -274,7 +284,7 @@ for disp in range(nFam):
     for conLvl in range(nCons):
       print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
       for sfCent in range(len(sfCenters)):
-          ignore, normResp = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+          ignore, normResp, ignore = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
           norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
       
       conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b');
@@ -288,8 +298,45 @@ for disp in range(nFam):
       if disp == 0:
           conDisp_plots[conLvl, disp].set_ylabel('Response (ips)', fontsize=20);
 
+conDisp_plots[0, 2].text(0.5, 1.2, 'Normalization pool responses', fontsize=16, horizontalalignment='center', verticalalignment='center', transform=conDisp_plots[0, 2].transAxes);
+'''
+
+'''
+#########
+# Linear filter simulations
+#########
+
+conLevels = [1, 0.75, 0.5, 0.33, 0.1];
+nCons = len(conLevels);
+sfCenters = expSfCent;
+fExc, excFilt_plots = plt.subplots(nFam, nCons, sharey=True, figsize=(45,25))
+exc_sim = np.nan * np.empty((nFam, nCons, len(expSfCent)));
+
+# simulations
+for disp in range(nFam):
+    for conLvl in range(nCons):
+      print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
+      for sfCent in range(len(sfCenters)):
+          ignore, ignore, excResp = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+          exc_sim[disp, conLvl, sfCent] = np.mean(excResp); # take mean of the returned simulations (10 repetitions per stim. condition)
+      
+      excFilt_plots[conLvl, disp].semilogx(sfCenters, exc_sim[disp, conLvl, :], 'b');
+      excFilt_plots[conLvl, disp].set_xlim([1e-1, 1e1]);
+      excFilt_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}'.format(conLevels[conLvl], disp+1), fontsize=12, horizontalalignment='center', verticalalignment='center', transform=excFilt_plots[conLvl, disp].transAxes);
+
+      excFilt_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8);
+      excFilt_plots[conLvl, disp].tick_params(width=1, length=4, which='minor'); # minor ticks, too...
+      if conLvl == 0:
+          conDisp_plots[conLvl, disp].set_xlabel('sf center (cpd)', fontsize=20);
+      if disp == 0:
+          conDisp_plots[conLvl, disp].set_ylabel('Response (ips)', fontsize=20);
+
+excFilt_plots[0, 2].text(0.5, 1.2, 'Excitatory filter responses', fontsize=16, horizontalalignment='center', verticalalignment='center', transform=excFilt_plots[0, 2].transAxes);
+'''
+
 # and now save it
-allFigs = [f, fDetails, fNorm];
+allFigs = [f, fDetails];
+#allFigs = [f, fDetails, fNorm, fExc];
 saveName = "cellSimpMod_%d.pdf" % cellNum
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(allFigs)): ## will open an empty extra figure :(

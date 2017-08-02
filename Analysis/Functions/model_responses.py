@@ -508,8 +508,11 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
     # otherwise, save the responses
    
     # THIS NOT GUARANTEED :)
-    if not make_own_stim:
+    if not make_own_stim: 
+        print('Saving, it seems. In ' + str(loadPath));
         # Save the simulated normalization response in the units structure
+        if 'mod' not in S['sfm']:
+          S['sfm']['mod'] = dict();
         S['sfm']['mod']['normalization'] = M;
         numpy.save(loadPath + unitName + '_sfm.npy', S)
         
@@ -553,9 +556,9 @@ def GetNormResp(iU, stimParams = []):
     
     dataList = numpy.load(loadPath + 'dataList.npy');
     dataList = dataList.item();
-    
+
     if isinstance(iU, int):
-        unitName = dataList['unitName'][iU];
+        unitName = str(dataList['unitName'][iU]);
     else:
         unitName = iU;
     
@@ -635,7 +638,7 @@ def SFMGiveBof(params, structureSFM):
 
         # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
         numerator     = noiseEarly + Lexc;
-        denominator   = pow(sigma, 2) + pow(Linh, 2); # square Linh added 7/24 - was mistakenly not fixed earlier
+        denominator   = pow(pow(sigma, 2) + pow(Linh, 2), 0.5); # square Linh added 7/24 - was mistakenly not fixed earlier
         ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
         meanRate      = ratio.mean(0);
         respModel     = noiseLate + scale*meanRate; # respModel[iR]
@@ -733,9 +736,10 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     numerator     = noiseEarly + Lexc;
-    denominator   = pow(sigma, 2) + pow(Linh, 2); # squaring Linh - edit 7/17
-    ratio         = pow(numpy.maximum(0, num/denominator), respExp);
+    # taking square root of denominator (after summing squares...) to bring in line with computation in Carandini, Heeger, Movshon, '97
+    denominator   = pow(pow(sigma, 2) + pow(Linh, 2), 0.5); # squaring Linh - edit 7/17
+    ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
     meanRate      = ratio.mean(0);
     respModel     = noiseLate + scale*meanRate; # respModel[iR]
 
-    return respModel, Linh;
+    return respModel, Linh, Lexc;
