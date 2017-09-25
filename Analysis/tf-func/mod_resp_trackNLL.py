@@ -311,12 +311,14 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     r   = tf.divide(tf.square(mu), tf.subtract(var, mu)); # The parameters r and p of the negative binomial distribution
     p   = tf.divide(r, tf.add(r, mu));
 
-    log_lh = negBinom(ph_spikeCount, r, p);
-     
-    #NLL = tf.reduce_mean(-1*log_lh);
-    wNLL = tf.reduce_mean(tf.multiply(-ph_objWeight, log_lh));
+    # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
+    lsq = tf.square(tf.add(tf.sqrt(respModel), -tf.sqrt(ph_spikeCount)));
+    NLL = tf.reduce_mean(ph_objWeight*lsq); # was 1*lsq
 
-    return wNLL;
+    #log_lh = negBinom(ph_spikeCount, r, p);
+    #NLL = tf.reduce_mean(-1*log_lh);
+    
+    return NLL;
 
 def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
                       v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain):
@@ -354,8 +356,9 @@ def negBinom(x, r, p):
     
     return tf.add(naGam, haanGam);
     
-def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
+def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
     # Given just a cell number, will fit the Robbe V1 model to the data
+    # stopThresh is the value (in NLL) at which we stop the fitting (i.e. if the difference in NLL between two full steps is < stopThresh, stop the fitting
     # LR is learning rate
  
     ########
@@ -365,7 +368,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal machine
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fitListName = 'fitListCHMnoCV.npy';
+    fitListName = 'fitListCHMlsq.npy';
 
     fitList = numpy.load(loc_data + fitListName); # no .item() needed...
     dataList = numpy.load(loc_data + 'dataList.npy').item();
@@ -394,7 +397,8 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
      
     pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
     dOrdSp = numpy.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
-    normConst = numpy.random.uniform(-1, 0) if initFromCurr==0 else curr_params[2];
+    normConst = -0.8 if initFromCurr==0 else curr_params[2]; # why -0.8? Talked with Tony, he suggests starting with lower sigma rather than higher/non-saturating one
+    #normConst = numpy.random.uniform(-1, 0) if initFromCurr==0 else curr_params[2];
     respExp = numpy.random.uniform(1, 3) if initFromCurr==0 else curr_params[3];
     respScal = numpy.random.uniform(10, 1000) if initFromCurr==0 else curr_params[4];
     noiseEarly = numpy.random.uniform(0.001, 0.1) if initFromCurr==0 else curr_params[5];
@@ -425,7 +429,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     #purge of NaNs...
     mask = numpy.isnan(numpy.sum(stimOr, 0)); # sum over all stim components...if there are any nans in that trial, we know
     objWeight = numpy.ones((stimOr.shape[1]));    
- 
+
     # and get rid of orientation tuning curve trials
     oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
 
@@ -435,26 +439,26 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
         if len(indCond[0]) > 0:
             oriInds = numpy.append(oriInds, indCond);
 
-    mask[oriInds.astype(numpy.int64)] = True; # as in, don't include those trials either!
-
     # get rid of CRF trials, too? Not yet...
-    # BUT, let's overweight them in the loss function - 9/25/17
     conBlockIDs = numpy.arange(138, 156+1, 2);
     conInds = numpy.empty((0,));
     for iB in conBlockIDs:
-        indCond = numpy.where(trial_inf['blockID'] == iB);
-        if len(indCond[0]) > 0:
-            conInds = numpy.append(conInds, indCond);
+       indCond = numpy.where(trial_inf['blockID'] == iB);
+       if len(indCond[0]) > 0:
+           conInds = numpy.append(conInds, indCond);
 
-    objWeight[conInds.astype(numpy.int64)] = 10; # just for now...
-    # mask[conInds.astype(numpy.int64)] = True; # as in, don't include those trials either!
+    objWeight[conInds.astype(numpy.int64)] = 10; # for now, yes it's a "magic number"    
+
+    mask[oriInds.astype(numpy.int64)] = True; # as in, don't include those trials either!
+
+    #pdb.set_trace();
 
     fixedOr = stimOr[:,~mask];
     fixedTf = stimTf[:,~mask];
     fixedCo = stimCo[:,~mask];
     fixedSf = stimSf[:,~mask];
     fixedPh = stimPh[:,~mask];
-
+    
     # cell responses
     spikes = trial_inf['spikeCount'][~mask];
     stim_dur = trial_inf['duration'][~mask];
@@ -490,8 +494,8 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     
     ph_spikeCount = tf.placeholder(tf.float32);
     ph_stimDur = tf.placeholder(tf.float32);
-    ph_objWeight = tf.placeholder(tf.float32);       
- 
+    ph_objWeight = tf.placeholder(tf.float32);
+        
     ph_normResp = tf.placeholder(tf.float32);
     ph_normCentSf = tf.placeholder(tf.float32);
 
@@ -517,8 +521,11 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
     m.run(init);
     
     currNLL = fitList[cellNum-1]['NLL'];
+    prevNLL = numpy.nan;
+    diffNLL = 1e4; # just pick a large value
+    iter = 1;
 
-    for i in range(fitIter):
+    while (abs(diffNLL) > stopThresh):
         # resample data...
         if subset_frac > 0:
           trialsToPick = numpy.random.randint(0, fixedOr.shape[-1], subsetShape[-1]);
@@ -536,9 +543,9 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
                           ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, ph_stimDur: subsetDur, ph_objWeight: subsetWeight, \
                           ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
 
-          #print('itreation ' + str(i) + '...NLL is:' + str(loss));
+          print('iteration ' + str(iter) + '...NLL is:' + str(loss));
         
-          if (i/500.0) == round(i/500.0):
+          if (iter/500.0) == round(iter/500.0):
             NLL = m.run(full, feed_dict={ph_stimOr: fixedOr, ph_stimTfFull: fixedTf, ph_stimCo: fixedCo, \
                         ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
                         ph_stimDur: stim_dur, ph_objWeight: objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
@@ -550,15 +557,23 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
                             ph_stimDur: stim_dur, ph_objWeight: objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
 
         
-          if (i/500.0) == round(i/500.0):
+          if (iter/500.0) == round(iter/500.0):
             NLL = m.run(okok, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
                         ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
-                        ph_stimDur: stim_dur, ph_objWeight: objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
+                        ph_stimDur: stim_dur, ph_objWeight:objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
 
-        if (i/500.0) == round(i/500.0): # save every once in a while!!!
+        if (iter/500.0) == round(iter/500.0): # save every once in a while!!!
           
-          print('iteration ' + str(i) + '...NLL is ' + str(NLL) + ' and params are ' + str(curr_params));
-          
+          print('iteration ' + str(iter) + '...NLL is ' + str(NLL) + ' and params are ' + str(curr_params));
+
+          if numpy.isnan(prevNLL):
+            diffNLL = NLL;
+          else:
+            diffNLL = prevNLL - NLL;
+          prevNLL = NLL;
+
+          print('Difference in NLL is : ' + str(diffNLL));
+
           if NLL < currNLL or numpy.any(numpy.isnan(curr_params)): # if the saved params are NaN, overwrite them
 
        	    real_params = m.run(applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
@@ -579,6 +594,8 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
             fitList[cellNum-1]['params'] = real_params;
             numpy.save(loc_data + fitListName, fitList);   
 
+        iter = iter+1;
+
     # Now the fitting is done    
     # Now get "true" model parameters and NLL
     if subset_frac > 0:
@@ -587,7 +604,7 @@ def setModel(cellNum, fitIter, lr, subset_frac = 0, initFromCurr = 1):
                             ph_stimDur: stim_dur, ph_objWeight: objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
     else:
       NLL = m.run(okok, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
-                            ph_stimSf: fixedSf, ph_stimPh: stimPh, ph_spikeCount: spikes, \
+                            ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
                             ph_stimDur: stim_dur, ph_objWeight: objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
 
 
@@ -615,10 +632,10 @@ if __name__ == '__main__':
       print('First should be cell number, second is number of fit iterations/updates, third is fraction of data to be used in subsample...currently ignored, anyway');
       exit();
 
-    print('Running cell ' + sys.argv[1] + ' for ' + sys.argv[2] + ' iterations with learning rate ' + sys.argv[3]);
+    print('Running cell ' + sys.argv[1] + ' with NLL step threshold of ' + sys.argv[2] + ' with learning rate ' + sys.argv[3]);
 
     if len(sys.argv) > 4: # subsample data for each iteration
       print('Additionally, each iteration will have ' + sys.argv[4] + ' of the data (subsample fraction)');
-      setModel(int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]), int(sys.argv[5]));
+      setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]), int(sys.argv[5]));
     else: # all trials in each iteration
-      setModel(int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]));
+      setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]));
