@@ -41,7 +41,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitName = 'fitListCHMe2.npy'
+fitName = 'fitListCHMnoCV.npy'
 descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
 
@@ -337,7 +337,7 @@ excFilt_plots[0, 2].text(0.5, 1.2, 'Excitatory filter responses', fontsize=16, h
 # and now save it
 allFigs = [f, fDetails];
 #allFigs = [f, fDetails, fNorm, fExc];
-saveName = "cellSimpMod_%d.pdf" % cellNum
+saveName = "cell_%d.pdf" % cellNum
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(allFigs)): ## will open an empty extra figure :(
     pdf.savefig(allFigs[fig])

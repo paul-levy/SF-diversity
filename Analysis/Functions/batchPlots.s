@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=00:25:00
+#SBATCH --time=00:5:00
 #SBATCH --mem=1500M0B
 
 #SBATCH --job-name=sfPlots
