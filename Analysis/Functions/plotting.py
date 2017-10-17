@@ -41,7 +41,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitName = 'fitListCHMnoCV.npy'
+fitName = 'fitListCHM.npy'
 descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
 
@@ -120,16 +120,16 @@ for con in reversed(range(nCon)): # contrast
     all_plots[con, 0].set_ylim([-1, yMax]);
     for fam in reversed(range(nFam)): # family        
         expPoints = all_plots[con, fam].errorbar(expSfCent, expResponses[fam][con], allExpSEM[fam, con, :],\
-                                                 linestyle='None', marker='o', color='b');
+                                                 linestyle='None', marker='o', color='b', clip_on=False);
         modRange = all_plots[con, fam].fill_between(expSfCent, modLow[fam,con,:], \
                                                     modHigh[fam, con,:], color='r', alpha=0.2);
-        modAvgPlt = all_plots[con, fam].plot(expSfCent, modAvg[fam, con,:], 'ro', alpha=0.2);
+        modAvgPlt = all_plots[con, fam].plot(expSfCent, modAvg[fam, con,:], 'ro', alpha=0.2, clip_on=False);
         sponRate = all_plots[con, fam].axhline(expData['sfm']['exp']['sponRateMean'], color='k', linestyle='dashed');
         all_plots[con,fam].set_xscale('log');
         
         # pretty
-        all_plots[con,fam].tick_params(labelsize=15, width=1, length=8);
-        all_plots[con,fam].tick_params(width=1, length=4, which='minor'); # minor ticks, too...
+        all_plots[con,fam].tick_params(labelsize=15, width=1, length=8, direction='out');
+        all_plots[con,fam].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
         if con == 1:
             all_plots[con, fam].set_xlabel('sf center (cpd)', fontsize=20);
         if fam == 0:
@@ -137,8 +137,15 @@ for con in reversed(range(nCon)): # contrast
        
         all_plots[con,fam].text(0.5,1.05, 'mod: {:.2f} cpd | {:.2f} oct'.format(pSfMod[fam, con], bwMod[fam, con]), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[con,fam].transAxes); 
         all_plots[con,fam].text(0.5,1.10, 'exp: {:.2f} cpd | {:.2f} oct'.format(pSfExp[fam, con], bwExp[fam, con]), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[con,fam].transAxes); 
+
+        # Remove top/right axis, put ticks only on bottom/left
+        all_plots[con, fam].spines['right'].set_visible(False);
+        all_plots[con, fam].spines['top'].set_visible(False);
+        all_plots[con, fam].xaxis.set_ticks_position('bottom');
+        all_plots[con, fam].yaxis.set_ticks_position('left');
+
             
-f.legend((expPoints[0], modRange, modAvgPlt[0], sponRate), ('data +- 1 s.e.m.', 'model range', 'model average', 'spontaneous f.r.'), fontsize = 15, loc='right');
+f.legend((expPoints[0], modRange, modAvgPlt[0], sponRate), ('data +- 1 s.e.m.', 'model range', 'model average', 'spontaneous f.r.'), fontsize = 15, loc='upper right');
 f.suptitle('SF mixture experiment', fontsize=25);
 
 #########
@@ -147,8 +154,8 @@ f.suptitle('SF mixture experiment', fontsize=25);
 
 fDetails, all_plots = plt.subplots(3,5, figsize=(25,10))
 # plot ori tuning
-modPlt=all_plots[0, 0].plot(expData['sfm']['exp']['ori'], oriModResp, 'ro'); # Model responses
-expPlt=all_plots[0, 0].plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-'); # Exp responses
+modPlt=all_plots[0, 0].plot(expData['sfm']['exp']['ori'], oriModResp, 'ro', clip_on=False); # Model responses
+expPlt=all_plots[0, 0].plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-', clip_on=False); # Exp responses
 all_plots[0, 0].set_xlabel('Ori (deg)', fontsize=20);
 all_plots[0, 0].set_ylabel('Response (ips)', fontsize=20);
 
@@ -156,11 +163,17 @@ all_plots[0, 0].set_ylabel('Response (ips)', fontsize=20);
 consUse = expData['sfm']['exp']['con'];
 base = np.amin(conModResp);
 amp = np.amax(conModResp) - base;
-all_plots[0, 1].semilogx(consUse, conModResp, 'ro'); # Model responses
-all_plots[0, 1].semilogx(consUse, expData['sfm']['exp']['conRateMean'], 'o-'); # Model responses
+all_plots[0, 1].semilogx(consUse, conModResp, 'ro', clip_on=False); # Model responses
+all_plots[0, 1].semilogx(consUse, expData['sfm']['exp']['conRateMean'], 'o-', clip_on=False); # Measured responses
 crf = lambda con, base, amp, sig, rExp: base + amp*np.power((con / np.sqrt(np.power(sig, 2) + np.power(con, 2))), rExp);
 all_plots[0, 1].semilogx(consUse, crf(consUse, base, amp, np.power(10, modFit[2]), modFit[3]), '--');
 all_plots[0, 1].set_xlabel('Con (%)', fontsize=20);
+# Remove top/right axis, put ticks only on bottom/left
+all_plots[0, 1].spines['right'].set_visible(False);
+all_plots[0, 1].spines['top'].set_visible(False);
+all_plots[0, 1].xaxis.set_ticks_position('bottom');
+all_plots[0, 1].yaxis.set_ticks_position('left');
+
 
 all_plots[0,2].axis('off');
 all_plots[0,3].axis('off');
@@ -217,11 +230,17 @@ all_plots[1,1].set_xlim([omega[0], omega[-1]]);
 all_plots[1,1].set_ylim([-1.5, 1]);
 all_plots[1, 1].set_xlabel('SF (cpd)', fontsize=20);
 all_plots[1, 1].set_ylabel('Normalized response (a.u.)', fontsize=20);
+# Remove top/right axis, put ticks only on bottom/left
+all_plots[1, 1].spines['right'].set_visible(False);
+all_plots[1, 1].spines['top'].set_visible(False);
+all_plots[1, 1].xaxis.set_ticks_position('bottom');
+all_plots[1, 1].yaxis.set_ticks_position('left');
+
 
 for i in range(len(all_plots)):
     for j in range (len(all_plots[0])):
-        all_plots[i,j].tick_params(labelsize=15, width=1, length=8);
-        all_plots[i,j].tick_params(width=1, length=4, which='minor'); # minor ticks, too...
+        all_plots[i,j].tick_params(labelsize=15, width=1, length=8, direction='out');
+        all_plots[i,j].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
 
 # last but not least...and not last... response nonlinearity
 all_plots[1,2].plot([-1, 1], [0, 0], 'k--')
@@ -231,7 +250,13 @@ all_plots[1,2].plot(np.linspace(-1,1,100), np.maximum(0, np.linspace(-1,1,100)),
 all_plots[1,2].set_xlim([-1, 1]);
 all_plots[1,2].set_ylim([-.1, 1]);
 all_plots[1,2].text(0.5, 1.1, 'respExp: {:.2f}'.format(modFit[3]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+# Remove top/right axis, put ticks only on bottom/left
+all_plots[1, 2].spines['right'].set_visible(False);
+all_plots[1, 2].spines['top'].set_visible(False);
+all_plots[1, 2].xaxis.set_ticks_position('bottom');
+all_plots[1, 2].yaxis.set_ticks_position('left');
     
+
 # actually last - CRF at different dispersion levels
 crf_row = len(all_plots)-1; # we're putting the CRFs in the last row of this plot
 crf_sfIndex = np.argmin(abs(expSfCent - descrExpFit[0][0][2])); # get mu (i.e. prefSf) as measured at high contrast, single grating and find closest presented SF (index)
@@ -248,14 +273,21 @@ for i in range(nFam):
 
 # now plot!
 for i in range(len(all_plots[0])):
-    all_plots[crf_row, i].semilogx(1, expResponses[i][0][crf_sfIndex], 'bo'); # exp response - high con
-    all_plots[crf_row, i].semilogx(0.33, expResponses[i][1][crf_sfIndex], 'bo'); # exp response - low con
-    all_plots[crf_row, i].semilogx(crf_cons, crf_sim[i, :], 'ro-'); # model resposes - range of cons
+    all_plots[crf_row, i].semilogx(1, expResponses[i][0][crf_sfIndex], 'bo', clip_on=False); # exp response - high con
+    all_plots[crf_row, i].semilogx(0.33, expResponses[i][1][crf_sfIndex], 'bo', clip_on=False); # exp response - low con
+    all_plots[crf_row, i].semilogx(crf_cons, crf_sim[i, :], 'ro-', clip_on=False); # model resposes - range of cons
     all_plots[crf_row, i].set_xlabel('Con (%)', fontsize=20);    
     all_plots[crf_row, i].set_xlim([1e-2, 1e0]);
     all_plots[crf_row, i].set_ylim([0, 1.05*np.amax(np.maximum(crf_sim[0, :], expResponses[0][0][crf_sfIndex]))]);
     if i == 0:
       all_plots[crf_row, i].set_ylabel('Resp. amp (sps)');
+
+    # Remove top/right axis, put ticks only on bottom/left
+    all_plots[crf_row, i].spines['right'].set_visible(False);
+    all_plots[crf_row, i].spines['top'].set_visible(False);
+    all_plots[crf_row, i].xaxis.set_ticks_position('bottom');
+    all_plots[crf_row, i].yaxis.set_ticks_position('left');
+
 
 fDetails.legend((modPlt[0], expPlt[0]), ('model', 'experiment'), fontsize = 15, loc='center left');
 fDetails.suptitle('SF mixture - details', fontsize=25);
@@ -287,16 +319,23 @@ for disp in range(nFam):
           ignore, normResp, ignore = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
           norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
       
-      conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b');
+      conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);
       conDisp_plots[conLvl, disp].set_xlim([1e-1, 1e1]);
       conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}'.format(conLevels[conLvl], disp+1), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
-      conDisp_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8);
-      conDisp_plots[conLvl, disp].tick_params(width=1, length=4, which='minor'); # minor ticks, too...
+      conDisp_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8, direction='out');
+      conDisp_plots[conLvl, disp].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
       if conLvl == 0:
           conDisp_plots[conLvl, disp].set_xlabel('sf center (cpd)', fontsize=20);
       if disp == 0:
           conDisp_plots[conLvl, disp].set_ylabel('Response (ips)', fontsize=20);
+
+      # remove axis from top and right, set ticks to be only bottom and left
+      conDisp_plots[conLvl, disp].spines['right'].set_visible(False);
+      conDisp_plots[conLvl, disp].spines['top'].set_visible(False);
+      conDisp_plots[conLvl, disp].xaxis.set_ticks_position('bottom');
+      conDisp_plots[conLvl, disp].yaxis.set_ticks_position('left');
+
 
 conDisp_plots[0, 2].text(0.5, 1.2, 'Normalization pool responses', fontsize=16, horizontalalignment='center', verticalalignment='center', transform=conDisp_plots[0, 2].transAxes);
 '''
@@ -320,12 +359,12 @@ for disp in range(nFam):
           ignore, ignore, excResp = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
           exc_sim[disp, conLvl, sfCent] = np.mean(excResp); # take mean of the returned simulations (10 repetitions per stim. condition)
       
-      excFilt_plots[conLvl, disp].semilogx(sfCenters, exc_sim[disp, conLvl, :], 'b');
+      excFilt_plots[conLvl, disp].semilogx(sfCenters, exc_sim[disp, conLvl, :], 'b', clip_on=False);
       excFilt_plots[conLvl, disp].set_xlim([1e-1, 1e1]);
       excFilt_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}'.format(conLevels[conLvl], disp+1), fontsize=12, horizontalalignment='center', verticalalignment='center', transform=excFilt_plots[conLvl, disp].transAxes);
 
-      excFilt_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8);
-      excFilt_plots[conLvl, disp].tick_params(width=1, length=4, which='minor'); # minor ticks, too...
+      excFilt_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8, direction='out');
+      excFilt_plots[conLvl, disp].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
       if conLvl == 0:
           conDisp_plots[conLvl, disp].set_xlabel('sf center (cpd)', fontsize=20);
       if disp == 0:
