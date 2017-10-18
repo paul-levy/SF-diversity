@@ -368,7 +368,7 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal machine
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fitListName = 'fitListCHMlsq.npy';
+    fitListName = 'fitListCHM_crfWeight.npy';
 
     fitList = numpy.load(loc_data + fitListName); # no .item() needed...
     dataList = numpy.load(loc_data + 'dataList.npy').item();
@@ -447,7 +447,7 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
        if len(indCond[0]) > 0:
            conInds = numpy.append(conInds, indCond);
 
-    objWeight[conInds.astype(numpy.int64)] = 10; # for now, yes it's a "magic number"    
+    objWeight[conInds.astype(numpy.int64)] = 1e2; # for now, yes it's a "magic number"    
 
     mask[oriInds.astype(numpy.int64)] = True; # as in, don't include those trials either!
 
