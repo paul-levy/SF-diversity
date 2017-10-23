@@ -41,7 +41,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitName = 'fitListCHM.npy'
+fitName = 'fitListCHM_asym.npy'
 descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
 
@@ -205,11 +205,12 @@ sfExc = s/sMax;
 inhSfTuning = getSuppressiveSFtuning();
 
 # Compute weights for suppressive signals
+inhAsym = modFit[8];
 nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
 inhWeight = [];
 for iP in range(len(nInhChan)):
     # '0' because no asymmetry
-    inhWeight = np.append(inhWeight, 1 + 0 * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
+    inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
            
 sfInh = 0 * np.ones(omega.shape) / np.amax(modHigh); # mult by 0 because we aren't including a subtractive inhibition in model for now 7/19/17
 sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
@@ -295,10 +296,11 @@ fDetails.suptitle('SF mixture - details', fontsize=25);
 
 
 # print, in text, model parameters:
-all_plots[0, 4].text(0.5, 0.4, 'prefSf: {:.3f}'.format(modFit[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-all_plots[0, 4].text(0.5, 0.3, 'derivative order: {:.3f}'.format(modFit[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-all_plots[0, 4].text(0.5, 0.2, 'response scalar: {:.3f}'.format(modFit[4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-all_plots[0, 4].text(0.5, 0.1, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modFit[2]), modFit[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.5, 'prefSf: {:.3f}'.format(modFit[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.4, 'derivative order: {:.3f}'.format(modFit[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.3, 'response scalar: {:.3f}'.format(modFit[4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.2, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modFit[2]), modFit[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+all_plots[0, 4].text(0.5, 0.1, 'inhibitory asymmetry: {:.3f}'.format(modFit[8]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
 '''
 #########

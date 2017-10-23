@@ -673,6 +673,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     # 05 = early additive noise
     # 06 = late additive noise
     # 07 = variance of response gain    
+    # 08 = inhibitory asymmetry (i.e. tilt of gain over SF for weighting normalization pool responses)
 
     print('simulate!');
     
@@ -685,7 +686,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     excChannel = {'pref': pref, 'dord': dord};
 
     # Inhibitory channel
-    # nothing for this iteration - 7/7/17
+    inhAsym = params[8];
 
      # Other (nonlinear) model components
     sigma    = pow(10, params[2]); # normalization constant
@@ -712,7 +713,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     nFrames = 120; # always
     for iP in range(len(nInhChan)):
         # if asym, put where '0' is
-        inhWeight = numpy.append(inhWeight, 1 + 0*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
+        inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                             - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
 
     # assumption (made by Robbe) - only two normalization pools
