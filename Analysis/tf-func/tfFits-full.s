@@ -14,7 +14,7 @@
 module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 
-python model_responses.py $SLURM_ARRAY_TASK_ID 50000 0.1 0.1 1
+python model_responses.py $SLURM_ARRAY_TASK_ID 25000 0.1 0 0
  
 # leave a blank line at the end
 
