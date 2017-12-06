@@ -32,6 +32,8 @@ matplotlib.use('Agg') # why? so that we can get around having no GUI on cluster
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
 
+plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/Analysis/Functions/paul_plt_cluster.mplstyle');
+
 import pdb
 
 cellNum = int(sys.argv[1]);
@@ -41,7 +43,8 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitName = 'fitListCHM_asym.npy'
+fitName = 'fitList_171128.npy';
+#fitName = 'fitListCHM_asym.npy'
 descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
 
@@ -123,8 +126,10 @@ for con in reversed(range(nCon)): # contrast
                                                  linestyle='None', marker='o', color='b', clip_on=False);
         modRange = all_plots[con, fam].fill_between(expSfCent, modLow[fam,con,:], \
                                                     modHigh[fam, con,:], color='r', alpha=0.2);
-        modAvgPlt = all_plots[con, fam].plot(expSfCent, modAvg[fam, con,:], 'ro', alpha=0.2, clip_on=False);
-        sponRate = all_plots[con, fam].axhline(expData['sfm']['exp']['sponRateMean'], color='k', linestyle='dashed');
+        modAvgPlt = all_plots[con, fam].plot(expSfCent, modAvg[fam, con,:], 'r-', alpha=0.7, clip_on=False);
+        #modAvgPlt = all_plots[con, fam].plot(expSfCent, modAvg[fam, con,:], 'ro', alpha=0.2, clip_on=False);
+        sponRate = all_plots[con, fam].axhline(expData['sfm']['exp']['sponRateMean'], color='b', linestyle='dashed');
+        sponRateMod = all_plots[con, fam].axhline(modFit[6], color='r', linestyle='dashed');
         all_plots[con,fam].set_xscale('log');
         
         # pretty
@@ -145,7 +150,7 @@ for con in reversed(range(nCon)): # contrast
         all_plots[con, fam].yaxis.set_ticks_position('left');
 
             
-f.legend((expPoints[0], modRange, modAvgPlt[0], sponRate), ('data +- 1 s.e.m.', 'model range', 'model average', 'spontaneous f.r.'), fontsize = 15, loc='upper right');
+f.legend((expPoints[0], modRange, modAvgPlt[0], sponRate, sponRateMod), ('data +- 1 s.e.m.', 'model range', 'model average', 'exp spont f.r.', 'mod spont f.r.'), fontsize = 15, loc='upper right');
 f.suptitle('SF mixture experiment', fontsize=25);
 
 #########
@@ -205,7 +210,8 @@ sfExc = s/sMax;
 inhSfTuning = getSuppressiveSFtuning();
 
 # Compute weights for suppressive signals
-inhAsym = modFit[8];
+inhAsym = 0;
+#inhAsym = modFit[8];
 nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
 inhWeight = [];
 for iP in range(len(nInhChan)):
@@ -300,7 +306,7 @@ all_plots[0, 4].text(0.5, 0.5, 'prefSf: {:.3f}'.format(modFit[0]), fontsize=12, 
 all_plots[0, 4].text(0.5, 0.4, 'derivative order: {:.3f}'.format(modFit[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 all_plots[0, 4].text(0.5, 0.3, 'response scalar: {:.3f}'.format(modFit[4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 all_plots[0, 4].text(0.5, 0.2, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modFit[2]), modFit[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-all_plots[0, 4].text(0.5, 0.1, 'inhibitory asymmetry: {:.3f}'.format(modFit[8]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+#all_plots[0, 4].text(0.5, 0.1, 'inhibitory asymmetry: {:.3f}'.format(modFit[8]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
 '''
 #########

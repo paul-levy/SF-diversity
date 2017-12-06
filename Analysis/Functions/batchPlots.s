@@ -12,7 +12,7 @@
 #SBATCH --error=plt_%A_%a.err
 
 module purge
-module load tensorflow/python2.7/20170218
+source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 
 python plotting.py $SLURM_ARRAY_TASK_ID
  
