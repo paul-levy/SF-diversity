@@ -69,7 +69,18 @@ for sfs = 1 : length(sfsLost)
     sfCenters{sfs} = freqSeries(ceil((1+sfsLost(sfs))/2) : (nSfsTot - sfsLost(sfs)/2)); 
 end
 
-%% now compute the opacity 
+meanSf = mean(1:nSfsTot);
+multFactors = sfCenters{1}((meanSf+1):end)./sfCenters{1}(meanSf);
+% use multFactors for both center sfs and for grating sfs around center 
+
+%% now compute the opacity
+% NOTE: These opacities apply if you change only the opacity and not the
+% contrast of each grating. If you want to follow Robbe's approach in
+% sfMix, then you can safely use only the opacity relationships described
+% with O(:, :, 1), i.e. full contrast; to then get the contrast values for
+% a particular total contrast, use the same opacities prescribed there but
+% with each grating at the new total contrast (e.g. use same opacity but
+% have contrast be 0.33 instead of 1.0)
 conSort = sort(conProfile, 1, 'descend');
  
 O = zeros(size(conProfile));
@@ -91,14 +102,38 @@ for c = 1 : nConsMix
     reshape(O(:, :, c), nGrats, nConsMix)
 end
 
+%% inverse test - i.e. from con&opacity to contrast
+
+temp.con{1} = 0.68;
+temp.con{2} = 0.68;
+temp.con{3} = 0.68;
+temp.con{4} = 0.68;
+temp.con{5} = 0.68;
+temp.con{6} = 0.68;
+temp.con{7} = 0.68;
+
+
+temp.opa{1} = 0.9690;
+temp.opa{2} = 0.3142;
+temp.opa{3} = 0.2391;
+temp.opa{4} = 0.1412;
+temp.opa{5} = 0.1237;
+temp.opa{6} = 0.0784;
+temp.opa{7} = 0.0727;
+
+
 %% Code snippet for reversing opacity back into contrast
 
-trial.con{9} = temp.con{9}.*temp.opa{9};
-trial.con{8} = temp.con{8}.*temp.opa{8}.*(1-temp.opa{9});
-trial.con{7} = temp.con{7}.*temp.opa{7}.*(1-temp.opa{9}).*(1-temp.opa{8});
-trial.con{6} = temp.con{6}.*temp.opa{6}.*(1-temp.opa{9}).*(1-temp.opa{8}).*(1-temp.opa{7});
-trial.con{5} = temp.con{5}.*temp.opa{5}.*(1-temp.opa{9}).*(1-temp.opa{8}).*(1-temp.opa{7}).*(1-temp.opa{6});
-trial.con{4} = temp.con{4}.*temp.opa{4}.*(1-temp.opa{9}).*(1-temp.opa{8}).*(1-temp.opa{7}).*(1-temp.opa{6}).*(1-temp.opa{5});
-trial.con{3} = temp.con{3}.*temp.opa{3}.*(1-temp.opa{9}).*(1-temp.opa{8}).*(1-temp.opa{7}).*(1-temp.opa{6}).*(1-temp.opa{5}).*(1-temp.opa{4});
-trial.con{2} = temp.con{2}.*temp.opa{2}.*(1-temp.opa{9}).*(1-temp.opa{8}).*(1-temp.opa{7}).*(1-temp.opa{6}).*(1-temp.opa{5}).*(1-temp.opa{4}).*(1-temp.opa{3});
-trial.con{1} = temp.con{1}.*temp.opa{1}.*(1-temp.opa{9}).*(1-temp.opa{8}).*(1-temp.opa{7}).*(1-temp.opa{6}).*(1-temp.opa{5}).*(1-temp.opa{4}).*(1-temp.opa{3}).*(1-temp.opa{2});
+% going from most superficial to "deepest"/base grating
+trial.con{7} = temp.con{7}.*temp.opa{7};
+trial.con{6} = temp.con{6}.*temp.opa{6}.*(1-temp.opa{7});
+trial.con{5} = temp.con{5}.*temp.opa{5}.*(1-temp.opa{7}).*(1-temp.opa{6});
+trial.con{4} = temp.con{4}.*temp.opa{4}.*(1-temp.opa{7}).*(1-temp.opa{6}).*(1-temp.opa{5});
+trial.con{3} = temp.con{3}.*temp.opa{3}.*(1-temp.opa{7}).*(1-temp.opa{6}).*(1-temp.opa{5}).*(1-temp.opa{4});
+trial.con{2} = temp.con{2}.*temp.opa{2}.*(1-temp.opa{7}).*(1-temp.opa{6}).*(1-temp.opa{5}).*(1-temp.opa{4}).*(1-temp.opa{3});
+trial.con{1} = temp.con{1}.*temp.opa{1}.*(1-temp.opa{7}).*(1-temp.opa{6}).*(1-temp.opa{5}).*(1-temp.opa{4}).*(1-temp.opa{3}).*(1-temp.opa{2});
+% trial.con{2} = temp.con{2}.*temp.opa{2}.*(1-temp.opa{9}).*(1-temp.opa{8}).*(1-temp.opa{7}).*(1-temp.opa{6}).*(1-temp.opa{5}).*(1-temp.opa{4}).*(1-temp.opa{3});
+% trial.con{1} = temp.con{1}.*temp.opa{1}.*(1-temp.opa{9}).*(1-temp.opa{8}).*(1-temp.opa{7}).*(1-temp.opa{6}).*(1-temp.opa{5}).*(1-temp.opa{4}).*(1-temp.opa{3}).*(1-temp.opa{2});
+
+
+
