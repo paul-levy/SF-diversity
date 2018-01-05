@@ -368,7 +368,7 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal machine
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fitListName = 'fitList_171128.npy';
+    fitListName = 'fitList_171214a.npy';
 
     fitList = numpy.load(loc_data + fitListName); # no .item() needed...
     dataList = numpy.load(loc_data + 'dataList.npy').item();
@@ -481,7 +481,7 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
     #########
     # Set up the network!
     #########
-    subsetShape = [fixedTf.shape[0], round(fixedTf.shape[-1]*subset_frac)];
+    subsetShape = [fixedTf.shape[0], int(round(fixedTf.shape[-1]*subset_frac))];
     
     ph_stimOr = tf.placeholder(tf.float32);
     if subset_frac > 0:
