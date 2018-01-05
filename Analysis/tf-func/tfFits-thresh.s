@@ -8,13 +8,13 @@
 #SBATCH --mail-user=pl1465@nyu.edu
 #SBATCH --mail-type=ALL
 
-#SBATCH --output=tf_%A_%a.out
-#SBATCH --error=tf_%A_%a.err
+#SBATCH --output=tfA_%A_%a.out
+#SBATCH --error=tfA_%A_%a.err
 
 module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 
-python mod_resp_trackNLL.py $SLURM_ARRAY_TASK_ID 1e-6 0.1 0 0
+python mod_resp_trackNLL.py $SLURM_ARRAY_TASK_ID 1e-8 0.1 0.10 0
  
 # leave a blank line at the end
 

@@ -10,3 +10,6 @@ altExp/analysis/structures/m*
 **/._*
 altExp/firstPass/**
 **/*~
+**/*.out
+**/*.err
+**/tf2.7/

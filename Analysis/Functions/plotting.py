@@ -43,7 +43,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitName = 'fitList_171128.npy';
+fitName = 'fitList_171214b.npy';
 #fitName = 'fitListCHM_asym.npy'
 descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
