@@ -83,43 +83,70 @@ def flexible_Gauss(params, stim_sf):
                 
     return [max(0.1, respFloor + respRelFloor*x) for x in shape];
 
-def get_center_con(family, contrast):
-
-    # hardcoded - based on sfMix as run in 2015/2016 (m657, m658, m660); given
-    # the stimulus family and contrast level, returns the expected contrast of
-    # the center frequency.
+def blankResp(cellStruct):
+    tr = cellStruct['sfm']['exp']['trial'];
+    mu = numpy.mean(tr['spikeCount'][numpy.isnan(tr['con'][0])]);
+    sig = numpy.std(tr['spikeCount'][numpy.isnan(tr['con'][0])]);
     
-    # contrast = 1 means high contrast...otherwise, low contrast
+    return mu, sig
 
-    con = numpy.nan
+def tabulate_responses(cellStruct):
+    np = numpy;
+    conDig = 3; # round contrast to the thousandth
     
-    if family == 1:
-        if contrast == 1:
-            con = 1.0000;
-        else:
-            con = 0.3300;
-    elif family == 2:
-        if contrast == 1:
-            con = 0.6717;
-        else:
-            con = 0.2217;
-    elif family == 3:
-        if contrast == 1:
-            con = 0.3785;
-        else:
-            con = 0.1249;
-    elif family == 4:
-        if contrast == 1:
-            con = 0.2161;
-        else:
-            con = 0.0713;
-    elif family == 5:
-        if contrast == 1:
-            con = 0.1451;
-        else:
-            con = 0.0479;
+    data = cellStruct['sfm']['exp']['trial'];
 
-    return con
+    all_cons = np.unique(np.round(data['total_con'], conDig));
+    all_cons = all_cons[~np.isnan(all_cons)];
+
+    all_sfs = np.unique(data['cent_sf']);
+    all_sfs = all_sfs[~np.isnan(all_sfs)];
+
+    all_disps = np.unique(data['num_comps']);
+    all_disps = all_disps[all_disps>0]; # ignore zero...
+
+    nCons = len(all_cons);
+    nSfs = len(all_sfs);
+    nDisps = len(all_disps);
+    
+    respMean = np.nan * np.empty((nDisps, nSfs, nCons));
+    respVar = np.nan * np.empty((nDisps, nSfs, nCons));
+
+    respMean = np.nan * np.empty((nDisps, nSfs, nCons));
+    respVar = np.nan * np.empty((nDisps, nSfs, nCons));
+
+    val_con_by_disp = [];
+    valid_disp = dict();
+    valid_con = dict();
+    valid_sf = dict();
+    
+    for d in range(nDisps):
+        val_con_by_disp.append([]);
+
+        valid_disp[d] = data['num_comps'] == all_disps[d];
+
+        for con in range(nCons):
+
+            valid_con[con] = np.round(data['total_con'], conDig) == all_cons[con];
+
+            for sf in range(nSfs):
+
+                valid_sf[sf] = data['cent_sf'] == all_sfs[sf];
+
+                valid_tr = valid_disp[d] & valid_sf[sf] & valid_con[con];
+
+                if np.all(np.unique(valid_tr) == False):
+                    continue;
+
+                respMean[d, sf, con] = np.mean(data['spikeCount'][valid_tr]);
+                respVar[d, sf, con] = np.std((data['spikeCount'][valid_tr]));
+
+        
+            if np.any(~np.isnan(respMean[d, :, con])):
+                if ~np.isnan(np.nanmean(respMean[d, :, con])):
+                    val_con_by_disp[d].append(con);
+                    
+    return [respMean, respVar], [all_cons, all_disps, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf];
 
 def random_in_range(lims, size = 1):
 

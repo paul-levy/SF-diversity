@@ -1,8 +1,12 @@
 Analysis/Structures/Structures-extra
 Analysis/Structures/m*
 Analysis/Figures/*
+altExp/analysis/structures/m*
 **/.ipynb_checkpoints/**
-**/__pycache__/
+**/__pycache__/**
 **/.DS_Store
 **/._.DS_Store
 **/*.pyc
+**/._*
+altExp/firstPass/**
+**/*~
