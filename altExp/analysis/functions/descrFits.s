@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=1:00:00
+#SBATCH --time=1:30:00
 #SBATCH --mem=4GB
 
 #SBATCH --job-name=princeDescr
@@ -12,9 +12,9 @@
 #SBATCH --error=df_%A_%a.err
 
 module purge
-module load tensorflow/python2.7/20170218
+source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 
-python descr_fit.py $SLURM_ARRAY_TASK_ID 25 1
+python descr_fit.py $SLURM_ARRAY_TASK_ID 10
   
 # leave a blank line at the end
 

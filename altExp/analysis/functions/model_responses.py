@@ -1,6 +1,5 @@
 import math, cmath, numpy, os
 from helper_fcns import makeStimulus
-#from makeStimulus import makeStimulus 
 from scipy.stats import norm, mode, lognorm, nbinom
 from numpy.matlib import repmat
 import time
@@ -518,7 +517,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
         
     return M;
 
-def GetNormResp(iU, stimParams = []):
+def GetNormResp(iU, loadPath):
    
     
     # GETNORMRESP    Runs the code that computes the response of the
@@ -528,18 +527,7 @@ def GetNormResp(iU, stimParams = []):
 
     # Robbe Goris, 10-30-2015
 
-    # Edit - Paul Levy, 1/23/17 to give option 2nd parameter for passing in own
-    # stimuli (see SFMNormResp for more details)
-    # 1/25/17 - Allowed 'S' to be passed in by checking if unitName is numeric
-    # or not (if isnumeric...)
-    
     M = dict();
-    
-    # Set paths
-    base = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
-    #base = '/home/pl1465/SF_diversity/'; # prince 
-    #base = '/e/3.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
-    loadPath     = base + 'structures/';
     
     # Set characteristics normalization pool
     # The pool includes broad and narrow filters
@@ -561,7 +549,7 @@ def GetNormResp(iU, stimParams = []):
     else:
         unitName = iU;
     
-    M = SFMNormResp(unitName, loadPath, normPool, stimParams);
+    M = SFMNormResp(unitName, loadPath, normPool);
 
     return M;
 

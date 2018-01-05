@@ -50,12 +50,13 @@ def descr_loss(params, data, family, contrast):
     valid_disp = validByStimVal[0];
     valid_con = validByStimVal[1];
     
-    curr_con = valid_con[val_con_by_disp[contrast]];
+    # family, contrast are in absolute terms (i.e. we pass over non-valid ones, so we can just index normally)
+    curr_con = valid_con[contrast];
     curr_disp = valid_disp[family];
 
-    indices = np.where(con_check & ori_check); 
+    indices = np.where(curr_con & curr_disp); 
     
-    obs_count = fixedSpikes[indices];
+    obs_count = trial['spikeCount'][indices];
 
     pred_rate = flexible_Gauss(params, trial['sf'][0][indices]);
     stim_dur = trial['duration'][indices];
@@ -85,7 +86,7 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
 
     to_unpack = hfunc.tabulate_responses(data);
     [respMean, respVar] = to_unpack[0];
-    [all_cons, all_disps, all_sfs] = to_unpack[1];
+    [all_disps, all_cons, all_sfs] = to_unpack[1];
     val_con_by_disp = to_unpack[2];
     
     nDisps = len(all_disps);
@@ -102,7 +103,7 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
         for con in range(nCons):    
             
             if con not in val_con_by_disp[family]:
-                continue
+                continue;
 
             print('.');           
             # set initial parameters - a range from which we will pick!

@@ -146,7 +146,7 @@ def tabulate_responses(cellStruct):
                 if ~np.isnan(np.nanmean(respMean[d, :, con])):
                     val_con_by_disp[d].append(con);
                     
-    return [respMean, respVar], [all_cons, all_disps, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf];
+    return [respMean, respVar], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf];
 
 def random_in_range(lims, size = 1):
 
