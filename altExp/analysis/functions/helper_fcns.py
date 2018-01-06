@@ -113,12 +113,11 @@ def tabulate_responses(cellStruct, modResp = []):
     respStd = np.nan * np.empty((nDisps, nSfs, nCons));
 
     if len(modResp) == 0: # as in, if it isempty
-        modRespMean = [];
-        modRespStd = [];
+        modRespOrg = [];
         mod = 0;
     else:
-        modRespMean = np.nan * np.empty((nDisps, nSfs, nCons));
-        modRespStd = np.nan * np.empty((nDisps, nSfs, nCons));
+        nRepsMax = 20; # assume we'll never have more than 20 reps for any given condition...
+        modRespOrg = np.nan * np.empty((nDisps, nSfs, nCons, nRepsMax));
         mod = 1;
         
 
@@ -150,14 +149,14 @@ def tabulate_responses(cellStruct, modResp = []):
                 respStd[d, sf, con] = np.std((data['spikeCount'][valid_tr]));
                 
                 if mod:
-                    modRespMean[d, sf, con] = np.mean(modResp[valid_tr]);
-                    modRespStd[d, sf, con] = np.std(modResp[valid_tr]);
+                    nTrCurr = sum(valid_tr); # how many trials are we getting?
+                    modRespOrg[d, sf, con, 0:nTrCurr] = modResp[valid_tr];
         
             if np.any(~np.isnan(respMean[d, :, con])):
                 if ~np.isnan(np.nanmean(respMean[d, :, con])):
                     val_con_by_disp[d].append(con);
                     
-    return [respMean, respStd], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf],[modRespMean, modRespStd];
+    return [respMean, respStd], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
 
 def random_in_range(lims, size = 1):
 
