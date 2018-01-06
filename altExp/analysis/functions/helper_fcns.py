@@ -90,7 +90,7 @@ def blankResp(cellStruct):
     
     return mu, sig
 
-def tabulate_responses(cellStruct):
+def tabulate_responses(cellStruct, modResp = []):
     np = numpy;
     conDig = 3; # round contrast to the thousandth
     
@@ -110,15 +110,23 @@ def tabulate_responses(cellStruct):
     nDisps = len(all_disps);
     
     respMean = np.nan * np.empty((nDisps, nSfs, nCons));
-    respVar = np.nan * np.empty((nDisps, nSfs, nCons));
+    respStd = np.nan * np.empty((nDisps, nSfs, nCons));
 
-    respMean = np.nan * np.empty((nDisps, nSfs, nCons));
-    respVar = np.nan * np.empty((nDisps, nSfs, nCons));
+    if len(modResp) == 0: # as in, if it isempty
+        modRespMean = [];
+        modRespStd = [];
+        mod = 0;
+    else:
+        modRespMean = np.nan * np.empty((nDisps, nSfs, nCons));
+        modRespStd = np.nan * np.empty((nDisps, nSfs, nCons));
+        mod = 1;
+        
 
     val_con_by_disp = [];
     valid_disp = dict();
     valid_con = dict();
     valid_sf = dict();
+    
     
     for d in range(nDisps):
         val_con_by_disp.append([]);
@@ -139,14 +147,17 @@ def tabulate_responses(cellStruct):
                     continue;
 
                 respMean[d, sf, con] = np.mean(data['spikeCount'][valid_tr]);
-                respVar[d, sf, con] = np.std((data['spikeCount'][valid_tr]));
-
+                respStd[d, sf, con] = np.std((data['spikeCount'][valid_tr]));
+                
+                if mod:
+                    modRespMean[d, sf, con] = np.mean(modResp[valid_tr]);
+                    modRespStd[d, sf, con] = np.std(modResp[valid_tr]);
         
             if np.any(~np.isnan(respMean[d, :, con])):
                 if ~np.isnan(np.nanmean(respMean[d, :, con])):
                     val_con_by_disp[d].append(con);
                     
-    return [respMean, respVar], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf];
+    return [respMean, respStd], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf],[modRespMean, modRespStd];
 
 def random_in_range(lims, size = 1):
 

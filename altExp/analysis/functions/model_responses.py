@@ -592,7 +592,7 @@ def SFMGiveBof(params, structureSFM):
 
     # Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
     priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15)); # matlab: lognpdf(respExp, 1.15, 0.3);
-    NLLExp   = -numpy.log(priorExp);
+    NLLExp   = 0; #-numpy.log(priorExp);
 
     # Compute weights for suppressive signals
     nInhChan = T['mod']['normalization']['pref']['sf'];
@@ -637,13 +637,13 @@ def SFMGiveBof(params, structureSFM):
         p   = r/(r + mu);
 
         # Evaluate the model
-        llh = nbinom.pmf(T['exp']['trial']['spikeCount'], r, p); # Likelihood for each pass under doubly stochastic model
-
-        NLLtempSFM = sum(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]      
-
+        lsq = numpy.square(numpy.sqrt(respModel) - numpy.sqrt(T['exp']['trial']['spikeCount']));
+        NLL = numpy.mean(lsq); # was 1*lsq
+        #llh = nbinom.pmf(T['exp']['trial']['spikeCount'], r, p); # Likelihood for each pass under doubly stochastic model
+        #NLLtempSFM = numpy.mean(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]
 
     # Combine data and prior
-    NLL = NLLtempSFM + NLLExp; # sum over NLLtempSFM if you allow it to be d>1
+    #NLL = NLLtempSFM + NLLExp; # sum over NLLtempSFM if you allow it to be d>1
 
     return NLL, respModel;
     #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};
