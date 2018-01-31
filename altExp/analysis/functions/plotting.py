@@ -12,11 +12,10 @@
 import os
 import numpy as np
 import matplotlib
-matplotlib.use('TkAgg') # to avoid GUI/cluster issues...
+matplotlib.use('Agg') # to avoid GUI/cluster issues...
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
 import helper_fcns
-import autoreload
 
 import sys # so that we can import model_responses (in different folder)
 import model_responses
@@ -29,8 +28,13 @@ which_cell = int(sys.argv[1]);
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
 # savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 # personal mac
-dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
-save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/';
+#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
+#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/';
+# prince cluster
+dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
+save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
+
+fitListName = 'fitList_180105.npy';
 
 conDig = 3; # round contrast to the 3rd digit
 
@@ -38,25 +42,21 @@ dataList = np.load(dataPath + 'dataList.npy', encoding='latin1').item();
 
 cellStruct = np.load(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy', encoding='latin1').item();
 
+# #### Load descriptive model fits, comp. model fits
 
-# In[46]:
+descrFits = np.load(dataPath + 'descrFits.npy', encoding = 'latin1').item();
+descrFits = descrFits[which_cell-1]['params']; # just get this cell
 
-cellStruct = np.load(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy', encoding='latin1').item();
-
-
-# In[47]:
-
-autoreload.reload(helper_fcns)
-
+modParams = np.load(dataPath + fitListName, encoding= 'latin1').item();
+modParamsCurr = modParams[which_cell-1]['params'];
 
 # ### Organize data
 # #### determine contrasts, center spatial frequency, dispersions
 
-# In[48]:
-
 data = cellStruct['sfm']['exp']['trial'];
 
-resp, stimVals, val_con_by_disp, validByStimVal = helper_fcns.tabulate_responses(cellStruct);
+modRespAll = model_responses.SFMGiveBof(modParamsCurr, cellStruct)[1];
+resp, stimVals, val_con_by_disp, validByStimVal, modResp = helper_fcns.tabulate_responses(cellStruct, modRespAll);
 
 all_disps = stimVals[0];
 all_cons = stimVals[1];
@@ -66,25 +66,17 @@ nCons = len(all_cons);
 nSfs = len(all_sfs);
 nDisps = len(all_disps);
 
-con_diffs = np.diff(all_cons);
-closest_cons = all_cons[con_diffs>0.01];
-
-
 # #### Unpack responses
 
-# In[49]:
-
 respMean = resp[0];
-respVar = resp[1];
+respStd = resp[1];
+predMean = resp[2];
+predStd = resp[3];
 
-
-# #### Load descriptive model fits
-
-# In[50]:
-
-descrFits = np.load(dataPath + 'descrFits.npy', encoding = 'latin1').item();
-descrFits = descrFits[which_cell-1]['params']; # just get this cell
-
+# modResp is (nFam, nSf, nCons, nReps) nReps is (currently; 2018.01.05) set to 20 to accommadate the current experiment with 10 repetitions
+modLow = np.nanmin(modResp, axis=3);
+modHigh = np.nanmax(modResp, axis=3);
+modAvg = np.nanmean(modResp, axis=3);
 
 # ### Plots
 
@@ -109,15 +101,25 @@ for d in range(nDisps):
     
     for c in reversed(range(n_v_cons)):
         c_plt_ind = len(v_cons) - c - 1;
-        v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);
-        
+        v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
+
         # plot data
         dispAx[d][c_plt_ind].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                      respVar[d, v_sfs, v_cons[c]], fmt='o');
+                                      respStd[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+
+        # plot linear superposition prediction
+        dispAx[d][c_plt_ind].errorbar(all_sfs[v_sfs], predMean[d, v_sfs, v_cons[c]], 
+                                      predStd[d, v_sfs, v_cons[c]], fmt='p', clip_on=False);
+
         # plot descriptive model fit
         curr_mod_params = descrFits[d, v_cons[c], :];
-        dispAx[d][c_plt_ind].plot(sfs_plot, helper_fcns.flexible_Gauss(curr_mod_params, sfs_plot))
+        dispAx[d][c_plt_ind].plot(sfs_plot, helper_fcns.flexible_Gauss(curr_mod_params, sfs_plot), clip_on=False)
         
+	# plot model fits
+	dispAx[d][c_plt_ind].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
+                                      modHigh[d, v_sfs, v_cons[c]], color='r', alpha=0.2);
+	dispAx[d][c_plt_ind].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
+
         dispAx[d][c_plt_ind].set_xlim((min(all_sfs), max(all_sfs)));
         dispAx[d][c_plt_ind].set_ylim((0, 1.5*maxResp));
         
@@ -130,8 +132,6 @@ for d in range(nDisps):
 
 saveName = "/cell_%d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
-if not os.path.exists(full_save):
-    os.makedirs(full_save)
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fDisp:
     pdfSv.savefig(f)
@@ -164,10 +164,19 @@ for d in range(nDisps):
         
         # plot data
         sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                       respVar[d, v_sfs, v_cons[c]], fmt='o');
+                                       respStd[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+        # plot linear superposition prediction
+        sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], predMean[d, v_sfs, v_cons[c]], 
+                                       predStd[d, v_sfs, v_cons[c]], fmt='p', clip_on=False);
+
         # plot descriptive model fit
         curr_mod_params = descrFits[d, v_cons[c], :];
-        sfMixAx[c_plt_ind, d].plot(sfs_plot, helper_fcns.flexible_Gauss(curr_mod_params, sfs_plot))
+        sfMixAx[c_plt_ind, d].plot(sfs_plot, helper_fcns.flexible_Gauss(curr_mod_params, sfs_plot), clip_on=False)
+
+	# plot model fits
+	sfMixAx[c_plt_ind, d].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
+                                      modHigh[d, v_sfs, v_cons[c]], color='r', alpha=0.2);
+	sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
 
         sfMixAx[c_plt_ind, d].set_xlim((np.min(all_sfs), np.max(all_sfs)));
         sfMixAx[c_plt_ind, d].set_ylim((0, 1.5*maxResp));
@@ -177,26 +186,12 @@ for d in range(nDisps):
         
 saveName = "/cell_%d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'sfMixOnly/'));
-if not os.path.exists(full_save):
-    os.makedirs(full_save)
 pdfSv = pltSave.PdfPages(full_save + saveName);
 pdfSv.savefig(f) # only one figure here...
 pdfSv.close()
 
 
 # #### Plot contrast response functions
-
-# In[ ]:
-
-respMean[3, :, -4]
-
-
-# In[ ]:
-
-respMean[3, v_sfs[0][1], :]
-
-
-# In[ ]:
 
 crfAx = []; fCRF = [];
 for d in range(nDisps):
@@ -215,7 +210,7 @@ for d in range(nDisps):
         
         # 0.1 minimum to keep plot axis range OK...should find alternative
         crfAx[d][sf].errorbar(all_cons[v_cons], np.maximum(np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, )), 0.1),
-                            np.reshape([respVar[d, sf_ind, v_cons]], (n_cons, )), fmt='o');
+                            np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, )), fmt='o', clip_on=False);
         crfAx[d][sf].set_xscale('log');
         crfAx[d][sf].set_yscale('log');
         crfAx[d][sf].set_xlabel('contrast');
@@ -224,15 +219,9 @@ for d in range(nDisps):
 
 saveName = "/cell_%d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
-if not os.path.exists(full_save):
-    os.makedirs(full_save)
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
     pdfSv.savefig(f)
 pdfSv.close()
-
-
-# In[ ]:
-
 
 

@@ -197,63 +197,6 @@ def nbinpdf_log(x, r, p):
     
     return numpy.real(noGamma + withGamma);
 
-def organize_modResp(modResp, expStructure):
-    # Not updated for sfMixAlt - 1/31/18
-    # the blockIDs are fixed...
-    nFam = 5;
-    nCon = 2;
-    nCond = 11; # 11 sfCenters for sfMix
-    nReps = 20; # never more than 20 reps per stim. condition
-    
-    # Analyze the stimulus-driven responses for the orientation tuning curve
-    oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
-
-    rateOr = numpy.empty((0,));
-    for iB in oriBlockIDs:
-        indCond = numpy.where(expStructure['blockID'] == iB);
-        if len(indCond[0]) > 0:
-            rateOr = numpy.append(rateOr, numpy.mean(modResp[indCond]));
-        else:
-            rateOr = numpy.append(rateOr, numpy.nan);
-
-    #pdb.set_trace();
-
-    # Analyze the stimulus-driven responses for the contrast response function
-    conBlockIDs = numpy.arange(138, 156+1, 2);
-    iC = 0;
-
-    rateCo = numpy.empty((0,));
-    for iB in conBlockIDs:
-        indCond = numpy.where(expStructure['blockID'] == iB);   
-        if len(indCond[0]) > 0:
-            rateCo = numpy.append(rateCo, numpy.mean(modResp[indCond]));
-        else:
-            rateCo = numpy.append(rateCo, numpy.nan);
-
-    # Analyze the stimulus-driven responses for the spatial frequency mixtures
-
-    # Initialize Variables        
-    rateSfMix = numpy.ones((nFam, nCon, nCond)) * numpy.nan;
-    allSfMix = numpy.ones((nFam, nCon, nCond, nReps)) * numpy.nan;
-    for iE in range(nCon):
-        for iW in range(nFam):
-
-            StimBlockIDs  = numpy.arange(((iW)*(13*2)+1)+(iE), 1+((iW+1)*(13*2)-5)+(iE), 2);
-            nStimBlockIDs = len(StimBlockIDs);
-            #print('nStimBlockIDs = ' + str(nStimBlockIDs));
-        
-            iC = 0;
-
-            for iB in StimBlockIDs:
-                indCond = numpy.where(expStructure['blockID'] == iB);   
-                if len(indCond[0]) > 0:
-                    #print('setting up ' + str((iE, iW, iC)) + ' with ' + str(len(indCond[0])) + 'trials');
-                    rateSfMix[iW, iE, iC] = numpy.nanmean(modResp[indCond]);
-                    allSfMix[iW, iE, iC, 0:len(indCond[0])] = modResp[indCond];
-                    iC         = iC+1;
-                 
-    return rateOr, rateCo, rateSfMix, allSfMix;
-
 def getSuppressiveSFtuning(): # written when still new to python. Probably to matlab-y...
     # Not updated for sfMixAlt - 1/31/18
     # normPool details are fixed, ya?

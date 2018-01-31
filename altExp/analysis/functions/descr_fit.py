@@ -44,7 +44,7 @@ def descr_loss(params, data, family, contrast):
     epsilon = 1e-4;
     trial = data['sfm']['exp']['trial'];
 
-    respMetrics, stimVals, val_con_by_disp, validByStimVal = hfunc.tabulate_responses(data);
+    respMetrics, stimVals, val_con_by_disp, validByStimVal, ignore = hfunc.tabulate_responses(data);
 
     # get indices for trials we want to look at
     valid_disp = validByStimVal[0];
