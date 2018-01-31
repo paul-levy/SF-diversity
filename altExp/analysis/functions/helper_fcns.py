@@ -89,7 +89,7 @@ def blankResp(cellStruct):
     sig = numpy.std(tr['spikeCount'][numpy.isnan(tr['con'][0])]);
     
     return mu, sig
-
+    
 def tabulate_responses(cellStruct, modResp = []):
     np = numpy;
     conDig = 3; # round contrast to the thousandth
@@ -111,6 +111,8 @@ def tabulate_responses(cellStruct, modResp = []):
     
     respMean = np.nan * np.empty((nDisps, nSfs, nCons));
     respStd = np.nan * np.empty((nDisps, nSfs, nCons));
+    predMean = np.nan * np.empty((nDisps, nSfs, nCons));
+    predStd = np.nan * np.empty((nDisps, nSfs, nCons));
 
     if len(modResp) == 0: # as in, if it isempty
         modRespOrg = [];
@@ -120,12 +122,10 @@ def tabulate_responses(cellStruct, modResp = []):
         modRespOrg = np.nan * np.empty((nDisps, nSfs, nCons, nRepsMax));
         mod = 1;
         
-
     val_con_by_disp = [];
     valid_disp = dict();
     valid_con = dict();
     valid_sf = dict();
-    
     
     for d in range(nDisps):
         val_con_by_disp.append([]);
@@ -148,6 +148,28 @@ def tabulate_responses(cellStruct, modResp = []):
                 respMean[d, sf, con] = np.mean(data['spikeCount'][valid_tr]);
                 respStd[d, sf, con] = np.std((data['spikeCount'][valid_tr]));
                 
+                curr_pred = 0;
+                curr_var = 0; # variance (std^2) adds
+                for n_comp in range(all_disps[d]):
+                    # find information for each component, find corresponding trials, get response, sum
+                        # Note: unique(.) will only be one value, since all equiv stim have same equiv componentss 
+                    curr_con = np.unique(data['con'][n_comp][valid_tr]);
+                    val_con = np.round(data['total_con'], conDig) == np.round(curr_con, conDig);
+                    curr_sf = np.unique(data['sf'][n_comp][valid_tr]);
+                    val_sf = np.round(data['cent_sf'], conDig) == np.round(curr_sf, conDig);
+                    
+                    val_tr = val_con & val_sf & valid_disp[0] # why valid_disp[0]? we want single grating presentations!
+
+                    if np.all(np.unique(val_tr) == False):
+                        print('empty...');
+                        continue;
+                    
+                    curr_pred = curr_pred + np.mean(data['spikeCount'][val_tr]);
+                    curr_var = curr_var + np.var(data['spikeCount'][val_tr]);
+                    
+                predMean[d, sf, con] = curr_pred;
+                predStd[d, sf, con] = np.sqrt(curr_var);
+                
                 if mod:
                     nTrCurr = sum(valid_tr); # how many trials are we getting?
                     modRespOrg[d, sf, con, 0:nTrCurr] = modResp[valid_tr];
@@ -156,7 +178,7 @@ def tabulate_responses(cellStruct, modResp = []):
                 if ~np.isnan(np.nanmean(respMean[d, :, con])):
                     val_con_by_disp[d].append(con);
                     
-    return [respMean, respStd], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
+    return [respMean, respStd, predMean, predStd], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
 
 def random_in_range(lims, size = 1):
 
@@ -176,6 +198,7 @@ def nbinpdf_log(x, r, p):
     return numpy.real(noGamma + withGamma);
 
 def organize_modResp(modResp, expStructure):
+    # Not updated for sfMixAlt - 1/31/18
     # the blockIDs are fixed...
     nFam = 5;
     nCon = 2;
@@ -232,6 +255,7 @@ def organize_modResp(modResp, expStructure):
     return rateOr, rateCo, rateSfMix, allSfMix;
 
 def getSuppressiveSFtuning(): # written when still new to python. Probably to matlab-y...
+    # Not updated for sfMixAlt - 1/31/18
     # normPool details are fixed, ya?
     # plot model details - exc/suppressive components
     omega = numpy.logspace(-2, 2, 1000);
@@ -269,6 +293,7 @@ def getSuppressiveSFtuning(): # written when still new to python. Probably to ma
 
 def makeStimulus(stimFamily, conLevel, sf_c, template):
 
+# Not updated for sfMixAlt - 1/31/18
 # returns [Or, Tf, Co, Ph, Sf, trial_used]
 
 # 1/23/16 - This function is used to make arbitrary stimuli for use with
