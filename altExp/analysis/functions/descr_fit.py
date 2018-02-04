@@ -85,7 +85,7 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
     print('Doing the work, now');
 
     to_unpack = hfunc.tabulate_responses(data);
-    [respMean, respVar] = to_unpack[0];
+    [respMean, respVar, predMean, predVar] = to_unpack[0];
     [all_disps, all_cons, all_sfs] = to_unpack[1];
     val_con_by_disp = to_unpack[2];
     

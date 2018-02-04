@@ -97,7 +97,8 @@ for d in range(nDisps):
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
     
-    maxResp = np.maximum(np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])])), np.max(np.max(predMean[d, ~np.isnan(respMean[d, :, :])])));
+    maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
+#    maxResp = np.maximum(np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])])), np.max(np.max(predMean[d, ~np.isnan(respMean[d, :, :])])));
     
     for c in reversed(range(n_v_cons)):
         c_plt_ind = len(v_cons) - c - 1;
@@ -108,8 +109,8 @@ for d in range(nDisps):
                                       respStd[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
 
         # plot linear superposition prediction
-        dispAx[d][c_plt_ind].errorbar(all_sfs[v_sfs], predMean[d, v_sfs, v_cons[c]], 
-                                      predStd[d, v_sfs, v_cons[c]], fmt='p', clip_on=False);
+#        dispAx[d][c_plt_ind].errorbar(all_sfs[v_sfs], predMean[d, v_sfs, v_cons[c]], 
+#                                      predStd[d, v_sfs, v_cons[c]], fmt='p', clip_on=False);
 
         # plot descriptive model fit
         curr_mod_params = descrFits[d, v_cons[c], :];
@@ -127,7 +128,7 @@ for d in range(nDisps):
 #         dispAx[d][c].set_yscale('log');
         dispAx[d][c_plt_ind].set_xlabel('sf (c/deg)'); 
         dispAx[d][c_plt_ind].set_ylabel('resp (sps)');
-        dispAx[d][c_plt_ind].set_title('D%d: contrast: %.3f' % (d+1, all_cons[v_cons[c]]));
+        dispAx[d][c_plt_ind].set_title('D%d: contrast: %.3f' % (d, all_cons[v_cons[c]]));
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         dispAx[d][c_plt_ind].tick_params(labelsize=15, width=1, length=8, direction='out');
@@ -142,8 +143,140 @@ full_save = os.path.dirname(str(save_loc + 'byDisp/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fDisp:
     pdfSv.savefig(f)
+    plt.close(f)
+pdfSv.close();
+
+# #### All SF tuning on one graph, split by dispersion
+# right panel also includes pred/measure ratio as function of SF - all contrasts on same plot
+
+fDisp = []; dispAx = [];
+
+sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
+
+for d in range(nDisps):
+    
+    v_cons = val_con_by_disp[d];
+    n_v_cons = len(v_cons);
+    
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(40, 20));
+    fDisp.append(fCurr)
+    dispAx.append(dispCurr);
+    
+    maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
+#    maxResp = np.maximum(np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])])), np.max(np.max(predMean[d, ~np.isnan(respMean[d, :, :])])));
+    
+    lines = [];
+    for c in reversed(range(n_v_cons)):
+        v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
+
+        # plot data
+	col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
+        curr_line, = dispAx[d][0].plot(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], '-o', clip_on=False, color=col);
+	lines.append(curr_line);
+
+        # plot ratio: predResp/actualResp
+        dispAx[d][1].plot(all_sfs[v_sfs], np.divide(predMean[d, v_sfs, v_cons[c]], respMean[d, v_sfs, v_cons[c]]), clip_on=False, color=col);
+        dispAx[d][1].axhline(1, clip_on=False, linestyle='dashed'); # 1 for pred=measure (ratio of 1)
+
+        # plot descriptive model fit
+        curr_mod_params = descrFits[d, v_cons[c], :];
+        #dispAx[d].plot(sfs_plot, helper_fcns.flexible_Gauss(curr_mod_params, sfs_plot), clip_on=False)
+        
+	# plot model fits
+	#dispAx[d].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
+        #                              modHigh[d, v_sfs, v_cons[c]], color='r', alpha=0.2);
+	#dispAx[d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
+
+    for i in range(2):
+
+      dispAx[d][i].set_xlim((min(all_sfs), max(all_sfs)));
+        
+      dispAx[d][i].set_xscale('log');
+      dispAx[d][i].set_yscale('log');
+      dispAx[d][i].set_xlabel('sf (c/deg)'); 
+
+      # Set ticks out, remove top/right axis, put ticks only on bottom/left
+      dispAx[d][i].tick_params(labelsize=15, width=1, length=8, direction='out');
+      dispAx[d][i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
+      dispAx[d][i].spines['right'].set_visible(False);
+      dispAx[d][i].spines['top'].set_visible(False);
+      dispAx[d][i].xaxis.set_ticks_position('bottom');
+      dispAx[d][i].yaxis.set_ticks_position('left');
+
+    dispAx[d][0].set_ylim((1e-3, 1.5*maxResp));
+    dispAx[d][0].set_ylabel('resp (sps)');
+    dispAx[d][0].set_title('D%d - sf tuning' % (d));
+    dispAx[d][0].legend(lines, [str(i) for i in reversed(all_cons[v_cons])]);
+    dispAx[d][1].set_ylim((1e-3, 1e2));
+    dispAx[d][1].set_title('D%d - ratio of linearPred:measuredResp' % (d));
+    dispAx[d][1].set_ylabel('ratio');
+    dispAx[d][1].legend(lines, [str(i) for i in reversed(all_cons[v_cons])]);
+
+saveName = "/allCons_cell_%d.pdf" % (which_cell)
+full_save = os.path.dirname(str(save_loc + 'byDisp/'));
+pdfSv = pltSave.PdfPages(full_save + saveName);
+for f in fDisp:
+    pdfSv.savefig(f)
+    plt.close(f)
 pdfSv.close()
 
+## Plot sf tuning by dispersion with ratio of predicted response over measured response
+
+fDisp = []; dispAx = [];
+
+sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
+
+for d in range(nDisps):
+    
+    v_cons = val_con_by_disp[d];
+    n_v_cons = len(v_cons);
+    
+    fCurr, dispCurr = plt.subplots(n_v_cons, 1, figsize=(40, n_v_cons*10));
+    fDisp.append(fCurr)
+    dispAx.append(dispCurr);
+    
+    maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
+    
+    for c in reversed(range(n_v_cons)):
+        c_plt_ind = len(v_cons) - c - 1;
+        v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
+
+        # plot data
+        dispAx[d][c_plt_ind].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
+                                      respStd[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+
+        # plot ratio: predResp/actualResp
+        dispAx[d][c_plt_ind].plot(all_sfs[v_sfs], np.divide(predMean[d, v_sfs, v_cons[c]], respMean[d, v_sfs, v_cons[c]]), clip_on=False);
+        
+	# plot model fits
+	dispAx[d][c_plt_ind].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
+                                      modHigh[d, v_sfs, v_cons[c]], color='r', alpha=0.2);
+	dispAx[d][c_plt_ind].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
+
+        dispAx[d][c_plt_ind].set_xlim((min(all_sfs), max(all_sfs)));
+        #dispAx[d][c_plt_ind].set_ylim((0, 1.5*maxResp));
+        
+        dispAx[d][c_plt_ind].set_xscale('log');
+        dispAx[d][c_plt_ind].set_yscale('log');
+        dispAx[d][c_plt_ind].set_xlabel('sf (c/deg)'); 
+        dispAx[d][c_plt_ind].set_ylabel('resp (sps)');
+        dispAx[d][c_plt_ind].set_title('D%d: contrast: %.3f' % (d, all_cons[v_cons[c]]));
+
+	# Set ticks out, remove top/right axis, put ticks only on bottom/left
+        dispAx[d][c_plt_ind].tick_params(labelsize=15, width=1, length=8, direction='out');
+        dispAx[d][c_plt_ind].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
+	dispAx[d][c_plt_ind].spines['right'].set_visible(False);
+	dispAx[d][c_plt_ind].spines['top'].set_visible(False);
+	dispAx[d][c_plt_ind].xaxis.set_ticks_position('bottom');
+	dispAx[d][c_plt_ind].yaxis.set_ticks_position('left');
+
+saveName = "/linRatio_cell_%d.pdf" % (which_cell)
+full_save = os.path.dirname(str(save_loc + 'byDisp/'));
+pdfSv = pltSave.PdfPages(full_save + saveName);
+for f in fDisp:
+    pdfSv.savefig(f)
+    plt.close(f)
+pdfSv.close()
 
 # #### Plot just sfMix contrasts
 
@@ -152,7 +285,8 @@ pdfSv.close()
 # i.e. highest (up to) 4 contrasts for each dispersion
 
 mixCons = 4;
-maxResp = np.maximum(np.max(np.max(np.max(respMean[~np.isnan(respMean)]))), np.max(np.max(np.max(predMean[~np.isnan(predMean)]))));
+maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
+#maxResp = np.maximum(np.max(np.max(np.max(respMean[~np.isnan(respMean)]))), np.max(np.max(np.max(predMean[~np.isnan(predMean)]))));
 
 f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(40, 30));
 
@@ -173,8 +307,8 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
                                        respStd[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
         # plot linear superposition prediction
-        sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], predMean[d, v_sfs, v_cons[c]], 
-                                       predStd[d, v_sfs, v_cons[c]], fmt='p', clip_on=False);
+#        sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], predMean[d, v_sfs, v_cons[c]], 
+#                                       predStd[d, v_sfs, v_cons[c]], fmt='p', clip_on=False);
 
         # plot descriptive model fit
         curr_mod_params = descrFits[d, v_cons[c], :];
@@ -200,7 +334,7 @@ for d in range(nDisps):
 	sfMixAx[c_plt_ind, d].yaxis.set_ticks_position('left');
         
 #########
-# Plot secondary things - CRF, filter, normalization, nonlinearity, etc
+# Plot secondary things - filter, normalization, nonlinearity, etc
 #########
 
 fDetails, all_plots = plt.subplots(3,5, figsize=(25,10))
@@ -268,7 +402,6 @@ all_plots[1, 1].spines['top'].set_visible(False);
 all_plots[1, 1].xaxis.set_ticks_position('bottom');
 all_plots[1, 1].yaxis.set_ticks_position('left');
 
-
 for i in range(len(all_plots)):
     for j in range (len(all_plots[0])):
         all_plots[i,j].tick_params(labelsize=15, width=1, length=8, direction='out');
@@ -302,11 +435,16 @@ full_save = os.path.dirname(str(save_loc + 'sfMixOnly/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for fig in range(len(allFigs)):
     pdfSv.savefig(allFigs[fig])
+    plt.close(allFigs[fig])
 pdfSv.close()
 
 # #### Plot contrast response functions
 
 crfAx = []; fCRF = [];
+fSum, crfSum = plt.subplots(nDisps, 1, figsize=(15, 20), sharex=False, sharey=False);
+fCRF.append(fSum);
+crfAx.append(crfSum);
+
 for d in range(nDisps):
     
     # which sfs have at least one contrast presentation?
@@ -320,31 +458,92 @@ for d in range(nDisps):
         sf_ind = v_sfs[0][sf];
         v_cons = ~np.isnan(respMean[d, sf_ind, :]);
         n_cons = sum(v_cons);
-        
-        # 0.1 minimum to keep plot axis range OK...should find alternative
-        crfAx[d][sf].errorbar(all_cons[v_cons], np.maximum(np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, )), 0.1),
-                            np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, )), fmt='o', clip_on=False);
-        crfAx[d][sf].errorbar(all_cons[v_cons], np.maximum(np.reshape([predMean[d, sf_ind, v_cons]], (n_cons, )), 0.1),
-                            np.reshape([predStd[d, sf_ind, v_cons]], (n_cons, )), fmt='p', clip_on=False);
-        crfAx[d][sf].set_xscale('log');
-        crfAx[d][sf].set_yscale('log');
-        crfAx[d][sf].set_xlabel('contrast');
-        crfAx[d][sf].set_ylabel('resp (sps)');
-        crfAx[d][sf].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]));
+	
+        # summary
+	crfAx[0][d].plot(all_cons[v_cons], np.maximum(np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, )), 0.1), '-', clip_on=False);
 
-	# Set ticks out, remove top/right axis, put ticks only on bottom/left
-        crfAx[d][sf].tick_params(labelsize=15, width=1, length=8, direction='out');
-        crfAx[d][sf].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
-	crfAx[d][sf].spines['right'].set_visible(False);
-	crfAx[d][sf].spines['top'].set_visible(False);
-	crfAx[d][sf].xaxis.set_ticks_position('bottom');
-	crfAx[d][sf].yaxis.set_ticks_position('left');
+        # 0.1 minimum to keep plot axis range OK...should find alternative
+        crfAx[d+1][sf].errorbar(all_cons[v_cons], np.maximum(np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, )), 0.1),
+                            np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, )), fmt='o', clip_on=False);
+#        crfAx[d+1][sf].errorbar(all_cons[v_cons], np.maximum(np.reshape([predMean[d, sf_ind, v_cons]], (n_cons, )), 0.1),
+#                            np.reshape([predStd[d, sf_ind, v_cons]], (n_cons, )), fmt='p', clip_on=False);
+
+	# model fit
+	crfAx[d+1][sf].fill_between(all_cons[v_cons], modLow[d, sf_ind, v_cons], \
+                                      modHigh[d, sf_ind, v_cons], color='r', alpha=0.2);
+	crfAx[d+1][sf].plot(all_cons[v_cons], np.maximum(modAvg[d, sf_ind, v_cons], 0.1), 'r-', alpha=0.7, clip_on=False);
+
+	# make plots pretty
+	for i in range(2):
+
+	  if i == 0: # the summary plot
+	    plt_x = 0; plt_y = d;
+	  else: # other plots
+	    plt_x = d+1; plt_y = sf;
+
+	  crfAx[plt_x][plt_y].set_xscale('log');
+          #crfAx[plt_x][plt_y].set_yscale('log');
+          crfAx[plt_x][plt_y].set_xlabel('contrast');
+          crfAx[plt_x][plt_y].set_ylabel('resp (sps)');
+	  crfAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]));
+
+	  # Set ticks out, remove top/right axis, put ticks only on bottom/left
+          crfAx[plt_x][plt_y].tick_params(labelsize=15, width=1, length=8, direction='out');
+          crfAx[plt_x][plt_y].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
+	  crfAx[plt_x][plt_y].spines['right'].set_visible(False);
+	  crfAx[plt_x][plt_y].spines['top'].set_visible(False);
+	  crfAx[plt_x][plt_y].xaxis.set_ticks_position('bottom');
+	  crfAx[plt_x][plt_y].yaxis.set_ticks_position('left');
 
 saveName = "/cell_%d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
     pdfSv.savefig(f)
+    plt.close(f)
 pdfSv.close()
 
+# #### Plot contrast response functions - all sfs on one axis (per dispersion)
 
+crfAx = []; fCRF = [];
+
+for d in range(nDisps):
+    
+    # which sfs have at least one contrast presentation?
+    v_sfs = np.where(np.sum(~np.isnan(respMean[d, :, :]), axis = 1) > 0);
+    n_v_sfs = len(v_sfs[0])
+    fCurr, crfCurr = plt.subplots(1, 1, figsize=(15, 20), sharex = True, sharey = True);
+    fCRF.append(fCurr)
+    crfAx.append(crfCurr);
+    
+    for sf in range(n_v_sfs):
+        sf_ind = v_sfs[0][sf];
+        v_cons = ~np.isnan(respMean[d, sf_ind, :]);
+        n_cons = sum(v_cons);
+	
+	col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
+        line_curr, = crfAx[d].plot(all_cons[v_cons], np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, )), '-o', color=col, clip_on=False);
+	lines.append(line_curr);
+
+	crfAx[d].set_xscale('log');
+        crfAx[d].set_xlabel('contrast');
+        crfAx[d].set_ylabel('resp (sps)');
+	crfAx[d].set_title('D%d: sf:all' % (d));
+
+	# Set ticks out, remove top/right axis, put ticks only on bottom/left
+        crfAx[d].tick_params(labelsize=15, width=1, length=8, direction='out');
+        crfAx[d].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
+	crfAx[d].spines['right'].set_visible(False);
+	crfAx[d].spines['top'].set_visible(False);
+	crfAx[d].xaxis.set_ticks_position('bottom');
+	crfAx[d].yaxis.set_ticks_position('left');
+
+    crfAx[d].legend(lines, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
+
+saveName = "/allSfs_cell_%d.pdf" % (which_cell)
+full_save = os.path.dirname(str(save_loc + 'CRF/'));
+pdfSv = pltSave.PdfPages(full_save + saveName);
+for f in fCRF:
+    pdfSv.savefig(f)
+    plt.close(f)
+pdfSv.close()

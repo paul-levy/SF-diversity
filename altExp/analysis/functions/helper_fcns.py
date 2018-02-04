@@ -161,7 +161,7 @@ def tabulate_responses(cellStruct, modResp = []):
                     val_tr = val_con & val_sf & valid_disp[0] # why valid_disp[0]? we want single grating presentations!
 
                     if np.all(np.unique(val_tr) == False):
-                        print('empty...');
+                        #print('empty...');
                         continue;
                     
                     curr_pred = curr_pred + np.mean(data['spikeCount'][val_tr]);
