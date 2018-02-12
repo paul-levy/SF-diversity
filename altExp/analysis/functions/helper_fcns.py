@@ -1,9 +1,23 @@
 import math, numpy, random
 from scipy.stats import norm, mode
+import scipy.optimize as opt
 sqrt = math.sqrt
 log = math.log
 exp = math.exp
 import pdb
+
+# Functions:
+# bw_lin_to_log
+# bw_log_to_lin
+# compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
+# fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
+# flexible_Gauss - Descriptive function used to describe/fit SF tuning
+# blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
+# tabulateResponses - Organizes measured and model responses for sfMixAlt experiment
+# random_in_range - random real-valued number between A and B
+# nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
+# getSuppressiveSFtuning - returns the normalization pool response
+# makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
 
 def bw_lin_to_log( lin_low, lin_high ):
     # Given the low/high sf in cpd, returns number of octaves separating the
@@ -22,7 +36,6 @@ def bw_log_to_lin(log_bw, pref_sf):
     lin_bw = more_half - less_half;
     
     return lin_bw, sf_range
-
 
 def compute_SF_BW(fit, height, sf_range):
 
@@ -179,6 +192,126 @@ def tabulate_responses(cellStruct, modResp = []):
                     val_con_by_disp[d].append(con);
                     
     return [respMean, respStd, predMean, predStd], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
+
+def naka_rushton(con, params):
+    np = numpy;
+    base = params[0];
+    gain = params[1];
+    expon = params[2];
+    c50 = params[3];
+
+    return base + gain*np.divide(np.power(con, expon), np.power(con, expon) + np.power(c50, expon));
+
+def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base):
+    np = numpy;
+
+    n_sfs = len(resps);
+
+    loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
+    
+    loss_by_sf = np.zeros((n_sfs, 1));
+    for sf in range(n_sfs):
+        if len(nr_c50) == 1: # only one pmf_means value
+          nr_args = [nr_base, nr_gain[sf], nr_expn, nr_c50[0]]; 
+        else: # it's an array - grab the right one
+          nr_args = [nr_base, nr_gain[sf], nr_expn, nr_c50[sf]]; 
+	pred = naka_rushton(cons[sf], nr_args);
+	loss_by_sf[sf] = loss(resps[sf], pred);
+
+    return np.sum(loss_by_sf);
+
+def fit_all_CRF(cellStruct, each_c50):
+    np = numpy;
+    conDig = 3; # round contrast to the thousandth
+
+    data = cellStruct['sfm']['exp']['trial'];
+
+    all_cons = np.unique(np.round(data['total_con'], conDig));
+    all_cons = all_cons[~np.isnan(all_cons)];
+
+    all_sfs = np.unique(data['cent_sf']);
+    all_sfs = all_sfs[~np.isnan(all_sfs)];
+
+    all_disps = np.unique(data['num_comps']);
+    all_disps = all_disps[all_disps>0]; # ignore zero...
+
+    nCons = len(all_cons);
+    nSfs = len(all_sfs);
+    nDisps = len(all_disps);
+
+    nk_ru = dict();
+
+    for d in range(nDisps):
+        valid_disp = data['num_comps'] == all_disps[d];
+	cons = [];
+	resps = [];
+
+	nk_ru[d] = dict();
+	v_sfs = []; # keep track of valid sfs
+
+        for sf in range(nSfs):
+
+           valid_sf = data['cent_sf'] == all_sfs[sf];
+
+           valid_tr = valid_disp & valid_sf;
+           if np.all(np.unique(valid_tr) == False): # did we not find any trials?
+	        continue;
+	
+	   v_sfs.append(sf);
+	   nk_ru[d][sf] = dict(); # create dictionary here; thus, only valid sfs have valid keys
+           resps.append(data['spikeCount'][valid_tr]);
+           cons.append(data['total_con'][valid_tr]);
+    
+        maxResp = np.max(np.max(resps));
+	n_v_sfs = len(v_sfs);
+
+    	if each_c50 == 1:
+    	  n_c50s = n_v_sfs; # or n_v_sfs if separate for each SF...
+    	else:
+	  n_c50s = 1;	
+
+        init_base = 0;
+        bounds_base = (0, maxResp);
+        init_gain = np.mean(resps);
+        bounds_gain = (0, maxResp);
+        init_expn = 2;
+        bounds_expn = (1, 10);
+        init_c50 = np.sqrt(np.sum(np.power(all_cons, 2))); # geomean...
+        bounds_c50 = (0.01, 10*max(all_cons));
+        #bounds_c50 = (min(all_cons), 1); # don't fit to c50 larger than full contrast!
+
+ 	base_inits = np.repeat(init_base, 1); # only one baseline per SF
+	base_constr = [tuple(x) for x in np.broadcast_to(bounds_base, (1, 2))]
+ 	
+	gain_inits = np.repeat(init_gain, n_v_sfs); # ...and gain
+	gain_constr = [tuple(x) for x in np.broadcast_to(bounds_gain, (n_v_sfs, 2))]
+ 		
+	c50_inits = np.repeat(init_c50, n_c50s); # repeat n_v_sfs times if c50 separate for each SF; otherwise, 1
+	c50_constr = [tuple(x) for x in np.broadcast_to(bounds_c50, (n_c50s, 2))]
+
+        init_params = np.hstack((c50_inits, init_expn, gain_inits, base_inits));
+    	boundsAll = np.vstack((c50_constr, bounds_expn, gain_constr,base_constr));
+    	boundsAll = [tuple(x) for x in boundsAll]; # turn the (inner) arrays into tuples...
+
+	expn_ind = n_c50s;
+	gain_ind = n_c50s+1;
+	base_ind = gain_ind+n_v_sfs; # only one baseline per dispersion...
+
+	obj = lambda params: fit_CRF(cons, resps, params[0:n_c50s], params[expn_ind], params[gain_ind:gain_ind+n_v_sfs], params[base_ind]);
+	opts = opt.minimize(obj, init_params, bounds=boundsAll);
+
+        # now unpack...
+	params = opts['x'];
+	for sf in range(n_v_sfs):
+          if n_c50s == 1:
+            c50_ind = 0;
+          else:
+            c50_ind = sf;
+          nk_ru[d][v_sfs[sf]]['params'] = [params[base_ind], params[gain_ind+sf], params[expn_ind], params[c50_ind]];
+	    # params (to match naka_rushton) are: baseline, gain, expon, c50
+	  nk_ru[d][v_sfs[sf]]['loss'] = opts['fun'];
+
+    return nk_ru;
 
 def random_in_range(lims, size = 1):
 
