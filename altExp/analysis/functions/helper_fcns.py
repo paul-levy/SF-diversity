@@ -207,7 +207,8 @@ def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base):
 
     n_sfs = len(resps);
 
-    loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
+    loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
+    #loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
     
     loss_by_sf = np.zeros((n_sfs, 1));
     for sf in range(n_sfs):
@@ -218,7 +219,7 @@ def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base):
 	pred = naka_rushton(cons[sf], nr_args);
 	loss_by_sf[sf] = loss(resps[sf], pred);
 
-    return np.sum(loss_by_sf);
+    return np.sum(np.log(loss_by_sf));
 
 def fit_all_CRF(cellStruct, each_c50):
     np = numpy;
@@ -266,7 +267,7 @@ def fit_all_CRF(cellStruct, each_c50):
 	n_v_sfs = len(v_sfs);
 
     	if each_c50 == 1:
-    	  n_c50s = n_v_sfs; # or n_v_sfs if separate for each SF...
+    	  n_c50s = n_v_sfs; # separate for each SF...
     	else:
 	  n_c50s = 1;	
 

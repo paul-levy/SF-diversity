@@ -376,6 +376,9 @@ crfAx.append(crfSum);
 crfFitsSepC50 = helper_fcns.fit_all_CRF(cellStruct, 1);
 crfFitsOneC50 = helper_fcns.fit_all_CRF(cellStruct, 0);
 
+crf_loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
+#crf_loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
+
 for d in range(nDisps):
     
     # which sfs have at least one contrast presentation?
@@ -399,32 +402,34 @@ for d in range(nDisps):
         n_cons = sum(v_cons);
 	plot_cons = np.linspace(np.min(all_cons[v_cons]), np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
 
+	# organize responses
+	resps_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
+
 	# CRF fit
 	curr_fit_sep = crfFitsSepC50[d][sf_ind]['params'];
 	curr_fit_all = crfFitsOneC50[d][sf_ind]['params'];
-	#curr_loss_sep = crfFitsSepC50[d][sf_ind]['loss'];
-	#curr_loss_all = crfFitsOneC50[d][sf_ind]['loss'];
- 
+	sep_loss = np.sum(np.log(crf_loss(resps_curr, helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_sep))));
+	all_loss = np.sum(np.log(crf_loss(resps_curr, helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_all))));
+	 
         c50_sep[sf] = curr_fit_sep[3];
         c50_all[sf] = curr_fit_all[3];
 
         # summary plots
-	crfAx[0][d, 0].plot(all_cons[v_cons], np.maximum(np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, )), 0.1), '-', clip_on=False);
+	crfAx[0][d, 0].plot(all_cons[v_cons], np.maximum(resps_curr, 0.1), '-', clip_on=False);
 
         # 0.1 minimum to keep plot axis range OK...should find alternative
-        expPts = crfAx[d+1][row_ind, col_ind].errorbar(all_cons[v_cons], np.maximum(np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, )), 0.1),
-                            np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, )), fmt='o', clip_on=False);
+        expPts = crfAx[d+1][row_ind, col_ind].errorbar(all_cons[v_cons], np.maximum(resps_curr, 0.1), np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, )), fmt='o', clip_on=False);
 
         sepPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
         allPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_all), linestyle='dashed');
 	# accompanying text...
-	crfAx[d+1][row_ind, col_ind].text(0, 0.9, 'fixed: gain %.1f; c50 %.3f; exp: %.2f; baseline: %.1f' % (curr_fit_sep[1], curr_fit_sep[3], curr_fit_sep[2], curr_fit_sep[0]), 
+	crfAx[d+1][row_ind, col_ind].text(0, 0.9, 'free [%.1f]: gain %.1f; c50 %.3f; exp: %.2f; baseline: %.1f' % (sep_loss, curr_fit_sep[1], curr_fit_sep[3], curr_fit_sep[2], curr_fit_sep[0]), 
 		horizontalalignment='left', verticalalignment='center', transform=crfAx[d+1][row_ind, col_ind].transAxes, fontsize=30);
-	crfAx[d+1][row_ind, col_ind].text(0, 0.8, 'free: gain %.1f; c50 %.3f; exp: %.2f; baseline: %.1f' % (curr_fit_all[1], curr_fit_all[3], curr_fit_all[2], curr_fit_all[0]), 
+	crfAx[d+1][row_ind, col_ind].text(0, 0.8, 'fixed [%.1f]: gain %.1f; c50 %.3f; exp: %.2f; baseline: %.1f' % (all_loss, curr_fit_all[1], curr_fit_all[3], curr_fit_all[2], curr_fit_all[0]), 
 		horizontalalignment='left', verticalalignment='center', transform=crfAx[d+1][row_ind, col_ind].transAxes, fontsize=30);
 
 	# legend
-	crfAx[d+1][row_ind, col_ind].legend((expPts[0], sepPlt[0], allPlt[0]), ('data', 'free c50', 'fixed c50'), fontsize='medium', loc='best')
+	crfAx[d+1][row_ind, col_ind].legend((expPts[0], sepPlt[0], allPlt[0]), ('data', 'free c50', 'fixed c50'), fontsize='medium', loc='center left')
 
 	plt_x = d+1; plt_y = (row_ind, col_ind);
 
