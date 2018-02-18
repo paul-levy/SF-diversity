@@ -10,6 +10,7 @@ matplotlib.use('Agg') # to avoid GUI/cluster issues...
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
 import helper_fcns
+from scipy.stats import poisson
 
 import pdb
 
@@ -373,10 +374,12 @@ fSum, crfSum = plt.subplots(nDisps, 2, figsize=(40, 40), sharex=False, sharey=Fa
 fCRF.append(fSum);
 crfAx.append(crfSum);
 
-crfFitsSepC50 = helper_fcns.fit_all_CRF(cellStruct, 1);
-crfFitsOneC50 = helper_fcns.fit_all_CRF(cellStruct, 0);
+n_fits_crf = 1; # i.e. how many attempts at optimization?
+crfFitsSepC50 = helper_fcns.fit_all_CRF(cellStruct, 1, n_fits_crf);
+crfFitsOneC50 = helper_fcns.fit_all_CRF(cellStruct, 0, n_fits_crf);
 
-crf_loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
+crf_loss = lambda resp, pred: poisson.logpmf(resp, pred);
+#crf_loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
 #crf_loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
 
 for d in range(nDisps):
@@ -408,8 +411,9 @@ for d in range(nDisps):
 	# CRF fit
 	curr_fit_sep = crfFitsSepC50[d][sf_ind]['params'];
 	curr_fit_all = crfFitsOneC50[d][sf_ind]['params'];
-	sep_loss = np.sum(np.log(crf_loss(resps_curr, helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_sep))));
-	all_loss = np.sum(np.log(crf_loss(resps_curr, helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_all))));
+	#pdb.set_trace();
+	sep_loss = -np.sum(crf_loss(np.round(resps_curr), helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_sep))); # round - p(spikes|rate) must have spikes as integer
+	all_loss = -np.sum(crf_loss(np.round(resps_curr), helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_all)));
 	 
         c50_sep[sf] = curr_fit_sep[3];
         c50_all[sf] = curr_fit_all[3];

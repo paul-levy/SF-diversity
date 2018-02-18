@@ -1,5 +1,6 @@
 import math, numpy, random
-from scipy.stats import norm, mode
+from scipy.stats import norm, mode, poisson
+from scipy.stats.mstats import gmean as geomean
 import scipy.optimize as opt
 sqrt = math.sqrt
 log = math.log
@@ -207,7 +208,8 @@ def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base):
 
     n_sfs = len(resps);
 
-    loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
+    loss = lambda resp, pred: poisson.logpmf(resp, pred);
+    #loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
     #loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
     
     loss_by_sf = np.zeros((n_sfs, 1));
@@ -216,12 +218,15 @@ def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base):
           nr_args = [nr_base, nr_gain[sf], nr_expn, nr_c50[0]]; 
         else: # it's an array - grab the right one
           nr_args = [nr_base, nr_gain[sf], nr_expn, nr_c50[sf]]; 
-	pred = naka_rushton(cons[sf], nr_args);
-	loss_by_sf[sf] = loss(resps[sf], pred);
+	pred = naka_rushton(cons[sf], nr_args); # ensure we don't have pred (lambda) = 0 --> log will "blow up"
+	curr_loss = loss(resps[sf], pred);
+	loss_by_sf[sf] = np.sum(curr_loss);
 
-    return np.sum(np.log(loss_by_sf));
+    #return np.sum(np.log(np.maximum(1e-4, loss_by_sf)));
+    #pdb.set_trace();
+    return -np.sum(loss_by_sf); # negate; we're minimizing NEGATIVE log likelihood...
 
-def fit_all_CRF(cellStruct, each_c50):
+def fit_all_CRF(cellStruct, each_c50, n_iter = 1):
     np = numpy;
     conDig = 3; # round contrast to the thousandth
 
@@ -271,15 +276,14 @@ def fit_all_CRF(cellStruct, each_c50):
     	else:
 	  n_c50s = 1;	
 
-        init_base = 0;
-        bounds_base = (0, maxResp);
-        init_gain = np.mean(resps);
-        bounds_gain = (0, maxResp);
+        init_base = 0.1;
+        bounds_base = (0.01, maxResp);
+        init_gain = np.max(resps) - np.min(resps);
+        bounds_gain = (0, 10*maxResp);
         init_expn = 2;
         bounds_expn = (1, 10);
-        init_c50 = np.sqrt(np.sum(np.power(all_cons, 2))); # geomean...
-        bounds_c50 = (0.01, 10*max(all_cons));
-        #bounds_c50 = (min(all_cons), 1); # don't fit to c50 larger than full contrast!
+        init_c50 = 0.1; #geomean(all_cons);
+        bounds_c50 = (0.01, 10*max(all_cons)); # contrast values are b/t [0, 1]
 
  	base_inits = np.repeat(init_base, 1); # only one baseline per SF
 	base_constr = [tuple(x) for x in np.broadcast_to(bounds_base, (1, 2))]
@@ -300,6 +304,29 @@ def fit_all_CRF(cellStruct, each_c50):
 
 	obj = lambda params: fit_CRF(cons, resps, params[0:n_c50s], params[expn_ind], params[gain_ind:gain_ind+n_v_sfs], params[base_ind]);
 	opts = opt.minimize(obj, init_params, bounds=boundsAll);
+
+        #pdb.set_trace();
+
+	curr_params = opts['x'];
+	curr_loss = opts['fun'];
+
+	for iter in range(n_iter-1): # now, extra iterations if chosen...
+	  init_params = np.hstack((random_in_range(bounds_c50, n_c50s), random_in_range(bounds_expn), random_in_range(bounds_gain, n_v_sfs), random_in_range(bounds_base)));
+
+          # choose optimization method
+          if np.mod(iter, 2) == 0:
+             methodStr = 'L-BFGS-B';
+          else:
+             methodStr = 'TNC';
+
+	  opt_iter = opt.minimize(obj, init_params, bounds=boundsAll, method=methodStr);
+
+	  #pdb.set_trace();
+
+          if opt_iter['fun'] < curr_loss:
+	    print('improve.');
+	    curr_loss = opt_iter['fun'];
+	    curr_params = opts['x'];
 
         # now unpack...
 	params = opts['x'];
