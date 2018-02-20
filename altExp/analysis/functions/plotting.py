@@ -1,7 +1,6 @@
 # coding: utf-8
 
 ######################## To do:
-#2/5/18 - "Clean up" plotting code s.t. you only make the plots you want, keep # plots to a minimum
 
 import os
 import numpy as np
@@ -10,7 +9,8 @@ matplotlib.use('Agg') # to avoid GUI/cluster issues...
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
 import helper_fcns
-from scipy.stats import poisson
+from scipy.stats import poisson, nbinom
+from scipy.stats.mstats import gmean
 
 import pdb
 
@@ -32,6 +32,7 @@ which_cell = int(sys.argv[1]);
 dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
+crfFitName = 'crfFits-varGain.npy';
 fitListName = 'fitList_180105.npy';
 
 conDig = 3; # round contrast to the 3rd digit
@@ -374,11 +375,12 @@ fSum, crfSum = plt.subplots(nDisps, 2, figsize=(40, 40), sharex=False, sharey=Fa
 fCRF.append(fSum);
 crfAx.append(crfSum);
 
-n_fits_crf = 1; # i.e. how many attempts at optimization?
-crfFitsSepC50 = helper_fcns.fit_all_CRF(cellStruct, 1, n_fits_crf);
-crfFitsOneC50 = helper_fcns.fit_all_CRF(cellStruct, 0, n_fits_crf);
+fits = np.load(dataPath + crfFitName).item();
+crfFitsSepC50 = fits[which_cell-1]['fits_each'];
+crfFitsOneC50 = fits[which_cell-1]['fits'];
 
-crf_loss = lambda resp, pred: poisson.logpmf(resp, pred);
+crf_loss = lambda resp, r, p: nbinom.pmf(resp, r, p); # Likelihood for each pass under doubly stochastic model
+#crf_loss = lambda resp, pred: poisson.logpmf(resp, pred);
 #crf_loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
 #crf_loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
 
@@ -411,9 +413,14 @@ for d in range(nDisps):
 	# CRF fit
 	curr_fit_sep = crfFitsSepC50[d][sf_ind]['params'];
 	curr_fit_all = crfFitsOneC50[d][sf_ind]['params'];
-	#pdb.set_trace();
-	sep_loss = -np.sum(crf_loss(np.round(resps_curr), helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_sep))); # round - p(spikes|rate) must have spikes as integer
-	all_loss = -np.sum(crf_loss(np.round(resps_curr), helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_all)));
+	# ignore varGain when reporting loss here...
+	sep_pred = helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_sep[0:4]);
+	all_pred = helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_all[0:4]);
+	r_sep, p_sep = helper_fcns.mod_poiss(sep_pred, curr_fit_sep[4]);
+	r_all, p_all = helper_fcns.mod_poiss(all_pred, curr_fit_all[4]);
+	
+	sep_loss = -np.sum(crf_loss(np.round(resps_curr), r_sep, p_sep));
+	all_loss = -np.sum(crf_loss(np.round(resps_curr), r_all, p_all));
 	 
         c50_sep[sf] = curr_fit_sep[3];
         c50_all[sf] = curr_fit_all[3];
@@ -427,9 +434,9 @@ for d in range(nDisps):
         sepPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
         allPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_all), linestyle='dashed');
 	# accompanying text...
-	crfAx[d+1][row_ind, col_ind].text(0, 0.9, 'free [%.1f]: gain %.1f; c50 %.3f; exp: %.2f; baseline: %.1f' % (sep_loss, curr_fit_sep[1], curr_fit_sep[3], curr_fit_sep[2], curr_fit_sep[0]), 
+	crfAx[d+1][row_ind, col_ind].text(0, 0.9, 'free [%.1f]: gain %.1f; c50 %.3f; exp: %.2f; base: %.1f, varGn: %.2f' % (sep_loss, curr_fit_sep[1], curr_fit_sep[3], curr_fit_sep[2], curr_fit_sep[0], curr_fit_sep[4]), 
 		horizontalalignment='left', verticalalignment='center', transform=crfAx[d+1][row_ind, col_ind].transAxes, fontsize=30);
-	crfAx[d+1][row_ind, col_ind].text(0, 0.8, 'fixed [%.1f]: gain %.1f; c50 %.3f; exp: %.2f; baseline: %.1f' % (all_loss, curr_fit_all[1], curr_fit_all[3], curr_fit_all[2], curr_fit_all[0]), 
+	crfAx[d+1][row_ind, col_ind].text(0, 0.8, 'fixed [%.1f]: gain %.1f; c50 %.3f; exp: %.2f; base: %.1f, varGn: %.2f' % (all_loss, curr_fit_all[1], curr_fit_all[3], curr_fit_all[2], curr_fit_all[0], curr_fit_all[4]), 
 		horizontalalignment='left', verticalalignment='center', transform=crfAx[d+1][row_ind, col_ind].transAxes, fontsize=30);
 
 	# legend

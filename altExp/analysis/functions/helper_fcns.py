@@ -1,5 +1,5 @@
 import math, numpy, random
-from scipy.stats import norm, mode, poisson
+from scipy.stats import norm, mode, poisson, nbinom
 from scipy.stats.mstats import gmean as geomean
 import scipy.optimize as opt
 sqrt = math.sqrt
@@ -194,6 +194,14 @@ def tabulate_responses(cellStruct, modResp = []):
                     
     return [respMean, respStd, predMean, predStd], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
 
+def mod_poiss(mu, varGain):
+    np = numpy;
+    var = mu + (varGain * np.power(mu, 2));                        # The corresponding variance of the spike count
+    r   = np.power(mu, 2) / (var - mu);                           # The parameters r and p of the negative binomial distribution
+    p   = r/(r + mu)
+
+    return r, p
+
 def naka_rushton(con, params):
     np = numpy;
     base = params[0];
@@ -203,12 +211,14 @@ def naka_rushton(con, params):
 
     return base + gain*np.divide(np.power(con, expon), np.power(con, expon) + np.power(c50, expon));
 
-def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base):
+def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain):
     np = numpy;
 
     n_sfs = len(resps);
 
-    loss = lambda resp, pred: poisson.logpmf(resp, pred);
+    # Evaluate the model
+    loss = lambda resp, r, p: nbinom.pmf(resp, r, p); # Likelihood for each pass under doubly stochastic model
+    #loss = lambda resp, pred: poisson.logpmf(resp, pred);
     #loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
     #loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
     
@@ -219,127 +229,18 @@ def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base):
         else: # it's an array - grab the right one
           nr_args = [nr_base, nr_gain[sf], nr_expn, nr_c50[sf]]; 
 	pred = naka_rushton(cons[sf], nr_args); # ensure we don't have pred (lambda) = 0 --> log will "blow up"
-	curr_loss = loss(resps[sf], pred);
-	loss_by_sf[sf] = np.sum(curr_loss);
 
-    #return np.sum(np.log(np.maximum(1e-4, loss_by_sf)));
-    #pdb.set_trace();
+        pred = naka_rushton(cons[sf], nr_args); # ensure we don't have pred (lambda) = 0 --> log will "blow up"
+            # Get predicted spike count distributions
+        mu  = pred; # The predicted mean spike count; respModel[iR]
+        var = mu + (v_varGain * np.power(mu, 2));                        # The corresponding variance of the spike count
+        r   = np.power(mu, 2) / (var - mu);                           # The parameters r and p of the negative binomial distribution
+        p   = r/(r + mu);
+
+        curr_loss = loss(resps[sf], r, p);
+        loss_by_sf[sf] = np.sum(np.log(curr_loss));
+
     return -np.sum(loss_by_sf); # negate; we're minimizing NEGATIVE log likelihood...
-
-def fit_all_CRF(cellStruct, each_c50, n_iter = 1):
-    np = numpy;
-    conDig = 3; # round contrast to the thousandth
-
-    data = cellStruct['sfm']['exp']['trial'];
-
-    all_cons = np.unique(np.round(data['total_con'], conDig));
-    all_cons = all_cons[~np.isnan(all_cons)];
-
-    all_sfs = np.unique(data['cent_sf']);
-    all_sfs = all_sfs[~np.isnan(all_sfs)];
-
-    all_disps = np.unique(data['num_comps']);
-    all_disps = all_disps[all_disps>0]; # ignore zero...
-
-    nCons = len(all_cons);
-    nSfs = len(all_sfs);
-    nDisps = len(all_disps);
-
-    nk_ru = dict();
-
-    for d in range(nDisps):
-        valid_disp = data['num_comps'] == all_disps[d];
-	cons = [];
-	resps = [];
-
-	nk_ru[d] = dict();
-	v_sfs = []; # keep track of valid sfs
-
-        for sf in range(nSfs):
-
-           valid_sf = data['cent_sf'] == all_sfs[sf];
-
-           valid_tr = valid_disp & valid_sf;
-           if np.all(np.unique(valid_tr) == False): # did we not find any trials?
-	        continue;
-	
-	   v_sfs.append(sf);
-	   nk_ru[d][sf] = dict(); # create dictionary here; thus, only valid sfs have valid keys
-           resps.append(data['spikeCount'][valid_tr]);
-           cons.append(data['total_con'][valid_tr]);
-    
-        maxResp = np.max(np.max(resps));
-	n_v_sfs = len(v_sfs);
-
-    	if each_c50 == 1:
-    	  n_c50s = n_v_sfs; # separate for each SF...
-    	else:
-	  n_c50s = 1;	
-
-        init_base = 0.1;
-        bounds_base = (0.01, maxResp);
-        init_gain = np.max(resps) - np.min(resps);
-        bounds_gain = (0, 10*maxResp);
-        init_expn = 2;
-        bounds_expn = (1, 10);
-        init_c50 = 0.1; #geomean(all_cons);
-        bounds_c50 = (0.01, 10*max(all_cons)); # contrast values are b/t [0, 1]
-
- 	base_inits = np.repeat(init_base, 1); # only one baseline per SF
-	base_constr = [tuple(x) for x in np.broadcast_to(bounds_base, (1, 2))]
- 	
-	gain_inits = np.repeat(init_gain, n_v_sfs); # ...and gain
-	gain_constr = [tuple(x) for x in np.broadcast_to(bounds_gain, (n_v_sfs, 2))]
- 		
-	c50_inits = np.repeat(init_c50, n_c50s); # repeat n_v_sfs times if c50 separate for each SF; otherwise, 1
-	c50_constr = [tuple(x) for x in np.broadcast_to(bounds_c50, (n_c50s, 2))]
-
-        init_params = np.hstack((c50_inits, init_expn, gain_inits, base_inits));
-    	boundsAll = np.vstack((c50_constr, bounds_expn, gain_constr,base_constr));
-    	boundsAll = [tuple(x) for x in boundsAll]; # turn the (inner) arrays into tuples...
-
-	expn_ind = n_c50s;
-	gain_ind = n_c50s+1;
-	base_ind = gain_ind+n_v_sfs; # only one baseline per dispersion...
-
-	obj = lambda params: fit_CRF(cons, resps, params[0:n_c50s], params[expn_ind], params[gain_ind:gain_ind+n_v_sfs], params[base_ind]);
-	opts = opt.minimize(obj, init_params, bounds=boundsAll);
-
-        #pdb.set_trace();
-
-	curr_params = opts['x'];
-	curr_loss = opts['fun'];
-
-	for iter in range(n_iter-1): # now, extra iterations if chosen...
-	  init_params = np.hstack((random_in_range(bounds_c50, n_c50s), random_in_range(bounds_expn), random_in_range(bounds_gain, n_v_sfs), random_in_range(bounds_base)));
-
-          # choose optimization method
-          if np.mod(iter, 2) == 0:
-             methodStr = 'L-BFGS-B';
-          else:
-             methodStr = 'TNC';
-
-	  opt_iter = opt.minimize(obj, init_params, bounds=boundsAll, method=methodStr);
-
-	  #pdb.set_trace();
-
-          if opt_iter['fun'] < curr_loss:
-	    print('improve.');
-	    curr_loss = opt_iter['fun'];
-	    curr_params = opts['x'];
-
-        # now unpack...
-	params = opts['x'];
-	for sf in range(n_v_sfs):
-          if n_c50s == 1:
-            c50_ind = 0;
-          else:
-            c50_ind = sf;
-          nk_ru[d][v_sfs[sf]]['params'] = [params[base_ind], params[gain_ind+sf], params[expn_ind], params[c50_ind]];
-	    # params (to match naka_rushton) are: baseline, gain, expon, c50
-	  nk_ru[d][v_sfs[sf]]['loss'] = opts['fun'];
-
-    return nk_ru;
 
 def random_in_range(lims, size = 1):
 
