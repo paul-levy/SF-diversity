@@ -18,7 +18,7 @@ def fit_all_CRF(cell_num, data_loc, each_c50, n_boot_iter = 1000):
 	fit_key = 'fits';
 
     # load cell information
-    fits_name = 'crfFits-varGain.npy';
+    fits_name = 'crfFits-poissMod.npy';
     dataList = np.load(data_loc + 'dataList.npy').item();
     if os.path.isfile(data_loc + fits_name):
         crfFits = np.load(data_loc + fits_name).item();

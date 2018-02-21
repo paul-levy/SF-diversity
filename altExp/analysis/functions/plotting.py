@@ -32,7 +32,7 @@ which_cell = int(sys.argv[1]);
 dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
-crfFitName = 'crfFits-varGain.npy';
+crfFitName = 'crfFits-sqrt.npy';
 fitListName = 'fitList_180105.npy';
 
 conDig = 3; # round contrast to the 3rd digit
@@ -379,9 +379,9 @@ fits = np.load(dataPath + crfFitName).item();
 crfFitsSepC50 = fits[which_cell-1]['fits_each'];
 crfFitsOneC50 = fits[which_cell-1]['fits'];
 
-crf_loss = lambda resp, r, p: nbinom.pmf(resp, r, p); # Likelihood for each pass under doubly stochastic model
+#crf_loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
 #crf_loss = lambda resp, pred: poisson.logpmf(resp, pred);
-#crf_loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
+crf_loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
 #crf_loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
 
 for d in range(nDisps):
@@ -419,8 +419,10 @@ for d in range(nDisps):
 	r_sep, p_sep = helper_fcns.mod_poiss(sep_pred, curr_fit_sep[4]);
 	r_all, p_all = helper_fcns.mod_poiss(all_pred, curr_fit_all[4]);
 	
-	sep_loss = -np.sum(crf_loss(np.round(resps_curr), r_sep, p_sep));
-	all_loss = -np.sum(crf_loss(np.round(resps_curr), r_all, p_all));
+	sep_loss = np.sum(crf_loss(np.round(resps_curr), sep_pred));
+	all_loss = np.sum(crf_loss(np.round(resps_curr), all_pred));
+	#sep_loss = -np.sum(crf_loss(np.round(resps_curr), r_sep, p_sep));
+	#all_loss = -np.sum(crf_loss(np.round(resps_curr), r_all, p_all));
 	 
         c50_sep[sf] = curr_fit_sep[3];
         c50_all[sf] = curr_fit_all[3];

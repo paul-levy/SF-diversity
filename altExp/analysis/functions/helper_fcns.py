@@ -217,7 +217,7 @@ def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain):
     n_sfs = len(resps);
 
     # Evaluate the model
-    loss = lambda resp, r, p: nbinom.pmf(resp, r, p); # Likelihood for each pass under doubly stochastic model
+    loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
     #loss = lambda resp, pred: poisson.logpmf(resp, pred);
     #loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
     #loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
@@ -237,10 +237,15 @@ def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain):
         r   = np.power(mu, 2) / (var - mu);                           # The parameters r and p of the negative binomial distribution
         p   = r/(r + mu);
 
-        curr_loss = loss(resps[sf], r, p);
-        loss_by_sf[sf] = np.sum(np.log(curr_loss));
+		# if error calculation
+        #curr_loss = loss(resps[sf], pred);
+        #loss_by_sf[sf] = np.sum(curr_loss);
+		# if likelihood calculation
+        curr_loss = loss(resps[sf], r, p); # already log
+        #curr_loss = loss(resps[sf], pred); # already log
+        loss_by_sf[sf] = -np.sum(curr_loss); # negate if LLH
 
-    return -np.sum(loss_by_sf); # negate; we're minimizing NEGATIVE log likelihood...
+    return np.sum(loss_by_sf);
 
 def random_in_range(lims, size = 1):
 
