@@ -298,9 +298,10 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     uno = tf.add(noiseEarly, tf.cast(Lexc, dtype=tf.float32));
     numerator     = uno;
     # taking the sqrt of the denominator (which is sum of squares) to bring in line with Carandini, Heeger, Movshon, '97
-    denominator   = tf.sqrt(tf.square(sigma) + tf.square(Linh)); # squaring Linh - edit 7/17
+    denominator   = tf.sqrt(tf.square(sigma) + tf.square(Linh)); # squaring Linh - edit 7/17 (july 2017)
     # ratio will be nTrials x nTrials
-    ratio         = tf.pow(tf.maximum(tf.constant(0, dtype=tf.float32), tf.divide(numerator,denominator)), respExp);
+    ratio         = tf.pow(tf.divide(numerator,denominator), respExp); # numerator will always be > 0 (not just >= 0), so we don't need to worry about 0 ratio (which "blows up" likelihoods!)
+    #ratio         = tf.pow(tf.maximum(tf.constant(0, dtype=tf.float32), tf.divide(numerator,denominator)), respExp);
     meanRate      = tf.reduce_mean(ratio, axis=1);
     respModel     = noiseLate + (scale * meanRate);
 
@@ -312,11 +313,12 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     p   = tf.divide(r, tf.add(r, mu));
 
     # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
-    lsq = tf.square(tf.add(tf.sqrt(respModel), -tf.sqrt(ph_spikeCount)));
-    NLL = tf.reduce_mean(ph_objWeight*lsq); # was 1*lsq
+    #lsq = tf.square(tf.add(tf.sqrt(respModel), -tf.sqrt(ph_spikeCount)));
+    #NLL = tf.reduce_mean(ph_objWeight*lsq); # was 1*lsq
 
-    #log_lh = negBinom(ph_spikeCount, r, p);
-    #NLL = tf.reduce_mean(-1*log_lh);
+    # likelihood based on modulated poisson model
+    log_lh = negBinom(ph_spikeCount, r, p);
+    NLL = tf.reduce_mean(-1*log_lh);
     
     return NLL;
 
@@ -328,7 +330,7 @@ def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
         # 02 = normalization constant (log10 basis) || unconstrained
         # 03 = response exponent || >1
         # 04 = response scalar || >1e-3
-        # 05 = early additive noise || [0,1]
+        # 05 = early additive noise || [0.001, 1]
         # 06 = late additive noise || >0
         # 07 = variance of response gain || >1e-3     
 
@@ -338,7 +340,7 @@ def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
     #three = tf.constant(2, tf.float32);
     three = tf.add(tf.nn.softplus(v_respExp), 1);
     four = tf.add(tf.nn.softplus(v_respScalar), 1e-3);
-    five = tf.sigmoid(v_noiseEarly);
+    five = 0.001+(1-0.001)*tf.sigmoid(v_noiseEarly); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
     six = tf.nn.softplus(v_noiseLate);
     seven = tf.add(tf.nn.softplus(v_varGain), 1e-3);
     return [zero,one,two,three,four,five,six,seven];
@@ -368,7 +370,7 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal machine
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fitListName = 'fitList_171214a.npy';
+    fitListName = 'fitList_180220.npy';
 
     fitList = numpy.load(loc_data + fitListName); # no .item() needed...
     dataList = numpy.load(loc_data + 'dataList.npy').item();

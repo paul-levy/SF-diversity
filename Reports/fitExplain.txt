@@ -1,0 +1,15 @@
+This simple text document provides a few details on the fitting files which exist in SF_diversity/Analysis/Structures and the corresponding plots in ../Figures
+
+fits_171128 - "baseline" model with no asymmetry, no fitting of orientation data (but yes to CRF); 
+	running mod_resp_trackNLL.npy with ADAM with
+		threshold approx. 1e-6, 
+		learning rate = 0.1				
+ 		data subsample = 0 (i.e. using all data)
+		starting from existing fit = no (0)
+
+fits_180220 - same as fits_171128, but with likelihood determined by modulated poisson model
+	running mod_resp_trackNLL.npy with ADAM with
+		threshold 1e-8
+		learning rate = 0.1
+		data subsample = 0.1
+		start from existing fit = no (0)
