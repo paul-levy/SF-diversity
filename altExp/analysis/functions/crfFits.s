@@ -14,8 +14,16 @@
 module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 
-python crf_fit.py $SLURM_ARRAY_TASK_ID 0 1
-python crf_fit.py $SLURM_ARRAY_TASK_ID 1 1
+# CELL_ID FIX/FREE-c50 fitType [optional: nIterations; default = 1, i.e. no repeats]
+	# note: currently, crf_fit.py calls non-bootstrapped optimization; see crf_fit.py for details
+	# fitType:
+		# 1 - least squares
+		# 2 - minimize sq(sqrt(pred) - sqrt(resp))
+		# 3 - poisson
+		# 4 - modulated poisson (Goris)
+
+python crf_fit.py $SLURM_ARRAY_TASK_ID 0 4
+python crf_fit.py $SLURM_ARRAY_TASK_ID 1 4
   
 # leave a blank line at the end
 

@@ -21,6 +21,7 @@ plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/A
 plt.rc('legend',fontsize='medium') # using a named size
 
 which_cell = int(sys.argv[1]);
+fit_type = int(sys.argv[2]);
 
 # at CNS
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
@@ -32,21 +33,40 @@ which_cell = int(sys.argv[1]);
 dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
-crfFitName = 'crfFits-sqrt.npy';
+if fit_type == 1:
+  loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
+  type_str = '-lsq';
+if fit_type == 2:
+  loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
+  type_str = '-sqrt';
+if fit_type == 3:
+  loss = lambda resp, pred: poisson.logpmf(resp, pred);
+  type_str = '-poiss';
+if fit_type == 4:
+  loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
+  type_str = '-poissMod';
+
 fitListName = 'fitList_180105.npy';
+crfFitName = str('crfFits' + type_str + '.npy');
+
+rpt_fit = 1; # i.e. take the multi-start result
+if rpt_fit:
+  is_rpt = '_rpt';
+else:
+  is_rpt = '';
 
 conDig = 3; # round contrast to the 3rd digit
 
-dataList = np.load(dataPath + 'dataList.npy', encoding='latin1').item();
+dataList = np.load(str(dataPath + 'dataList.npy'), encoding='latin1').item();
 
-cellStruct = np.load(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy', encoding='latin1').item();
+cellStruct = np.load(str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy'), encoding='latin1').item();
 
 # #### Load descriptive model fits, comp. model fits
 
-descrFits = np.load(dataPath + 'descrFits.npy', encoding = 'latin1').item();
+descrFits = np.load(str(dataPath + 'descrFits.npy'), encoding = 'latin1').item();
 descrFits = descrFits[which_cell-1]['params']; # just get this cell
 
-modParams = np.load(dataPath + fitListName, encoding= 'latin1').item();
+modParams = np.load(str(dataPath + fitListName), encoding= 'latin1').item();
 modParamsCurr = modParams[which_cell-1]['params'];
 
 # ### Organize data
@@ -375,14 +395,9 @@ fSum, crfSum = plt.subplots(nDisps, 2, figsize=(40, 40), sharex=False, sharey=Fa
 fCRF.append(fSum);
 crfAx.append(crfSum);
 
-fits = np.load(dataPath + crfFitName).item();
-crfFitsSepC50 = fits[which_cell-1]['fits_each'];
-crfFitsOneC50 = fits[which_cell-1]['fits'];
-
-#crf_loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
-#crf_loss = lambda resp, pred: poisson.logpmf(resp, pred);
-crf_loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
-#crf_loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
+fits = np.load(str(dataPath + crfFitName)).item();
+crfFitsSepC50 = fits[which_cell-1][str('fits_each' + is_rpt)];
+crfFitsOneC50 = fits[which_cell-1][str('fits' + is_rpt)];
 
 for d in range(nDisps):
     
@@ -416,13 +431,18 @@ for d in range(nDisps):
 	# ignore varGain when reporting loss here...
 	sep_pred = helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_sep[0:4]);
 	all_pred = helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_all[0:4]);
-	r_sep, p_sep = helper_fcns.mod_poiss(sep_pred, curr_fit_sep[4]);
-	r_all, p_all = helper_fcns.mod_poiss(all_pred, curr_fit_all[4]);
-	
-	sep_loss = np.sum(crf_loss(np.round(resps_curr), sep_pred));
-	all_loss = np.sum(crf_loss(np.round(resps_curr), all_pred));
-	#sep_loss = -np.sum(crf_loss(np.round(resps_curr), r_sep, p_sep));
-	#all_loss = -np.sum(crf_loss(np.round(resps_curr), r_all, p_all));
+
+	if fit_type == 4:
+	  r_sep, p_sep = helper_fcns.mod_poiss(sep_pred, curr_fit_sep[4]);
+	  r_all, p_all = helper_fcns.mod_poiss(all_pred, curr_fit_all[4]);
+	  sep_loss = -np.sum(loss(np.round(resps_curr), r_sep, p_sep));
+	  all_loss = -np.sum(loss(np.round(resps_curr), r_all, p_all));
+	elif fit_type == 3:	
+	  sep_loss = -np.sum(loss(np.round(resps_curr), sep_pred));
+	  all_loss = -np.sum(loss(np.round(resps_curr), all_pred));
+	else: # i.e. fit_type == 1 || == 2
+	  sep_loss = np.sum(loss(np.round(resps_curr), sep_pred));
+	  all_loss = np.sum(loss(np.round(resps_curr), all_pred));
 	 
         c50_sep[sf] = curr_fit_sep[3];
         c50_all[sf] = curr_fit_all[3];

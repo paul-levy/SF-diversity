@@ -211,39 +211,53 @@ def naka_rushton(con, params):
 
     return base + gain*np.divide(np.power(con, expon), np.power(con, expon) + np.power(c50, expon));
 
-def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain):
+def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain, fit_type):
+	# fit_type (i.e. which loss function):
+		# 1 - least squares
+		# 2 - square root
+		# 3 - poisson
+		# 4 - modulated poisson
     np = numpy;
 
     n_sfs = len(resps);
 
     # Evaluate the model
-    loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
-    #loss = lambda resp, pred: poisson.logpmf(resp, pred);
-    #loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
-    #loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
-    
     loss_by_sf = np.zeros((n_sfs, 1));
     for sf in range(n_sfs):
         if len(nr_c50) == 1: # only one pmf_means value
           nr_args = [nr_base, nr_gain[sf], nr_expn, nr_c50[0]]; 
         else: # it's an array - grab the right one
           nr_args = [nr_base, nr_gain[sf], nr_expn, nr_c50[sf]]; 
-	pred = naka_rushton(cons[sf], nr_args); # ensure we don't have pred (lambda) = 0 --> log will "blow up"
-
+	# evaluate the model
         pred = naka_rushton(cons[sf], nr_args); # ensure we don't have pred (lambda) = 0 --> log will "blow up"
-            # Get predicted spike count distributions
-        mu  = pred; # The predicted mean spike count; respModel[iR]
-        var = mu + (v_varGain * np.power(mu, 2));                        # The corresponding variance of the spike count
-        r   = np.power(mu, 2) / (var - mu);                           # The parameters r and p of the negative binomial distribution
-        p   = r/(r + mu);
+        
+	if fit_type == 4:
+	    # Get predicted spike count distributions
+	  mu  = pred; # The predicted mean spike count; respModel[iR]
+          var = mu + (v_varGain * np.power(mu, 2));                        # The corresponding variance of the spike count
+          r   = np.power(mu, 2) / (var - mu);                           # The parameters r and p of the negative binomial distribution
+          p   = r/(r + mu);
+	# no elif/else
 
-		# if error calculation
-        #curr_loss = loss(resps[sf], pred);
-        #loss_by_sf[sf] = np.sum(curr_loss);
+	if fit_type == 1 or fit_type == 2:
+		# error calculation
+          if fit_type == 1:
+            loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
+          if fit_type == 2:
+            loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
+
+          curr_loss = loss(resps[sf], pred);
+          loss_by_sf[sf] = np.sum(curr_loss);
+
+	else:
 		# if likelihood calculation
-        curr_loss = loss(resps[sf], r, p); # already log
-        #curr_loss = loss(resps[sf], pred); # already log
-        loss_by_sf[sf] = -np.sum(curr_loss); # negate if LLH
+          if fit_type == 3:
+            loss = lambda resp, pred: poisson.logpmf(resp, pred);
+            curr_loss = loss(resps[sf], pred); # already log
+          if fit_type == 4:
+            loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
+	    curr_loss = loss(resps[sf], r, p); # already log
+          loss_by_sf[sf] = -np.sum(curr_loss); # negate if LLH
 
     return np.sum(loss_by_sf);
 
