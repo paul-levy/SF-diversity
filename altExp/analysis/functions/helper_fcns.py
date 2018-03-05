@@ -99,10 +99,11 @@ def flexible_Gauss(params, stim_sf):
 
 def blankResp(cellStruct):
     tr = cellStruct['sfm']['exp']['trial'];
-    mu = numpy.mean(tr['spikeCount'][numpy.isnan(tr['con'][0])]);
-    sig = numpy.std(tr['spikeCount'][numpy.isnan(tr['con'][0])]);
+    blank_tr = tr['spikeCount'][numpy.isnan(tr['con'][0])];
+    mu = numpy.mean(blank_tr);
+    sig = numpy.std(blank_tr);
     
-    return mu, sig
+    return mu, sig, blank_tr;
     
 def tabulate_responses(cellStruct, modResp = []):
     np = numpy;
@@ -224,10 +225,10 @@ def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain, fit_type)
     # Evaluate the model
     loss_by_sf = np.zeros((n_sfs, 1));
     for sf in range(n_sfs):
-        if len(nr_c50) == 1: # only one pmf_means value
-          nr_args = [nr_base, nr_gain[sf], nr_expn, nr_c50[0]]; 
-        else: # it's an array - grab the right one
-          nr_args = [nr_base, nr_gain[sf], nr_expn, nr_c50[sf]]; 
+        all_params = (nr_c50, nr_expn, nr_gain, nr_base);
+        param_ind = [0 if len(i) == 1 else sf for i in all_params];
+
+        nr_args = [nr_base[param_ind[3]], nr_gain[param_ind[2]], nr_expn[param_ind[1]], nr_c50[param_ind[0]]]; 
 	# evaluate the model
         pred = naka_rushton(cons[sf], nr_args); # ensure we don't have pred (lambda) = 0 --> log will "blow up"
         

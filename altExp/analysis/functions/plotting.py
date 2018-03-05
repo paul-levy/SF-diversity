@@ -8,6 +8,8 @@ import matplotlib
 matplotlib.use('Agg') # to avoid GUI/cluster issues...
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
+import seaborn as sns
+sns.set(style='ticks')
 import helper_fcns
 from scipy.stats import poisson, nbinom
 from scipy.stats.mstats import gmean
@@ -76,7 +78,7 @@ data = cellStruct['sfm']['exp']['trial'];
 
 modRespAll = model_responses.SFMGiveBof(modParamsCurr, cellStruct)[1];
 resp, stimVals, val_con_by_disp, validByStimVal, modResp = helper_fcns.tabulate_responses(cellStruct, modRespAll);
-blankMean, _ = helper_fcns.blankResp(cellStruct); 
+blankMean, blankStd, _ = helper_fcns.blankResp(cellStruct); 
 # all responses on log ordinate (y axis) should be baseline subtracted
 
 all_disps = stimVals[0];
@@ -154,11 +156,8 @@ for d in range(nDisps):
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
           dispAx[d][c_plt_ind, i].tick_params(labelsize=15, width=1, length=8, direction='out');
-          dispAx[d][c_plt_ind, i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
-	  dispAx[d][c_plt_ind, i].spines['right'].set_visible(False);
-	  dispAx[d][c_plt_ind, i].spines['top'].set_visible(False);
-	  dispAx[d][c_plt_ind, i].xaxis.set_ticks_position('bottom');
-	  dispAx[d][c_plt_ind, i].yaxis.set_ticks_position('left');
+          dispAx[d][c_plt_ind, i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
+          sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
 
         dispAx[d][c_plt_ind, 0].set_ylim((0, 1.5*maxResp));
         dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
@@ -213,10 +212,7 @@ for d in range(nDisps):
     # Set ticks out, remove top/right axis, put ticks only on bottom/left
     dispAx[d].tick_params(labelsize=15, width=2, length=16, direction='out');
     dispAx[d].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
-    dispAx[d].spines['right'].set_visible(False);
-    dispAx[d].spines['top'].set_visible(False);
-    dispAx[d].xaxis.set_ticks_position('bottom');
-    dispAx[d].yaxis.set_ticks_position('left');
+    sns.despine(ax=dispAx[d], offset=10, trim=False); 
 
     dispAx[d].set_ylabel('resp above baseline (sps)');
     dispAx[d].set_title('D%d - sf tuning' % (d));
@@ -278,11 +274,8 @@ for d in range(nDisps):
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         sfMixAx[c_plt_ind, d].tick_params(labelsize=15, width=1, length=8, direction='out');
         sfMixAx[c_plt_ind, d].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
-	sfMixAx[c_plt_ind, d].spines['right'].set_visible(False);
-	sfMixAx[c_plt_ind, d].spines['top'].set_visible(False);
-	sfMixAx[c_plt_ind, d].xaxis.set_ticks_position('bottom');
-	sfMixAx[c_plt_ind, d].yaxis.set_ticks_position('left');
-        
+        sns.despine(ax=sfMixAx[c_plt_ind, d], offset=10, trim=False);
+	        
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc
 #########
@@ -347,10 +340,7 @@ all_plots[1,1].set_ylim([-1.5, 1]);
 all_plots[1, 1].set_xlabel('SF (cpd)', fontsize=20);
 all_plots[1, 1].set_ylabel('Normalized response (a.u.)', fontsize=20);
 # Remove top/right axis, put ticks only on bottom/left
-all_plots[1, 1].spines['right'].set_visible(False);
-all_plots[1, 1].spines['top'].set_visible(False);
-all_plots[1, 1].xaxis.set_ticks_position('bottom');
-all_plots[1, 1].yaxis.set_ticks_position('left');
+sns.despine(ax=all_plots[1, 1], offset=10, trim=False);
 
 for i in range(len(all_plots)):
     for j in range (len(all_plots[0])):
@@ -366,10 +356,7 @@ all_plots[1,2].set_xlim([-1, 1]);
 all_plots[1,2].set_ylim([-.1, 1]);
 all_plots[1,2].text(0.5, 1.1, 'respExp: {:.2f}'.format(modParamsCurr[3]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 # Remove top/right axis, put ticks only on bottom/left
-all_plots[1, 2].spines['right'].set_visible(False);
-all_plots[1, 2].spines['top'].set_visible(False);
-all_plots[1, 2].xaxis.set_ticks_position('bottom');
-all_plots[1, 2].yaxis.set_ticks_position('left');
+sns.despine(ax=all_plots[1, 2], offset=10, trim=False);
     
 # print, in text, model parameters:
 all_plots[0, 4].text(0.5, 0.5, 'prefSf: {:.3f}'.format(modParamsCurr[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
@@ -388,7 +375,7 @@ for fig in range(len(allFigs)):
     plt.close(allFigs[fig])
 pdfSv.close()
 
-# #### Plot contrast response functions
+# #### Plot contrast response functions with Naka-Rushton fits
 
 crfAx = []; fCRF = [];
 fSum, crfSum = plt.subplots(nDisps, 2, figsize=(40, 40), sharex=False, sharey=False);
@@ -420,38 +407,40 @@ for d in range(nDisps):
 
         v_cons = ~np.isnan(respMean[d, sf_ind, :]);
         n_cons = sum(v_cons);
-	plot_cons = np.linspace(np.min(all_cons[v_cons]), np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
+	plot_cons = np.linspace(0, np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
+	#plot_cons = np.linspace(np.min(all_cons[v_cons]), np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
 
 	# organize responses
-	resps_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
+        resps_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
+        resps_w_blank = np.hstack((blankMean, resps_curr));
 
 	# CRF fit
 	curr_fit_sep = crfFitsSepC50[d][sf_ind]['params'];
 	curr_fit_all = crfFitsOneC50[d][sf_ind]['params'];
 	# ignore varGain when reporting loss here...
-	sep_pred = helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_sep[0:4]);
-	all_pred = helper_fcns.naka_rushton(all_cons[v_cons], curr_fit_all[0:4]);
+	sep_pred = helper_fcns.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_sep[0:4]);
+	all_pred = helper_fcns.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_all[0:4]);
 
 	if fit_type == 4:
 	  r_sep, p_sep = helper_fcns.mod_poiss(sep_pred, curr_fit_sep[4]);
 	  r_all, p_all = helper_fcns.mod_poiss(all_pred, curr_fit_all[4]);
-	  sep_loss = -np.sum(loss(np.round(resps_curr), r_sep, p_sep));
-	  all_loss = -np.sum(loss(np.round(resps_curr), r_all, p_all));
+	  sep_loss = -np.sum(loss(np.round(resps_w_blank), r_sep, p_sep));
+	  all_loss = -np.sum(loss(np.round(resps_w_blank), r_all, p_all));
 	elif fit_type == 3:	
-	  sep_loss = -np.sum(loss(np.round(resps_curr), sep_pred));
-	  all_loss = -np.sum(loss(np.round(resps_curr), all_pred));
+	  sep_loss = -np.sum(loss(np.round(resps_w_blank), sep_pred));
+	  all_loss = -np.sum(loss(np.round(resps_w_blank), all_pred));
 	else: # i.e. fit_type == 1 || == 2
-	  sep_loss = np.sum(loss(np.round(resps_curr), sep_pred));
-	  all_loss = np.sum(loss(np.round(resps_curr), all_pred));
+	  sep_loss = np.sum(loss(np.round(resps_w_blank), sep_pred));
+	  all_loss = np.sum(loss(np.round(resps_w_blank), all_pred));
 	 
         c50_sep[sf] = curr_fit_sep[3];
         c50_all[sf] = curr_fit_all[3];
 
         # summary plots
-	crfAx[0][d, 0].plot(all_cons[v_cons], np.maximum(resps_curr, 0.1), '-', clip_on=False);
+	crfAx[0][d, 0].plot(all_cons[v_cons], resps_curr, '-', clip_on=False);
 
-        # 0.1 minimum to keep plot axis range OK...should find alternative
-        expPts = crfAx[d+1][row_ind, col_ind].errorbar(all_cons[v_cons], np.maximum(resps_curr, 0.1), np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, )), fmt='o', clip_on=False);
+        stdPts = np.hstack((0, np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, ))));
+        expPts = crfAx[d+1][row_ind, col_ind].errorbar(np.hstack((0, all_cons[v_cons])), resps_w_blank, stdPts, fmt='o', clip_on=False);
 
         sepPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
         allPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_all), linestyle='dashed');
@@ -466,31 +455,25 @@ for d in range(nDisps):
 
 	plt_x = d+1; plt_y = (row_ind, col_ind);
 
-	crfAx[plt_x][plt_y].set_xscale('log');
+	crfAx[plt_x][plt_y].set_xscale('symlog', linthreshx=0.01); # symlog will allow us to go down to 0 
         crfAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
         crfAx[plt_x][plt_y].set_ylabel('resp (sps)', fontsize='medium');
 	crfAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
+        sns.despine(ax = crfAx[plt_x][plt_y], offset = 10, trim=False);
         crfAx[plt_x][plt_y].tick_params(labelsize=25, width=2, length=16, direction='out');
         crfAx[plt_x][plt_y].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
-	crfAx[plt_x][plt_y].spines['right'].set_visible(False);
-	crfAx[plt_x][plt_y].spines['top'].set_visible(False);
-	crfAx[plt_x][plt_y].xaxis.set_ticks_position('bottom');
-	crfAx[plt_x][plt_y].yaxis.set_ticks_position('left');
 
     # make summary plots nice
     for i in range(2):
         crfAx[0][d, i].set_xscale('log');
+        sns.despine(ax = crfAx[0][d, i], offset=10, trim=False);
 
         # Set ticks out, remove top/right axis, put ticks only on bottom/left
         crfAx[0][d, i].tick_params(labelsize=25, width=2, length=16, direction='out');
         crfAx[0][d, i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
-        crfAx[0][d, i].spines['right'].set_visible(False);
-        crfAx[0][d, i].spines['top'].set_visible(False);
-        crfAx[0][d, i].xaxis.set_ticks_position('bottom');
-        crfAx[0][d, i].yaxis.set_ticks_position('left');
-    
+   
     # plot c50 as f/n of SF; plot sf tuning as reference...
     crfAx[0][d, 1].plot(all_sfs[v_sfs[0]], c50_sep);
     crfAx[0][d, 1].plot(all_sfs[v_sfs[0]], c50_all);
@@ -508,8 +491,6 @@ for d in range(nDisps):
     crfAx[0][d, 1].set_title('D%d - C50 (fixed vs free)' % (d), fontsize='large');
     crfAx[0][d, 1].set_xlabel('sf (cpd)', fontsize='large');
     crfAx[0][d, 1].set_ylabel('c50', fontsize='large');
-
-	
 
 saveName = "/cell_%d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
@@ -559,10 +540,7 @@ for d in range(nDisps):
     # Set ticks out, remove top/right axis, put ticks only on bottom/left
     crfAx[d].tick_params(labelsize=15, width=1, length=8, direction='out');
     crfAx[d].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
-    crfAx[d].spines['right'].set_visible(False);
-    crfAx[d].spines['top'].set_visible(False);
-    crfAx[d].xaxis.set_ticks_position('bottom');
-    crfAx[d].yaxis.set_ticks_position('left');
+    sns.despine(ax = crfAx[d], offset=10, trim=False);
 
     crfAx[d].set_ylabel('resp above baseline (sps)');
     crfAx[d].set_title('D%d: sf:all - log resp' % (d));
