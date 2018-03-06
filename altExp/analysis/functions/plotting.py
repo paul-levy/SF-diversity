@@ -280,13 +280,19 @@ for d in range(nDisps):
 # Plot secondary things - filter, normalization, nonlinearity, etc
 #########
 
-fDetails, all_plots = plt.subplots(3,5, figsize=(25,10))
+fDetails = plt.figure();
+fDetails.set_size_inches(w=25,h=10)
+#fDetails, all_plots = plt.subplots(3,5, figsize=(25,10))
 
+detailSize = (3, 5);
+
+'''
 all_plots[0,2].axis('off');
 all_plots[0,3].axis('off');
 #all_plots[0,4].axis('off');
 all_plots[1,3].axis('off');
 all_plots[1,4].axis('off');
+'''
 
 # plot model details - filter
 imSizeDeg = cellStruct['sfm']['exp']['size'];
@@ -297,9 +303,11 @@ prefOri = 0; # just fixed value since no model param for this
 aRatio = 1; # just fixed value since no model param for this
 filtTemp  = model_responses.oriFilt(imSizeDeg, pixSize, prefSf, prefOri, dOrder, aRatio);
 filt      = (filtTemp - filtTemp[0,0])/ np.amax(np.abs(filtTemp - filtTemp[0,0]));
-all_plots[1,0].imshow(filt, cmap='gray');
-all_plots[1,0].axis('off');
-all_plots[1,0].set_title('Filter in space', fontsize=20)
+
+plt.subplot2grid(detailSize, (2, 0)); # set the current subplot location/size[default is 1x1]
+plt.imshow(filt, cmap='gray');
+plt.axis('off');
+#plt.title('Filter in space', fontsize=20)
 
 # plot model details - exc/suppressive components
 omega = np.logspace(-2, 2, 1000);
@@ -325,47 +333,69 @@ sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
 sfNorm = sfNorm/np.amax(np.abs(sfNorm));
 
 # just setting up lines
-all_plots[1,1].semilogx([omega[0], omega[-1]], [0, 0], 'k--')
-all_plots[1,1].semilogx([.01, .01], [-1.5, 1], 'k--')
-all_plots[1,1].semilogx([.1, .1], [-1.5, 1], 'k--')
-all_plots[1,1].semilogx([1, 1], [-1.5, 1], 'k--')
-all_plots[1,1].semilogx([10, 10], [-1.5, 1], 'k--')
-all_plots[1,1].semilogx([100, 100], [-1.5, 1], 'k--')
+plt.subplot2grid(detailSize, (2, 1)); # set the current subplot location/size[default is 1x1]
+plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+plt.semilogx([.01, .01], [-1.5, 1], 'k--')
+plt.semilogx([.1, .1], [-1.5, 1], 'k--')
+plt.semilogx([1, 1], [-1.5, 1], 'k--')
+plt.semilogx([10, 10], [-1.5, 1], 'k--')
+plt.semilogx([100, 100], [-1.5, 1], 'k--')
 # now the real stuff
-all_plots[1,1].semilogx(omega, sfExc, 'k-')
-all_plots[1,1].semilogx(omega, sfInh, 'r--', linewidth=2);
-all_plots[1,1].semilogx(omega, sfNorm, 'r-', linewidth=1);
-all_plots[1,1].set_xlim([omega[0], omega[-1]]);
-all_plots[1,1].set_ylim([-1.5, 1]);
-all_plots[1, 1].set_xlabel('SF (cpd)', fontsize=20);
-all_plots[1, 1].set_ylabel('Normalized response (a.u.)', fontsize=20);
+plt.semilogx(omega, sfExc, 'k-')
+plt.semilogx(omega, sfInh, 'r--', linewidth=2);
+plt.semilogx(omega, sfNorm, 'r-', linewidth=1);
+plt.xlim([omega[0], omega[-1]]);
+plt.ylim([-1.5, 1]);
+plt.xlabel('SF (cpd)', fontsize=20);
+plt.ylabel('Normalized response (a.u.)', fontsize=20);
 # Remove top/right axis, put ticks only on bottom/left
-sns.despine(ax=all_plots[1, 1], offset=10, trim=False);
+sns.despine(ax=plt.subplot2grid(detailSize, (2, 1)), offset=10, trim=False);
 
+'''
 for i in range(len(all_plots)):
     for j in range (len(all_plots[0])):
         all_plots[i,j].tick_params(labelsize=15, width=1, length=8, direction='out');
         all_plots[i,j].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
+'''
 
 # last but not least...and not last... response nonlinearity
-all_plots[1,2].plot([-1, 1], [0, 0], 'k--')
-all_plots[1,2].plot([0, 0], [-.1, 1], 'k--')
-all_plots[1,2].plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modParamsCurr[3]), 'k-', linewidth=2)
-all_plots[1,2].plot(np.linspace(-1,1,100), np.maximum(0, np.linspace(-1,1,100)), 'k--', linewidth=1)
-all_plots[1,2].set_xlim([-1, 1]);
-all_plots[1,2].set_ylim([-.1, 1]);
-all_plots[1,2].text(0.5, 1.1, 'respExp: {:.2f}'.format(modParamsCurr[3]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+curr_ax = plt.subplot2grid(detailSize, (2, 2)); # set the current subplot location/size[default is 1x1]
+plt.plot([-1, 1], [0, 0], 'k--')
+plt.plot([0, 0], [-.1, 1], 'k--')
+plt.plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modParamsCurr[3]), 'k-', linewidth=2)
+plt.plot(np.linspace(-1,1,100), np.maximum(0, np.linspace(-1,1,100)), 'k--', linewidth=1)
+plt.xlim([-1, 1]);
+plt.ylim([-.1, 1]);
+plt.text(0.5, 1.1, 'respExp: {:.2f}'.format(modParamsCurr[3]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 # Remove top/right axis, put ticks only on bottom/left
-sns.despine(ax=all_plots[1, 2], offset=10, trim=False);
+sns.despine(ax=curr_ax, offset=5, trim=False);
     
 # print, in text, model parameters:
-all_plots[0, 4].text(0.5, 0.5, 'prefSf: {:.3f}'.format(modParamsCurr[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-all_plots[0, 4].text(0.5, 0.4, 'derivative order: {:.3f}'.format(modParamsCurr[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-all_plots[0, 4].text(0.5, 0.3, 'response scalar: {:.3f}'.format(modParamsCurr[4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-all_plots[0, 4].text(0.5, 0.2, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modParamsCurr[2]), modParamsCurr[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+plt.subplot2grid(detailSize, (0, 4)); # set the current subplot location/size[default is 1x1]
+plt.text(0.5, 0.5, 'prefSf: {:.3f}'.format(modParamsCurr[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+plt.text(0.5, 0.4, 'derivative order: {:.3f}'.format(modParamsCurr[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+plt.text(0.5, 0.3, 'response scalar: {:.3f}'.format(modParamsCurr[4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+plt.text(0.5, 0.2, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modParamsCurr[2]), modParamsCurr[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+
+# poisson test - mean/var for each condition (i.e. sfXdispXcon)
+curr_ax = plt.subplot2grid(detailSize, (0, 0), colspan=2, rowspan=2); # set the current subplot location/size[default is 1x1]
+val_conds = ~np.isnan(respMean);
+gt0 = np.logical_and(respMean[val_conds]>0, respStd[val_conds]>0);
+plt.loglog([0.01, 1000], [0.01, 1000], 'k--');
+plt.loglog(respMean[val_conds][gt0], np.square(respStd[val_conds][gt0]), 'o');
+''' # skeleton for plotting modulated poisson prediction
+if fit_type == 4: # i.e. modPoiss
+  mean_vals = np.logspace(-1, 2, 50);
+  plt.loglog(mean_vals, mean_vals + 
+'''
+plt.xlabel('Mean (sps)');
+plt.ylabel('Variance (sps^2)');
+plt.title('Super-poisson?');
+plt.axis('equal');
+sns.despine(ax=curr_ax, offset=5, trim=False);
 
 ### now save both figures (sfMix contrasts and details)
-
+#pdb.set_trace()
 allFigs = [f, fDetails];
 saveName = "/cell_%d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'sfMixOnly/'));
@@ -399,6 +429,8 @@ for d in range(nDisps):
     
     c50_sep = np.zeros((n_v_sfs, 1));
     c50_all = np.zeros((n_v_sfs, 1));
+
+    rvc_plots = [];
 
     for sf in range(n_v_sfs):
 	row_ind = sf/n_cols;
@@ -437,7 +469,8 @@ for d in range(nDisps):
         c50_all[sf] = curr_fit_all[3];
 
         # summary plots
-	crfAx[0][d, 0].plot(all_cons[v_cons], resps_curr, '-', clip_on=False);
+	curr_rvc = crfAx[0][d, 0].plot(all_cons[v_cons], resps_curr, '-', clip_on=False);
+        rvc_plots.append(curr_rvc[0]);
 
         stdPts = np.hstack((0, np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, ))));
         expPts = crfAx[d+1][row_ind, col_ind].errorbar(np.hstack((0, all_cons[v_cons])), resps_w_blank, stdPts, fmt='o', clip_on=False);
@@ -451,7 +484,7 @@ for d in range(nDisps):
 		horizontalalignment='left', verticalalignment='center', transform=crfAx[d+1][row_ind, col_ind].transAxes, fontsize=30);
 
 	# legend
-	crfAx[d+1][row_ind, col_ind].legend((expPts[0], sepPlt[0], allPlt[0]), ('data', 'free c50', 'fixed c50'), fontsize='medium', loc='center left')
+	crfAx[d+1][row_ind, col_ind].legend((expPts[0], sepPlt[0], allPlt[0]), ('data', 'free c50', 'fixed c50'), fontsize='large', loc='center left')
 
 	plt_x = d+1; plt_y = (row_ind, col_ind);
 
@@ -475,23 +508,25 @@ for d in range(nDisps):
         crfAx[0][d, i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
    
     # plot c50 as f/n of SF; plot sf tuning as reference...
-    crfAx[0][d, 1].plot(all_sfs[v_sfs[0]], c50_sep);
-    crfAx[0][d, 1].plot(all_sfs[v_sfs[0]], c50_all);
+    sepC50s = crfAx[0][d, 1].plot(all_sfs[v_sfs[0]], c50_sep);
+    allC50s = crfAx[0][d, 1].plot(all_sfs[v_sfs[0]], c50_all);
     maxC50 = np.maximum(np.max(c50_sep), np.max(c50_all));
     v_cons = np.array(val_con_by_disp[d]);
     sfRef = respMean[d, v_sfs[0], v_cons[-1]]; # plot highest contrast spatial frequency tuning curve
 	# we normalize the sf tuning, flip upside down so it matches the profile of c50, which is lowest near peak SF preference
-    crfAx[0][d, 1].plot(all_sfs[v_sfs[0]],  maxC50*(1-sfRef/np.max(sfRef)), linestyle='dashed');
+    invSF = crfAx[0][d, 1].plot(all_sfs[v_sfs[0]],  maxC50*(1-sfRef/np.max(sfRef)), linestyle='dashed');
     crfAx[0][d, 1].set_xlim([all_sfs[0], all_sfs[-1]]);
 
-    crfAx[0][d, 0].set_title('D%d - all CRF' % (d), fontsize='large');
+    crfAx[0][d, 0].set_title('D%d - all RVC' % (d), fontsize='large');
     crfAx[0][d, 0].set_xlabel('contrast', fontsize='large');
     crfAx[0][d, 0].set_ylabel('resp (sps)', fontsize='large');
+    crfAx[0][d, 0].legend(rvc_plots, [str(i) for i in np.round(all_sfs[v_sfs[0]], 2)], loc='upper left');
 
     crfAx[0][d, 1].set_title('D%d - C50 (fixed vs free)' % (d), fontsize='large');
     crfAx[0][d, 1].set_xlabel('sf (cpd)', fontsize='large');
     crfAx[0][d, 1].set_ylabel('c50', fontsize='large');
-
+    crfAx[0][d, 1].legend((sepC50s[0], allC50s[0], invSF[0]), ('c50 free', 'c50 fixed', 'rescaled SF tuning'), fontsize='large', loc='center left');
+    
 saveName = "/cell_%d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);

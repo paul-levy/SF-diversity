@@ -13,13 +13,14 @@
 
 module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
+module load seaborn/0.7.1
 
 # second param is fit_type:
 	# 1 - least squares
 	# 2 - square root
 	# 3 - poisson
 	# 4 - modulated poission
-python plotting.py $SLURM_ARRAY_TASK_ID 4
+python plotting.py $SLURM_ARRAY_TASK_ID 3
  
 # leave a blank line at the end
 

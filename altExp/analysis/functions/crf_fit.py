@@ -1,4 +1,4 @@
-from helper_fcns import naka_rushton, fit_CRF, random_in_range
+from helper_fcns import naka_rushton, fit_CRF, random_in_range, blankResp
 import os.path
 import sys
 import math, numpy
@@ -7,7 +7,7 @@ from scipy.stats.mstats import gmean as geomean
 import scipy.optimize as opt
 import pdb
 
-def fit_all_CRF(cell_num, data_loc, each_c50, fit_type, n_iter = 1):
+def fit_all_CRF(cell_num, data_loc, each_c50, fit_type, n_iter = 1, each_expn = 0, each_base = 0, each_gain = 1):
     print(str(n_iter) + ' fit attempts');
     np = numpy;
     conDig = 3; # round contrast to the thousandth
@@ -53,7 +53,11 @@ def fit_all_CRF(cell_num, data_loc, each_c50, fit_type, n_iter = 1):
 
     nk_ru = dict();
     all_data = dict();
-    
+
+    # for use in fitting SF functions...
+    _, _, blankResps = blankResp(cellStruct);    
+    blankCons = np.zeros_like(blankResps);
+
     for d in range(nDisps):
         valid_disp = data['num_comps'] == all_disps[d];
 	cons = [];
@@ -77,8 +81,8 @@ def fit_all_CRF(cell_num, data_loc, each_c50, fit_type, n_iter = 1):
            nk_ru[d][sf]['params'] = np.nan * np.zeros((n_params, 1));
            nk_ru[d][sf]['loss'] = np.nan;
 
-	   resps.append(data['spikeCount'][valid_tr]);
-           cons.append(data['total_con'][valid_tr]);
+	   resps.append(np.hstack((blankResps, data['spikeCount'][valid_tr])));
+           cons.append(np.hstack((blankCons, data['total_con'][valid_tr])));
 
         # save data for later use
         all_data[d]['resps'] = resps;
@@ -88,14 +92,18 @@ def fit_all_CRF(cell_num, data_loc, each_c50, fit_type, n_iter = 1):
         maxResp = np.max(np.max(resps));
 	n_v_sfs = len(v_sfs);
 
+        each_list = (each_base, each_gain, each_expn, each_c50);
+
+        n_per_param = [1 if i == 0 else n_v_sfs for i in each_list];
+        '''
     	if each_c50 == 1:
     	  n_c50s = n_v_sfs; # separate for each SF...
     	else:
 	  n_c50s = 1;	
-
-        init_base = 0;
-        bounds_base = (0, 0);
-        #bounds_base = (0.1, maxResp);
+        '''
+        init_base = 0.1;
+        #bounds_base = (0, 0);
+        bounds_base = (0.1, maxResp);
         init_gain = np.max(resps) - np.min(resps);
         bounds_gain = (0, 10*maxResp);
         init_expn = 2;
@@ -105,25 +113,30 @@ def fit_all_CRF(cell_num, data_loc, each_c50, fit_type, n_iter = 1):
         init_varGain = 1;
         bounds_varGain = (0.01, None);
 
- 	base_inits = np.repeat(init_base, 1); # only one baseline per SF
-	base_constr = [tuple(x) for x in np.broadcast_to(bounds_base, (1, 2))]
+ 	base_inits = np.repeat(init_base, n_per_param[0]); # default is only one baseline per SF
+	base_constr = [tuple(x) for x in np.broadcast_to(bounds_base, (n_per_param[0], 2))]
  	
-	gain_inits = np.repeat(init_gain, n_v_sfs); # ...and gain
-	gain_constr = [tuple(x) for x in np.broadcast_to(bounds_gain, (n_v_sfs, 2))]
- 		
-	c50_inits = np.repeat(init_c50, n_c50s); # repeat n_v_sfs times if c50 separate for each SF; otherwise, 1
-	c50_constr = [tuple(x) for x in np.broadcast_to(bounds_c50, (n_c50s, 2))]
+	gain_inits = np.repeat(init_gain, n_per_param[1]); # gain is always separate for each SF
+	gain_constr = [tuple(x) for x in np.broadcast_to(bounds_gain, (n_per_param[1], 2))]
 
-        init_params = np.hstack((c50_inits, init_expn, gain_inits, base_inits, init_varGain));
-    	boundsAll = np.vstack((c50_constr, bounds_expn, gain_constr,base_constr, bounds_varGain));
+	expn_inits = np.repeat(init_expn, n_per_param[2]); # exponent can be either, like baseline
+	expn_constr = [tuple(x) for x in np.broadcast_to(bounds_expn, (n_per_param[2], 2))]
+ 		
+	c50_inits = np.repeat(init_c50, n_per_param[3]); # repeat n_v_sfs times if c50 separate for each SF; otherwise, 1
+	c50_constr = [tuple(x) for x in np.broadcast_to(bounds_c50, (n_per_param[3], 2))]
+
+        init_params = np.hstack((c50_inits, expn_inits, gain_inits, base_inits, init_varGain));
+    	boundsAll = np.vstack((c50_constr, expn_constr, gain_constr, base_constr, bounds_varGain));
     	boundsAll = [tuple(x) for x in boundsAll]; # turn the (inner) arrays into tuples...
 
-	expn_ind = n_c50s;
-	gain_ind = n_c50s+1;
-	base_ind = gain_ind+n_v_sfs; # only one baseline per dispersion...
-        varGain_ind = base_ind+1;
+        c50_ind = 0;
+	expn_ind = n_per_param[3]; # the number of c50s...
+	gain_ind = expn_ind+n_per_param[2]; # the number of exponents
+	base_ind = gain_ind+n_per_param[1]; # always n_v_sfs gain parameters
+        varGain_ind = base_ind+n_per_param[0];
 
-	obj = lambda params: fit_CRF(cons, resps, params[0:n_c50s], params[expn_ind], params[gain_ind:gain_ind+n_v_sfs], params[base_ind], params[varGain_ind], fit_type);
+	obj = lambda params: fit_CRF(cons, resps, params[c50_ind:c50_ind+n_per_param[3]], params[expn_ind:expn_ind+n_per_param[2]], params[gain_ind:gain_ind+n_per_param[1]], \
+                                     params[base_ind:base_ind+n_per_param[0]], params[varGain_ind], fit_type);
 	opts = opt.minimize(obj, init_params, bounds=boundsAll);
 
 	curr_params = opts['x'];
@@ -147,15 +160,12 @@ def fit_all_CRF(cell_num, data_loc, each_c50, fit_type, n_iter = 1):
 
         # now unpack...
         for sf_in in range(n_v_sfs):
-          if n_c50s == 1:
-            c50_ind = 0;
-          else:
-            c50_ind = sf_in;
+          param_ind = [0 if i == 1 else sf_in for i in n_per_param];
 
-          nk_ru[d][v_sfs[sf_in]]['params'][0] = curr_params[base_ind];
-          nk_ru[d][v_sfs[sf_in]]['params'][1] = curr_params[gain_ind+sf_in];
-          nk_ru[d][v_sfs[sf_in]]['params'][2] = curr_params[expn_ind];
-          nk_ru[d][v_sfs[sf_in]]['params'][3] = curr_params[c50_ind];
+          nk_ru[d][v_sfs[sf_in]]['params'][0] = curr_params[base_ind + param_ind[0]];
+          nk_ru[d][v_sfs[sf_in]]['params'][1] = curr_params[gain_ind + param_ind[1]];
+          nk_ru[d][v_sfs[sf_in]]['params'][2] = curr_params[expn_ind + param_ind[2]];
+          nk_ru[d][v_sfs[sf_in]]['params'][3] = curr_params[c50_ind + param_ind[3]];
           # params (to match naka_rushton) are: baseline, gain, expon, c50
           nk_ru[d][v_sfs[sf_in]]['params'][4] = curr_params[varGain_ind];
           nk_ru[d][v_sfs[sf_in]]['loss'] = curr_loss
@@ -168,6 +178,7 @@ def fit_all_CRF(cell_num, data_loc, each_c50, fit_type, n_iter = 1):
       crfFits[cell_num-1] = dict();
     crfFits[cell_num-1][fit_key] = nk_ru;
     crfFits[cell_num-1]['data'] = all_data;
+    crfFits[cell_num-1]['blankResps'] = blankResps;
 
     np.save(data_loc + fits_name, crfFits);
     print('saving for cell ' + str(cell_num));
