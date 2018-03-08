@@ -386,9 +386,10 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
       fL_suffix = '_poiss.npy';
     elif fitType == 3:
       fL_suffix = '_modPoiss.npy';
+    fitName = str(fitListName + fL_suffix);
 
-    if os.path.isfile(loc_data + fitListName + fL_suffix):
-      fitList = numpy.load(str(loc_data + fitListName + fL_suffix)).item(); # no .item() needed...
+    if os.path.isfile(loc_data + fitName):
+      fitList = numpy.load(str(loc_data + fitName)).item(); # no .item() needed...
     else:
       fitList = dict();
     dataList = numpy.load(str(loc_data + 'dataList.npy')).item();
@@ -616,15 +617,15 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
             print('.NLL|fullData.'); print(NLL);
             currNLL = NLL;
             currParams = real_params;
-	    if os.path.isfile(loc_data + fitListName + fL_suffix):
+	    if os.path.isfile(loc_data + fitName):
               # reload fitlist in case changes have been made with the file elsewhere!
-              fitList = numpy.load(str(loc_data + fitListName + fL_suffix)).item();
+              fitList = numpy.load(str(loc_data + fitName)).item();
             if cellNum-1 not in fitList:
               fitList[cellNum-1] = dict();
  
             fitList[cellNum-1]['NLL'] = NLL;
             fitList[cellNum-1]['params'] = real_params;
-            numpy.save(loc_data + fitListName + fL_suffix, fitList);   
+            numpy.save(loc_data + fitName, fitList);   
 
         iter = iter+1;
 
@@ -645,15 +646,15 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
 
     # Put those into fitList and save...ONLY if better than before
     if NLL < currNLL:
-      if os.path.isfile(loc_data + fitListName + fL_suffix):
+      if os.path.isfile(loc_data + fitName):
         # reload (as above) to avoid overwriting changes made with the file elsewhere
-        fitList = numpy.load(str(loc_data + fitListName + fL_suffix)).item();
+        fitList = numpy.load(str(loc_data + fitName)).item();
       if cellNum-1 not in fitList:
         fitList[cellNum-1] = dict();
       fitList[cellNum-1]['NLL'] = NLL;
       fitList[cellNum-1]['params'] = x;
 
-      numpy.save(loc_data + fitListName + fL_suffix, fitList);
+      numpy.save(loc_data + fitName, fitList);
 
     print('Final parameters are ' + str(fitList[cellNum-1]['params']));
     

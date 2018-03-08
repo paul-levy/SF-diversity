@@ -37,14 +37,21 @@ plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/A
 import pdb
 
 cellNum = int(sys.argv[1]);
+fitType = int(sys.argv[2]);
 
 save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 #save_loc = '/ser/1.2/p2/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Figures/'# CNS
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitName = 'fitList_171214b.npy';
-#fitName = 'fitListCHM_asym.npy'
+fitBase = 'fitList_180307';
+if fitType == 1:
+  fitSuf = '_sqrt.npy';
+elif fitType == 2:
+  fitSuf = '_poiss.npy';
+elif fitType == 3:
+  fitSuf = '_modPoiss.npy';
+fitName = str(fitBase + fitSuf);
 descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
 
@@ -59,7 +66,7 @@ height = 1/2.; # measure BW at half-height
 sf_range = [0.01, 10]; # allowed values of 'mu' for fits - see descr_fit.py for details
 
 dL = np.load(data_loc + expName).item();
-fitList = np.load(data_loc + fitName, encoding='latin1'); # no '.item()' because this is array of dictionaries...
+fitList = np.load(data_loc + fitName, encoding='latin1').item();
 descrExpFits = np.load(data_loc + descrExpName, encoding='latin1').item();
 descrModFits = np.load(data_loc + descrModName, encoding='latin1').item();
 
@@ -178,7 +185,22 @@ all_plots[0, 1].spines['right'].set_visible(False);
 all_plots[0, 1].spines['top'].set_visible(False);
 all_plots[0, 1].xaxis.set_ticks_position('bottom');
 all_plots[0, 1].yaxis.set_ticks_position('left');
-
+ 
+#poisson test - mean/var for each condition (i.e. sfXdispXcon)
+'''
+gt0 = np.logical_and(respMean[val_conds]>0, respStd[val_conds]>0);
+plt.loglog([0.01, 1000], [0.01, 1000], 'k--');
+plt.loglog(respMean[val_conds][gt0], np.square(respStd[val_conds][gt0]), 'o');
+# skeleton for plotting modulated poisson prediction                                                                                                                                                    
+if fit_type == 3: # i.e. modPoiss                                                                                                                                                                          
+  mean_vals = np.logspace(-1, 2, 50);                                                                                                                                                                       
+  plt.loglog(mean_vals, mean_vals +                                                                                                                                                                        
+plt.xlabel('Mean (sps)');
+plt.ylabel('Variance (sps^2)');
+plt.title('Super-poisson?');
+plt.axis('equal');
+sns.despine(ax=curr_ax, offset=5, trim=False);
+'''
 
 all_plots[0,2].axis('off');
 all_plots[0,3].axis('off');
