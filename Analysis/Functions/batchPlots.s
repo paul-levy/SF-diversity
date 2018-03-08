@@ -13,13 +13,14 @@
 
 module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
+module load seaborn/0.7.1
 
 # cellNum fitType
 # fitType: i.e. which loss function
 #   1 - sqrt
 #   2 - poiss
 #   3 - modPoiss
-python plotting.py $SLURM_ARRAY_TASK_ID 1
+python plotting.py $SLURM_ARRAY_TASK_ID 3
  
 # leave a blank line at the end
 

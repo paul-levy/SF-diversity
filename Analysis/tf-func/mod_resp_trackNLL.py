@@ -309,8 +309,9 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
       lsq = tf.square(tf.add(tf.sqrt(respModel), -tf.sqrt(ph_spikeCount)));
       NLL = tf.reduce_mean(ph_objWeight*lsq); # was 1*lsq
     elif fitType == 2:
-      log_lh = tf.nn.log_poisson_loss(ph_spikeCount, respModel);
-      NLL = tf.reduce_mean(-1*log_lh);
+        # must be same type for using tf.nn.log_poisson_loss, so typecast
+      log_lh = tf.nn.log_poisson_loss(tf.cast(ph_spikeCount, dtype=tf.float32), tf.cast(tf.log(respModel), dtype=tf.float32));
+      NLL = tf.reduce_mean(1*log_lh); # nn.log_poisson_loss already negates!
     elif fitType == 3:
       # Get predicted spike count distributions
       mu  = tf.multiply(ph_stimDur, respModel); 
