@@ -376,6 +376,9 @@ plt.text(0.5, 0.5, 'prefSf: {:.3f}'.format(modParamsCurr[0]), fontsize=12, horiz
 plt.text(0.5, 0.4, 'derivative order: {:.3f}'.format(modParamsCurr[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.text(0.5, 0.3, 'response scalar: {:.3f}'.format(modParamsCurr[4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.text(0.5, 0.2, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modParamsCurr[2]), modParamsCurr[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+if fit_type == 4:
+  varGain = modParamsCurr[7];
+  plt.text(0.5, 0.1, 'varGain: {:.3f}'.format(varGain), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
 # poisson test - mean/var for each condition (i.e. sfXdispXcon)
 curr_ax = plt.subplot2grid(detailSize, (0, 0), colspan=2, rowspan=2); # set the current subplot location/size[default is 1x1]
@@ -383,11 +386,10 @@ val_conds = ~np.isnan(respMean);
 gt0 = np.logical_and(respMean[val_conds]>0, respStd[val_conds]>0);
 plt.loglog([0.01, 1000], [0.01, 1000], 'k--');
 plt.loglog(respMean[val_conds][gt0], np.square(respStd[val_conds][gt0]), 'o');
-''' # skeleton for plotting modulated poisson prediction
+# skeleton for plotting modulated poisson prediction
 if fit_type == 4: # i.e. modPoiss
   mean_vals = np.logspace(-1, 2, 50);
-  plt.loglog(mean_vals, mean_vals + 
-'''
+  plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals));
 plt.xlabel('Mean (sps)');
 plt.ylabel('Variance (sps^2)');
 plt.title('Super-poisson?');
