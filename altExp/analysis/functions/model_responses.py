@@ -115,7 +115,9 @@ def SFMSimpleResp(S, channel, stimParams = []):
 
             all_stim = makeStimulus(stimParams.get('stimFamily'), stimParams.get('conLevel'), \
                                                                     stimParams.get('sf_c'), stimParams.get('template'));
-            
+
+            #pdb.set_trace();
+
             stimOr = all_stim.get('Ori');
             stimTf = all_stim.get('Tf');
             stimCo = all_stim.get('Con');
@@ -137,8 +139,6 @@ def SFMSimpleResp(S, channel, stimParams = []):
                 
         if numpy.count_nonzero(numpy.isnan(stimOr)): # then this is a blank stimulus, no computation to be done
             continue;
-                
-        #pdb.set_trace();
                 
         # I. Orientation, spatial frequency and temporal frequency
         # Compute orientation tuning - removed 7/18/17
@@ -517,7 +517,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
         
     return M;
 
-def GetNormResp(iU, loadPath):
+def GetNormResp(iU, loadPath, stimParams = []):
    
     
     # GETNORMRESP    Runs the code that computes the response of the
@@ -541,15 +541,14 @@ def GetNormResp(iU, loadPath):
 
     normPool = {'n': n, 'nUnits': nUnits, 'gain': gain};
     
-    dataList = numpy.load(loadPath + 'dataList.npy');
-    dataList = dataList.item();
-
     if isinstance(iU, int):
+        dataList = numpy.load(loadPath + 'dataList.npy');
+        dataList = dataList.item();
         unitName = str(dataList['unitName'][iU]);
+        M = SFMNormResp(unitName, loadPath, normPool);
     else:
         unitName = iU;
-    
-    M = SFMNormResp(unitName, loadPath, normPool);
+        M = SFMNormResp(unitName, [], normPool, stimParams);
 
     return M;
 
@@ -712,6 +711,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     # Evaluate sfmix experiment
     T = structureSFM['sfm']; # [iR]
     
+    #pdb.set_trace();
     # Get simple cell response for excitatory channel
     E = SFMSimpleResp(structureSFM, excChannel, stimParams);  
 
@@ -719,7 +719,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     Lexc = E['simpleResp'];
 
     # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to bring everything in linear contrast scale again)
-    normResp = GetNormResp(structureSFM, stimParams);
+    normResp = GetNormResp(structureSFM, [], stimParams);
     Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)

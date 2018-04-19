@@ -331,8 +331,9 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
 # taken from the template, which will be actual stimuli from that cell
 
     # Fixed parameters
-    num_families = 5;
-    num_gratings = 9;
+    num_families = 4;
+    num_gratings = 7;
+    comps = [1, 3, 5, 7]; # number of components for each family
 
     spreadVec = numpy.logspace(math.log10(.125), math.log10(1.25), num_families);
     octSeries  = numpy.linspace(1.5, -1.5, num_gratings);
@@ -358,7 +359,7 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
     Sf = numpy.power(2, octSeries + numpy.log2(sf_c)); # final spatial frequency
     Co = numpy.dot(profile, total_contrast); # final contrast
 
-    # The others
+    ## The others
     
     # get orientation - IN RADIANS
     trial = template.get('sfm').get('exp').get('trial');
@@ -368,11 +369,8 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
     if template.get('trial_used') is not None: #use specified trial
         trial_to_copy = template.get('trial_used');
     else: # get random trial for phase, TF
-        # we'll draw from a random trial with the same stimulus family/contrast
-        if conLevel!=1 or conLevel!=2: # basically, if we're doing a 'non-tradiational' contrast, then there isn't                  a corresponding blockID. So we'll just go with a high contrast blocKID; just used for Tf & Ph, anyway
-            conLevel = 2; # just set it to 1...
-        valid_blockIDs = numpy.arange((stimFamily-1)*(13*2)+1+(conLevel-1), ((stimFamily)*(13*2)-5)+(conLevel-1), 2)
-                        # above from Robbe's plotSfMix
+        # we'll draw from a random trial with the same stimulus family
+        valid_blockIDs = trial['blockID'][numpy.where(trial['num_comps'] == comps[stimFamily-1])];
         num_blockIDs = len(valid_blockIDs);
         # for phase and TF
         valid_trials = trial.get('blockID') == valid_blockIDs[random.randint(0, num_blockIDs-1)] # pick a random block ID
@@ -384,6 +382,9 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
     # grab Tf and Phase [IN RADIANS] from each grating for the given trial
     Tf = numpy.asarray([i[trial_to_copy] for i in trial.get('tf')]);
     Ph = numpy.asarray([i[trial_to_copy] * math.pi/180 for i in trial.get('ph')]);
+    
+    if numpy.any(numpy.isnan(Tf)):
+      pdb.set_trace();
 
     # now, sort by contrast (descending) with ties given to lower SF:
     inds_asc = numpy.argsort(Co); # this sorts ascending

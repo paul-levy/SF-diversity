@@ -325,7 +325,7 @@ inhAsym = 0;
 nInhChan = cellStruct['sfm']['mod']['normalization']['pref']['sf'];
 inhWeight = [];
 for iP in range(len(nInhChan)):
-    # '0' because no asymmetry
+    # 0* if we ignore asymmetry; inhAsym* otherwise
     inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(cellStruct['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(cellStruct['sfm']['mod']['normalization']['pref']['sf'][iP]))));
            
 sfInh = 0 * np.ones(omega.shape) / np.amax(modHigh); # mult by 0 because we aren't including a subtractive inhibition in model for now 7/19/17
@@ -350,13 +350,6 @@ plt.xlabel('SF (cpd)', fontsize=20);
 plt.ylabel('Normalized response (a.u.)', fontsize=20);
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=plt.subplot2grid(detailSize, (2, 1)), offset=10, trim=False);
-
-'''
-for i in range(len(all_plots)):
-    for j in range (len(all_plots[0])):
-        all_plots[i,j].tick_params(labelsize=15, width=1, length=8, direction='out');
-        all_plots[i,j].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
-'''
 
 # last but not least...and not last... response nonlinearity
 curr_ax = plt.subplot2grid(detailSize, (2, 2)); # set the current subplot location/size[default is 1x1]
@@ -396,9 +389,45 @@ plt.title('Super-poisson?');
 plt.axis('equal');
 sns.despine(ax=curr_ax, offset=5, trim=False);
 
-### now save both figures (sfMix contrasts and details)
+#########
+# Normalization pool simulations
+#########
+conLevels = [1, 0.75, 0.5, 0.33, 0.1];
+nCons = len(conLevels);
+sfCenters = np.logspace(-1, 1, 11); # just for now...
+#sfCenters = allSfs;
+fNorm, conDisp_plots = plt.subplots(nCons, nDisps, sharey=True, figsize=(45,25))
+norm_sim = np.nan * np.empty((nDisps, nCons, len(sfCenters)));
+# simulations
+for disp in range(nDisps):
+    for conLvl in range(nCons):
+      print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
+      for sfCent in range(len(sfCenters)):
+          # if modParamsCurr doesn't have inhAsym parameter, add it!
+          if len(modParamsCurr) < 9:
+            modParamsCurr.append(helper_fcns.random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
+          ignore, normResp, ignore = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+          norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
+      
+      conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);
+      conDisp_plots[conLvl, disp].set_xlim([1e-1, 1e1]);
+      conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+      conDisp_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8, direction='out');
+      conDisp_plots[conLvl, disp].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
+      if conLvl == 0:
+          conDisp_plots[conLvl, disp].set_xlabel('sf center (cpd)', fontsize=20);
+      if disp == 0:
+          conDisp_plots[conLvl, disp].set_ylabel('Response (ips)', fontsize=20);
+      # remove axis from top and right, set ticks to be only bottom and left
+      conDisp_plots[conLvl, disp].spines['right'].set_visible(False);
+      conDisp_plots[conLvl, disp].spines['top'].set_visible(False);
+      conDisp_plots[conLvl, disp].xaxis.set_ticks_position('bottom');
+      conDisp_plots[conLvl, disp].yaxis.set_ticks_position('left');
+conDisp_plots[0, 2].text(0.5, 1.2, 'Normalization pool responses', fontsize=16, horizontalalignment='center', verticalalignment='center', transform=conDisp_plots[0, 2].transAxes);
+
+### now save all figures (sfMix contrasts, details, normalization stuff)
 #pdb.set_trace()
-allFigs = [f, fDetails];
+allFigs = [f, fDetails, fNorm];
 saveName = "/cell_%d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'sfMixOnly/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
