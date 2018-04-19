@@ -20,7 +20,7 @@ module load seaborn/0.7.1
 	# 2 - square root
 	# 3 - poisson
 	# 4 - modulated poission
-python plotting.py $SLURM_ARRAY_TASK_ID 3
+python plotting.py $SLURM_ARRAY_TASK_ID 4
  
 # leave a blank line at the end
 

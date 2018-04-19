@@ -14,7 +14,7 @@
 module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 
-python descr_fit.py $SLURM_ARRAY_TASK_ID 10
+python descr_fit.py $SLURM_ARRAY_TASK_ID 4
   
 # leave a blank line at the end
 
