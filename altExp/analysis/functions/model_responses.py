@@ -730,4 +730,4 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     meanRate      = ratio.mean(0);
     respModel     = noiseLate + scale*meanRate; # respModel[iR]
 
-    return respModel, Linh, Lexc;
+    return respModel, Linh, Lexc, normResp['normResp'];
