@@ -13,6 +13,7 @@ import seaborn as sns
 sns.set(style='ticks')
 import helper_fcns
 from scipy.stats import poisson, nbinom
+from scipy.stats import norm as normpdf
 from scipy.stats.mstats import gmean
 
 import pdb
@@ -25,6 +26,11 @@ plt.rc('legend',fontsize='medium') # using a named size
 
 which_cell = int(sys.argv[1]);
 fit_type = int(sys.argv[2]);
+norm_type = int(sys.argv[3]);
+
+if norm_type == 1: # i.e. gaussian, not "standard asymmetry"
+  gs_mean = float(sys.argv[4]);
+  gs_std = float(sys.argv[5]);
 
 # at CNS
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
@@ -114,7 +120,7 @@ modAvg = np.nanmean(modResp, axis=3);
 conLevels = [1, 0.75, 0.5, 0.33, 0.1]; # what contrasts to test?
 nCons = len(conLevels);
 nDisps = 4;
-sfCenters = np.logspace(-1, 1, 11); # just for now...
+sfCenters = np.logspace(-2, 2, 31); # just for now...
 
 fNorm, conDisp_plots = plt.subplots(nCons, nDisps, sharey=True, figsize=(45,25))
 
@@ -123,46 +129,56 @@ norm_sim = np.nan * np.empty((nDisps, nCons, len(sfCenters)));
 for disp in range(nDisps):
     for conLvl in range(nCons):
       print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
+
+      # if modParamsCurr doesn't have inhAsym parameter, add it!
+      if len(modParamsCurr) < 9: 
+        modParamsCurr.append(helper_fcns.random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
+
       for sfCent in range(len(sfCenters)):
 
-        # do the calculation here - more flexibility
-        inhWeight = [];
-        nFrames = 120;
-        T = cellStruct['sfm'];
-        #pdb.set_trace();
-        nInhChan = T['mod']['normalization']['pref']['sf'];
+        if norm_type == 1:
+          # A: do the calculation here - more flexibility
+          inhWeight = [];
+          nFrames = 120;
+          T = cellStruct['sfm'];
+          #pdb.set_trace();
+          nInhChan = T['mod']['normalization']['pref']['sf'];
         
-        # if modParamsCurr doesn't have inhAsym parameter, add it!
-        if len(modParamsCurr) < 9: 
-          modParamsCurr.append(helper_fcns.random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
+          for iP in range(len(nInhChan)): # two channels: narrow and broad
 
-        for iP in range(len(nInhChan)):
+            # if asym, put where '0' is
+            curr_chan = len(T['mod']['normalization']['pref']['sf'][iP]);
+            #gs_mean = -1; # in log coordinates
+            #gs_std = 1; # in log coordinates
+            log_sfs = np.log(T['mod']['normalization']['pref']['sf'][iP]);
+            new_weights = normpdf.pdf(log_sfs, gs_mean, gs_std);
+            inhWeight = np.append(inhWeight, new_weights);
+            print('Weights: ' + str(new_weights));
 
-          # if asym, put where '0' is
-          inhWeight = np.append(inhWeight, 1 + 0*(np.log(T['mod']['normalization']['pref']['sf'][iP]) \
-                                            - np.mean(np.log(T['mod']['normalization']['pref']['sf'][iP]))));
+          ignore, ignore, ignore, normRespSimple = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+          nTrials = normRespSimple.shape[0]
 
-        ignore, ignore, ignore, normRespSimple = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
-        nTrials = normRespSimple.shape[0]
+          #pdb.set_trace();
+          inhWeightT1 = np.reshape(inhWeight, (1, len(inhWeight)));
+          inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
+          inhWeightT3 = np.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
+          inhWeightMat  = np.tile(inhWeightT3, (1,1,nFrames));
 
-        #pdb.set_trace();
-        inhWeightT1 = np.reshape(inhWeight, (1, len(inhWeight)));
-        inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
-        inhWeightT3 = np.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
-        inhWeightMat  = np.tile(inhWeightT3, (1,1,nFrames));
+          normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
 
-        normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
-
-        norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-    
-        '''
-        # calculation if using normalization calculation in model_responses.SFMsimulate
-        ignore, normResp, ignore = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
-        '''
+          norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
+        
+        if norm_type == 0:
+          # B: OR, calculation if using normalization calculation in model_responses.SFMsimulate
+          ignore, normResp, ignore, ignore = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+          norm_sim[disp, conLvl, sfCent] = np.mean(normResp);
 
       conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);
-      conDisp_plots[conLvl, disp].set_xlim([1e-1, 1e1]);
-      conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+      conDisp_plots[conLvl, disp].set_xlim([np.min(sfCenters), np.max(sfCenters)]);
+      if norm_type == 1:
+        conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|sig: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, gs_mean, gs_std), fontsize=12, horizontalalignment='center', verticalalignment='center');
+      elif norm_type == 0:
+        conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8]), fontsize=12, horizontalalignment='center', verticalalignment='center');
       conDisp_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8, direction='out');
       conDisp_plots[conLvl, disp].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
       if conLvl == 0:
