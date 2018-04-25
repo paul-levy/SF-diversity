@@ -23,7 +23,8 @@ module load seaborn/0.7.1
 # third param is 1 (gaussian) or 0 (helper_functions asymmetry) calculation for normalization
 # if third param is 1:
 #   4/5 params are (in log coordinates) mean and std of gaussian
-python norm_sandbox.py $SLURM_ARRAY_TASK_ID 4 1 0 0.1
+python norm_sandbox.py $SLURM_ARRAY_TASK_ID 4 1
+#python norm_sandbox.py $SLURM_ARRAY_TASK_ID 4 1 0 0.1
  
 # leave a blank line at the end
 

@@ -29,8 +29,12 @@ fit_type = int(sys.argv[2]);
 norm_type = int(sys.argv[3]);
 
 if norm_type == 1: # i.e. gaussian, not "standard asymmetry"
-  gs_mean = float(sys.argv[4]);
-  gs_std = float(sys.argv[5]);
+  if len(sys.argv) > 4:
+    gs_mean = float(sys.argv[4]);
+    gs_std = float(sys.argv[5]);
+  else:
+    gs_mean = helper_fcns.random_in_range([-1, 1])[0]; 
+    gs_std = np.power(10, helper_fcns.random_in_range([-2, 2])[0]); # i.e. 1e-2, 1e2
 
 # at CNS
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
