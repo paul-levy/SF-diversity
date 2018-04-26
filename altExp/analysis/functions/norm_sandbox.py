@@ -141,35 +141,11 @@ for disp in range(nDisps):
       for sfCent in range(len(sfCenters)):
 
         if norm_type == 1:
-          # A: do the calculation here - more flexibility
-          inhWeight = [];
-          nFrames = 120;
-          T = cellStruct['sfm'];
-          #pdb.set_trace();
-          nInhChan = T['mod']['normalization']['pref']['sf'];
-        
-          for iP in range(len(nInhChan)): # two channels: narrow and broad
-
-            # if asym, put where '0' is
-            curr_chan = len(T['mod']['normalization']['pref']['sf'][iP]);
-            #gs_mean = -1; # in log coordinates
-            #gs_std = 1; # in log coordinates
-            log_sfs = np.log(T['mod']['normalization']['pref']['sf'][iP]);
-            new_weights = normpdf.pdf(log_sfs, gs_mean, gs_std);
-            inhWeight = np.append(inhWeight, new_weights);
-            print('Weights: ' + str(new_weights));
-
           ignore, ignore, ignore, normRespSimple = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
-          nTrials = normRespSimple.shape[0]
-
-          #pdb.set_trace();
-          inhWeightT1 = np.reshape(inhWeight, (1, len(inhWeight)));
-          inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
-          inhWeightT3 = np.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
-          inhWeightMat  = np.tile(inhWeightT3, (1,1,nFrames));
-
+          nTrials = normRespSimple.shape[0];
+          nInhChan = cellStruct['sfm']['mod']['normalization']['pref']['sf'];
+          inhWeightMat  = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
           normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
-
           norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
         
         if norm_type == 0:

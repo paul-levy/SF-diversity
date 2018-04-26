@@ -24,6 +24,13 @@ plt.rc('legend',fontsize='medium') # using a named size
 
 which_cell = int(sys.argv[1]);
 fit_type = int(sys.argv[2]);
+normTypeArr = [];
+nArgsIn = len(sys.argv) - 3; # we've already taken 3 arguments off (function all, which_cell, fit_type)
+argInd = 3;
+while nArgsIn > 0:
+  normTypeArr.append(float(sys.argv[argInd]));
+  nArgsIn = nArgsIn - 1;
+  argInd = argInd + 1;
 
 # at CNS
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
@@ -76,7 +83,11 @@ modParamsCurr = modParams[which_cell-1]['params'];
 
 data = cellStruct['sfm']['exp']['trial'];
 
-modRespAll = model_responses.SFMGiveBof(modParamsCurr, cellStruct)[1];
+ignore, modRespAll, normTypeArr = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr);
+norm_type = normTypeArr[0];
+gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof
+gs_std = normTypeArr[2]; # guaranteed to exist ...
+#modRespAll = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr)[1]; # NOTE: We're taking [1] (i.e. second) output of SFMGiveBof
 resp, stimVals, val_con_by_disp, validByStimVal, modResp = helper_fcns.tabulate_responses(cellStruct, modRespAll);
 blankMean, blankStd, _ = helper_fcns.blankResp(cellStruct); 
 # all responses on log ordinate (y axis) should be baseline subtracted
@@ -398,16 +409,25 @@ sfCenters = np.logspace(-1, 1, 11); # just for now...
 #sfCenters = allSfs;
 fNorm, conDisp_plots = plt.subplots(nCons, nDisps, sharey=True, figsize=(45,25))
 norm_sim = np.nan * np.empty((nDisps, nCons, len(sfCenters)));
+if len(modParamsCurr) < 9:
+    modParamsCurr.append(helper_fcns.random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
+
 # simulations
 for disp in range(nDisps):
     for conLvl in range(nCons):
       print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
       for sfCent in range(len(sfCenters)):
           # if modParamsCurr doesn't have inhAsym parameter, add it!
-          if len(modParamsCurr) < 9:
-            modParamsCurr.append(helper_fcns.random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
-          ignore, normResp, ignore = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
-          norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
+          if norm_type == 1:
+            ignore, ignore, ignore, normRespSimple = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+            nTrials = normRespSimple.shape[0];
+            nInhChan = cellStruct['sfm']['mod']['normalization']['pref']['sf'];
+            inhWeightMat  = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
+            normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
+            norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
+          elif norm_type == 0:
+            ignore, normResp, ignore, ignore = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+            norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
       
       conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);
       conDisp_plots[conLvl, disp].set_xlim([1e-1, 1e1]);

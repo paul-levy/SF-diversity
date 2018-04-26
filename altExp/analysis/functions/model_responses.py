@@ -1,5 +1,5 @@
 import math, cmath, numpy, os
-from helper_fcns import makeStimulus
+from helper_fcns import makeStimulus, random_in_range
 from scipy.stats import norm, mode, lognorm, nbinom
 from numpy.matlib import repmat
 import time
@@ -115,8 +115,6 @@ def SFMSimpleResp(S, channel, stimParams = []):
 
             all_stim = makeStimulus(stimParams.get('stimFamily'), stimParams.get('conLevel'), \
                                                                     stimParams.get('sf_c'), stimParams.get('template'));
-
-            #pdb.set_trace();
 
             stimOr = all_stim.get('Ori');
             stimTf = all_stim.get('Tf');
@@ -552,7 +550,7 @@ def GetNormResp(iU, loadPath, stimParams = []):
 
     return M;
 
-def SFMGiveBof(params, structureSFM):
+def SFMGiveBof(params, structureSFM, normTypeArr = []):
     # Computes the negative log likelihood for the LN-LN model
     # Returns NLL ###, respModel, E
 
@@ -564,6 +562,8 @@ def SFMGiveBof(params, structureSFM):
     # 05 = early additive noise
     # 06 = late additive noise
     # 07 = variance of response gain    
+
+    # normTypeArr should be [0 or 1, [mean], [std]]
 
     print('ha!');
     
@@ -598,7 +598,29 @@ def SFMGiveBof(params, structureSFM):
     nTrials = len(T['exp']['trial']['num']);
     inhWeight = [];
     nFrames = 120; # always
-    for iP in range(len(nInhChan)):
+
+    if normTypeArr:
+      norm_type = int(normTypeArr[0]); # typecast to int
+      if len(normTypeArr) > 1:
+        gs_mean = normTypeArr[1];
+      else:
+        gs_mean = random_in_range([-1, 1])[0];
+      if len(normTypeArr) > 2:
+        gs_std = normTypeArr[2];
+      else:
+        gs_std = numpy.power(10, random_in_range([-2, 2])[0]); # i.e. 1e-2, 1e2
+      normTypeArr = [norm_type, gs_mean, gs_std]; # save in case we drew mean/std randomly
+    else:
+      norm_type = 0; # i.e. just run old asymmetry computation
+
+    for iP in range(len(nInhChan)): # two channels: narrow and broad
+      if norm_type == 1:
+        # if asym, put where '0' is
+        curr_chan = len(T['mod']['normalization']['pref']['sf'][iP]);
+        log_sfs = numpy.log(T['mod']['normalization']['pref']['sf'][iP]);
+        new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
+        inhWeight = numpy.append(inhWeight, new_weights);
+      if norm_type == 0:
         # if you reintroduce asymmetry, put that asymmetry parameter where the '0' is now!
         inhWeight = numpy.append(inhWeight, 1 + 0*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                             - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
@@ -644,7 +666,7 @@ def SFMGiveBof(params, structureSFM):
     # Combine data and prior
     #NLL = NLLtempSFM + NLLExp; # sum over NLLtempSFM if you allow it to be d>1
 
-    return NLL, respModel;
+    return NLL, respModel, normTypeArr;
     #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};
 
 def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):

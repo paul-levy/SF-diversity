@@ -1,6 +1,7 @@
 import math, numpy, random
 from scipy.stats import norm, mode, poisson, nbinom
 from scipy.stats.mstats import gmean as geomean
+from numpy.matlib import repmat
 import scipy.optimize as opt
 sqrt = math.sqrt
 log = math.log
@@ -19,6 +20,7 @@ import pdb
 # nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
 # getSuppressiveSFtuning - returns the normalization pool response
 # makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
+# genNormWeights - used to generate the weighting matrix for weighting normalization pool responses
 
 def bw_lin_to_log( lin_low, lin_high ):
     # Given the low/high sf in cpd, returns number of octaves separating the
@@ -396,3 +398,27 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
     Sf = Sf[inds_des];
     
     return {'Ori': Or, 'Tf' : Tf, 'Con': Co, 'Ph': Ph, 'Sf': Sf, 'trial_used': trial_used}
+
+def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials):
+  np = numpy;
+  # A: do the calculation here - more flexibility
+  inhWeight = [];
+  nFrames = 120;
+  T = cellStruct['sfm'];
+  nInhChan = T['mod']['normalization']['pref']['sf'];
+        
+  for iP in range(len(nInhChan)): # two channels: narrow and broad
+
+    # if asym, put where '0' is
+    curr_chan = len(T['mod']['normalization']['pref']['sf'][iP]);
+    log_sfs = np.log(T['mod']['normalization']['pref']['sf'][iP]);
+    new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
+    inhWeight = np.append(inhWeight, new_weights);
+    print('Weights: ' + str(new_weights));
+
+  inhWeightT1 = np.reshape(inhWeight, (1, len(inhWeight)));
+  inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
+  inhWeightT3 = np.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
+  inhWeightMat  = np.tile(inhWeightT3, (1,1,nFrames));
+
+  return inhWeightMat;
