@@ -22,8 +22,8 @@ source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 		# 3 - poisson
 		# 4 - modulated poisson (Goris)
 
-python crf_fit.py $SLURM_ARRAY_TASK_ID 0 3
-python crf_fit.py $SLURM_ARRAY_TASK_ID 1 3
+python crf_fit.py $SLURM_ARRAY_TASK_ID 0 2
+python crf_fit.py $SLURM_ARRAY_TASK_ID 1 2
   
 # leave a blank line at the end
 

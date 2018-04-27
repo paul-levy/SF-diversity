@@ -55,7 +55,7 @@ if fit_type == 4:
   loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
   type_str = '-poissMod';
 
-fitListName = 'fitList_180105.npy';
+fitListName = 'fitList_180426.npy';
 crfFitName = str('crfFits' + type_str + '.npy');
 
 rpt_fit = 1; # i.e. take the multi-start result

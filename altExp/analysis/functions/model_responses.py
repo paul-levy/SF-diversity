@@ -564,6 +564,11 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     # 07 = variance of response gain    
 
     # normTypeArr should be [0 or 1, [mean], [std]]
+    # if normTypeArr[0] = 0
+    #   08 = asymmetry of normalization (optional parameter)
+    # if normTypeArr[0] = 1 (Gaussian weights)
+    #   08 = mean of Gaussian
+    #   09 = std of Gaussian
 
     print('ha!');
     
@@ -601,14 +606,18 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
 
     if normTypeArr:
       norm_type = int(normTypeArr[0]); # typecast to int
-      if len(normTypeArr) > 1:
-        gs_mean = normTypeArr[1];
+      if len(params) > 9: # we've optimized for these parameters
+        gs_mean = params[8];
+        gs_std = params[9];
       else:
-        gs_mean = random_in_range([-1, 1])[0];
-      if len(normTypeArr) > 2:
-        gs_std = normTypeArr[2];
-      else:
-        gs_std = numpy.power(10, random_in_range([-2, 2])[0]); # i.e. 1e-2, 1e2
+        if len(normTypeArr) > 1:
+          gs_mean = normTypeArr[1];
+        else:
+          gs_mean = random_in_range([-1, 1])[0];
+        if len(normTypeArr) > 2:
+          gs_std = normTypeArr[2];
+        else:
+          gs_std = numpy.power(10, random_in_range([-2, 2])[0]); # i.e. 1e-2, 1e2
       normTypeArr = [norm_type, gs_mean, gs_std]; # save in case we drew mean/std randomly
     else:
       norm_type = 0; # i.e. just run old asymmetry computation
