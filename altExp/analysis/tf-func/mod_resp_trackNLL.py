@@ -384,7 +384,7 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
     ########
     loc_data = '/home/pl1465/SF_diversity/altExp/analysis/structures/'; # Prince cluster 
 
-    fitListName = 'fitList_180426_slowLR.npy';
+    fitListName = 'fitList_180426.npy';
 
     if os.path.exists(loc_data + fitListName):
       fitList = numpy.load(loc_data + fitListName).item();

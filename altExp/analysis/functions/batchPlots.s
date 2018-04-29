@@ -8,8 +8,8 @@
 #SBATCH --mail-user=pl1465@nyu.edu
 #SBATCH --mail-type=ALL
 
-#SBATCH --output=pltLR_%A_%a.out
-#SBATCH --error=pltLR_%A_%a.err
+#SBATCH --output=plt_%A_%a.out
+#SBATCH --error=plt_%A_%a.err
 
 module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate

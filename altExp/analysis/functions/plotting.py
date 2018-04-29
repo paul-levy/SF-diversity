@@ -55,7 +55,7 @@ if fit_type == 4:
   loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
   type_str = '-poissMod';
 
-fitListName = 'fitList_180426.npy';
+fitListName = 'fitList_180426_slowLR.npy';
 crfFitName = str('crfFits' + type_str + '.npy');
 
 rpt_fit = 1; # i.e. take the multi-start result
@@ -405,7 +405,7 @@ sns.despine(ax=curr_ax, offset=5, trim=False);
 #########
 conLevels = [1, 0.75, 0.5, 0.33, 0.1];
 nCons = len(conLevels);
-sfCenters = np.logspace(-1, 1, 11); # just for now...
+sfCenters = np.logspace(-2, 2, 21); # just for now...
 #sfCenters = allSfs;
 fNorm, conDisp_plots = plt.subplots(nCons, nDisps, sharey=True, figsize=(45,25))
 norm_sim = np.nan * np.empty((nDisps, nCons, len(sfCenters)));
@@ -419,19 +419,22 @@ for disp in range(nDisps):
       for sfCent in range(len(sfCenters)):
           # if modParamsCurr doesn't have inhAsym parameter, add it!
           if norm_type == 1:
-            ignore, ignore, ignore, normRespSimple = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+            unweighted = 1;
+            ignore, ignore, ignore, normRespSimple = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted);
             nTrials = normRespSimple.shape[0];
             nInhChan = cellStruct['sfm']['mod']['normalization']['pref']['sf'];
             inhWeightMat  = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
             normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
+            conDisp_plots[conLvl, disp].text(0.5, 0.0, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8], modParamsCurr[9]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
           elif norm_type == 0:
             ignore, normResp, ignore, ignore = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-      
+            conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
+     
       conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);
-      conDisp_plots[conLvl, disp].set_xlim([1e-1, 1e1]);
-      conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+      conDisp_plots[conLvl, disp].set_xlim([1e-2, 1e2]);
+
       conDisp_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8, direction='out');
       conDisp_plots[conLvl, disp].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
       if conLvl == 0:
@@ -456,7 +459,9 @@ for fig in range(len(allFigs)):
     plt.close(allFigs[fig])
 pdfSv.close()
 
+#########
 # #### Plot contrast response functions with Naka-Rushton fits
+#########
 
 crfAx = []; fCRF = [];
 fSum, crfSum = plt.subplots(nDisps, 2, figsize=(40, 40), sharex=False, sharey=False);
@@ -578,10 +583,83 @@ for d in range(nDisps):
     crfAx[0][d, 1].set_ylabel('c50', fontsize='large');
     crfAx[0][d, 1].legend((sepC50s[0], allC50s[0], invSF[0]), ('c50 free', 'c50 fixed', 'rescaled SF tuning'), fontsize='large', loc='center left');
     
-saveName = "/cell_%d.pdf" % (which_cell)
+saveName = "/cell_NR_%d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
+    pdfSv.savefig(f)
+    plt.close(f)
+pdfSv.close()
+
+# #### Plot contrast response functions with (full) model predictions; i.e. not Naka-Rushton 
+
+rvcAx = []; fRVC = [];
+
+for d in range(nDisps):
+    
+    # which sfs have at least one contrast presentation?
+    v_sfs = np.where(np.sum(~np.isnan(respMean[d, :, :]), axis = 1) > 0);
+    n_v_sfs = len(v_sfs[0])
+    n_rows = 3; #int(np.floor(n_v_sfs/2));
+    n_cols = 4; #n_v_sfs - n_rows
+    fCurr, rvcCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*20, n_rows*20), sharex = True, sharey = True);
+    fRVC.append(fCurr)
+    rvcAx.append(rvcCurr);
+    
+    #rvc_plots = [];
+
+    for sf in range(n_v_sfs):
+	row_ind = sf/n_cols;
+	col_ind = np.mod(sf, n_cols);
+        sf_ind = v_sfs[0][sf];
+       	plt_x = d; plt_y = (row_ind, col_ind);
+
+        v_cons = ~np.isnan(respMean[d, sf_ind, :]);
+        n_cons = sum(v_cons);
+	plot_cons = np.linspace(0, np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
+	#plot_cons = np.linspace(np.min(all_cons[v_cons]), np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
+
+	# organize responses
+        resps_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
+        resps_w_blank = np.hstack((blankMean, resps_curr));
+
+        # plot data
+        dataPlt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, )), 0.1), '-', clip_on=False);
+	# RVC with full model fit
+        rvcAx[plt_x][plt_y].fill_between(all_cons[v_cons], modLow[d, sf_ind, v_cons], \
+                                      modHigh[d, sf_ind, v_cons], color='r', alpha=0.2);
+        #pdb.set_trace();
+        modPlt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(modAvg[d, sf_ind, v_cons], 0.1), 'r-', alpha=0.7, clip_on=False);
+
+        # summary plots
+        '''
+	curr_rvc = rvcAx[0][d, 0].plot(all_cons[v_cons], resps_curr, '-', clip_on=False);
+        rvc_plots.append(curr_rvc[0]);
+
+        stdPts = np.hstack((0, np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, ))));
+        expPts = rvcAx[d+1][row_ind, col_ind].errorbar(np.hstack((0, all_cons[v_cons])), resps_w_blank, stdPts, fmt='o', clip_on=False);
+
+        sepPlt = rvcAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
+        allPlt = rvcAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_all), linestyle='dashed');
+	# accompanying legend/comments
+	rvcAx[d+1][row_ind, col_ind].legend((expPts[0], sepPlt[0], allPlt[0]), ('data', 'model fits'), fontsize='large', loc='center left')
+        '''
+
+	rvcAx[plt_x][plt_y].set_xscale('symlog', linthreshx=0.01); # symlog will allow us to go down to 0 
+        rvcAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
+        rvcAx[plt_x][plt_y].set_ylabel('resp (sps)', fontsize='medium');
+	rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
+	rvcAx[plt_x][plt_y].legend((dataPlt[0], modPlt[0]), ('data', 'model avg'), fontsize='large', loc='center left');
+
+	# Set ticks out, remove top/right axis, put ticks only on bottom/left
+        sns.despine(ax = rvcAx[plt_x][plt_y], offset = 10, trim=False);
+        rvcAx[plt_x][plt_y].tick_params(labelsize=25, width=2, length=16, direction='out');
+        rvcAx[plt_x][plt_y].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+
+saveName = "/cell_%d.pdf" % (which_cell)
+full_save = os.path.dirname(str(save_loc + 'CRF/'));
+pdfSv = pltSave.PdfPages(full_save + saveName);
+for f in fRVC:
     pdfSv.savefig(f)
     plt.close(f)
 pdfSv.close()

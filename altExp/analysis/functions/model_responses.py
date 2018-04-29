@@ -678,9 +678,10 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     return NLL, respModel, normTypeArr;
     #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};
 
-def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
+def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     # Currently, will get slightly different stimuli for excitatory and inhibitory/normalization pools
     # But differences are just in phase/TF, but for TF, drawn from same distribution, anyway...
+    # 4/27/18: if unweighted = 1, then do the calculation/return normResp with weights applied; otherwise, just return the unweighted filter responses
 
     # 00 = preferred spatial frequency   (cycles per degree)
     # 01 = derivative order in space
@@ -751,6 +752,8 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
 
     # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to bring everything in linear contrast scale again)
     normResp = GetNormResp(structureSFM, [], stimParams);
+    if unweighted == 1:
+      return [], [], Lexc, normResp['normResp'];
     Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
