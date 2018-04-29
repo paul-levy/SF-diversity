@@ -85,8 +85,9 @@ data = cellStruct['sfm']['exp']['trial'];
 
 ignore, modRespAll, normTypeArr = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr);
 norm_type = normTypeArr[0];
-gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof
-gs_std = normTypeArr[2]; # guaranteed to exist ...
+if norm_type == 1:
+  gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 1
+  gs_std = normTypeArr[2]; # guaranteed to exist ...
 #modRespAll = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr)[1]; # NOTE: We're taking [1] (i.e. second) output of SFMGiveBof
 resp, stimVals, val_con_by_disp, validByStimVal, modResp = helper_fcns.tabulate_responses(cellStruct, modRespAll);
 blankMean, blankStd, _ = helper_fcns.blankResp(cellStruct); 
