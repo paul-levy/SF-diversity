@@ -621,6 +621,7 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
       normTypeArr = [norm_type, gs_mean, gs_std]; # save in case we drew mean/std randomly
     else:
       norm_type = 0; # i.e. just run old asymmetry computation
+      normTypeArr = [norm_type];
 
     for iP in range(len(nInhChan)): # two channels: narrow and broad
       if norm_type == 1:
