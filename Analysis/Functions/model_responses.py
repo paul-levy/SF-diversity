@@ -1,6 +1,5 @@
 import math, cmath, numpy, os
-from helper_fcns import makeStimulus
-#from makeStimulus import makeStimulus 
+from helper_fcns import makeStimulus, random_in_range
 from scipy.stats import norm, mode, lognorm, nbinom
 from numpy.matlib import repmat
 import time
@@ -116,7 +115,7 @@ def SFMSimpleResp(S, channel, stimParams = []):
 
             all_stim = makeStimulus(stimParams.get('stimFamily'), stimParams.get('conLevel'), \
                                                                     stimParams.get('sf_c'), stimParams.get('template'));
-            
+
             stimOr = all_stim.get('Ori');
             stimTf = all_stim.get('Tf');
             stimCo = all_stim.get('Con');
@@ -129,7 +128,7 @@ def SFMSimpleResp(S, channel, stimParams = []):
             stimPh = numpy.empty((nGratings,));
             stimSf = numpy.empty((nGratings,));
             
-            for iC in range(9):
+            for iC in range(nGratings):
                 stimOr[iC] = z.get('ori')[iC][p] * math.pi/180; # in radians
                 stimTf[iC] = z.get('tf')[iC][p];          # in cycles per second
                 stimCo[iC] = z.get('con')[iC][p];         # in Michelson contrast
@@ -138,8 +137,6 @@ def SFMSimpleResp(S, channel, stimParams = []):
                 
         if numpy.count_nonzero(numpy.isnan(stimOr)): # then this is a blank stimulus, no computation to be done
             continue;
-                
-        #pdb.set_trace();
                 
         # I. Orientation, spatial frequency and temporal frequency
         # Compute orientation tuning - removed 7/18/17
@@ -518,7 +515,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
         
     return M;
 
-def GetNormResp(iU, stimParams = []):
+def GetNormResp(iU, loadPath, stimParams = []):
    
     
     # GETNORMRESP    Runs the code that computes the response of the
@@ -528,19 +525,7 @@ def GetNormResp(iU, stimParams = []):
 
     # Robbe Goris, 10-30-2015
 
-    # Edit - Paul Levy, 1/23/17 to give option 2nd parameter for passing in own
-    # stimuli (see SFMNormResp for more details)
-    # 1/25/17 - Allowed 'S' to be passed in by checking if unitName is numeric
-    # or not (if isnumeric...)
-    
     M = dict();
-    
-    # Set paths
-    base = '/home/pl1465/SF_diversity/'; # prince 
-    #base = '/e/3.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
-    currentPath  = base + 'Analysis/Scripts/';
-    loadPath     = base + 'Analysis/Structures/';
-    functionPath = base + 'Analysis/Functions/';
     
     # Set characteristics normalization pool
     # The pool includes broad and narrow filters
@@ -554,19 +539,18 @@ def GetNormResp(iU, stimParams = []):
 
     normPool = {'n': n, 'nUnits': nUnits, 'gain': gain};
     
-    dataList = numpy.load(loadPath + 'dataList.npy');
-    dataList = dataList.item();
-
     if isinstance(iU, int):
+        dataList = numpy.load(loadPath + 'dataList.npy');
+        dataList = dataList.item();
         unitName = str(dataList['unitName'][iU]);
+        M = SFMNormResp(unitName, loadPath, normPool);
     else:
         unitName = iU;
-    
-    M = SFMNormResp(unitName, loadPath, normPool, stimParams);
+        M = SFMNormResp(unitName, [], normPool, stimParams);
 
     return M;
 
-def SFMGiveBof(params, structureSFM):
+def SFMGiveBof(params, structureSFM, normTypeArr = []):
     # Computes the negative log likelihood for the LN-LN model
     # Returns NLL ###, respModel, E
 
@@ -578,6 +562,13 @@ def SFMGiveBof(params, structureSFM):
     # 05 = early additive noise
     # 06 = late additive noise
     # 07 = variance of response gain    
+
+    # normTypeArr should be [0 or 1, [mean], [std]]
+    # if normTypeArr[0] = 0
+    #   08 = asymmetry of normalization (optional parameter)
+    # if normTypeArr[0] = 1 (Gaussian weights)
+    #   08 = mean of Gaussian
+    #   09 = std of Gaussian
 
     print('ha!');
     
@@ -605,14 +596,41 @@ def SFMGiveBof(params, structureSFM):
 
     # Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
     priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15)); # matlab: lognpdf(respExp, 1.15, 0.3);
-    NLLExp   = -numpy.log(priorExp);
+    NLLExp   = 0; #-numpy.log(priorExp);
 
     # Compute weights for suppressive signals
     nInhChan = T['mod']['normalization']['pref']['sf'];
     nTrials = len(T['exp']['trial']['num']);
     inhWeight = [];
     nFrames = 120; # always
-    for iP in range(len(nInhChan)):
+
+    if normTypeArr:
+      norm_type = int(normTypeArr[0]); # typecast to int
+      if len(params) > 9: # we've optimized for these parameters
+        gs_mean = params[8];
+        gs_std = params[9];
+      else:
+        if len(normTypeArr) > 1:
+          gs_mean = normTypeArr[1];
+        else:
+          gs_mean = random_in_range([-1, 1])[0];
+        if len(normTypeArr) > 2:
+          gs_std = normTypeArr[2];
+        else:
+          gs_std = numpy.power(10, random_in_range([-2, 2])[0]); # i.e. 1e-2, 1e2
+      normTypeArr = [norm_type, gs_mean, gs_std]; # save in case we drew mean/std randomly
+    else:
+      norm_type = 0; # i.e. just run old asymmetry computation
+      normTypeArr = [norm_type];
+
+    for iP in range(len(nInhChan)): # two channels: narrow and broad
+      if norm_type == 1:
+        # if asym, put where '0' is
+        curr_chan = len(T['mod']['normalization']['pref']['sf'][iP]);
+        log_sfs = numpy.log(T['mod']['normalization']['pref']['sf'][iP]);
+        new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
+        inhWeight = numpy.append(inhWeight, new_weights);
+      if norm_type == 0:
         # if you reintroduce asymmetry, put that asymmetry parameter where the '0' is now!
         inhWeight = numpy.append(inhWeight, 1 + 0*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                             - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
@@ -650,20 +668,21 @@ def SFMGiveBof(params, structureSFM):
         p   = r/(r + mu);
 
         # Evaluate the model
-        llh = nbinom.pmf(T['exp']['trial']['spikeCount'], r, p); # Likelihood for each pass under doubly stochastic model
-
-        NLLtempSFM = sum(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]      
-
+        lsq = numpy.square(numpy.sqrt(respModel) - numpy.sqrt(T['exp']['trial']['spikeCount']));
+        NLL = numpy.mean(lsq); # was 1*lsq
+        #llh = nbinom.pmf(T['exp']['trial']['spikeCount'], r, p); # Likelihood for each pass under doubly stochastic model
+        #NLLtempSFM = numpy.mean(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]
 
     # Combine data and prior
-    NLL = NLLtempSFM + NLLExp; # sum over NLLtempSFM if you allow it to be d>1
+    #NLL = NLLtempSFM + NLLExp; # sum over NLLtempSFM if you allow it to be d>1
 
-    return NLL, respModel;
+    return NLL, respModel, normTypeArr;
     #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};
 
-def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
+def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     # Currently, will get slightly different stimuli for excitatory and inhibitory/normalization pools
     # But differences are just in phase/TF, but for TF, drawn from same distribution, anyway...
+    # 4/27/18: if unweighted = 1, then do the calculation/return normResp with weights applied; otherwise, just return the unweighted filter responses
 
     # 00 = preferred spatial frequency   (cycles per degree)
     # 01 = derivative order in space
@@ -725,6 +744,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     # Evaluate sfmix experiment
     T = structureSFM['sfm']; # [iR]
     
+    #pdb.set_trace();
     # Get simple cell response for excitatory channel
     E = SFMSimpleResp(structureSFM, excChannel, stimParams);  
 
@@ -732,7 +752,9 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     Lexc = E['simpleResp'];
 
     # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to bring everything in linear contrast scale again)
-    normResp = GetNormResp(structureSFM, stimParams);
+    normResp = GetNormResp(structureSFM, [], stimParams);
+    if unweighted == 1:
+      return [], [], Lexc, normResp['normResp'];
     Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
@@ -743,4 +765,4 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c):
     meanRate      = ratio.mean(0);
     respModel     = noiseLate + scale*meanRate; # respModel[iR]
 
-    return respModel, Linh, Lexc;
+    return respModel, Linh, Lexc, normResp['normResp'];

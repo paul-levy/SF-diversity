@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=00:5:00
+#SBATCH --time=00:15:00
 #SBATCH --mem=1500M0B
 
 #SBATCH --job-name=sfPlots
@@ -15,12 +15,15 @@ module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 module load seaborn/0.7.1
 
-# cellNum fitType
-# fitType: i.e. which loss function
-#   1 - sqrt
-#   2 - poiss
-#   3 - modPoiss
-python plotting.py $SLURM_ARRAY_TASK_ID 3
+# second param is fit_type:
+	# 1 - least squares
+	# 2 - square root
+	# 3 - poisson
+	# 4 - modulated poission
+# third param is 1 (gaussian) or 0 (helper_functions asymmetry) calculation for normalization
+# if third param is 1:
+#   4/5 [optional] params are (in log coordinates) mean and std of gaussian
+python plotting.py $SLURM_ARRAY_TASK_ID 2 1 0 1
  
 # leave a blank line at the end
 

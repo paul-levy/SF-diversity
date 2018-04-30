@@ -12,20 +12,18 @@
     # 05 = early additive noise
     # 06 = late additive noise
     # 07 = variance of response gain
+    
+    # 08 = asymmetry of normalization (weights +/- linearly about SF mean)
+    # OR
+    # 08 = mean of gaussian which is used to apply weights to norm pool filters (as f'n of sf)
+    # 09 = std of ...
 
 # ### SF Diversity Project - plotting data, descriptive fits, and functional model fits
 
-# #### Pick your cell
-
-# In[ ]:
-
-# #### Set constants
-
-# In[441]:
-
+import os
 import sys
 import numpy as np
-from helper_fcns import organize_modResp, flexible_Gauss, getSuppressiveSFtuning, compute_SF_BW
+from helper_fcns import organize_modResp, flexible_Gauss, getSuppressiveSFtuning, compute_SF_BW, genNormWeights, random_in_range
 import model_responses as mod_resp
 from itertools import chain
 import matplotlib
@@ -41,6 +39,13 @@ import pdb
 
 cellNum = int(sys.argv[1]);
 fitType = int(sys.argv[2]);
+normTypeArr= [];
+nArgsIn = len(sys.argv) - 3; # we've already taken 3 arguments off (function all, which_cell, fit_type)
+argInd = 3;
+while nArgsIn > 0:
+  normTypeArr.append(float(sys.argv[argInd]));
+  nArgsIn = nArgsIn - 1;
+  argInd = argInd + 1;
 
 save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 #save_loc = '/ser/1.2/p2/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Figures/'# CNS
@@ -75,15 +80,18 @@ descrModFits = np.load(data_loc + descrModName, encoding='latin1').item();
 
 # #### Load data
 
-# In[258]:
-
 expData = np.load(str(data_loc + dL['unitName'][cellNum-1] + '_sfm.npy')).item();
+expResp = expData
 modFit = fitList[cellNum-1]['params']; # 
 descrExpFit = descrExpFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 descrModFit = descrModFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 
-a, modResp = mod_resp.SFMGiveBof(modFit, expData);
-expResp = expData
+ignore, modResp, normTypeArr = mod_resp.SFMGiveBof(modFit, expData, normTypeArr);
+norm_type = normTypeArr[0];
+if norm_type == 1:
+  gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 1
+  gs_std = normTypeArr[2]; # guaranteed to exist ...
+#modRespAll = mod_resp.SFMGiveBof(modParamsCurr, expData, normTypeArr)[1]; # NOTE: We're taking [1] (i.e. second) output of SFMGiveBof
 oriModResp, conModResp, sfmixModResp, allSfMix = organize_modResp(modResp, expData['sfm']['exp']['trial'])
 oriExpResp, conExpResp, sfmixExpResp, allSfMixExp = organize_modResp(expData['sfm']['exp']['trial']['spikeCount'], \
                                                                            expData['sfm']['exp']['trial'])
@@ -321,28 +329,41 @@ if fitType == 3:
   plt.text(0.5, 0.1, 'varGain: {:.3f}'.format(varGain), fontsize=12, horizontalalignment='center', verticalalignment='center');
 #plt.text(0.5, 0.1, 'inhibitory asymmetry: {:.3f}'.format(modFit[8]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
-'''
 #########
 # Normalization pool simulations
 #########
 
 conLevels = [1, 0.75, 0.5, 0.33, 0.1];
 nCons = len(conLevels);
-sfCenters = expSfCent;
+sfCenters = np.logspace(-2, 2, 21); # for now
 fNorm, conDisp_plots = plt.subplots(nFam, nCons, sharey=True, figsize=(45,25))
-norm_sim = np.nan * np.empty((nFam, nCons, len(expSfCent)));
+norm_sim = np.nan * np.empty((nFam, nCons, len(sfCenters)));
+if len(modFit) < 9: # if len >= 9, then either we have asymmetry parameter or we're doing gaussian (or other) normalization weighting
+    modFit.append(random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
 
 # simulations
 for disp in range(nFam):
     for conLvl in range(nCons):
       print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
       for sfCent in range(len(sfCenters)):
-          ignore, normResp, ignore = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
-          norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
+          # if modFit doesn't have inhAsym parameter, add it!
+          if norm_type == 1:
+            unweighted = 1;
+            ignore, ignore, ignore, normRespSimple = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted);
+            nTrials = normRespSimple.shape[0];
+            nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
+            inhWeightMat  = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
+            normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
+            norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
       
+            conDisp_plots[conLvl, disp].text(0.5, 0.0, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, gs_mean, gs_std), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
+          elif norm_type == 0:
+            ignore, normResp, ignore, ignore = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+            norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
+            conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modFit[8]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
+     
       conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);
-      conDisp_plots[conLvl, disp].set_xlim([1e-1, 1e1]);
-      conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}'.format(conLevels[conLvl], disp+1), fontsize=12, horizontalalignment='center', verticalalignment='center');
+      conDisp_plots[conLvl, disp].set_xlim([1e-2, 1e2]);
 
       conDisp_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8, direction='out');
       conDisp_plots[conLvl, disp].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
@@ -350,16 +371,12 @@ for disp in range(nFam):
           conDisp_plots[conLvl, disp].set_xlabel('sf center (cpd)', fontsize=20);
       if disp == 0:
           conDisp_plots[conLvl, disp].set_ylabel('Response (ips)', fontsize=20);
-
       # remove axis from top and right, set ticks to be only bottom and left
       conDisp_plots[conLvl, disp].spines['right'].set_visible(False);
       conDisp_plots[conLvl, disp].spines['top'].set_visible(False);
       conDisp_plots[conLvl, disp].xaxis.set_ticks_position('bottom');
       conDisp_plots[conLvl, disp].yaxis.set_ticks_position('left');
-
-
 conDisp_plots[0, 2].text(0.5, 1.2, 'Normalization pool responses', fontsize=16, horizontalalignment='center', verticalalignment='center', transform=conDisp_plots[0, 2].transAxes);
-'''
 
 '''
 #########
@@ -397,8 +414,8 @@ excFilt_plots[0, 2].text(0.5, 1.2, 'Excitatory filter responses', fontsize=16, h
 # fix subplots to not overlap
 fDetails.tight_layout();
 # and now save it
-allFigs = [f, fDetails];
-#allFigs = [f, fDetails, fNorm, fExc];
+#allFigs = [f, fDetails];
+allFigs = [f, fDetails, fNorm];
 saveName = "cell_%d.pdf" % cellNum
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(allFigs)): ## will open an empty extra figure :(

@@ -1,28 +1,44 @@
 import math, numpy, random
-from scipy.stats import norm, mode
+from scipy.stats import norm, mode, poisson, nbinom
+from scipy.stats.mstats import gmean as geomean
+from numpy.matlib import repmat
+import scipy.optimize as opt
 sqrt = math.sqrt
 log = math.log
 exp = math.exp
 import pdb
 
+# Functions:
+# bw_lin_to_log
+# bw_log_to_lin
+# compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
+# fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
+# flexible_Gauss - Descriptive function used to describe/fit SF tuning
+# blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
+# tabulateResponses - Organizes measured and model responses for sfMixAlt experiment
+# random_in_range - random real-valued number between A and B
+# nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
+# getSuppressiveSFtuning - returns the normalization pool response
+# makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
+# genNormWeights - used to generate the weighting matrix for weighting normalization pool responses
+
 def bw_lin_to_log( lin_low, lin_high ):
     # Given the low/high sf in cpd, returns number of octaves separating the
     # two values
 
-    return math.log(lin_high/lin_low, 2);
+    return numpy.log2(lin_high/lin_low);
 
 def bw_log_to_lin(log_bw, pref_sf):
     # given the preferred SF and octave bandwidth, returns the corresponding
     # (linear) bounds in cpd
 
-    less_half = math.pow(2, math.log(pref_sf, 2) - log_bw/2);
-    more_half = math.pow(2, log_bw/2 + math.log(pref_sf, 2));
+    less_half = numpy.power(2, numpy.log2(pref_sf) - log_bw/2);
+    more_half = numpy.power(2, log_bw/2 + numpy.log2(pref_sf));
 
     sf_range = [less_half, more_half];
     lin_bw = more_half - less_half;
     
     return lin_bw, sf_range
-
 
 def compute_SF_BW(fit, height, sf_range):
 
@@ -83,6 +99,14 @@ def flexible_Gauss(params, stim_sf):
                 
     return [max(0.1, respFloor + respRelFloor*x) for x in shape];
 
+def blankResp(cellStruct): # CHECK CHECK - is tr['con'][0] still the indicator of blank?
+    tr = cellStruct['sfm']['exp']['trial'];
+    blank_tr = tr['spikeCount'][numpy.isnan(tr['con'][0])];
+    mu = numpy.mean(blank_tr);
+    sig = numpy.std(blank_tr);
+    
+    return mu, sig, blank_tr;
+    
 def get_center_con(family, contrast):
 
     # hardcoded - based on sfMix as run in 2015/2016 (m657, m658, m660); given
@@ -120,23 +144,6 @@ def get_center_con(family, contrast):
             con = 0.0479;
 
     return con
-
-def random_in_range(lims, size = 1):
-
-    return [random.uniform(lims[0], lims[1]) for i in range(size)]
-
-def nbinpdf_log(x, r, p):
-    from scipy.special import loggamma as lgamma
-
-    # We assume that r & p are tf placeholders/variables; x is a constant
-    # Negative binomial is:
-        # gamma(x+r) * (1-p)^x * p^r / (gamma(x+1) * gamma(r))
-    
-    # Here we return the log negBinomial:
-    noGamma = x * numpy.log(1-p) + (r * numpy.log(p));
-    withGamma = lgamma(x + r) - lgamma(x + 1) - lgamma(r);
-    
-    return numpy.real(noGamma + withGamma);
 
 def organize_modResp(modResp, expStructure):
     # the blockIDs are fixed...
@@ -194,7 +201,92 @@ def organize_modResp(modResp, expStructure):
                  
     return rateOr, rateCo, rateSfMix, allSfMix;
 
+def mod_poiss(mu, varGain):
+    np = numpy;
+    var = mu + (varGain * np.power(mu, 2));                        # The corresponding variance of the spike count
+    r   = np.power(mu, 2) / (var - mu);                           # The parameters r and p of the negative binomial distribution
+    p   = r/(r + mu)
+
+    return r, p
+
+def naka_rushton(con, params):
+    np = numpy;
+    base = params[0];
+    gain = params[1];
+    expon = params[2];
+    c50 = params[3];
+
+    return base + gain*np.divide(np.power(con, expon), np.power(con, expon) + np.power(c50, expon));
+
+def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain, fit_type):
+	# fit_type (i.e. which loss function):
+		# 1 - least squares
+		# 2 - square root
+		# 3 - poisson
+		# 4 - modulated poisson
+    np = numpy;
+
+    n_sfs = len(resps);
+
+    # Evaluate the model
+    loss_by_sf = np.zeros((n_sfs, 1));
+    for sf in range(n_sfs):
+        all_params = (nr_c50, nr_expn, nr_gain, nr_base);
+        param_ind = [0 if len(i) == 1 else sf for i in all_params];
+
+        nr_args = [nr_base[param_ind[3]], nr_gain[param_ind[2]], nr_expn[param_ind[1]], nr_c50[param_ind[0]]]; 
+	# evaluate the model
+        pred = naka_rushton(cons[sf], nr_args); # ensure we don't have pred (lambda) = 0 --> log will "blow up"
+        
+	if fit_type == 4:
+	    # Get predicted spike count distributions
+	  mu  = pred; # The predicted mean spike count; respModel[iR]
+          var = mu + (v_varGain * np.power(mu, 2));                        # The corresponding variance of the spike count
+          r   = np.power(mu, 2) / (var - mu);                           # The parameters r and p of the negative binomial distribution
+          p   = r/(r + mu);
+	# no elif/else
+
+	if fit_type == 1 or fit_type == 2:
+		# error calculation
+          if fit_type == 1:
+            loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
+          if fit_type == 2:
+            loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
+
+          curr_loss = loss(resps[sf], pred);
+          loss_by_sf[sf] = np.sum(curr_loss);
+
+	else:
+		# if likelihood calculation
+          if fit_type == 3:
+            loss = lambda resp, pred: poisson.logpmf(resp, pred);
+            curr_loss = loss(resps[sf], pred); # already log
+          if fit_type == 4:
+            loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
+	    curr_loss = loss(resps[sf], r, p); # already log
+          loss_by_sf[sf] = -np.sum(curr_loss); # negate if LLH
+
+    return np.sum(loss_by_sf);
+
+def random_in_range(lims, size = 1):
+
+    return [random.uniform(lims[0], lims[1]) for i in range(size)]
+
+def nbinpdf_log(x, r, p):
+    from scipy.special import loggamma as lgamma
+
+    # We assume that r & p are tf placeholders/variables; x is a constant
+    # Negative binomial is:
+        # gamma(x+r) * (1-p)^x * p^r / (gamma(x+1) * gamma(r))
+    
+    # Here we return the log negBinomial:
+    noGamma = x * numpy.log(1-p) + (r * numpy.log(p));
+    withGamma = lgamma(x + r) - lgamma(x + 1) - lgamma(r);
+    
+    return numpy.real(noGamma + withGamma);
+
 def getSuppressiveSFtuning(): # written when still new to python. Probably to matlab-y...
+    # Not updated for sfMixAlt - 1/31/18
     # normPool details are fixed, ya?
     # plot model details - exc/suppressive components
     omega = numpy.logspace(-2, 2, 1000);
@@ -271,7 +363,7 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
     Sf = numpy.power(2, octSeries + numpy.log2(sf_c)); # final spatial frequency
     Co = numpy.dot(profile, total_contrast); # final contrast
 
-    # The others
+    ## The others
     
     # get orientation - IN RADIANS
     trial = template.get('sfm').get('exp').get('trial');
@@ -308,3 +400,27 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
     Sf = Sf[inds_des];
     
     return {'Ori': Or, 'Tf' : Tf, 'Con': Co, 'Ph': Ph, 'Sf': Sf, 'trial_used': trial_used}
+
+def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials):
+  np = numpy;
+  # A: do the calculation here - more flexibility
+  inhWeight = [];
+  nFrames = 120;
+  T = cellStruct['sfm'];
+  nInhChan = T['mod']['normalization']['pref']['sf'];
+        
+  for iP in range(len(nInhChan)): # two channels: narrow and broad
+
+    # if asym, put where '0' is
+    curr_chan = len(T['mod']['normalization']['pref']['sf'][iP]);
+    log_sfs = np.log(T['mod']['normalization']['pref']['sf'][iP]);
+    new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
+    inhWeight = np.append(inhWeight, new_weights);
+    print('Weights: ' + str(new_weights));
+
+  inhWeightT1 = np.reshape(inhWeight, (1, len(inhWeight)));
+  inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
+  inhWeightT3 = np.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
+  inhWeightMat  = np.tile(inhWeightT3, (1,1,nFrames));
+
+  return inhWeightMat;
