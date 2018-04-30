@@ -14,7 +14,6 @@ import pdb
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
-# blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
 # tabulateResponses - Organizes measured and model responses for sfMixAlt experiment
 # random_in_range - random real-valued number between A and B
 # nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
@@ -99,14 +98,6 @@ def flexible_Gauss(params, stim_sf):
                 
     return [max(0.1, respFloor + respRelFloor*x) for x in shape];
 
-def blankResp(cellStruct): # CHECK CHECK - is tr['con'][0] still the indicator of blank?
-    tr = cellStruct['sfm']['exp']['trial'];
-    blank_tr = tr['spikeCount'][numpy.isnan(tr['con'][0])];
-    mu = numpy.mean(blank_tr);
-    sig = numpy.std(blank_tr);
-    
-    return mu, sig, blank_tr;
-    
 def get_center_con(family, contrast):
 
     # hardcoded - based on sfMix as run in 2015/2016 (m657, m658, m660); given
