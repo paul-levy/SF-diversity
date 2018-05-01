@@ -52,7 +52,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_180307';
+fitBase = 'fitList_180430_LR';
 if fitType == 1:
   fitSuf = '_sqrt.npy';
 elif fitType == 2:
@@ -196,7 +196,7 @@ amp = np.amax(conModResp) - base;
 plt.semilogx(consUse, conModResp, 'ro', clip_on=False); # Model responses
 plt.semilogx(consUse, expData['sfm']['exp']['conRateMean'], 'o-', clip_on=False); # Measured responses
 crf = lambda con, base, amp, sig, rExp: base + amp*np.power((con / np.sqrt(np.power(sig, 2) + np.power(con, 2))), rExp);
-plt.semilogx(consUse, crf(consUse, base, amp, np.power(10, modFit[2]), modFit[3]), '--');
+#plt.semilogx(consUse, crf(consUse, base, amp, np.power(10, modFit[2]), modFit[3]), '--');
 plt.xlabel('Con (%)', fontsize=20);
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset = 5);
