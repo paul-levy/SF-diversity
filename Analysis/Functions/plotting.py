@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 
 # # Plotting
@@ -203,17 +202,19 @@ sns.despine(ax=curr_ax, offset = 5);
  
 #poisson test - mean/var for each condition (i.e. sfXdispXcon)
 curr_ax = plt.subplot2grid(detailSize, (0, 0));
-plt.loglog([0.01, 1000], [0.01, 1000], 'k--');
+lower_bound = 1e-2;
+plt.loglog([lower_bound, 1000], [lower_bound, 1000], 'k--');
 meanList = (expData['sfm']['exp']['conRateMean'], expData['sfm']['exp']['oriRateMean'], sfMeanFlat);
 varList = (expData['sfm']['exp']['conRateVar'], expData['sfm']['exp']['oriRateVar'], sfVarFlat);
 for i in range(len(meanList)):
-  gt0 = np.logical_and(meanList[i]>0, varList[i]>0);
-  plt.loglog(meanList[i][gt0], varList[i][gt0], 'o');
+  gtLB = np.logical_and(meanList[i]>lower_bound, varList[i]>lower_bound);
+  plt.loglog(meanList[i][gtLB], varList[i][gtLB], 'o');
 # skeleton for plotting modulated poisson prediction                                                                                                                                                    
 if fitType == 3: # i.e. modPoiss                                                                                                                                                                          
   varGain = modFit[7];
-  mean_vals = np.logspace(-1, 2, 50);                                                                                                                                                                       
+  mean_vals = np.logspace(-1, 2, 50);
   plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals));
+
 plt.xlabel('Mean (sps)');
 plt.ylabel('Variance (sps^2)');
 plt.title('Super-poisson?');
@@ -243,15 +244,20 @@ sfExc = s/sMax;
 inhSfTuning = getSuppressiveSFtuning();
 
 # Compute weights for suppressive signals
-inhAsym = 0;
-#inhAsym = modFit[8];
 nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
-inhWeight = [];
-for iP in range(len(nInhChan)):
-    # '0' because no asymmetry
-    inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
-           
-sfInh = 0 * np.ones(omega.shape) / np.amax(modHigh); # mult by 0 because we aren't including a subtractive inhibition in model for now 7/19/17
+if norm_type == 1:
+  nTrials =  len(expData['sfm']['exp']['trial']['num']);
+  inhWeight  = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
+else:
+  if modFit[8]: # i.e. if this parameter exists...
+    inhAsym = modFit[8];
+  else:
+    inhAsym = 0;
+
+  inhWeight = [];
+  for iP in range(len(nInhChan)):
+      inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
+
 sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
 sfNorm = sfNorm/np.amax(np.abs(sfNorm));
 
@@ -350,13 +356,13 @@ for disp in range(nFam):
           if norm_type == 1:
             unweighted = 1;
             ignore, ignore, ignore, normRespSimple = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted);
-            nTrials = normRespSimple.shape[0];
+            nTrials = len(expData['sfm']['exp']['trial']['num']);
             nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
             inhWeightMat  = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
             normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-      
-            conDisp_plots[conLvl, disp].text(0.5, 0.0, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, gs_mean, gs_std), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
+            maxResp = np.maximum(norm_sim[disp, conLvl, sfCent]);
+            conDisp_plots[conLvl, disp].text(0.5, 1.1*maxResp, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, gs_mean, gs_std), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
           elif norm_type == 0:
             ignore, normResp, ignore, ignore = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
@@ -411,11 +417,89 @@ for disp in range(nFam):
 excFilt_plots[0, 2].text(0.5, 1.2, 'Excitatory filter responses', fontsize=16, horizontalalignment='center', verticalalignment='center', transform=excFilt_plots[0, 2].transAxes);
 '''
 
+fSims = []; simsAx = [];
+
+for d in range(nDisps):
+    
+    v_cons = val_con_by_disp[d];
+    n_v_cons = len(v_cons);
+    
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(40, 40)); # left side for SF simulations, right side for RVC simulations
+    fSims.append(fCurr)
+    simsAx.append(dispCurr);
+
+    # SF tuning - NEED TO SIMULATE
+    lines = [];
+    for c in reversed(range(n_v_cons)):
+        v_sfs = ~np.isnan(curr_resps[d, :, v_cons[c]]);
+        for sf_i in v_sfs:
+          modResp, ignore, ignore, ignore = model_res
+
+        # plot data
+        col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
+        respAbBaseline = curr_resps[d, v_sfs, v_cons[c]] - curr_mean;
+        curr_line, = dispAx[d][0].plot(all_sfs[v_sfs][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
+        lines.append(curr_line);
+
+    dispAx[d][0].set_aspect('equal', 'box'); 
+    dispAx[d][0].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
+    dispAx[d][0].set_ylim((5e-2, 1.5*maxResp));
+    dispAx[d][0].set_xlabel('sf (c/deg)'); 
+
+    dispAx[d][0].set_ylabel('resp above baseline (sps)');
+    dispAx[d][0].set_title('D%d - sf tuning' % (d));
+    dispAx[d][0].legend(lines, [str(i) for i in reversed(all_cons[v_cons])], loc=0);
+
+    # RVCs - NEED TO SIMULATE
+    curr_resps = modAvg;
+    curr_base = modBlankMean;
+    title_str = 'model';
+    maxResp = np.max(np.max(np.max(curr_resps[~np.isnan(curr_resps)])));
+
+    # which sfs have at least one contrast presentation?
+    v_sfs = np.where(np.sum(~np.isnan(curr_resps[d, :, :]), axis = 1) > 0);
+    n_v_sfs = len(v_sfs[0])
+
+    lines = []; lines_log = [];
+    for sf in range(n_v_sfs):
+        sf_ind = v_sfs[0][sf];
+        v_cons = ~np.isnan(curr_resps[d, sf_ind, :]);
+        n_cons = sum(v_cons);
+
+        col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
+        plot_resps = np.reshape([curr_resps[d, sf_ind, v_cons]], (n_cons, ));
+        respAbBaseline = plot_resps-curr_base;
+        line_curr, = crfAx[d][i].plot(all_cons[v_cons][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
+        #line_curr, = crfAx[d][i].plot(all_cons[v_cons], np.maximum(1e-1, curr_resps-blankMean), '-o', color=col, clip_on=False);
+        lines_log.append(line_curr);
+
+    crfAx[d][i].set_xlim([1e-2, 1]);
+    crfAx[d][i].set_ylim([1e-2, 1.5*maxResp]);
+    crfAx[d][i].set_aspect('equal', 'box')
+    crfAx[d][i].set_xscale('log');
+    crfAx[d][i].set_yscale('log');
+    crfAx[d][i].set_xlabel('contrast');
+
+    crfAx[d][i].set_ylabel('resp above baseline (sps)');
+    crfAx[d][i].set_title('D%d: sf:all - log resp %s' % (d, title_str));
+    crfAx[d][i].legend(lines_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
+
+    for i in range(2):
+    
+      dispAx[d][i].set_xscale('log');
+      dispAx[d][i].set_yscale('log');
+
+      # Set ticks out, remove top/right axis, put ticks only on bottom/left
+      dispAx[d][i].tick_params(labelsize=15, width=2, length=16, direction='out');
+      dispAx[d][i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+      sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
+
+
 # fix subplots to not overlap
 fDetails.tight_layout();
 # and now save it
 #allFigs = [f, fDetails];
-allFigs = [f, fDetails, fNorm];
+allFigs = [f, fDetails, fNorm, fSimulations];
 saveName = "cell_%d.pdf" % cellNum
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(allFigs)): ## will open an empty extra figure :(
