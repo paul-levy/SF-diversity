@@ -705,7 +705,13 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     excChannel = {'pref': pref, 'dord': dord};
 
     # Inhibitory channel
-    inhAsym = params[8];
+    if len(params) > 9:
+      norm_type = 1;
+      gs_mean = params[8];
+      gs_std = params[9];
+    else:
+      norm_type = 0;
+      inhAsym = params[8];
 
      # Other (nonlinear) model components
     sigma    = pow(10, params[2]); # normalization constant
@@ -730,10 +736,14 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     nTrials = stimParams['repeats'];
     inhWeight = [];
     nFrames = 120; # always
-    for iP in range(len(nInhChan)):
-        # if asym, put where '0' is
-        inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
-                                            - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
+
+    if norm_type == 1:
+      inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
+    else:
+      for iP in range(len(nInhChan)):
+          # if asym, put where '0' is
+          inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
+                                              - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
 
     # assumption (made by Robbe) - only two normalization pools
     inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));

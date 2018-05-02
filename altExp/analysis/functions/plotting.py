@@ -91,6 +91,7 @@ if norm_type == 1:
 #modRespAll = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr)[1]; # NOTE: We're taking [1] (i.e. second) output of SFMGiveBof
 resp, stimVals, val_con_by_disp, validByStimVal, modResp = helper_fcns.tabulate_responses(cellStruct, modRespAll);
 blankMean, blankStd, _ = helper_fcns.blankResp(cellStruct); 
+modBlankMean = modParamsCurr[6]; # late additive noise is the baseline of the model
 # all responses on log ordinate (y axis) should be baseline subtracted
 
 all_disps = stimVals[0];
@@ -197,38 +198,46 @@ for d in range(nDisps):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(1, 1, figsize=(40, 20));
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(40, 40)); # left side for data, right side for model predictions
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
+
+    for i in range(2):
     
-    maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
-    
-    lines = [];
-    for c in reversed(range(n_v_cons)):
-        v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
+      if i == 0:
+        curr_resps = respMean;
+        curr_mean = blankMean;
+      else:
+        curr_resps = modAvg;
+        curr_mean = modBlankMean;
+      maxResp = np.max(np.max(curr_resps[d, ~np.isnan(curr_resps[d, :, :])]));
 
-        # plot data
-	col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
-	respAbBaseline = respMean[d, v_sfs, v_cons[c]] - blankMean;
-        curr_line, = dispAx[d].plot(all_sfs[v_sfs][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
-	lines.append(curr_line);
+      lines = [];
+      for c in reversed(range(n_v_cons)):
+          v_sfs = ~np.isnan(curr_resps[d, :, v_cons[c]]);        
 
-    dispAx[d].set_aspect('equal', 'box'); 
-    dispAx[d].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
-    dispAx[d].set_ylim((5e-2, 1.5*maxResp));
+          # plot data
+          col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
+          respAbBaseline = curr_resps[d, v_sfs, v_cons[c]] - curr_mean;
+          curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
+          lines.append(curr_line);
 
-    dispAx[d].set_xscale('log');
-    dispAx[d].set_yscale('log');
-    dispAx[d].set_xlabel('sf (c/deg)'); 
+      dispAx[d][i].set_aspect('equal', 'box'); 
+      dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
+      dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
 
-    # Set ticks out, remove top/right axis, put ticks only on bottom/left
-    dispAx[d].tick_params(labelsize=15, width=2, length=16, direction='out');
-    dispAx[d].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
-    sns.despine(ax=dispAx[d], offset=10, trim=False); 
+      dispAx[d][i].set_xscale('log');
+      dispAx[d][i].set_yscale('log');
+      dispAx[d][i].set_xlabel('sf (c/deg)'); 
 
-    dispAx[d].set_ylabel('resp above baseline (sps)');
-    dispAx[d].set_title('D%d - sf tuning' % (d));
-    dispAx[d].legend(lines, [str(i) for i in reversed(all_cons[v_cons])], loc=0);
+      # Set ticks out, remove top/right axis, put ticks only on bottom/left
+      dispAx[d][i].tick_params(labelsize=15, width=2, length=16, direction='out');
+      dispAx[d][i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+      sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
+
+      dispAx[d][i].set_ylabel('resp above baseline (sps)');
+      dispAx[d][i].set_title('D%d - sf tuning' % (d));
+      dispAx[d][i].legend(lines, [str(i) for i in reversed(all_cons[v_cons])], loc=0);
 
 saveName = "/allCons_cell_%d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
@@ -669,47 +678,56 @@ pdfSv.close()
 
 crfAx = []; fCRF = [];
 
-maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
-
 for d in range(nDisps):
     
-    # which sfs have at least one contrast presentation?
-    v_sfs = np.where(np.sum(~np.isnan(respMean[d, :, :]), axis = 1) > 0);
-    n_v_sfs = len(v_sfs[0])
-    fCurr, crfCurr = plt.subplots(1, 1, figsize=(15, 20), sharex = True, sharey = False);
+    fCurr, crfCurr = plt.subplots(1, 2, figsize=(15, 40), sharex = False, sharey = False); # left side for data, right side for model predictions
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
-    
-    lines = []; lines_log = [];
-    for sf in range(n_v_sfs):
-        sf_ind = v_sfs[0][sf];
-        v_cons = ~np.isnan(respMean[d, sf_ind, :]);
-        n_cons = sum(v_cons);
-	
-	col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
- 	curr_resps = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
-        #line_curr, = crfAx[d][0].plot(all_cons[v_cons], curr_resps, '-o', color=col, clip_on=False);
-	#lines.append(line_curr);
-	respAbBaseline = curr_resps-blankMean;
-        line_curr, = crfAx[d].plot(all_cons[v_cons][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
-        #line_curr, = crfAx[d].plot(all_cons[v_cons], np.maximum(1e-1, curr_resps-blankMean), '-o', color=col, clip_on=False);
-	lines_log.append(line_curr);
 
-    crfAx[d].set_xlim([1e-2, 1]);
-    crfAx[d].set_ylim([1e-2, 1.5*maxResp]);
-    crfAx[d].set_aspect('equal', 'box')
-    crfAx[d].set_xscale('log');
-    crfAx[d].set_yscale('log');
-    crfAx[d].set_xlabel('contrast');
+    for i in range(2):
+      
+      if i == 0:
+        curr_resps = respMean;
+        curr_base = blankMean;
+        title_str = 'data';
+      else:
+        curr_resps = modAvg;
+        curr_base = modBlankMean;
+        title_str = 'model';
+      maxResp = np.max(np.max(np.max(curr_resps[~np.isnan(curr_resps)])));
 
-    # Set ticks out, remove top/right axis, put ticks only on bottom/left
-    crfAx[d].tick_params(labelsize=15, width=1, length=8, direction='out');
-    crfAx[d].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
-    sns.despine(ax = crfAx[d], offset=10, trim=False);
+      # which sfs have at least one contrast presentation?
+      v_sfs = np.where(np.sum(~np.isnan(curr_resps[d, :, :]), axis = 1) > 0);
+      n_v_sfs = len(v_sfs[0])
 
-    crfAx[d].set_ylabel('resp above baseline (sps)');
-    crfAx[d].set_title('D%d: sf:all - log resp' % (d));
-    crfAx[d].legend(lines_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
+      lines = []; lines_log = [];
+      for sf in range(n_v_sfs):
+          sf_ind = v_sfs[0][sf];
+          v_cons = ~np.isnan(curr_resps[d, sf_ind, :]);
+          n_cons = sum(v_cons);
+
+          col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
+          plot_resps = np.reshape([curr_resps[d, sf_ind, v_cons]], (n_cons, ));
+          respAbBaseline = plot_resps-curr_base;
+          line_curr, = crfAx[d][i].plot(all_cons[v_cons][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
+          #line_curr, = crfAx[d][i].plot(all_cons[v_cons], np.maximum(1e-1, curr_resps-blankMean), '-o', color=col, clip_on=False);
+          lines_log.append(line_curr);
+
+      crfAx[d][i].set_xlim([1e-2, 1]);
+      crfAx[d][i].set_ylim([1e-2, 1.5*maxResp]);
+      crfAx[d][i].set_aspect('equal', 'box')
+      crfAx[d][i].set_xscale('log');
+      crfAx[d][i].set_yscale('log');
+      crfAx[d][i].set_xlabel('contrast');
+
+      # Set ticks out, remove top/right axis, put ticks only on bottom/left
+      crfAx[d][i].tick_params(labelsize=15, width=1, length=8, direction='out');
+      crfAx[d][i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
+      sns.despine(ax = crfAx[d][i], offset=10, trim=False);
+
+      crfAx[d][i].set_ylabel('resp above baseline (sps)');
+      crfAx[d][i].set_title('D%d: sf:all - log resp %s' % (d, title_str));
+      crfAx[d][i].legend(lines_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
 
 saveName = "/allSfs_log_cell_%d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
