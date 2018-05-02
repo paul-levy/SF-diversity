@@ -407,7 +407,7 @@ def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials):
     log_sfs = np.log(T['mod']['normalization']['pref']['sf'][iP]);
     new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
     inhWeight = np.append(inhWeight, new_weights);
-    print('Weights: ' + str(new_weights));
+    #print('Weights: ' + str(new_weights));
 
   inhWeightT1 = np.reshape(inhWeight, (1, len(inhWeight)));
   inhWeightT2 = repmat(inhWeightT1, nTrials, 1);

@@ -1,5 +1,5 @@
 import math, cmath, numpy, os
-from helper_fcns import makeStimulus, random_in_range
+from helper_fcns import makeStimulus, random_in_range, genNormWeights
 from scipy.stats import norm, mode, lognorm, nbinom
 from numpy.matlib import repmat
 import time
@@ -705,7 +705,13 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     excChannel = {'pref': pref, 'dord': dord};
 
     # Inhibitory channel
-    inhAsym = params[8];
+    if len(params) > 9:
+      norm_type = 1;
+      gs_mean = params[8];
+      gs_std = params[9];
+    else:
+      norm_type = 0;
+      inhAsym = params[8];
 
      # Other (nonlinear) model components
     sigma    = pow(10, params[2]); # normalization constant
@@ -730,21 +736,24 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     nTrials = stimParams['repeats'];
     inhWeight = [];
     nFrames = 120; # always
-    for iP in range(len(nInhChan)):
-        # if asym, put where '0' is
-        inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
-                                            - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
 
-    # assumption (made by Robbe) - only two normalization pools
-    inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
-    inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
-    inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
-    inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
+    if norm_type == 1:
+      inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
+    else:
+      for iP in range(len(nInhChan)):
+          # if asym, put where '0' is
+          inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
+                                              - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
+
+      # assumption (made by Robbe) - only two normalization pools
+      inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
+      inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
+      inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
+      inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
                               
     # Evaluate sfmix experiment
     T = structureSFM['sfm']; # [iR]
     
-    #pdb.set_trace();
     # Get simple cell response for excitatory channel
     E = SFMSimpleResp(structureSFM, excChannel, stimParams);  
 
