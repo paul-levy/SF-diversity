@@ -693,6 +693,8 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     # 06 = late additive noise
     # 07 = variance of response gain    
     # 08 = inhibitory asymmetry (i.e. tilt of gain over SF for weighting normalization pool responses)
+    # OR
+    # 08/09 = mean/std of gaussian used for weighting normalization filters
 
     print('simulate!');
     

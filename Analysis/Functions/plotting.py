@@ -100,6 +100,7 @@ oriExpResp, conExpResp, sfmixExpResp, allSfMixExp = organize_modResp(expData['sf
 modLow = np.nanmin(allSfMix, axis=3);
 modHigh = np.nanmax(allSfMix, axis=3);
 modAvg = np.nanmean(allSfMix, axis=3);
+modSponRate = modFit[6];
 
 findNan = np.isnan(allSfMixExp);
 nonNan = np.sum(findNan == False, axis=3); # how many valid trials are there for each fam x con x center combination?
@@ -149,7 +150,7 @@ for con in reversed(range(nCon)): # contrast
         modAvgPlt = all_plots[con, fam].plot(expSfCent, modAvg[fam, con,:], 'r-', alpha=0.7, clip_on=False);
         #modAvgPlt = all_plots[con, fam].plot(expSfCent, modAvg[fam, con,:], 'ro', alpha=0.2, clip_on=False);
         sponRate = all_plots[con, fam].axhline(expData['sfm']['exp']['sponRateMean'], color='b', linestyle='dashed');
-        sponRateMod = all_plots[con, fam].axhline(modFit[6], color='r', linestyle='dashed');
+        sponRateMod = all_plots[con, fam].axhline(modSponRate, color='r', linestyle='dashed');
         all_plots[con,fam].set_xscale('log');
         
         # pretty
@@ -246,8 +247,9 @@ inhSfTuning = getSuppressiveSFtuning();
 # Compute weights for suppressive signals
 nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
 if norm_type == 1:
-  nTrials =  len(expData['sfm']['exp']['trial']['num']);
-  inhWeight  = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
+  nTrials =  inhSfTuning.shape[0];
+  inhWeight = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
+  inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
 else:
   if modFit[8]: # i.e. if this parameter exists...
     inhAsym = modFit[8];
@@ -271,7 +273,7 @@ plt.semilogx([10, 10], [-1.5, 1], 'k--')
 plt.semilogx([100, 100], [-1.5, 1], 'k--')
 # now the real stuff
 plt.semilogx(omega, sfExc, 'k-')
-plt.semilogx(omega, sfInh, 'r--', linewidth=2);
+#plt.semilogx(omega, sfInh, 'r--', linewidth=2);
 plt.semilogx(omega, sfNorm, 'r-', linewidth=1);
 plt.xlim([omega[0], omega[-1]]);
 plt.ylim([-1.5, 1]);
@@ -356,17 +358,20 @@ for disp in range(nFam):
           if norm_type == 1:
             unweighted = 1;
             ignore, ignore, ignore, normRespSimple = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted);
-            nTrials = len(expData['sfm']['exp']['trial']['num']);
+            nTrials = normRespSimple.shape[0];
             nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
             inhWeightMat  = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
             normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-            maxResp = np.maximum(norm_sim[disp, conLvl, sfCent]);
-            conDisp_plots[conLvl, disp].text(0.5, 1.1*maxResp, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, gs_mean, gs_std), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
           elif norm_type == 0:
             ignore, normResp, ignore, ignore = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-            conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modFit[8]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
+
+      if norm_type == 1:
+        maxResp = np.max(norm_sim[disp, conLvl, :]);
+        conDisp_plots[conLvl, disp].text(0.5, 1.1*maxResp, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, gs_mean, gs_std), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
+      else:
+        conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modFit[8]), fontsize=12, horizontalalignment='center', verticalalignment='center');
      
       conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);
       conDisp_plots[conLvl, disp].set_xlim([1e-2, 1e2]);
@@ -417,9 +422,21 @@ for disp in range(nFam):
 excFilt_plots[0, 2].text(0.5, 1.2, 'Excitatory filter responses', fontsize=16, horizontalalignment='center', verticalalignment='center', transform=excFilt_plots[0, 2].transAxes);
 '''
 
+# construct by hand for now; 5 dispersions with the old stimulus set
+val_con_by_disp = [];
+val_con_by_disp.append(np.array([1, 0.688, 0.473, 0.325, 0.224, 0.154, 0.106, 0.073, 0.05, 0.01]));
+val_con_by_disp.append(np.array([1, 0.688, 0.473, 0.325]));
+val_con_by_disp.append(np.array([1, 0.688, 0.473, 0.325]));
+val_con_by_disp.append(np.array([1, 0.688, 0.473, 0.325]));
+val_con_by_disp.append(np.array([1, 0.688, 0.473, 0.325]));
+
+v_sfs = np.logspace(np.log10(0.3), np.log10(10), 11); # for now
+print('\nSimulating enhanced range of contrasts from model\n\n');
+print('\tTesting at range of spatial frequencies: ' + str(v_sfs));
+
 fSims = []; simsAx = [];
 
-for d in range(nDisps):
+for d in range(nFam):
     
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
@@ -431,75 +448,81 @@ for d in range(nDisps):
     # SF tuning - NEED TO SIMULATE
     lines = [];
     for c in reversed(range(n_v_cons)):
-        v_sfs = ~np.isnan(curr_resps[d, :, v_cons[c]]);
+        curr_resps = [];
         for sf_i in v_sfs:
-          modResp, ignore, ignore, ignore = model_res
+          print('Testing SF tuning: disp %d, con %.2f, sf %.2f' % (d+1, v_cons[c], sf_i));
+          sf_iResp, ignore, ignore, ignore = mod_resp.SFMsimulate(modFit, expData, d+1, v_cons[c], sf_i);
+          curr_resps.append(sf_iResp[0]); # SFMsimulate returns array - unpack it
 
         # plot data
         col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
-        respAbBaseline = curr_resps[d, v_sfs, v_cons[c]] - curr_mean;
-        curr_line, = dispAx[d][0].plot(all_sfs[v_sfs][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
+        respAbBaseline = curr_resps - modSponRate;
+        #print('Simulated at %d|%d sfs: %d above baseline' % (len(v_sfs), len(curr_resps), sum(respAbBaseline>1e-1)));
+        curr_line, = simsAx[d][0].plot(v_sfs[respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
         lines.append(curr_line);
 
-    dispAx[d][0].set_aspect('equal', 'box'); 
-    dispAx[d][0].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
-    dispAx[d][0].set_ylim((5e-2, 1.5*maxResp));
-    dispAx[d][0].set_xlabel('sf (c/deg)'); 
+    simsAx[d][0].set_aspect('equal', 'box'); 
+    simsAx[d][0].set_xlim((0.5*min(v_sfs), 1.2*max(v_sfs)));
+    #simsAx[d][0].set_ylim((5e-2, 1.5*maxResp));
+    simsAx[d][0].set_xlabel('sf (c/deg)'); 
 
-    dispAx[d][0].set_ylabel('resp above baseline (sps)');
-    dispAx[d][0].set_title('D%d - sf tuning' % (d));
-    dispAx[d][0].legend(lines, [str(i) for i in reversed(all_cons[v_cons])], loc=0);
+    simsAx[d][0].set_ylabel('resp above baseline (sps)');
+    simsAx[d][0].set_title('D%d - sf tuning' % (d));
+    simsAx[d][0].legend(lines, [str(i) for i in reversed(v_cons)], loc=0);
 
     # RVCs - NEED TO SIMULATE
-    curr_resps = modAvg;
-    curr_base = modBlankMean;
-    title_str = 'model';
-    maxResp = np.max(np.max(np.max(curr_resps[~np.isnan(curr_resps)])));
+    n_v_sfs = len(v_sfs)
 
-    # which sfs have at least one contrast presentation?
-    v_sfs = np.where(np.sum(~np.isnan(curr_resps[d, :, :]), axis = 1) > 0);
-    n_v_sfs = len(v_sfs[0])
+    lines_log = [];
+    for sf_i in range(n_v_sfs):
+        sf_curr = v_sfs[sf_i];
 
-    lines = []; lines_log = [];
-    for sf in range(n_v_sfs):
-        sf_ind = v_sfs[0][sf];
-        v_cons = ~np.isnan(curr_resps[d, sf_ind, :]);
-        n_cons = sum(v_cons);
+        curr_resps = [];
+        for con_i in v_cons:
+          print('Testing RVC: disp %d, con %.2f, sf %.2f' % (d+1, con_i, sf_curr));
+          con_iResp, ignore, ignore, ignore = mod_resp.SFMsimulate(modFit, expData, d+1, con_i, sf_curr);
+          curr_resps.append(con_iResp[0]); # unpack the array returned by SFMsimulate
 
-        col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
-        plot_resps = np.reshape([curr_resps[d, sf_ind, v_cons]], (n_cons, ));
-        respAbBaseline = plot_resps-curr_base;
-        line_curr, = crfAx[d][i].plot(all_cons[v_cons][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
-        #line_curr, = crfAx[d][i].plot(all_cons[v_cons], np.maximum(1e-1, curr_resps-blankMean), '-o', color=col, clip_on=False);
+        col = [sf_i/float(n_v_sfs), sf_i/float(n_v_sfs), sf_i/float(n_v_sfs)];
+        respAbBaseline = curr_resps - modSponRate;
+        print('rAB = %s ||| v_cons %s' % (respAbBaseline, v_cons));
+        line_curr, = simsAx[d][1].plot(v_cons[respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
         lines_log.append(line_curr);
 
-    crfAx[d][i].set_xlim([1e-2, 1]);
-    crfAx[d][i].set_ylim([1e-2, 1.5*maxResp]);
-    crfAx[d][i].set_aspect('equal', 'box')
-    crfAx[d][i].set_xscale('log');
-    crfAx[d][i].set_yscale('log');
-    crfAx[d][i].set_xlabel('contrast');
+    simsAx[d][1].set_xlim([1e-2, 1]);
+    #simsAx[d][1].set_ylim([1e-2, 1.5*maxResp]);
+    simsAx[d][1].set_aspect('equal', 'box')
+    simsAx[d][1].set_xscale('log');
+    simsAx[d][1].set_yscale('log');
+    simsAx[d][1].set_xlabel('contrast');
 
-    crfAx[d][i].set_ylabel('resp above baseline (sps)');
-    crfAx[d][i].set_title('D%d: sf:all - log resp %s' % (d, title_str));
-    crfAx[d][i].legend(lines_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
+    simsAx[d][1].set_ylabel('resp above baseline (sps)');
+    simsAx[d][1].set_title('D%d: sf:all - log resp' % (d));
+    simsAx[d][1].legend(lines_log, [str(i) for i in np.round(v_sfs, 2)], loc='upper left');
 
-    for i in range(2):
+    for ii in range(2):
     
-      dispAx[d][i].set_xscale('log');
-      dispAx[d][i].set_yscale('log');
+      simsAx[d][ii].set_xscale('log');
+      simsAx[d][ii].set_yscale('log');
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
-      dispAx[d][i].tick_params(labelsize=15, width=2, length=16, direction='out');
-      dispAx[d][i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
-      sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
-
+      simsAx[d][ii].tick_params(labelsize=15, width=2, length=16, direction='out');
+      simsAx[d][ii].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+      sns.despine(ax=simsAx[d][ii], offset=10, trim=False); 
 
 # fix subplots to not overlap
 fDetails.tight_layout();
+# fSims must be saved separately...
+saveName = "cell_%d_simulate.pdf" % (cellNum)
+pdfSv = pltSave.PdfPages(str(save_loc + saveName));
+for ff in fSims:
+    pdfSv.savefig(ff)
+    plt.close(ff)
+pdfSv.close();
+
 # and now save it
 #allFigs = [f, fDetails];
-allFigs = [f, fDetails, fNorm, fSimulations];
+allFigs = [f, fDetails, fNorm];
 saveName = "cell_%d.pdf" % cellNum
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(allFigs)): ## will open an empty extra figure :(
