@@ -209,7 +209,7 @@ meanList = (expData['sfm']['exp']['conRateMean'], expData['sfm']['exp']['oriRate
 varList = (expData['sfm']['exp']['conRateVar'], expData['sfm']['exp']['oriRateVar'], sfVarFlat);
 for i in range(len(meanList)):
   gtLB = np.logical_and(meanList[i]>lower_bound, varList[i]>lower_bound);
-  plt.loglog(meanList[i][gtLB], varList[i][gtLB], 'o');
+  #plt.loglog(meanList[i][gtLB], varList[i][gtLB], 'o');
 # skeleton for plotting modulated poisson prediction                                                                                                                                                    
 if fitType == 3: # i.e. modPoiss                                                                                                                                                                          
   varGain = modFit[7];
@@ -436,6 +436,32 @@ print('\tTesting at range of spatial frequencies: ' + str(v_sfs));
 
 fSims = []; simsAx = [];
 
+# first, just plot the (normalized) excitatory filter and normalization pool response on the same plot
+# calculations done above in fDetails (sfExc, sfNorm)
+fFilt, axCurr = plt.subplots(1, 1, figsize=(10, 10));
+fSims.append(fFilt);
+simsAx.append(axCurr);
+
+# plot model details - filter
+simsAx[0].semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+simsAx[0].semilogx([.01, .01], [-1.5, 1], 'k--')
+simsAx[0].semilogx([.1, .1], [-1.5, 1], 'k--')
+simsAx[0].semilogx([1, 1], [-1.5, 1], 'k--')
+simsAx[0].semilogx([10, 10], [-1.5, 1], 'k--')
+simsAx[0].semilogx([100, 100], [-1.5, 1], 'k--')
+# now the real stuff
+ex = simsAx[0].semilogx(omega, sfExc, 'k-')
+#simsAx[0].semilogx(omega, sfInh, 'r--', linewidth=2);
+nm = simsAx[0].semilogx(omega, -sfNorm, 'r-', linewidth=1);
+simsAx[0].set_xlim([omega[0], omega[-1]]);
+simsAx[0].set_ylim([-1.5, 1]);
+simsAx[0].set_xlabel('SF (cpd)', fontsize=12);
+simsAx[0].set_ylabel('Normalized response (a.u.)', fontsize=12);
+simsAx[0].set_title('CELL %d' % (cellNum), fontsize=20);
+simsAx[0].legend([ex[0], nm[0]], ('excitatory %.2f' % (modFit[0]), 'normalization %.2f' % (np.exp(modFit[-2]))));
+# Remove top/right axis, put ticks only on bottom/left
+sns.despine(ax=simsAx[0], offset=5);
+
 for d in range(nFam):
     
     v_cons = val_con_by_disp[d];
@@ -458,17 +484,17 @@ for d in range(nFam):
         col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
         respAbBaseline = curr_resps - modSponRate;
         #print('Simulated at %d|%d sfs: %d above baseline' % (len(v_sfs), len(curr_resps), sum(respAbBaseline>1e-1)));
-        curr_line, = simsAx[d][0].plot(v_sfs[respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
+        curr_line, = simsAx[d+1][0].plot(v_sfs[respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
         lines.append(curr_line);
 
-    simsAx[d][0].set_aspect('equal', 'box'); 
-    simsAx[d][0].set_xlim((0.5*min(v_sfs), 1.2*max(v_sfs)));
-    #simsAx[d][0].set_ylim((5e-2, 1.5*maxResp));
-    simsAx[d][0].set_xlabel('sf (c/deg)'); 
+    simsAx[d+1][0].set_aspect('equal', 'box'); 
+    simsAx[d+1][0].set_xlim((0.5*min(v_sfs), 1.2*max(v_sfs)));
+    #simsAx[d+1][0].set_ylim((5e-2, 1.5*maxResp));
+    simsAx[d+1][0].set_xlabel('sf (c/deg)'); 
 
-    simsAx[d][0].set_ylabel('resp above baseline (sps)');
-    simsAx[d][0].set_title('D%d - sf tuning' % (d));
-    simsAx[d][0].legend(lines, [str(i) for i in reversed(v_cons)], loc=0);
+    simsAx[d+1][0].set_ylabel('resp above baseline (sps)');
+    simsAx[d+1][0].set_title('D%d - sf tuning' % (d));
+    simsAx[d+1][0].legend(lines, [str(i) for i in reversed(v_cons)], loc=0);
 
     # RVCs - NEED TO SIMULATE
     n_v_sfs = len(v_sfs)
@@ -486,29 +512,29 @@ for d in range(nFam):
         col = [sf_i/float(n_v_sfs), sf_i/float(n_v_sfs), sf_i/float(n_v_sfs)];
         respAbBaseline = curr_resps - modSponRate;
         print('rAB = %s ||| v_cons %s' % (respAbBaseline, v_cons));
-        line_curr, = simsAx[d][1].plot(v_cons[respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
+        line_curr, = simsAx[d+1][1].plot(v_cons[respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
         lines_log.append(line_curr);
 
-    simsAx[d][1].set_xlim([1e-2, 1]);
-    #simsAx[d][1].set_ylim([1e-2, 1.5*maxResp]);
-    simsAx[d][1].set_aspect('equal', 'box')
-    simsAx[d][1].set_xscale('log');
-    simsAx[d][1].set_yscale('log');
-    simsAx[d][1].set_xlabel('contrast');
+    simsAx[d+1][1].set_xlim([1e-2, 1]);
+    #simsAx[d+1][1].set_ylim([1e-2, 1.5*maxResp]);
+    simsAx[d+1][1].set_aspect('equal', 'box')
+    simsAx[d+1][1].set_xscale('log');
+    simsAx[d+1][1].set_yscale('log');
+    simsAx[d+1][1].set_xlabel('contrast');
 
-    simsAx[d][1].set_ylabel('resp above baseline (sps)');
-    simsAx[d][1].set_title('D%d: sf:all - log resp' % (d));
-    simsAx[d][1].legend(lines_log, [str(i) for i in np.round(v_sfs, 2)], loc='upper left');
+    simsAx[d+1][1].set_ylabel('resp above baseline (sps)');
+    simsAx[d+1][1].set_title('D%d: sf:all - log resp' % (d));
+    simsAx[d+1][1].legend(lines_log, [str(i) for i in np.round(v_sfs, 2)], loc='upper left');
 
     for ii in range(2):
     
-      simsAx[d][ii].set_xscale('log');
-      simsAx[d][ii].set_yscale('log');
+      simsAx[d+1][ii].set_xscale('log');
+      simsAx[d+1][ii].set_yscale('log');
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
-      simsAx[d][ii].tick_params(labelsize=15, width=2, length=16, direction='out');
-      simsAx[d][ii].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
-      sns.despine(ax=simsAx[d][ii], offset=10, trim=False); 
+      simsAx[d+1][ii].tick_params(labelsize=15, width=2, length=16, direction='out');
+      simsAx[d+1][ii].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+      sns.despine(ax=simsAx[d+1][ii], offset=10, trim=False); 
 
 # fix subplots to not overlap
 fDetails.tight_layout();
