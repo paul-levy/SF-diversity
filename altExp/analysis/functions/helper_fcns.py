@@ -320,7 +320,6 @@ def getSuppressiveSFtuning(): # written when still new to python. Probably to ma
 
 def makeStimulus(stimFamily, conLevel, sf_c, template):
 
-# Not updated for sfMixAlt - 1/31/18
 # returns [Or, Tf, Co, Ph, Sf, trial_used]
 
 # 1/23/16 - This function is used to make arbitrary stimuli for use with
