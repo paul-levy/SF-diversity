@@ -437,30 +437,31 @@ print('\tTesting at range of spatial frequencies: ' + str(v_sfs));
 fSims = []; simsAx = [];
 
 # first, just plot the (normalized) excitatory filter and normalization pool response on the same plot
+# and for ease of comparison, also duplicate the SF and RVC tuning for single gratings here
 # calculations done above in fDetails (sfExc, sfNorm)
 fFilt, axCurr = plt.subplots(1, 1, figsize=(10, 10));
 fSims.append(fFilt);
 simsAx.append(axCurr);
 
 # plot model details - filter
-simsAx[0].semilogx([omega[0], omega[-1]], [0, 0], 'k--')
-simsAx[0].semilogx([.01, .01], [-1.5, 1], 'k--')
-simsAx[0].semilogx([.1, .1], [-1.5, 1], 'k--')
-simsAx[0].semilogx([1, 1], [-1.5, 1], 'k--')
-simsAx[0].semilogx([10, 10], [-1.5, 1], 'k--')
-simsAx[0].semilogx([100, 100], [-1.5, 1], 'k--')
+simsAx[0][0].semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+simsAx[0][0].semilogx([.01, .01], [-1.5, 1], 'k--')
+simsAx[0][0].semilogx([.1, .1], [-1.5, 1], 'k--')
+simsAx[0][0].semilogx([1, 1], [-1.5, 1], 'k--')
+simsAx[0][0].semilogx([10, 10], [-1.5, 1], 'k--')
+simsAx[0][0].semilogx([100, 100], [-1.5, 1], 'k--')
 # now the real stuff
-ex = simsAx[0].semilogx(omega, sfExc, 'k-')
-#simsAx[0].semilogx(omega, sfInh, 'r--', linewidth=2);
-nm = simsAx[0].semilogx(omega, -sfNorm, 'r-', linewidth=1);
-simsAx[0].set_xlim([omega[0], omega[-1]]);
-simsAx[0].set_ylim([-1.5, 1]);
-simsAx[0].set_xlabel('SF (cpd)', fontsize=12);
-simsAx[0].set_ylabel('Normalized response (a.u.)', fontsize=12);
-simsAx[0].set_title('CELL %d' % (cellNum), fontsize=20);
-simsAx[0].legend([ex[0], nm[0]], ('excitatory %.2f' % (modFit[0]), 'normalization %.2f' % (np.exp(modFit[-2]))));
+ex = simsAx[0][0].semilogx(omega, sfExc, 'k-')
+#simsAx[0][0].semilogx(omega, sfInh, 'r--', linewidth=2);
+nm = simsAx[0][0].semilogx(omega, -sfNorm, 'r-', linewidth=1);
+simsAx[0][0].set_xlim([omega[0], omega[-1]]);
+simsAx[0][0].set_ylim([-1.5, 1]);
+simsAx[0][0].set_xlabel('SF (cpd)', fontsize=12);
+simsAx[0][0].set_ylabel('Normalized response (a.u.)', fontsize=12);
+simsAx[0][0].set_title('CELL %d' % (cellNum), fontsize=20);
+simsAx[0][0].legend([ex[0], nm[0]], ('excitatory %.2f' % (modFit[0]), 'normalization %.2f' % (np.exp(modFit[-2]))));
 # Remove top/right axis, put ticks only on bottom/left
-sns.despine(ax=simsAx[0], offset=5);
+sns.despine(ax=simsAx[0][0], offset=5);
 
 for d in range(nFam):
     
