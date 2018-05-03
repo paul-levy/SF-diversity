@@ -701,7 +701,7 @@ if __name__ == '__main__':
     print('Running cell ' + sys.argv[1] + ' with NLL step threshold of ' + sys.argv[2] + ' with learning rate ' + sys.argv[3]);
 
     if len(sys.argv) > 4: # subsample data for each iteration
-      print('Additionally, each iteration will have ' + sys.argv[4] + ' of the data (subsample fraction)');
+      print('Additionally, each iteration will have ' + sys.argv[5] + ' of the data (subsample fraction)');
       setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5]), int(sys.argv[6]));
     else: # all trials in each iteration
       setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]));
