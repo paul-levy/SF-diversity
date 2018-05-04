@@ -623,23 +623,18 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
       norm_type = 0; # i.e. just run old asymmetry computation
       normTypeArr = [norm_type];
 
-    for iP in range(len(nInhChan)): # two channels: narrow and broad
-      if norm_type == 1:
-        # if asym, put where '0' is
-        curr_chan = len(T['mod']['normalization']['pref']['sf'][iP]);
-        log_sfs = numpy.log(T['mod']['normalization']['pref']['sf'][iP]);
-        new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
-        inhWeight = numpy.append(inhWeight, new_weights);
-      if norm_type == 0:
-        # if you reintroduce asymmetry, put that asymmetry parameter where the '0' is now!
-        inhWeight = numpy.append(inhWeight, 1 + 0*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
-                                            - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
-
-    # assumption (made by Robbe) - only two normalization pools
-    inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
-    inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
-    inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
-    inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
+    if norm_type == 1:
+      inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
+    else:
+      for iP in range(len(nInhChan)):
+          # if asym, put where '0' is
+          inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
+                                              - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
+      # assumption (made by Robbe) - only two normalization pools
+      inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
+      inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
+      inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
+      inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
                               
     # Evaluate sfmix experiment
     for iR in range(1): #range(len(structureSFM['sfm'])): # why 1 for now? We don't have S.sfm as array (just one)
@@ -744,12 +739,11 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
           # if asym, put where '0' is
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                               - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
-
-    # assumption (made by Robbe) - only two normalization pools
-    inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
-    inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
-    inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
-    inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
+      # assumption (made by Robbe) - only two normalization pools
+      inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
+      inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
+      inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
+      inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
                               
     # Evaluate sfmix experiment
     T = structureSFM['sfm']; # [iR]
