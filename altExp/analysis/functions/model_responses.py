@@ -1,5 +1,5 @@
 import math, cmath, numpy, os
-from helper_fcns import makeStimulus, random_in_range
+from helper_fcns import makeStimulus, random_in_range, genNormWeights
 from scipy.stats import norm, mode, lognorm, nbinom
 from numpy.matlib import repmat
 import time
