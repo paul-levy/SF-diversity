@@ -325,11 +325,12 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     p   = tf.divide(r, tf.add(r, mu));
 
     # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
-    lsq = tf.square(tf.add(tf.sqrt(respModel), -tf.sqrt(ph_spikeCount)));
-    NLL = tf.reduce_mean(ph_objWeight*lsq); # was 1*lsq
+    #lsq = tf.square(tf.add(tf.sqrt(respModel), -tf.sqrt(ph_spikeCount)));
+    #NLL = tf.reduce_mean(ph_objWeight*lsq); # was 1*lsq
 
-    #log_lh = negBinom(ph_spikeCount, r, p);
-    #NLL = tf.reduce_mean(-1*log_lh);
+    # modPoiss loss function
+    log_lh = negBinom(ph_spikeCount, r, p);
+    NLL = tf.reduce_mean(-1*log_lh);
     
     return NLL;
 
@@ -384,7 +385,7 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
     ########
     loc_data = '/home/pl1465/SF_diversity/altExp/analysis/structures/'; # Prince cluster 
 
-    fitListName = 'fitList_180426.npy';
+    fitListName = 'fitList_180506_modPoiss.npy';
 
     if os.path.exists(loc_data + fitListName):
       fitList = numpy.load(loc_data + fitListName).item();
@@ -604,6 +605,7 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
             if numpy.any(numpy.isnan(real_params)): # don't save a fit with NaN!
               print('.nanParam.');
               iter = iter+1;
+              real_params = curr_params; # likely, curr_params will not be NaN; if real_params has a NaN, then we're ruined!
               continue;
 
             print('.update.');
