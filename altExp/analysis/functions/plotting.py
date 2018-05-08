@@ -1,4 +1,4 @@
-# coding: utf-8
+ # coding: utf-8
 
 ######################## To do:
 
@@ -20,7 +20,14 @@ import sys # so that we can import model_responses (in different folder)
 import model_responses
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/Analysis/Functions/paul_plt_cluster.mplstyle');
-plt.rc('legend',fontsize='medium') # using a named size
+from matplotlib import rcParams
+rcParams['font.size'] = 20;
+rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
+rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
+rcParams['lines.linewidth'] = 5;
+rcParams['axes.linewidth'] = 3;
+rcParams['lines.markersize'] = 5
+rcParams['font.style'] = 'oblique';
 
 which_cell = int(sys.argv[1]);
 fit_type = int(sys.argv[2]);
@@ -55,7 +62,7 @@ if fit_type == 4:
   loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
   type_str = '-poissMod';
 
-fitListName = 'fitList_180426_slowLR.npy';
+fitListName = 'fitList_180506_modPoiss.npy';
 crfFitName = str('crfFits' + type_str + '.npy');
 
 rpt_fit = 1; # i.e. take the multi-start result
@@ -127,7 +134,7 @@ for d in range(nDisps):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(40, n_v_cons*10), sharey=False);
+    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(25, n_v_cons*8), sharey=False);
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
     
@@ -198,7 +205,7 @@ for d in range(nDisps):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(1, 2, figsize=(40, 40)); # left side for data, right side for model predictions
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(20, 20)); # left side for data, right side for model predictions
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
 
@@ -255,7 +262,7 @@ mixCons = 4;
 maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
 #maxResp = np.maximum(np.max(np.max(np.max(respMean[~np.isnan(respMean)]))), np.max(np.max(np.max(predMean[~np.isnan(predMean)]))));
 
-f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(40, 30));
+f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(20, 15));
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
 
@@ -417,7 +424,7 @@ conLevels = [1, 0.75, 0.5, 0.33, 0.1];
 nCons = len(conLevels);
 sfCenters = np.logspace(-2, 2, 21); # just for now...
 #sfCenters = allSfs;
-fNorm, conDisp_plots = plt.subplots(nCons, nDisps, sharey=True, figsize=(45,25))
+fNorm, conDisp_plots = plt.subplots(nCons, nDisps, sharey=True, figsize=(40,30));
 norm_sim = np.nan * np.empty((nDisps, nCons, len(sfCenters)));
 if len(modParamsCurr) < 9:
     modParamsCurr.append(helper_fcns.random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
@@ -478,7 +485,7 @@ pdfSv.close()
 #########
 
 crfAx = []; fCRF = [];
-fSum, crfSum = plt.subplots(nDisps, 2, figsize=(40, 40), sharex=False, sharey=False);
+fSum, crfSum = plt.subplots(nDisps, 2, figsize=(30, 30), sharex=False, sharey=False);
 fCRF.append(fSum);
 crfAx.append(crfSum);
 
@@ -493,7 +500,7 @@ for d in range(nDisps):
     n_v_sfs = len(v_sfs[0])
     n_rows = 3; #int(np.floor(n_v_sfs/2));
     n_cols = 4; #n_v_sfs - n_rows
-    fCurr, crfCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*20, n_rows*20), sharex = True, sharey = True);
+    fCurr, crfCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*10, n_rows*15), sharex = True, sharey = True);
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
     
@@ -542,6 +549,7 @@ for d in range(nDisps):
 	curr_rvc = crfAx[0][d, 0].plot(all_cons[v_cons], resps_curr, '-', clip_on=False);
         rvc_plots.append(curr_rvc[0]);
 
+        # NR fit plots
         stdPts = np.hstack((0, np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, ))));
         expPts = crfAx[d+1][row_ind, col_ind].errorbar(np.hstack((0, all_cons[v_cons])), resps_w_blank, stdPts, fmt='o', clip_on=False);
 
@@ -605,9 +613,11 @@ for f in fCRF:
     plt.close(f)
 pdfSv.close()
 
-# #### Plot contrast response functions with (full) model predictions; i.e. not Naka-Rushton 
+# #### Plot contrast response functions with (full) model predictions AND Naka-Rushton 
 
 rvcAx = []; fRVC = [];
+
+# crfFitsSepC50 loaded above
 
 for d in range(nDisps):
     
@@ -616,7 +626,7 @@ for d in range(nDisps):
     n_v_sfs = len(v_sfs[0])
     n_rows = 3; #int(np.floor(n_v_sfs/2));
     n_cols = 4; #n_v_sfs - n_rows
-    fCurr, rvcCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*20, n_rows*20), sharex = True, sharey = True);
+    fCurr, rvcCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*10, n_rows*10), sharex = True, sharey = True);
     fRVC.append(fCurr)
     rvcAx.append(rvcCurr);
     
@@ -642,6 +652,9 @@ for d in range(nDisps):
 	# RVC with full model fit
         rvcAx[plt_x][plt_y].fill_between(all_cons[v_cons], modLow[d, sf_ind, v_cons], \
                                       modHigh[d, sf_ind, v_cons], color='r', alpha=0.2);
+        # RVC from Naka-Rushton fit
+	curr_fit_sep = crfFitsSepC50[d][sf_ind]['params'];
+        nrPlt = rvcAx[plt_x][plt_y].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
         #pdb.set_trace();
         modPlt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(modAvg[d, sf_ind, v_cons], 0.1), 'r-', alpha=0.7, clip_on=False);
 
@@ -663,7 +676,7 @@ for d in range(nDisps):
         rvcAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
         rvcAx[plt_x][plt_y].set_ylabel('resp (sps)', fontsize='medium');
 	rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
-	rvcAx[plt_x][plt_y].legend((dataPlt[0], modPlt[0]), ('data', 'model avg'), fontsize='large', loc='center left');
+	rvcAx[plt_x][plt_y].legend((dataPlt[0], modPlt[0], nrPlt[0]), ('data', 'model avg', 'Naka-Rushton'), fontsize='large', loc='center left');
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         sns.despine(ax = rvcAx[plt_x][plt_y], offset = 10, trim=False);
@@ -684,7 +697,7 @@ crfAx = []; fCRF = [];
 
 for d in range(nDisps):
     
-    fCurr, crfCurr = plt.subplots(1, 2, figsize=(15, 40), sharex = False, sharey = False); # left side for data, right side for model predictions
+    fCurr, crfCurr = plt.subplots(1, 2, figsize=(20, 25), sharex = False, sharey = False); # left side for data, right side for model predictions
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
 

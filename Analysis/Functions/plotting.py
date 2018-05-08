@@ -34,6 +34,17 @@ import seaborn as sns
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/Analysis/Functions/paul_plt_cluster.mplstyle');
 sns.set(style='ticks');
 
+# better plotting
+from matplotlib import rcParams
+rcParams['font.size'] = 20;
+rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
+rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
+rcParams['lines.linewidth'] = 3;
+rcParams['axes.linewidth'] = 1.5;
+rcParams['lines.markersize'] = 3;
+rcParams['font.style'] = 'oblique';
+rcParams['legend.fontsize'] ='large'; # using a named size
+
 import pdb
 
 cellNum = int(sys.argv[1]);
@@ -276,7 +287,7 @@ plt.semilogx(omega, sfExc, 'k-')
 #plt.semilogx(omega, sfInh, 'r--', linewidth=2);
 plt.semilogx(omega, sfNorm, 'r-', linewidth=1);
 plt.xlim([omega[0], omega[-1]]);
-plt.ylim([-1.5, 1]);
+plt.ylim([-0.1, 1.1]);
 plt.xlabel('SF (cpd)', fontsize=12);
 plt.ylabel('Normalized response (a.u.)', fontsize=12);
 # Remove top/right axis, put ticks only on bottom/left
@@ -422,6 +433,9 @@ for disp in range(nFam):
 excFilt_plots[0, 2].text(0.5, 1.2, 'Excitatory filter responses', fontsize=16, horizontalalignment='center', verticalalignment='center', transform=excFilt_plots[0, 2].transAxes);
 '''
 
+### SIMULATION PLOTS###
+# We'll simulate from the model, now
+
 # construct by hand for now; 5 dispersions with the old stimulus set
 val_con_by_disp = [];
 val_con_by_disp.append(np.array([1, 0.688, 0.473, 0.325, 0.224, 0.154, 0.106, 0.073, 0.05, 0.01]));
@@ -444,31 +458,30 @@ fSims.append(fFilt);
 simsAx.append(axCurr);
 
 # plot model details - filter
-simsAx[0][0].semilogx([omega[0], omega[-1]], [0, 0], 'k--')
-simsAx[0][0].semilogx([.01, .01], [-1.5, 1], 'k--')
-simsAx[0][0].semilogx([.1, .1], [-1.5, 1], 'k--')
-simsAx[0][0].semilogx([1, 1], [-1.5, 1], 'k--')
-simsAx[0][0].semilogx([10, 10], [-1.5, 1], 'k--')
-simsAx[0][0].semilogx([100, 100], [-1.5, 1], 'k--')
+simsAx[0].semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+simsAx[0].semilogx([.01, .01], [-0.1, 1], 'k--')
+simsAx[0].semilogx([.1, .1], [-0.1, 1], 'k--')
+simsAx[0].semilogx([1, 1], [-0.1, 1], 'k--')
+simsAx[0].semilogx([10, 10], [-0.1, 1], 'k--')
+simsAx[0].semilogx([100, 100], [-0.1, 1], 'k--')
 # now the real stuff
-ex = simsAx[0][0].semilogx(omega, sfExc, 'k-')
-#simsAx[0][0].semilogx(omega, sfInh, 'r--', linewidth=2);
-nm = simsAx[0][0].semilogx(omega, -sfNorm, 'r-', linewidth=1);
-simsAx[0][0].set_xlim([omega[0], omega[-1]]);
-simsAx[0][0].set_ylim([-1.5, 1]);
-simsAx[0][0].set_xlabel('SF (cpd)', fontsize=12);
-simsAx[0][0].set_ylabel('Normalized response (a.u.)', fontsize=12);
-simsAx[0][0].set_title('CELL %d' % (cellNum), fontsize=20);
-simsAx[0][0].legend([ex[0], nm[0]], ('excitatory %.2f' % (modFit[0]), 'normalization %.2f' % (np.exp(modFit[-2]))));
+ex = simsAx[0].semilogx(omega, sfExc, 'k-')
+nm = simsAx[0].semilogx(omega, -sfNorm, 'r-', linewidth=2.5);
+simsAx[0].set_xlim([omega[0], omega[-1]]);
+simsAx[0].set_ylim([-0.1, 1.1]);
+simsAx[0].set_xlabel('SF (cpd)', fontsize=12);
+simsAx[0].set_ylabel('Normalized response (a.u.)', fontsize=12);
+simsAx[0].set_title('CELL %d' % (cellNum), fontsize=20);
+simsAx[0].legend([ex[0], nm[0]], ('excitatory %.2f' % (modFit[0]), 'normalization %.2f' % (np.exp(modFit[-2]))));
 # Remove top/right axis, put ticks only on bottom/left
-sns.despine(ax=simsAx[0][0], offset=5);
+sns.despine(ax=simsAx[0], offset=5);
 
 for d in range(nFam):
     
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(1, 2, figsize=(40, 40)); # left side for SF simulations, right side for RVC simulations
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(20, 20)); # left side for SF simulations, right side for RVC simulations
     fSims.append(fCurr)
     simsAx.append(dispCurr);
 

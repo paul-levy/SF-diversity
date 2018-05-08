@@ -33,6 +33,15 @@ import seaborn as sns
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/Analysis/Functions/paul_plt_cluster.mplstyle');
 sns.set(style='ticks');
+from matplotlib import rcParams
+rcParams['font.size'] = 20;
+rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
+rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
+rcParams['lines.linewidth'] = 4;
+rcParams['axes.linewidth'] = 3;
+rcParams['lines.markersize'] = 5
+rcParams['font.style'] = 'oblique';
+rcParams['legend.fontsize'] ='large'; # using a named size
 
 import pdb
 
@@ -172,8 +181,7 @@ simsAx[0].semilogx([10, 10], [-1.5, 1], 'k--')
 simsAx[0].semilogx([100, 100], [-1.5, 1], 'k--')
 # now the real stuff
 ex = simsAx[0].semilogx(omega, sfExc, 'k-')
-#simsAx[0].semilogx(omega, sfInh, 'r--', linewidth=2);
-nm = simsAx[0].semilogx(omega, -sfNorm, 'r-', linewidth=1);
+nm = simsAx[0].semilogx(omega, -sfNorm, 'r-', linewidth=2.5);
 simsAx[0].set_xlim([omega[0], omega[-1]]);
 simsAx[0].set_ylim([-1.5, 1]);
 simsAx[0].set_xlabel('SF (cpd)', fontsize=12);
@@ -188,7 +196,7 @@ for d in range(nFam):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(1, 2, figsize=(40, 40)); # left side for SF simulations, right side for RVC simulations
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(20, 20)); # left side for SF simulations, right side for RVC simulations
     fSims.append(fCurr)
     simsAx.append(dispCurr);
 
