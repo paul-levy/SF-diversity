@@ -20,7 +20,15 @@ import sys # so that we can import model_responses (in different folder)
 import model_responses
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/Analysis/Functions/paul_plt_cluster.mplstyle');
-plt.rc('legend',fontsize='medium') # using a named size
+from matplotlib import rcParams
+rcParams['font.size'] = 20;
+rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
+rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
+rcParams['lines.linewidth'] = 3;
+rcParams['axes.linewidth'] = 1.5;
+rcParams['lines.markersize'] = 3;
+rcParams['font.style'] = 'oblique';
+rcParams['legend.fontsize'] ='large'; # using a named size
 
 which_cell = int(sys.argv[1]);
 fit_type = int(sys.argv[2]);
@@ -36,11 +44,11 @@ while nArgsIn > 0:
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
 # savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 # personal mac
-dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
-save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/';
+#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
+#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/';
 # prince cluster
-#dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
-#save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
+dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
+save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
 if fit_type == 1:
   loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
@@ -55,7 +63,7 @@ if fit_type == 4:
   loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
   type_str = '-poissMod';
 
-fitListName = 'fitList_180426_slowLR.npy';
+fitListName = 'fitList_180506_modPoiss.npy';
 
 rpt_fit = 1; # i.e. take the multi-start result
 if rpt_fit:
@@ -178,10 +186,9 @@ simsAx[0].semilogx([10, 10], [-1.5, 1], 'k--')
 simsAx[0].semilogx([100, 100], [-1.5, 1], 'k--')
 # now the real stuff
 ex = simsAx[0].semilogx(omega, sfExc, 'k-')
-#simsAx[0].semilogx(omega, sfInh, 'r--', linewidth=2);
-nm = simsAx[0].semilogx(omega, -sfNorm, 'r-', linewidth=1);
+nm = simsAx[0].semilogx(omega, -sfNorm, 'r-', linewidth=2.5);
 simsAx[0].set_xlim([omega[0], omega[-1]]);
-simsAx[0].set_ylim([-1.5, 1]);
+simsAx[0].set_ylim([-0.1, 1.1]);
 simsAx[0].set_xlabel('SF (cpd)', fontsize=12);
 simsAx[0].set_ylabel('Normalized response (a.u.)', fontsize=12);
 simsAx[0].set_title('CELL %d' % (which_cell), fontsize=20);
@@ -207,7 +214,7 @@ for d in range(1): #nDisps
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(1, 2, figsize=(40, 40)); # left side for SF simulations, right side for RVC simulations
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(20, 20)); # left side for SF simulations, right side for RVC simulations
     fSims.append(fCurr)
     simsAx.append(dispCurr);
 
