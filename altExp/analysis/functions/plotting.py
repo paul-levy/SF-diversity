@@ -36,11 +36,11 @@ while nArgsIn > 0:
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
 # savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 # personal mac
-#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
-#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/';
+dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
+save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/cell4_sandbox/';
 # prince cluster
-dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
-save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
+#dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
+#save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
 if fit_type == 1:
   loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
@@ -77,6 +77,7 @@ descrFits = descrFits[which_cell-1]['params']; # just get this cell
 
 modParams = np.load(str(dataPath + fitListName), encoding= 'latin1').item();
 modParamsCurr = modParams[which_cell-1]['params'];
+modParamsCurr[2] = -0.75; # lower c50 to see contrast-dep shifts...
 
 # ### Organize data
 # #### determine contrasts, center spatial frequency, dispersions
@@ -140,7 +141,7 @@ for d in range(nDisps):
 
 	# plot pred/measured ratio
         dispAx[d][c_plt_ind, 1].plot(all_sfs[v_sfs], np.divide(predMean[d, v_sfs, v_cons[c]]-blankMean, respMean[d, v_sfs, v_cons[c]]-blankMean), clip_on=False);
-	dispAx[d][c_plt_ind, 1].axhline(1, clip_on=False, linestyle='dashed');
+        dispAx[d][c_plt_ind, 1].axhline(1, clip_on=False, linestyle='dashed');
         
         # plot data
         dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
@@ -155,11 +156,11 @@ for d in range(nDisps):
         #dispAx[d][c_plt_ind, 0].plot(sfs_plot, helper_fcns.flexible_Gauss(curr_mod_params, sfs_plot), clip_on=False)
         
 	# plot model fits
-	dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
+        dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
                                       modHigh[d, v_sfs, v_cons[c]], color='r', alpha=0.2);
-	dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
+        dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
 
-	for i in range(2):
+        for i in range(2):
 
           dispAx[d][c_plt_ind, i].set_xlim((min(all_sfs), max(all_sfs)));
         
@@ -175,7 +176,7 @@ for d in range(nDisps):
         dispAx[d][c_plt_ind, 0].set_ylim((0, 1.5*maxResp));
         dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
         dispAx[d][c_plt_ind, 1].set_ylabel('ratio (pred:measure)');
-	dispAx[d][c_plt_ind, 1].set_ylim((1e-1, 1e3));
+        dispAx[d][c_plt_ind, 1].set_ylim((1e-1, 1e3));
         dispAx[d][c_plt_ind, 1].set_yscale('log');
 
 
@@ -282,9 +283,9 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].plot(sfs_plot, helper_fcns.flexible_Gauss(curr_mod_params, sfs_plot), clip_on=False)
 
 	# plot model fits
-	sfMixAx[c_plt_ind, d].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
+        sfMixAx[c_plt_ind, d].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
                                       modHigh[d, v_sfs, v_cons[c]], color='r', alpha=0.2);
-	sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
+        sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
 
         sfMixAx[c_plt_ind, d].set_xlim((np.min(all_sfs), np.max(all_sfs)));
         sfMixAx[c_plt_ind, d].set_ylim((0, 1.5*maxResp));
@@ -482,7 +483,7 @@ fSum, crfSum = plt.subplots(nDisps, 2, figsize=(40, 40), sharex=False, sharey=Fa
 fCRF.append(fSum);
 crfAx.append(crfSum);
 
-fits = np.load(str(dataPath + crfFitName)).item();
+fits = np.load(str(dataPath + crfFitName), encoding='latin1').item();
 crfFitsSepC50 = fits[which_cell-1][str('fits_each' + is_rpt)];
 crfFitsOneC50 = fits[which_cell-1][str('fits' + is_rpt)];
 
@@ -503,13 +504,13 @@ for d in range(nDisps):
     rvc_plots = [];
 
     for sf in range(n_v_sfs):
-	row_ind = sf/n_cols;
-	col_ind = np.mod(sf, n_cols);
+        row_ind = sf/n_cols;
+        col_ind = np.mod(sf, n_cols);
         sf_ind = v_sfs[0][sf];
 
         v_cons = ~np.isnan(respMean[d, sf_ind, :]);
         n_cons = sum(v_cons);
-	plot_cons = np.linspace(0, np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
+        plot_cons = np.linspace(0, np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
 	#plot_cons = np.linspace(np.min(all_cons[v_cons]), np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
 
 	# organize responses
@@ -517,29 +518,29 @@ for d in range(nDisps):
         resps_w_blank = np.hstack((blankMean, resps_curr));
 
 	# CRF fit
-	curr_fit_sep = crfFitsSepC50[d][sf_ind]['params'];
-	curr_fit_all = crfFitsOneC50[d][sf_ind]['params'];
+        curr_fit_sep = crfFitsSepC50[d][sf_ind]['params'];
+        curr_fit_all = crfFitsOneC50[d][sf_ind]['params'];
 	# ignore varGain when reporting loss here...
-	sep_pred = helper_fcns.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_sep[0:4]);
-	all_pred = helper_fcns.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_all[0:4]);
+        sep_pred = helper_fcns.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_sep[0:4]);
+        all_pred = helper_fcns.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_all[0:4]);
 
-	if fit_type == 4:
-	  r_sep, p_sep = helper_fcns.mod_poiss(sep_pred, curr_fit_sep[4]);
-	  r_all, p_all = helper_fcns.mod_poiss(all_pred, curr_fit_all[4]);
-	  sep_loss = -np.sum(loss(np.round(resps_w_blank), r_sep, p_sep));
-	  all_loss = -np.sum(loss(np.round(resps_w_blank), r_all, p_all));
-	elif fit_type == 3:	
-	  sep_loss = -np.sum(loss(np.round(resps_w_blank), sep_pred));
-	  all_loss = -np.sum(loss(np.round(resps_w_blank), all_pred));
-	else: # i.e. fit_type == 1 || == 2
-	  sep_loss = np.sum(loss(np.round(resps_w_blank), sep_pred));
-	  all_loss = np.sum(loss(np.round(resps_w_blank), all_pred));
+        if fit_type == 4:
+          r_sep, p_sep = helper_fcns.mod_poiss(sep_pred, curr_fit_sep[4]);
+          r_all, p_all = helper_fcns.mod_poiss(all_pred, curr_fit_all[4]);
+          sep_loss = -np.sum(loss(np.round(resps_w_blank), r_sep, p_sep));
+          all_loss = -np.sum(loss(np.round(resps_w_blank), r_all, p_all));
+        elif fit_type == 3:	
+          sep_loss = -np.sum(loss(np.round(resps_w_blank), sep_pred));
+          all_loss = -np.sum(loss(np.round(resps_w_blank), all_pred));
+        else: # i.e. fit_type == 1 || == 2
+          sep_loss = np.sum(loss(np.round(resps_w_blank), sep_pred));
+          all_loss = np.sum(loss(np.round(resps_w_blank), all_pred));
 	 
         c50_sep[sf] = curr_fit_sep[3];
         c50_all[sf] = curr_fit_all[3];
 
         # summary plots
-	curr_rvc = crfAx[0][d, 0].plot(all_cons[v_cons], resps_curr, '-', clip_on=False);
+        curr_rvc = crfAx[0][d, 0].plot(all_cons[v_cons], resps_curr, '-', clip_on=False);
         rvc_plots.append(curr_rvc[0]);
 
         stdPts = np.hstack((0, np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, ))));
@@ -548,20 +549,20 @@ for d in range(nDisps):
         sepPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
         allPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_all), linestyle='dashed');
 	# accompanying text...
-	crfAx[d+1][row_ind, col_ind].text(0, 0.9, 'free [%.1f]: gain %.1f; c50 %.3f; exp: %.2f; base: %.1f, varGn: %.2f' % (sep_loss, curr_fit_sep[1], curr_fit_sep[3], curr_fit_sep[2], curr_fit_sep[0], curr_fit_sep[4]), 
+        crfAx[d+1][row_ind, col_ind].text(0, 0.9, 'free [%.1f]: gain %.1f; c50 %.3f; exp: %.2f; base: %.1f, varGn: %.2f' % (sep_loss, curr_fit_sep[1], curr_fit_sep[3], curr_fit_sep[2], curr_fit_sep[0], curr_fit_sep[4]), 
 		horizontalalignment='left', verticalalignment='center', transform=crfAx[d+1][row_ind, col_ind].transAxes, fontsize=30);
-	crfAx[d+1][row_ind, col_ind].text(0, 0.8, 'fixed [%.1f]: gain %.1f; c50 %.3f; exp: %.2f; base: %.1f, varGn: %.2f' % (all_loss, curr_fit_all[1], curr_fit_all[3], curr_fit_all[2], curr_fit_all[0], curr_fit_all[4]), 
+        crfAx[d+1][row_ind, col_ind].text(0, 0.8, 'fixed [%.1f]: gain %.1f; c50 %.3f; exp: %.2f; base: %.1f, varGn: %.2f' % (all_loss, curr_fit_all[1], curr_fit_all[3], curr_fit_all[2], curr_fit_all[0], curr_fit_all[4]), 
 		horizontalalignment='left', verticalalignment='center', transform=crfAx[d+1][row_ind, col_ind].transAxes, fontsize=30);
 
 	# legend
-	crfAx[d+1][row_ind, col_ind].legend((expPts[0], sepPlt[0], allPlt[0]), ('data', 'free c50', 'fixed c50'), fontsize='large', loc='center left')
+        crfAx[d+1][row_ind, col_ind].legend((expPts[0], sepPlt[0], allPlt[0]), ('data', 'free c50', 'fixed c50'), fontsize='large', loc='center left')
 
-	plt_x = d+1; plt_y = (row_ind, col_ind);
+        plt_x = d+1; plt_y = (row_ind, col_ind);
 
-	crfAx[plt_x][plt_y].set_xscale('symlog', linthreshx=0.01); # symlog will allow us to go down to 0 
+        crfAx[plt_x][plt_y].set_xscale('symlog', linthreshx=0.01); # symlog will allow us to go down to 0 
         crfAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
         crfAx[plt_x][plt_y].set_ylabel('resp (sps)', fontsize='medium');
-	crfAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
+        crfAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         sns.despine(ax = crfAx[plt_x][plt_y], offset = 10, trim=False);
@@ -623,14 +624,14 @@ for d in range(nDisps):
     #rvc_plots = [];
 
     for sf in range(n_v_sfs):
-	row_ind = sf/n_cols;
-	col_ind = np.mod(sf, n_cols);
+        row_ind = sf/n_cols;
+        col_ind = np.mod(sf, n_cols);
         sf_ind = v_sfs[0][sf];
        	plt_x = d; plt_y = (row_ind, col_ind);
 
         v_cons = ~np.isnan(respMean[d, sf_ind, :]);
         n_cons = sum(v_cons);
-	plot_cons = np.linspace(0, np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
+        plot_cons = np.linspace(0, np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
 	#plot_cons = np.linspace(np.min(all_cons[v_cons]), np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
 
 	# organize responses
@@ -659,11 +660,11 @@ for d in range(nDisps):
 	rvcAx[d+1][row_ind, col_ind].legend((expPts[0], sepPlt[0], allPlt[0]), ('data', 'model fits'), fontsize='large', loc='center left')
         '''
 
-	rvcAx[plt_x][plt_y].set_xscale('symlog', linthreshx=0.01); # symlog will allow us to go down to 0 
+        rvcAx[plt_x][plt_y].set_xscale('symlog', linthreshx=0.01); # symlog will allow us to go down to 0 
         rvcAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
         rvcAx[plt_x][plt_y].set_ylabel('resp (sps)', fontsize='medium');
-	rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
-	rvcAx[plt_x][plt_y].legend((dataPlt[0], modPlt[0]), ('data', 'model avg'), fontsize='large', loc='center left');
+        rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
+        rvcAx[plt_x][plt_y].legend((dataPlt[0], modPlt[0]), ('data', 'model avg'), fontsize='large', loc='center left');
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         sns.despine(ax = rvcAx[plt_x][plt_y], offset = 10, trim=False);

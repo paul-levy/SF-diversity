@@ -73,6 +73,10 @@ cellStruct = np.load(str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.n
 modParams = np.load(str(dataPath + fitListName), encoding= 'latin1').item();
 modParamsCurr = modParams[which_cell-1]['params'];
 
+# TEMP HACK
+modParamsCurr[2] = modParamsCurr[2]/1.5;
+modParamsCurr[4] = modParamsCurr[4]*10;
+
 if len(normTypeArr) == 3: # i.e. we've passed in gs_mean, gs_std, then replace...
   modParamsCurr[-2] = normTypeArr[1];
   modParamsCurr[-1] = normTypeArr[2];
