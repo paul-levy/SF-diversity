@@ -1,5 +1,5 @@
 import math, cmath, numpy, os
-from helper_fcns import makeStimulus, random_in_range, genNormWeights
+from helper_fcns import makeStimulus, random_in_range, genNormWeights, evalSigmaFilter
 from scipy.stats import norm, mode, lognorm, nbinom
 from numpy.matlib import repmat
 import time
@@ -41,7 +41,10 @@ def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
 
 # SFMSimpleResp - Used in Robbe V1 model - excitatory, linear filter response
 def SFMSimpleResp(S, channel, stimParams = []):
-    # returns object (class?) with simpleResp and other things
+    '''
+    # S is the cellStructure
+    # channel is a dictionary with the parameters specifying the filter/model
+    # returns object with simpleResp and other things
 
     # SFMSimpleResp       Computes response of simple cell for sfmix experiment
 
@@ -51,7 +54,7 @@ def SFMSimpleResp(S, channel, stimParams = []):
 
     # 1/23/17 - Edits: Added stimParamsm, make_own_stim so that I can set what
     # stimuli I want when simulating from model
-
+    '''
     make_own_stim = 0;
     if stimParams: # i.e. if we actually have non-empty stimParams
         make_own_stim = 1;
@@ -635,6 +638,20 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
       inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
       inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
       inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
+
+    # sigma calculation
+    filter = dict();
+    sigLow = 10;
+    sigHigh = 1; 
+    sfPref = params[0];
+    filter['type'] = 1; # flexible gaussian
+    filter['params'] = [0, 1, sfPref, sigLow, sigHigh]; # 0 for baseline, 1 for respAmpAbvBaseline
+
+    offset = 0.1;
+    scale = -(1-offset);
+
+    evalSfs = structureSFM['sfm']['exp']['trial']['sf'][0]; # the center SF of all stimuli
+    sigmaFilt = evalSigmaFilter(filter, scale, offset, evalSfs);
                               
     # Evaluate sfmix experiment
     for iR in range(1): #range(len(structureSFM['sfm'])): # why 1 for now? We don't have S.sfm as array (just one)
@@ -651,7 +668,9 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
 
         # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
         numerator     = noiseEarly + Lexc;
-        denominator   = pow(pow(sigma, 2) + pow(Linh, 2), 0.5); # square Linh added 7/24 - was mistakenly not fixed earlier
+        pdb.set_trace();
+        denominator   = pow(sigmaFilt + pow(Linh, 2), 0.5); # square Linh added 7/24 - was mistakenly not fixed earlier
+        # denominator   = pow(pow(sigma, 2) + pow(Linh, 2), 0.5); # square Linh added 7/24 - was mistakenly not fixed earlier
         ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
         meanRate      = ratio.mean(0);
         respModel     = noiseLate + scale*meanRate; # respModel[iR]

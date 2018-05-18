@@ -654,7 +654,7 @@ for d in range(nDisps):
         rvcAx[plt_x][plt_y].fill_between(all_cons[v_cons], modLow[d, sf_ind, v_cons], \
                                       modHigh[d, sf_ind, v_cons], color='r', alpha=0.2);
         # RVC from Naka-Rushton fit
-	curr_fit_sep = crfFitsSepC50[d][sf_ind]['params'];
+        curr_fit_sep = crfFitsSepC50[d][sf_ind]['params'];
         nrPlt = rvcAx[plt_x][plt_y].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
         #pdb.set_trace();
         modPlt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(modAvg[d, sf_ind, v_cons], 0.1), 'r-', alpha=0.7, clip_on=False);
@@ -676,8 +676,8 @@ for d in range(nDisps):
         rvcAx[plt_x][plt_y].set_xscale('symlog', linthreshx=0.01); # symlog will allow us to go down to 0 
         rvcAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
         rvcAx[plt_x][plt_y].set_ylabel('resp (sps)', fontsize='medium');
-	rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
-	rvcAx[plt_x][plt_y].legend((dataPlt[0], modPlt[0], nrPlt[0]), ('data', 'model avg', 'Naka-Rushton'), fontsize='large', loc='center left');
+        rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
+        rvcAx[plt_x][plt_y].legend((dataPlt[0], modPlt[0], nrPlt[0]), ('data', 'model avg', 'Naka-Rushton'), fontsize='large', loc='center left');
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         sns.despine(ax = rvcAx[plt_x][plt_y], offset = 10, trim=False);
