@@ -84,7 +84,6 @@ descrFits = descrFits[which_cell-1]['params']; # just get this cell
 
 modParams = np.load(str(dataPath + fitListName), encoding= 'latin1').item();
 modParamsCurr = modParams[which_cell-1]['params'];
-modParamsCurr[2] = -0.75; # lower c50 to see contrast-dep shifts...
 
 # ### Organize data
 # #### determine contrasts, center spatial frequency, dispersions
@@ -392,6 +391,24 @@ plt.text(0.5, 1.1, 'respExp: {:.2f}'.format(modParamsCurr[3]), fontsize=12, hori
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset=5, trim=False);
     
+if norm_type == 2: # plot the c50 filter (i.e. effective c50 as function of SF)
+  stimSf = np.logspace(-2, 2, 101);
+  sfPref = prefSf; # defined above
+  stdLeft = normTypeArr[2];
+  stdRight = normTypeArr[3];
+  
+  filter = helper_fcns.setSigmaFilter(sfPref, stdLeft, stdRight);
+  offset_sf = normTypeArr[1];
+  scale_sf = -(1-offset_sf); # we always scale so that range is [offset_sf, 1]
+  c50_filt = helper_fcns.evalSigmaFilter(filter, scale_sf, offset_sf, stimSf)
+ 
+  # now plot
+  curr_ax = plt.subplot2grid(detailSize, (2, 4));
+  plt.semilogx(stimSf, c50_filt);
+  plt.title('(mu, stdL/R, offset) = (%.2f, %.2f|%.2f, %.2f)' % (sfPref, stdLeft, stdRight, offset_sf));
+  plt.xlabel('sf (cpd)');
+  plt.ylabel('c50 (con %)')
+
 # print, in text, model parameters:
 plt.subplot2grid(detailSize, (0, 4)); # set the current subplot location/size[default is 1x1]
 plt.text(0.5, 0.5, 'prefSf: {:.3f}'.format(modParamsCurr[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
@@ -438,22 +455,21 @@ for disp in range(nDisps):
           # if modParamsCurr doesn't have inhAsym parameter, add it!
           if norm_type == 1:
             unweighted = 1;
-            ignore, ignore, ignore, normRespSimple = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted);
+            _, _, _, normRespSimple, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
             nTrials = normRespSimple.shape[0];
             nInhChan = cellStruct['sfm']['mod']['normalization']['pref']['sf'];
             inhWeightMat  = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
             normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-          elif norm_type == 0: 
-            # pass only the first 8 parameters so that we don't run SFMsimulate with the gaussian weighting
-            # (should fix SFMsimulate to take parameter specifying norm type)
-            ignore, normResp, ignore, ignore = model_responses.SFMsimulate(modParamsCurr[0:9], cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+          else: # norm_type == 0:
+            #_, normResp, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+            _, _, _, _, normResp = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], normTypeArr = normTypeArr);
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
      
       if norm_type == 1:
         maxResp = np.max(norm_sim[disp, conLvl, :]);
         conDisp_plots[conLvl, disp].text(0.5, 0.0, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8], modParamsCurr[9]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
-      else:
+      else: # norm_type == 0:
         conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
 
       conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);

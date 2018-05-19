@@ -22,7 +22,9 @@ import pdb
 # getSuppressiveSFtuning - returns the normalization pool response
 # makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
 # genNormWeights - used to generate the weighting matrix for weighting normalization pool responses
+# setSigmaFilter - create the filter we use for determining c50 with SF
 # evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
+# setNormTypeArr - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters
 
 def bw_lin_to_log( lin_low, lin_high ):
     # Given the low/high sf in cpd, returns number of octaves separating the
@@ -436,6 +438,19 @@ def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials):
 
   return inhWeightMat;
 
+def setSigmaFilter(sfPref, stdLeft, stdRight, filtType = 1):
+  '''
+  For now, we are parameterizing the semisaturation contrast filter as a "fleixble" Gaussian
+  That is, a gaussian parameterized with a mean, and a standard deviation to the left and right of that peak/mean
+  We set the baseline of the filter to 0 and the overall amplitude to 1
+  '''
+  filter = dict();
+  if filtType == 1:
+    filter['type'] = 1; # flexible gaussian
+    filter['params'] = [0, 1, sfPref, stdLeft, stdRight]; # 0 for baseline, 1 for respAmpAbvBaseline
+
+  return filter;
+
 def evalSigmaFilter(filter, scale, offset, evalSfs):
   '''
   filter is the type of filter to be evaluated (will be dictionary with necessary parameters)
@@ -452,4 +467,73 @@ def evalSigmaFilter(filter, scale, offset, evalSfs):
   evalC50 = scale*filterShape + offset - scale
   return evalC50;
 
+def setNormTypeArr(params, normTypeArr = []):
+  '''
+  Used to create the normTypeArr array which is called in model_responses by SFMGiveBof and SFMsimulate to set
+  the parameters/values used to compute the normalization signal for the full model
 
+  Requires the model parameters vector; optionally takes normTypeArr as input
+
+  Returns the normTypeArr
+  '''
+
+  # constants
+  c50_len = 11; # 11 parameters if we've optimized for the filter which sets c50 in a frequency-dependent way
+  gauss_len = 10; # 10 parameters in the model if we've optimized for the gaussian which weights the normalization filters
+  asym_len = 9; # 9 parameters in the model if we've used the old asymmetry calculation for norm weights
+
+  inhAsym = 0; # set to 0 as default
+
+  # now do the work
+  if normTypeArr:
+    norm_type = int(normTypeArr[0]); # typecast to int
+    if norm_type == 2:
+      if len(params) == c50_len:
+        filt_offset = params[8];
+        std_l = params[9];
+        std_r = params[10];
+      else:
+        if len(normTypeArr) > 1:
+          filt_offset = normTypeArr[1];
+        else: 
+          filt_offset = random_in_range([0.05, 0.2])[0]; 
+        if len(normTypeArr) > 2:
+          std_l = normTypeArr[2];
+        else:
+          std_l = random_in_range([0.5, 5])[0]; 
+        if len(normTypeArr) > 3:
+          std_r = normTypeArr[3];
+        else: 
+          std_r = random_in_range([0.5, 5])[0]; 
+      normTypeArr = [norm_type, filt_offset, std_l, std_r];
+
+    elif norm_type == 1:
+      if len(params) == gauss_len: # we've optimized for these parameters
+        gs_mean = params[8];
+        gs_std = params[9];
+      else:
+        if len(normTypeArr) > 1:
+          gs_mean = normTypeArr[1];
+        else:
+          gs_mean = random_in_range([-1, 1])[0];
+        if len(normTypeArr) > 2:
+          gs_std = normTypeArr[2];
+        else:
+          gs_std = numpy.power(10, random_in_range([-2, 2])[0]); # i.e. 1e-2, 1e2
+      normTypeArr = [norm_type, gs_mean, gs_std]; # save in case we drew mean/std randomly
+    
+    elif norm_type == 0:
+      if len(params) == asym_len:
+        inhAsym = params[8];
+      if len(normTypeArr) > 1: # then we've passed in inhAsym to override existing one, if there is one
+        inhAsym = normTypeArr[1];
+      normTypeArr = [norm_type, inhAsym];
+  else:
+    norm_type = 0; # i.e. just run old asymmetry computation
+    if len(params) == asym_len:
+      inhAsym = params[8];
+    if len(normTypeArr) > 1: # then we've passed in inhAsym to override existing one, if there is one
+      inhAsym = normTypeArr[1];
+    normTypeArr = [norm_type, inhAsym];
+
+  return normTypeArr;
