@@ -444,8 +444,10 @@ for disp in range(nDisps):
             inhWeightMat  = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
             normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-          elif norm_type == 0:
-            ignore, normResp, ignore, ignore = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+          elif norm_type == 0: 
+            # pass only the first 8 parameters so that we don't run SFMsimulate with the gaussian weighting
+            # (should fix SFMsimulate to take parameter specifying norm type)
+            ignore, normResp, ignore, ignore = model_responses.SFMsimulate(modParamsCurr[0:9], cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
      
       if norm_type == 1:

@@ -629,6 +629,7 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     if norm_type == 1:
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
     else:
+      inhAsym = 0;
       for iP in range(len(nInhChan)):
           # if asym, put where '0' is
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
@@ -643,15 +644,15 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     filter = dict();
     sigLow = 10;
     sigHigh = 1; 
-    sfPref = params[0];
+    sfPref = 0.1; # params[0];
     filter['type'] = 1; # flexible gaussian
     filter['params'] = [0, 1, sfPref, sigLow, sigHigh]; # 0 for baseline, 1 for respAmpAbvBaseline
 
-    offset = 0.1;
-    scale = -(1-offset);
+    offset_sigma = 0.1;
+    scale_sigma = -(1-offset_sigma);
 
     evalSfs = structureSFM['sfm']['exp']['trial']['sf'][0]; # the center SF of all stimuli
-    sigmaFilt = evalSigmaFilter(filter, scale, offset, evalSfs);
+    sigmaFilt = evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
                               
     # Evaluate sfmix experiment
     for iR in range(1): #range(len(structureSFM['sfm'])): # why 1 for now? We don't have S.sfm as array (just one)
@@ -668,7 +669,6 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
 
         # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
         numerator     = noiseEarly + Lexc;
-        pdb.set_trace();
         denominator   = pow(sigmaFilt + pow(Linh, 2), 0.5); # square Linh added 7/24 - was mistakenly not fixed earlier
         # denominator   = pow(pow(sigma, 2) + pow(Linh, 2), 0.5); # square Linh added 7/24 - was mistakenly not fixed earlier
         ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
@@ -754,6 +754,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     if norm_type == 1:
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
     else:
+      inhAsym = 0;
       for iP in range(len(nInhChan)):
           # if asym, put where '0' is
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
@@ -764,6 +765,21 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
       inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
       inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
                               
+    # sigma calculation
+    filter = dict();
+    sigLow = 10;
+    sigHigh = 1; 
+    sfPref = 0.1; #params[0];
+    # sfPref = params[0];
+    filter['type'] = 1; # flexible gaussian
+    filter['params'] = [0, 1, sfPref, sigLow, sigHigh]; # 0 for baseline, 1 for respAmpAbvBaseline
+
+    offset_sigma = 0.1;
+    scale_sigma = -(1-offset_sigma);
+
+    evalSfs = structureSFM['sfm']['exp']['trial']['sf'][0]; # the center SF of all stimuli
+    sigmaFilt = evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
+
     # Evaluate sfmix experiment
     T = structureSFM['sfm']; # [iR]
     
@@ -783,7 +799,8 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     numerator     = noiseEarly + Lexc;
     # taking square root of denominator (after summing squares...) to bring in line with computation in Carandini, Heeger, Movshon, '97
-    denominator   = pow(pow(sigma, 2) + pow(Linh, 2), 0.5); # squaring Linh - edit 7/17
+    denominator   = pow(sigmaFilt + pow(Linh, 2), 0.5); # squaring Linh - edit 7/17
+    # denominator   = pow(pow(sigma, 2) + pow(Linh, 2), 0.5); # squaring Linh - edit 7/17
     ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
     meanRate      = ratio.mean(0);
     respModel     = noiseLate + scale*meanRate; # respModel[iR]

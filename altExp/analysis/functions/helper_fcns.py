@@ -11,6 +11,7 @@ import pdb
 # Functions:
 # bw_lin_to_log
 # bw_log_to_lin
+# deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
@@ -21,6 +22,7 @@ import pdb
 # getSuppressiveSFtuning - returns the normalization pool response
 # makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
 # genNormWeights - used to generate the weighting matrix for weighting normalization pool responses
+# evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
 
 def bw_lin_to_log( lin_low, lin_high ):
     # Given the low/high sf in cpd, returns number of octaves separating the
@@ -39,6 +41,19 @@ def bw_log_to_lin(log_bw, pref_sf):
     lin_bw = more_half - less_half;
     
     return lin_bw, sf_range
+
+def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
+
+    prefSf = params[0];
+    dOrdSp = params[1];
+
+    sfRel = stimSf / prefSf;
+    s     = pow(stimSf, dOrdSp) * numpy.exp(-dOrdSp/2 * pow(sfRel, 2));
+    sMax  = pow(prefSf, dOrdSp) * numpy.exp(-dOrdSp/2);
+    sNl   = s/sMax;
+    selSf = sNl;
+
+    return selSf, stimSf;
 
 def compute_SF_BW(fit, height, sf_range):
 
@@ -77,7 +92,7 @@ def fix_params(params_in):
 
     return [abs(x) for x in params_in] 
 
-def flexible_Gauss(params, stim_sf):
+def flexible_Gauss(params, stim_sf, minThresh=0.1):
     # The descriptive model used to fit cell tuning curves - in this way, we
     # can read off preferred SF, octave bandwidth, and response amplitude
 
@@ -97,7 +112,7 @@ def flexible_Gauss(params, stim_sf):
     # hashtag:uglyPython
     shape = [math.exp(-pow(math.log(x), 2) / (2*pow(y, 2))) for x, y in zip(sf0, sigma)];
                 
-    return [max(0.1, respFloor + respRelFloor*x) for x in shape];
+    return [max(minThresh, respFloor + respRelFloor*x) for x in shape];
 
 def blankResp(cellStruct):
     tr = cellStruct['sfm']['exp']['trial'];
@@ -420,3 +435,21 @@ def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials):
   inhWeightMat  = np.tile(inhWeightT3, (1,1,nFrames));
 
   return inhWeightMat;
+
+def evalSigmaFilter(filter, scale, offset, evalSfs):
+  '''
+  filter is the type of filter to be evaluated (will be dictionary with necessary parameters)
+  scale, offset are used to scale and offset the filter shape
+  evalSfs - which sfs to evaluate at
+  '''
+
+  params = filter['params'];  
+  if filter['type'] == 1: # flexibleGauss
+    filterShape = numpy.array(flexible_Gauss(params, evalSfs, 0)); # 0 is baseline/minimum value of flexible_Gauss
+  elif filter['type'] == 2:
+    filterShape = deriv_gauss(params, evalSfs)[0]; # take the first output argument only
+
+  evalC50 = scale*filterShape + offset - scale
+  return evalC50;
+
+
