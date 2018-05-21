@@ -37,6 +37,37 @@ def ph_test(S, p):
                 
     return StimOr, stimTf, stimCo, stimPh, stimSf;
 
+def flexible_gauss(v_sigmaLow, v_sigmaHigh, sfPref, stim_sf, minThresh=0.1, respFloor = 0, respRelFloor = 1):
+    sfs_centered = tf.divide(stim_sf, sfPref);
+    gt_eq_1 = sfs_centered > 1; # find which sfs are greater than 1
+ 
+    # first calculate for when sf >= sfPref
+    gt1_inds = tf.where(tf.equal(gt_eq_1, True)); # which indices have sfs_centered>=1
+    sfs_curr = tf.cast(tf.boolean_mask(sfs_centered, gt_eq_1), dtype=tf.float32); # cast to float32
+    calc_gt1 = tf.exp(tf.divide(-tf.square(tf.log(sfs_curr)), tf.multiply(tf.constant(2, dtype=tf.float32), tf.square(v_sigmaHigh))))
+    # next, calculate for when sf < sfPref
+    lt1_inds = tf.where(tf.equal(~gt_eq_1, True)); # which indices have sfs_centered>=1
+    sfs_curr = tf.cast(tf.boolean_mask(sfs_centered, ~gt_eq_1), dtype=tf.float32);
+    calc_lt1 = tf.exp(tf.divide(-tf.square(tf.log(sfs_curr)), tf.multiply(tf.constant(2, dtype=tf.float32), tf.square(v_sigmaLow))))
+
+    calc_combined = tf.concat([calc_gt1, calc_lt1], axis=0); 
+    inds_combined = tf.concat([gt1_inds, lt1_inds], axis=0);
+
+    # The order of spatial frequencies represented in calc_combined are wrong relative to sfPref
+    # But we can reorder inds_combined (sorting with nn.top_k) to reorder calc_combined to 
+    # correspond with sfPref
+    reorder = tf.nn.top_k(tf.transpose(-1*inds_combined), k=stim_sf.shape[0]); 
+    # above: -1*inds because top_k will sort from highest value to lowest value; we want lowest ind [0] first
+    responses = tf.gather(calc_combined, reorder.indices);
+
+    pdb.set_trace();
+    return responses;
+    #masked_stimTf = tf.boolean_mask(ph_stimTf[0], ~nan_trials);
+    #prefTf = tf.round(tf.reduce_mean(masked_stimTf));     # in cycles per second
+   
+    #dist = tf.distributions.Normal(loc=normMean, scale=normStd)
+    #inhWeight = dist.prob(ph_normCenteredSf);
+
 # orientation filter used in plotting (only, I think?)
 def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
     
@@ -234,13 +265,13 @@ def SFMSimpleResp(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, mod_par
         
 def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, ph_objWeight, \
                ph_normResp, ph_normCenteredSf, v_prefSf, v_dOrdSp, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_normMean, v_normStd):
+                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight):
     
     # NOTE 4.26.18: ph_normCenteredSf is actually just the log SF centers of the normalization channels in one vector
     # Computes the negative log likelihood for the LN-LN model
 
     params = applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
-                              v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_normMean, v_normStd);
+                              v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight);
     
     # 00 = preferred spatial frequency   (cycles per degree)
     # 01 = derivative order in space
@@ -277,8 +308,9 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     varGain    = params[7];  # multiplicative noise
 
     # normalization weight parameters
-    normMean = params[8];
-    normStd = params[9];
+    v_sigOffset = params[8]; # c50 filter will range between [v_sigOffset, 1]
+    v_stdLeft = params[9]; # std of the gaussian to the left of the peak
+    v_stdRight = params[10]; # " to the right "
 
     ### Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
     #priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15));
@@ -287,11 +319,11 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     # why divide by number of trials? because we take mean of NLLs, so this way it's fair to add them
 
     ### Compute weights for suppressive signals - will be 1-vector of length nFilt [27]
-    # FIX THIS FIX THIS FIX THIS for new gauss. weights [ph_normResp]
-    # FIX THIS FIX THIS FIX THIS for new gauss. weights [ph_normResp]
+    inhWeight = 1 + tf.multiply(tf.constant(0, dtype=tf.float32), ph_normCenteredSf); # assume no asymmetry
+    ''' # for gaussian normalization weighting
     dist = tf.distributions.Normal(loc=normMean, scale=normStd)
     inhWeight = dist.prob(ph_normCenteredSf);
-
+    '''
     # now we must exand inhWeight to match rank of ph_normResp - no need to match dimensions, since * will broadcast
     inhWeight = tf.expand_dims(inhWeight, axis=0);
     inhWeightMat = tf.expand_dims(inhWeight, axis=-1);
@@ -306,6 +338,10 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     temp = ph_normResp * inhWeightMat;
     temp = tf.reduce_sum(temp, axis=1); # sum over filters to make nTrials x nFrames
     Linh = tf.sqrt(temp);
+
+    # Evaluate the c50 filter at the center frequencies present in the stimulus set
+    centerSfs = ph_stimSf[0, :]; # is this valid? CHECK CHECK CHECK
+    
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     uno = tf.add(noiseEarly, tf.cast(Lexc, dtype=tf.float32));
@@ -572,7 +608,7 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
                         ph_stimDur: stim_dur, ph_objWeight: objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
 
         else:
-	  opt = \
+          opt = \
                 m.run(optimizer, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
                             ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
                             ph_stimDur: stim_dur, ph_objWeight: objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
@@ -585,7 +621,7 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
 
         if (iter/500.0) == round(iter/500.0): # save every once in a while!!!
 
-    	  real_params = m.run(applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
+          real_params = m.run(applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
                                                v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_normMean, v_normStd));
 
           
