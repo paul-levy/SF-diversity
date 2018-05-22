@@ -340,14 +340,14 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
 
     # Evaluate the c50 filter at the center frequencies present in the stimulus set
     centerSfs = ph_stimSf[0, :]; # is this valid? CHECK CHECK CHECK
-    scale = -(1-sigOffset);
+    scaleSig = -(1-sigOffset);
     sigEff = flexible_gauss(stdLeft, stdRight, prefSf, centerSfs);
     sigmaEff = tf.transpose(sigEff, perm=[1, 0]); # just switch dimensions
     '''
-    Multiply sigmaEff by scale (where scale < 0) to create function on range [scale, 0] 
-    Then, add sigOffset and -scale to make function [0, -scale] --> [offset, offset-scale] where offset-scale typically = 1
+    Multiply sigmaEff by scaleSig (where scaleSig < 0) to create function on range [scaleSig, 0] 
+    Then, add sigOffset and -scaleSig to make function [0, -scaleSig] --> [offset, offset-scaleSig] where offset-scaleSig typically = 1
     '''
-    sigmaEffective = tf.add(tf.add(tf.multiply(scale, sigmaEff), sigOffset), -scale);
+    sigmaEffective = tf.add(tf.add(tf.multiply(scaleSig, sigmaEff), sigOffset), -scaleSig);
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     uno = tf.add(noiseEarly, tf.cast(Lexc, dtype=tf.float32));
