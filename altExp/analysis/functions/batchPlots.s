@@ -25,7 +25,7 @@ module load seaborn/0.7.1
 #   4/5 [optional] params are (in log coordinates) mean and std of gaussian
 # if third param is 2:
 #   4/5/6 [optional] params are std of left/right halves, and offset (i.e. bottom/lowest c50)
-python plotting.py $SLURM_ARRAY_TASK_ID 2 1
+python plotting.py $SLURM_ARRAY_TASK_ID 2 2
  
 # leave a blank line at the end
 

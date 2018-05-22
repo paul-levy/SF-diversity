@@ -43,11 +43,11 @@ while nArgsIn > 0:
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
 # savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 # personal mac
-dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
-save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/cell4_sandbox/';
+#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
+#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/cell4_sandbox/';
 # prince cluster
-#dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
-#save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
+dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
+save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
 if fit_type == 1:
   loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
@@ -62,7 +62,7 @@ if fit_type == 4:
   loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
   type_str = '-poissMod';
 
-fitListName = 'fitList_180521_modPoiss.npy';
+fitListName = 'fitList_180521_modPoiss_restrictLB.npy';
 crfFitName = str('crfFits' + type_str + '.npy');
 
 rpt_fit = 1; # i.e. take the multi-start result
@@ -92,6 +92,7 @@ data = cellStruct['sfm']['exp']['trial'];
 
 ignore, modRespAll, normTypeArr = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr);
 norm_type = normTypeArr[0];
+print('norm type %d' % (norm_type));
 if norm_type == 1:
   gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 1
   gs_std = normTypeArr[2]; # guaranteed to exist ...
@@ -398,14 +399,14 @@ if norm_type == 2: # plot the c50 filter (i.e. effective c50 as function of SF)
   stdRight = normTypeArr[3];
   
   filter = helper_fcns.setSigmaFilter(sfPref, stdLeft, stdRight);
-  offset_sf = normTypeArr[1];
-  scale_sf = -(1-offset_sf); # we always scale so that range is [offset_sf, 1]
-  c50_filt = helper_fcns.evalSigmaFilter(filter, scale_sf, offset_sf, stimSf)
+  offset_filt = normTypeArr[1];
+  scale_filt = -(1-offset_filt); # we always scale so that range is [offset_sf, 1]
+  c50_filt = helper_fcns.evalSigmaFilter(filter, scale_filt, offset_filt, stimSf)
  
   # now plot
   curr_ax = plt.subplot2grid(detailSize, (2, 4));
   plt.semilogx(stimSf, c50_filt);
-  plt.title('(mu, stdL/R, offset) = (%.2f, %.2f|%.2f, %.2f)' % (sfPref, stdLeft, stdRight, offset_sf));
+  plt.title('(mu, stdL/R, offset) = (%.2f, %.2f|%.2f, %.2f)' % (sfPref, stdLeft, stdRight, offset_filt));
   plt.xlabel('sf (cpd)');
   plt.ylabel('c50 (con %)')
 

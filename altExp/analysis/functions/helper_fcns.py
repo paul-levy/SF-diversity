@@ -464,7 +464,9 @@ def evalSigmaFilter(filter, scale, offset, evalSfs):
   elif filter['type'] == 2:
     filterShape = deriv_gauss(params, evalSfs)[0]; # take the first output argument only
 
-  evalC50 = scale*filterShape + offset - scale
+  evalC50 = scale*filterShape + offset - scale 
+  # scale*filterShape will be between [scale, 0]; then, -scale makes it [0, -scale], where scale <0 ---> -scale>0
+  # finally, +offset means evalC50 is [offset, -scale+offset], where -scale+offset will typically = 1
   return evalC50;
 
 def setNormTypeArr(params, normTypeArr = []):
@@ -528,6 +530,7 @@ def setNormTypeArr(params, normTypeArr = []):
       if len(normTypeArr) > 1: # then we've passed in inhAsym to override existing one, if there is one
         inhAsym = normTypeArr[1];
       normTypeArr = [norm_type, inhAsym];
+
   else:
     norm_type = 0; # i.e. just run old asymmetry computation
     if len(params) == asym_len:

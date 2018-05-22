@@ -704,7 +704,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     # 07 = variance of response gain    
     # 08 = inhibitory asymmetry (i.e. tilt of gain over SF for weighting normalization pool responses)
 
-    print('simulate!');
+    #print('simulate!');
 
     T = structureSFM['sfm'];
 

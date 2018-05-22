@@ -280,6 +280,9 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     # Added 04/26/18:
     # 08 = mean of normalization weights gaussian
     # 09 = std of ...
+    # Added 05/21/18:
+    # 08 = offset of c50 tuning filter (filter bounded between [sigOffset, 1]
+    # 09/10 = standard deviations to the left and right of the peak of the c50 filter
 
     nFrames = 120; # hashtag always
     
@@ -337,9 +340,14 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
 
     # Evaluate the c50 filter at the center frequencies present in the stimulus set
     centerSfs = ph_stimSf[0, :]; # is this valid? CHECK CHECK CHECK
-    #pdb.set_trace();
+    scale = -(1-sigOffset);
     sigEff = flexible_gauss(stdLeft, stdRight, prefSf, centerSfs);
-    sigmaEffective = tf.transpose(sigEff, perm=[1, 0]); # just switch dimensions
+    sigmaEff = tf.transpose(sigEff, perm=[1, 0]); # just switch dimensions
+    '''
+    Multiply sigmaEff by scale (where scale < 0) to create function on range [scale, 0] 
+    Then, add sigOffset and -scale to make function [0, -scale] --> [offset, offset-scale] where offset-scale typically = 1
+    '''
+    sigmaEffective = tf.add(tf.add(tf.multiply(scale, sigmaEff), sigOffset), -scale);
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     uno = tf.add(noiseEarly, tf.cast(Lexc, dtype=tf.float32));
@@ -384,7 +392,7 @@ def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
         # 08 = mean of normalization weights gaussian || [>-2]
         # 09 = std of ... || >1e-3
         # Added/changed on 5/21/18:
-        # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 0.2]
+        # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 1]
         # 09 = standard deviation of the gaussian to the left of the peak || >0.1
         # 10 = "" to the right "" || >0.1
 
@@ -399,7 +407,7 @@ def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
     seven = tf.add(tf.nn.softplus(v_varGain), 1e-3);
     #eight = tf.add(tf.nn.softplus(v_normMean), -2);
     #nine = tf.add(tf.nn.softplus(v_normStd), 1e-3);
-    eight = tf.sigmoid(v_sigOffset);
+    eight = tf.multiply(0.2, tf.sigmoid(v_sigOffset)); 
     nine = tf.add(tf.nn.softplus(v_stdLeft), 1e-1);
     ten = tf.add(tf.nn.softplus(v_stdRight), 1e-1);
     return [zero,one,two,three,four,five,six,seven,eight,nine,ten];
@@ -425,10 +433,10 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
     ########
     # Load cell
     ########
-    #loc_data = '/home/pl1465/SF_diversity/altExp/analysis/structures/'; # Prince cluster
-    loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/'; # Personal mac
+    loc_data = '/home/pl1465/SF_diversity/altExp/analysis/structures/'; # Prince cluster
+    #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/'; # Personal mac
 
-    fitListName = 'fitList_180521_modPoiss.npy';
+    fitListName = 'fitList_180521_modPoiss_restrictLB.npy';
 
     if os.path.exists(loc_data + fitListName):
       fitList = numpy.load(str(loc_data + fitListName), encoding='latin1').item();
@@ -459,7 +467,7 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
     # 08 = mean of (log)gaussian for normalization weights
     # 09 = std of (log)gaussian for normalization weights
     # Added/changed on 5/21/18:
-    # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 0.2]
+    # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 1]
     # 09 = standard deviation of the gaussian to the left of the peak || >0.1
     # 10 = "" to the right "" || >0.1
 
@@ -486,7 +494,7 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
     varGain = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[7];
     #normMean = numpy.random.uniform(-1, 1) if initFromCurr==0 else curr_params[8];
     #normStd = numpy.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[9];
-    sigOffset = numpy.random.uniform(0, 0.2) if initFromCurr==0 else curr_params[8];
+    sigOffset = numpy.random.uniform(0, 0.05) if initFromCurr==0 else curr_params[8];
     stdLeft = numpy.random.uniform(1, 5) if initFromCurr==0 else curr_params[9];
     stdRight = numpy.random.uniform(1, 5) if initFromCurr==0 else curr_params[10];
 
