@@ -19,11 +19,14 @@ module load seaborn/0.7.1
 	# 1 - square root
 	# 2 - poisson
 	# 3 - modulated poission
-# third param is 1 (gaussian) or 0 (helper_functions asymmetry) calculation for normalization
+# third param indicates which calculation for normalization
+# if third param is 0: standard asymmetric normalization (1 parameter)
 # if third param is 1:
 #   4/5 [optional] params are (in log coordinates) mean and std of gaussian
 #   if not given, then they will be chosen from the optimization (if done) or randomly from a distrubition
-python plotting.py $SLURM_ARRAY_TASK_ID 1 1
+# if third param is 2:
+#   4/5/6 [optional] params are std of left/right halves, and offset (i.e. bottom/lowest c50)
+python plotting.py $SLURM_ARRAY_TASK_ID 2 2
  
 # leave a blank line at the end
 

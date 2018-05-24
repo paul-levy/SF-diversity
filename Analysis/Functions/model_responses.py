@@ -1,5 +1,5 @@
 import math, cmath, numpy, os
-from helper_fcns import makeStimulus, random_in_range, genNormWeights
+from helper_fcns import makeStimulus, random_in_range, genNormWeights, setSigmaFilter, evalSigmaFilter, setNormTypeArr
 from scipy.stats import norm, mode, lognorm, nbinom
 from numpy.matlib import repmat
 import time
@@ -563,12 +563,19 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     # 06 = late additive noise
     # 07 = variance of response gain    
 
-    # normTypeArr should be [0 or 1, [mean], [std]]
+    # normTypeArr should be [0 or 1 or 2, *params]
     # if normTypeArr[0] = 0
-    #   08 = asymmetry of normalization (optional parameter)
+    #   08 = asymmetry of normalization
+    #   normTypeArr = [0, [inhAsym]]
     # if normTypeArr[0] = 1 (Gaussian weights)
     #   08 = mean of Gaussian
     #   09 = std of Gaussian
+    #   normTypeArr = [1, [mean], [std]]
+    # if normTypeArr[0] = 2 (freq-dep c50)
+    #   08 = std of left half (rel. to peak)
+    #   09 = std of right half (rel. to peak)
+    #   10 = offset (i.e. what is c50 at peak sensitivity, where c50 is lowest)
+    #   normTypeArr = [2, [offset], [leftSigma], [rightSigma]]
 
     print('ha!');
     
@@ -604,42 +611,41 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     inhWeight = [];
     nFrames = 120; # always
 
-    if normTypeArr:
-      norm_type = int(normTypeArr[0]); # typecast to int
-      if len(params) > 9: # we've optimized for these parameters
-        gs_mean = params[8];
-        gs_std = params[9];
-      else:
-        if len(normTypeArr) > 1:
-          gs_mean = normTypeArr[1];
-        else:
-          gs_mean = random_in_range([-1, 1])[0];
-        if len(normTypeArr) > 2:
-          gs_std = normTypeArr[2];
-        else:
-          gs_std = numpy.power(10, random_in_range([-2, 2])[0]); # i.e. 1e-2, 1e2
-      normTypeArr = [norm_type, gs_mean, gs_std]; # save in case we drew mean/std randomly
+    normTypeArr = setNormTypeArr(params, normTypeArr);
+    norm_type = int(normTypeArr[0]);
+
+    if norm_type == 2:
+      # sigma calculation
+      sfPref = params[0];
+      stdLeft = normTypeArr[2];
+      stdRight = normTypeArr[3];
+      filter = setSigmaFilter(sfPref, stdLeft, stdRight);
+
+      offset_sigma = normTypeArr[1];
+      scale_sigma = -(1-offset_sigma);
+
+      evalSfs = structureSFM['sfm']['exp']['trial']['sf'][0]; # the center SF of all stimuli
+      sigmaFilt = evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
     else:
-      norm_type = 0; # i.e. just run old asymmetry computation
-      normTypeArr = [norm_type];
+      sigmaFilt = numpy.square(sigma); # i.e. square the normalization constant
 
-    for iP in range(len(nInhChan)): # two channels: narrow and broad
-      if norm_type == 1:
-        # if asym, put where '0' is
-        curr_chan = len(T['mod']['normalization']['pref']['sf'][iP]);
-        log_sfs = numpy.log(T['mod']['normalization']['pref']['sf'][iP]);
-        new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
-        inhWeight = numpy.append(inhWeight, new_weights);
+    if norm_type == 1:
+      gs_mean = normTypeArr[1];
+      gs_std = normTypeArr[2];
+      inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
+    else: # norm_type == 0 or anything else,
       if norm_type == 0:
-        # if you reintroduce asymmetry, put that asymmetry parameter where the '0' is now!
-        inhWeight = numpy.append(inhWeight, 1 + 0*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
-                                            - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
-
-    # assumption (made by Robbe) - only two normalization pools
-    inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
-    inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
-    inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
-    inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
+        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 0
+      else:
+        inhAsym = 0; # otherwise, just set to 0
+      for iP in range(len(nInhChan)):
+          inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
+                                              - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
+      # assumption (made by Robbe) - only two normalization pools
+      inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
+      inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
+      inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
+      inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
                               
     # Evaluate sfmix experiment
     for iR in range(1): #range(len(structureSFM['sfm'])): # why 1 for now? We don't have S.sfm as array (just one)
@@ -656,7 +662,7 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
 
         # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
         numerator     = noiseEarly + Lexc;
-        denominator   = pow(pow(sigma, 2) + pow(Linh, 2), 0.5); # square Linh added 7/24 - was mistakenly not fixed earlier
+        denominator   = pow(sigmaFilt + pow(Linh, 2), 0.5); # square Linh added 7/24 - was mistakenly not fixed earlier
         ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
         meanRate      = ratio.mean(0);
         respModel     = noiseLate + scale*meanRate; # respModel[iR]
@@ -679,7 +685,7 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     return NLL, respModel, normTypeArr;
     #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};
 
-def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
+def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, normTypeArr = []):
     # Currently, will get slightly different stimuli for excitatory and inhibitory/normalization pools
     # But differences are just in phase/TF, but for TF, drawn from same distribution, anyway...
     # 4/27/18: if unweighted = 1, then do the calculation/return normResp with weights applied; otherwise, just return the unweighted filter responses
@@ -692,9 +698,13 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     # 05 = early additive noise
     # 06 = late additive noise
     # 07 = variance of response gain    
+
     # 08 = inhibitory asymmetry (i.e. tilt of gain over SF for weighting normalization pool responses)
     # OR
     # 08/09 = mean/std of gaussian used for weighting normalization filters
+    # OR
+    # 08 = offset in c50 filter (bounded b/t [offset, 1])
+    # 09/10 = std to the left/right of the peak of the c50 filter
 
     print('simulate!');
     
@@ -707,15 +717,10 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     excChannel = {'pref': pref, 'dord': dord};
 
     # Inhibitory channel
-    if len(params) > 9:
-      norm_type = 1;
-      gs_mean = params[8];
-      gs_std = params[9];
-    else:
-      norm_type = 0;
-      inhAsym = params[8];
+    normTypeArr = setNormTypeArr(params, normTypeArr);
+    norm_type = normTypeArr[0];
 
-     # Other (nonlinear) model components
+    # Other (nonlinear) model components
     sigma    = pow(10, params[2]); # normalization constant
     # respExp  = 2; # response exponent
     respExp  = params[3]; # response exponent
@@ -739,14 +744,31 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     inhWeight = [];
     nFrames = 120; # always
 
+    if norm_type == 2:
+      # sigma calculation
+      sfPref = params[0];
+      stdLeft = normTypeArr[2];
+      stdRight = normTypeArr[3];
+      filter = setSigmaFilter(sfPref, stdLeft, stdRight);
+
+      offset_sigma = normTypeArr[1];
+      scale_sigma = -(1-offset_sigma);
+
+      evalSfs = structureSFM['sfm']['exp']['trial']['sf'][0]; # the center SF of all stimuli
+      sigmaFilt = evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
+    else:
+      sigmaFilt = numpy.square(sigma); # i.e. normalization constant squared
+
     if norm_type == 1:
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
-    else:
+    else: # norm_type == 0 or anything else, we just go with 
+      if norm_type == 0:
+        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 0
+      else:
+        inhAsym = 0; # otherwise, just set to 0
       for iP in range(len(nInhChan)):
-          # if asym, put where '0' is
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                               - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
-
       # assumption (made by Robbe) - only two normalization pools
       inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
       inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
@@ -771,9 +793,9 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0):
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     numerator     = noiseEarly + Lexc;
     # taking square root of denominator (after summing squares...) to bring in line with computation in Carandini, Heeger, Movshon, '97
-    denominator   = pow(pow(sigma, 2) + pow(Linh, 2), 0.5); # squaring Linh - edit 7/17
+    denominator   = pow(sigmaFilt + pow(Linh, 2), 0.5); # squaring Linh - edit 7/17
     ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
     meanRate      = ratio.mean(0);
     respModel     = noiseLate + scale*meanRate; # respModel[iR]
 
-    return respModel, Linh, Lexc, normResp['normResp'];
+    return respModel, Linh, Lexc, normResp['normResp'], denominator;

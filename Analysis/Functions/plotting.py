@@ -22,7 +22,7 @@
 import os
 import sys
 import numpy as np
-from helper_fcns import organize_modResp, flexible_Gauss, getSuppressiveSFtuning, compute_SF_BW, genNormWeights, random_in_range
+from helper_fcns import organize_modResp, flexible_Gauss, getSuppressiveSFtuning, compute_SF_BW, genNormWeights, random_in_range, evalSigmaFilter, setSigmaFilter
 import model_responses as mod_resp
 from itertools import chain
 import matplotlib
@@ -62,7 +62,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_180430_LR';
+fitBase = 'fitList_180521';
 if fitType == 1:
   fitSuf = '_sqrt.npy';
 elif fitType == 2:
@@ -262,7 +262,7 @@ if norm_type == 1:
   inhWeight = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
   inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
 else:
-  if modFit[8]: # i.e. if this parameter exists...
+  if len(modFit) == 9: # i.e. if right number of model parameters...
     inhAsym = modFit[8];
   else:
     inhAsym = 0;
@@ -304,6 +304,24 @@ plt.ylim([-.1, 1]);
 plt.text(0.5, 1.1, 'respExp: {:.2f}'.format(modFit[3]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset=5);
+
+if norm_type == 2: # plot the c50 filter (i.e. effective c50 as function of SF)
+  stimSf = np.logspace(-2, 2, 101);
+  sfPref = prefSf; # defined above
+  stdLeft = normTypeArr[2];
+  stdRight = normTypeArr[3];
+  
+  filter = setSigmaFilter(sfPref, stdLeft, stdRight);
+  offset_filt = normTypeArr[1];
+  scale_filt = -(1-offset_filt); # we always scale so that range is [offset_sf, 1]
+  c50_filt = evalSigmaFilter(filter, scale_filt, offset_filt, stimSf)
+ 
+  # now plot
+  curr_ax = plt.subplot2grid(detailSize, (2, 4));
+  plt.semilogx(stimSf, c50_filt);
+  plt.title('(mu, stdL/R, offset) = (%.2f, %.2f|%.2f, %.2f)' % (sfPref, stdLeft, stdRight, offset_filt));
+  plt.xlabel('sf (cpd)');
+  plt.ylabel('c50 (con %)')
     
 # actually last - CRF at different dispersion levels
 crf_row = len(all_plots)-1; # we're putting the CRFs in the last row of this plot
@@ -368,14 +386,14 @@ for disp in range(nFam):
           # if modFit doesn't have inhAsym parameter, add it!
           if norm_type == 1:
             unweighted = 1;
-            ignore, ignore, ignore, normRespSimple = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted);
+            _, _, _, normRespSimple, _ = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
             nTrials = normRespSimple.shape[0];
             nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
             inhWeightMat  = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
             normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-          elif norm_type == 0:
-            ignore, normResp, ignore, ignore = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+          else: # including norm_type == 0 or 2
+            _, _, _, _, normResp = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], normTypeArr = normTypeArr);
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
 
       if norm_type == 1:
@@ -491,7 +509,7 @@ for d in range(nFam):
         curr_resps = [];
         for sf_i in v_sfs:
           print('Testing SF tuning: disp %d, con %.2f, sf %.2f' % (d+1, v_cons[c], sf_i));
-          sf_iResp, ignore, ignore, ignore = mod_resp.SFMsimulate(modFit, expData, d+1, v_cons[c], sf_i);
+          sf_iResp, _, _, _, _ = mod_resp.SFMsimulate(modFit, expData, d+1, v_cons[c], sf_i, normTypeArr = normTypeArr);
           curr_resps.append(sf_iResp[0]); # SFMsimulate returns array - unpack it
 
         # plot data
@@ -520,7 +538,7 @@ for d in range(nFam):
         curr_resps = [];
         for con_i in v_cons:
           print('Testing RVC: disp %d, con %.2f, sf %.2f' % (d+1, con_i, sf_curr));
-          con_iResp, ignore, ignore, ignore = mod_resp.SFMsimulate(modFit, expData, d+1, con_i, sf_curr);
+          con_iResp, _, _, _, _ = mod_resp.SFMsimulate(modFit, expData, d+1, con_i, sf_curr, normTypeArr = normTypeArr);
           curr_resps.append(con_iResp[0]); # unpack the array returned by SFMsimulate
 
         col = [sf_i/float(n_v_sfs), sf_i/float(n_v_sfs), sf_i/float(n_v_sfs)];

@@ -1,10 +1,9 @@
-import math
+from math import pi
 import numpy
 import os
 from makeStimulus import makeStimulus 
 from scipy.stats import norm, mode, lognorm, nbinom
 from numpy.matlib import repmat
-import time
 import sys
 
 import tensorflow as tf
@@ -12,7 +11,7 @@ import tensorflow as tf
 import pdb
 
 fft = numpy.fft
-tf_pi = tf.constant(math.pi);
+tf_pi = tf.constant(pi);
 
 def ph_test(S, p):
     
@@ -27,10 +26,10 @@ def ph_test(S, p):
     stimSf = numpy.empty((nGratings,));
                
     for iC in range(nStimComp):
-        stimOr[iC] = z.get('ori')[iC][p] * math.pi/180; # in radians
+        stimOr[iC] = z.get('ori')[iC][p] * pi/180; # in radians
         stimTf[iC] = z.get('tf')[iC][p];          # in cycles per second
         stimCo[iC] = z.get('con')[iC][p];         # in Michelson contrast
-        stimPh[iC] = z.get('ph')[iC][p] * math.pi/180;  # in radians
+        stimPh[iC] = z.get('ph')[iC][p] * pi/180;  # in radians
         stimSf[iC] = z.get('sf')[iC][p];          # in cycles per degree
                 
     return StimOr, stimTf, stimCo, stimPh, stimSf;
@@ -49,7 +48,7 @@ def flexible_gauss(v_sigmaLow, v_sigmaHigh, sfPref, stim_sf, minThresh=0.1, resp
     sfs_curr = tf.cast(tf.boolean_mask(sfs_centered, ~gt_eq_1), dtype=tf.float32);
     calc_lt1 = tf.exp(tf.divide(-tf.square(tf.log(sfs_curr)), tf.multiply(tf.constant(2, dtype=tf.float32), tf.square(v_sigmaLow))))
 
-    calc_combined = tf.concat([calc_gt1, calc_lt1], axis=0); 
+    calc_combined = tf.concat([calc_gt1, calc_lt1], axis=0);
     inds_combined = tf.concat([gt1_inds, lt1_inds], axis=0);
 
     # The order of spatial frequencies represented in calc_combined are wrong relative to sfPref
@@ -82,7 +81,7 @@ def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
     pixPerDeg = 1/pixSizeDeg;
     npts2     = round(0.5*imSizeDeg*pixPerDeg);
     psfPixels = 2*npts2*prefSf/pixPerDeg;                                      # convert peak sf from cycles/degree to pixels
-    sx        = psfPixels/max(math.sqrt(dOrder), 0.01);                             # MAGIC
+    sx        = psfPixels/max(numpy.sqrt(dOrder), 0.01);                             # MAGIC
     sy        = sx/aRatio;
     
     [X, Y] = numpy.mgrid[-npts2:npts2, -npts2:npts2];

@@ -11,6 +11,7 @@ import pdb
 # Functions:
 # bw_lin_to_log
 # bw_log_to_lin
+# deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
@@ -20,6 +21,9 @@ import pdb
 # getSuppressiveSFtuning - returns the normalization pool response
 # makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
 # genNormWeights - used to generate the weighting matrix for weighting normalization pool responses
+# setSigmaFilter - create the filter we use for determining c50 with SF
+# evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
+# setNormTypeArr - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters
 
 def bw_lin_to_log( lin_low, lin_high ):
     # Given the low/high sf in cpd, returns number of octaves separating the
@@ -38,6 +42,20 @@ def bw_log_to_lin(log_bw, pref_sf):
     lin_bw = more_half - less_half;
     
     return lin_bw, sf_range
+
+def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
+
+    prefSf = params[0];
+    dOrdSp = params[1];
+
+    sfRel = stimSf / prefSf;
+    s     = pow(stimSf, dOrdSp) * numpy.exp(-dOrdSp/2 * pow(sfRel, 2));
+    sMax  = pow(prefSf, dOrdSp) * numpy.exp(-dOrdSp/2);
+    sNl   = s/sMax;
+    selSf = sNl;
+
+    return selSf, stimSf;
+
 
 def compute_SF_BW(fit, height, sf_range):
 
@@ -76,7 +94,7 @@ def fix_params(params_in):
 
     return [abs(x) for x in params_in] 
 
-def flexible_Gauss(params, stim_sf):
+def flexible_Gauss(params, stim_sf, minThresh=0.1):
     # The descriptive model used to fit cell tuning curves - in this way, we
     # can read off preferred SF, octave bandwidth, and response amplitude
 
@@ -96,7 +114,7 @@ def flexible_Gauss(params, stim_sf):
     # hashtag:uglyPython
     shape = [math.exp(-pow(math.log(x), 2) / (2*pow(y, 2))) for x, y in zip(sf0, sigma)];
                 
-    return [max(0.1, respFloor + respRelFloor*x) for x in shape];
+    return [max(minThresh, respFloor + respRelFloor*x) for x in shape];
 
 def get_center_con(family, contrast):
 
@@ -415,3 +433,106 @@ def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials):
   inhWeightMat  = np.tile(inhWeightT3, (1,1,nFrames));
 
   return inhWeightMat;
+
+def setSigmaFilter(sfPref, stdLeft, stdRight, filtType = 1):
+  '''
+  For now, we are parameterizing the semisaturation contrast filter as a "fleixble" Gaussian
+  That is, a gaussian parameterized with a mean, and a standard deviation to the left and right of that peak/mean
+  We set the baseline of the filter to 0 and the overall amplitude to 1
+  '''
+  filter = dict();
+  if filtType == 1:
+    filter['type'] = 1; # flexible gaussian
+    filter['params'] = [0, 1, sfPref, stdLeft, stdRight]; # 0 for baseline, 1 for respAmpAbvBaseline
+
+  return filter;
+
+def evalSigmaFilter(filter, scale, offset, evalSfs):
+  '''
+  filter is the type of filter to be evaluated (will be dictionary with necessary parameters)
+  scale, offset are used to scale and offset the filter shape
+  evalSfs - which sfs to evaluate at
+  '''
+
+  params = filter['params'];  
+  if filter['type'] == 1: # flexibleGauss
+    filterShape = numpy.array(flexible_Gauss(params, evalSfs, 0)); # 0 is baseline/minimum value of flexible_Gauss
+  elif filter['type'] == 2:
+    filterShape = deriv_gauss(params, evalSfs)[0]; # take the first output argument only
+
+  evalC50 = scale*filterShape + offset - scale 
+  # scale*filterShape will be between [scale, 0]; then, -scale makes it [0, -scale], where scale <0 ---> -scale>0
+  # finally, +offset means evalC50 is [offset, -scale+offset], where -scale+offset will typically = 1
+  return evalC50;
+
+def setNormTypeArr(params, normTypeArr = []):
+  '''
+  Used to create the normTypeArr array which is called in model_responses by SFMGiveBof and SFMsimulate to set
+  the parameters/values used to compute the normalization signal for the full model
+
+  Requires the model parameters vector; optionally takes normTypeArr as input
+
+  Returns the normTypeArr
+  '''
+
+  # constants
+  c50_len = 11; # 11 parameters if we've optimized for the filter which sets c50 in a frequency-dependent way
+  gauss_len = 10; # 10 parameters in the model if we've optimized for the gaussian which weights the normalization filters
+  asym_len = 9; # 9 parameters in the model if we've used the old asymmetry calculation for norm weights
+
+  inhAsym = 0; # set to 0 as default
+
+  # now do the work
+  if normTypeArr:
+    norm_type = int(normTypeArr[0]); # typecast to int
+    if norm_type == 2:
+      if len(params) == c50_len:
+        filt_offset = params[8];
+        std_l = params[9];
+        std_r = params[10];
+      else:
+        if len(normTypeArr) > 1:
+          filt_offset = normTypeArr[1];
+        else: 
+          filt_offset = random_in_range([0.05, 0.2])[0]; 
+        if len(normTypeArr) > 2:
+          std_l = normTypeArr[2];
+        else:
+          std_l = random_in_range([0.5, 5])[0]; 
+        if len(normTypeArr) > 3:
+          std_r = normTypeArr[3];
+        else: 
+          std_r = random_in_range([0.5, 5])[0]; 
+      normTypeArr = [norm_type, filt_offset, std_l, std_r];
+
+    elif norm_type == 1:
+      if len(params) == gauss_len: # we've optimized for these parameters
+        gs_mean = params[8];
+        gs_std = params[9];
+      else:
+        if len(normTypeArr) > 1:
+          gs_mean = normTypeArr[1];
+        else:
+          gs_mean = random_in_range([-1, 1])[0];
+        if len(normTypeArr) > 2:
+          gs_std = normTypeArr[2];
+        else:
+          gs_std = numpy.power(10, random_in_range([-2, 2])[0]); # i.e. 1e-2, 1e2
+      normTypeArr = [norm_type, gs_mean, gs_std]; # save in case we drew mean/std randomly
+    
+    elif norm_type == 0:
+      if len(params) == asym_len:
+        inhAsym = params[8];
+      if len(normTypeArr) > 1: # then we've passed in inhAsym to override existing one, if there is one
+        inhAsym = normTypeArr[1];
+      normTypeArr = [norm_type, inhAsym];
+
+  else:
+    norm_type = 0; # i.e. just run old asymmetry computation
+    if len(params) == asym_len:
+      inhAsym = params[8];
+    if len(normTypeArr) > 1: # then we've passed in inhAsym to override existing one, if there is one
+      inhAsym = normTypeArr[1];
+    normTypeArr = [norm_type, inhAsym];
+
+  return normTypeArr;
