@@ -34,32 +34,25 @@ def ph_test(S, p):
                 
     return StimOr, stimTf, stimCo, stimPh, stimSf;
 
-def flexible_gauss(v_sigmaLow, v_sigmaHigh, sfPref, stim_sf, minThresh=0.1, respFloor = 0, respRelFloor = 1):
-    stim_sf.set_shape([None, ]); # it's one dimensional
+def flexible_gauss(v_sigmaLow, v_sigmaHigh, sfPref, stim_sf):
+
+    nPartitions = 2;
     sfs_centered = tf.divide(stim_sf, sfPref);
-    gt_eq_1 = sfs_centered > 1; # find which sfs are greater than 1
- 
-    # first calculate for when sf >= sfPref
-    gt1_inds = tf.where(tf.equal(gt_eq_1, True)); # which indices have sfs_centered>=1
-    sfs_curr = tf.cast(tf.boolean_mask(sfs_centered, gt_eq_1), dtype=tf.float32); # cast to float32
-    calc_gt1 = tf.exp(tf.divide(-tf.square(tf.log(sfs_curr)), tf.multiply(tf.constant(2, dtype=tf.float32), tf.square(v_sigmaHigh))))
-    # next, calculate for when sf < sfPref
-    lt1_inds = tf.where(tf.equal(~gt_eq_1, True)); # which indices have sfs_centered>=1
-    sfs_curr = tf.cast(tf.boolean_mask(sfs_centered, ~gt_eq_1), dtype=tf.float32);
-    calc_lt1 = tf.exp(tf.divide(-tf.square(tf.log(sfs_curr)), tf.multiply(tf.constant(2, dtype=tf.float32), tf.square(v_sigmaLow))))
+    gt_eq_1 = tf.cast(sfs_centered > 1, tf.int32); # find which sfs are greater than 1; make 0, 1 mask
 
-    calc_combined = tf.concat([calc_gt1, calc_lt1], axis=0);
-    inds_combined = tf.concat([gt1_inds, lt1_inds], axis=0);
+    # now partition the data into gt/lt; 0s go into 1st array, 1s into second
+    partitions = tf.dynamic_partition(sfs_centered, gt_eq_1, nPartitions)
+     
+    # first calculate for when sf < sfPref
+    calc_gt1 = tf.exp(tf.divide(-tf.square(tf.log(partitions[1])), tf.multiply(tf.constant(2, dtype=tf.float32), tf.square(v_sigmaHigh))))
+    # next, calculate for when sf >= sfPref
+    calc_lt1 = tf.exp(tf.divide(-tf.square(tf.log(partitions[0])), tf.multiply(tf.constant(2, dtype=tf.float32), tf.square(v_sigmaHigh))))
 
-    # The order of spatial frequencies represented in calc_combined are wrong relative to sfPref
-    # But we can reorder inds_combined (sorting with nn.top_k) to reorder calc_combined to 
-    # correspond with sfPref
-    shape_list = tf.unstack(tf.shape(stim_sf)); # get the right shape...
-    reorder = tf.nn.top_k(tf.transpose(-1*inds_combined), k=shape_list[0]); 
-    # above: -1*inds because top_k will sort from highest value to lowest value; we want lowest ind [0] first
-    responses = tf.gather(calc_combined, reorder.indices);
+    # now, recombine:
+    part_inds = tf.dynamic_partition(tf.range(tf.shape(sfs_centered)[0]), gt_eq_1, nPartitions); # first, get the partition indices so we can stitch the two together
+    gauss = tf.dynamic_stitch(part_inds, [calc_lt1, calc_gt1]);
 
-    return responses;
+    return gauss;
 
 # orientation filter used in plotting (only, I think?)
 def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
@@ -339,7 +332,7 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     centerSfs = ph_stimSf[0, :]; # is this valid? CHECK CHECK CHECK
     scaleSig = -(1-sigOffset);
     sigEff = flexible_gauss(stdLeft, stdRight, prefSf, centerSfs);
-    sigmaEff = tf.transpose(sigEff, perm=[1, 0]); # just switch dimensions
+    sigmaEff = tf.expand_dims(sigEff, axis=-1);
     '''
     Multiply sigmaEff by scaleSig (where scaleSig < 0) to create function on range [scaleSig, 0] 
     Then, add sigOffset and -scaleSig to make function [0, -scaleSig] --> [offset, offset-scaleSig] where offset-scaleSig typically = 1

@@ -703,6 +703,11 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     # 06 = late additive noise
     # 07 = variance of response gain    
     # 08 = inhibitory asymmetry (i.e. tilt of gain over SF for weighting normalization pool responses)
+    # OR
+    # 08/09 = mean/std of gaussian used for weighting normalization filters
+    # OR
+    # 08 = offset in c50 filter (bounded b/t [offset, 1])
+    # 09/10 = std to the left/right of the peak of the c50 filter
 
     #print('simulate!');
 
@@ -772,7 +777,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
       inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
       inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
       inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
-                              
+    
     # Evaluate sfmix experiment
     T = structureSFM['sfm']; # [iR]
     
