@@ -1,11 +1,10 @@
-import math
+from math import pi
 import numpy
 import os
 from makeStimulus import makeStimulus 
 from scipy.stats import norm, mode, lognorm, nbinom
 from scipy.stats.mstats import gmean
 from numpy.matlib import repmat
-import time
 import sys
 
 import tensorflow as tf
@@ -13,11 +12,10 @@ import tensorflow as tf
 import pdb
 
 fft = numpy.fft
-tf_pi = tf.constant(math.pi);
+tf_pi = tf.constant(pi);
 
 def ph_test(S, p):
     
-    pdb.set_trace();
     nStimComp = 7;    
 
     z = S['sfm']['exp']['trial'];
@@ -29,10 +27,10 @@ def ph_test(S, p):
     stimSf = numpy.empty((nGratings,));
                
     for iC in range(nStimComp):
-        stimOr[iC] = z.get('ori')[iC][p] * math.pi/180; # in radians
+        stimOr[iC] = z.get('ori')[iC][p] * pi/180; # in radians
         stimTf[iC] = z.get('tf')[iC][p];          # in cycles per second
         stimCo[iC] = z.get('con')[iC][p];         # in Michelson contrast
-        stimPh[iC] = z.get('ph')[iC][p] * math.pi/180;  # in radians
+        stimPh[iC] = z.get('ph')[iC][p] * pi/180;  # in radians
         stimSf[iC] = z.get('sf')[iC][p];          # in cycles per degree
                 
     return StimOr, stimTf, stimCo, stimPh, stimSf;
@@ -77,7 +75,7 @@ def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
     pixPerDeg = 1/pixSizeDeg;
     npts2     = round(0.5*imSizeDeg*pixPerDeg);
     psfPixels = 2*npts2*prefSf/pixPerDeg;                                      # convert peak sf from cycles/degree to pixels
-    sx        = psfPixels/max(math.sqrt(dOrder), 0.01);                             # MAGIC
+    sx        = psfPixels/max(numpy.sqrt(dOrder), 0.01);                             # MAGIC
     sy        = sx/aRatio;
     
     [X, Y] = numpy.mgrid[-npts2:npts2, -npts2:npts2];
@@ -254,7 +252,7 @@ def SFMSimpleResp(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, mod_par
         
 def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, ph_objWeight, \
                ph_normResp, ph_normCenteredSf, v_prefSf, v_dOrdSp, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight):
+                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight, fitType):
     
     # NOTE 4.26.18: ph_normCenteredSf is actually just the log SF centers of the normalization channels in one vector
     # Computes the negative log likelihood for the LN-LN model
@@ -353,21 +351,27 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     meanRate      = tf.reduce_mean(ratio, axis=1);
     respModel     = noiseLate + (scale * meanRate);
 
-    # Get predicted spike count distributions
-    mu  = tf.maximum(tf.constant(.01, dtype=tf.float32), tf.multiply(ph_stimDur, respModel)); 
-    # The predicted mean spike count; respModel[iR]
-    var = tf.add(mu, varGain*tf.square(mu)); # The corresponding variance of the spike count
-    r   = tf.divide(tf.square(mu), tf.subtract(var, mu)); # The parameters r and p of the negative binomial distribution
-    p   = tf.divide(r, tf.add(r, mu));
+    if fitType == 1:
+      # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
+      lsq = tf.square(tf.add(tf.sqrt(respModel), -tf.sqrt(ph_spikeCount)));
+      NLL = tf.reduce_mean(ph_objWeight*lsq); # was 1*lsq
+    elif fitType == 2:
+        # must be same type for using tf.nn.log_poisson_loss, so typecast
+      log_lh = tf.nn.log_poisson_loss(tf.cast(ph_spikeCount, dtype=tf.float32), tf.cast(tf.log(respModel), dtype=tf.float32));
+      NLL = tf.reduce_mean(1*log_lh); # nn.log_poisson_loss already negates!
+    elif fitType == 3:
+      # Get predicted spike count distributions
+      mu  = tf.multiply(ph_stimDur, respModel); 
+      #mu  = tf.maximum(tf.constant(.01, dtype=tf.float32), tf.multiply(ph_stimDur, respModel)); 
+      # The predicted mean spike count; respModel[iR]
+      var = tf.add(mu, varGain*tf.square(mu)); # The corresponding variance of the spike count
+      r   = tf.divide(tf.square(mu), tf.subtract(var, mu)); # The parameters r and p of the negative binomial distribution
+      p   = tf.divide(r, tf.add(r, mu));
 
-    # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
-    #lsq = tf.square(tf.add(tf.sqrt(respModel), -tf.sqrt(ph_spikeCount)));
-    #NLL = tf.reduce_mean(ph_objWeight*lsq); # was 1*lsq
+      # likelihood based on modulated poisson model
+      log_lh = negBinom(ph_spikeCount, r, p);
+      NLL = tf.reduce_mean(-1*log_lh);
 
-    # modPoiss loss function
-    log_lh = negBinom(ph_spikeCount, r, p);
-    NLL = tf.reduce_mean(-1*log_lh);
-    
     return NLL;
 
 def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
@@ -385,7 +389,7 @@ def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
         # 08 = mean of normalization weights gaussian || [>-2]
         # 09 = std of ... || >1e-3
         # Added/changed on 5/21/18:
-        # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 1]
+        # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 0.75]
         # 09 = standard deviation of the gaussian to the left of the peak || >0.1
         # 10 = "" to the right "" || >0.1
 
@@ -400,7 +404,7 @@ def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
     seven = tf.add(tf.nn.softplus(v_varGain), 1e-3);
     #eight = tf.add(tf.nn.softplus(v_normMean), -2);
     #nine = tf.add(tf.nn.softplus(v_normStd), 1e-3);
-    eight = tf.multiply(0.2, tf.sigmoid(v_sigOffset)); 
+    eight = tf.multiply(0.75, tf.sigmoid(v_sigOffset)); 
     nine = tf.add(tf.nn.softplus(v_stdLeft), 1e-1);
     ten = tf.add(tf.nn.softplus(v_stdRight), 1e-1);
     return [zero,one,two,three,four,five,six,seven,eight,nine,ten];
@@ -418,10 +422,14 @@ def negBinom(x, r, p):
     
     return tf.add(naGam, haanGam);
     
-def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
+def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr = 1):
     # Given just a cell number, will fit the Robbe V1 model to the data
     # stopThresh is the value (in NLL) at which we stop the fitting (i.e. if the difference in NLL between two full steps is < stopThresh, stop the fitting
     # LR is learning rate
+    # fitType
+    #   1 - loss := square(sqrt(resp) - sqrt(pred))
+    #   2 - loss := poissonProb(spikes | modelRate)
+    #   3 - loss := modPoiss model (a la Goris, 2014)
  
     ########
     # Load cell
@@ -429,7 +437,14 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
     loc_data = '/home/pl1465/SF_diversity/altExp/analysis/structures/'; # Prince cluster
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/'; # Personal mac
 
-    fitListName = 'fitList_180521_modPoiss_restrictLB.npy';
+    fL_name = 'fitList_180521.npy';
+    if fitType == 1:
+      fL_suffix = '_sqrt.npy';
+    elif fitType == 2:
+      fL_suffix = '_poiss.npy';
+    elif fitType == 3:
+      fL_suffix = '_modPoiss.npy';
+    fitListName = str(fL_name + fL_suffix);
 
     if os.path.exists(loc_data + fitListName):
       fitList = numpy.load(str(loc_data + fitListName), encoding='latin1').item();
@@ -580,13 +595,13 @@ def setModel(cellNum, stopThresh, lr, subset_frac = 0, initFromCurr = 1):
     # Set up model here - we return the NLL
     okok = SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, ph_objWeight, \
               ph_normResp, ph_normCentSf, v_prefSf, v_dOrdSp, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight);
+                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight, fitType);
 
     if subset_frac > 0:  # then we also need to create an optimization with the full dataset
       ph_stimTfFull = tf.placeholder(tf.float32, shape=fixedTf.shape);
       full = SFMGiveBof(ph_stimOr, ph_stimTfFull, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, ph_objWeight, \
               ph_normResp, ph_normCentSf, v_prefSf, v_dOrdSp, v_normConst, \
-                        v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight);
+                        v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight, fitType);
     
     
     print('Setting optimizer');
@@ -725,6 +740,6 @@ if __name__ == '__main__':
 
     if len(sys.argv) > 4: # subsample data for each iteration
       print('Additionally, each iteration will have ' + sys.argv[4] + ' of the data (subsample fraction)');
-      setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]), int(sys.argv[5]));
+      setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5]), int(sys.argv[6]));
     else: # all trials in each iteration
-      setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]));
+      setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]));

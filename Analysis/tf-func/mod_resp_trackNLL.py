@@ -345,7 +345,7 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     # taking the sqrt of the denominator (which is sum of squares) to bring in line with Carandini, Heeger, Movshon, '97
     denominator   = tf.sqrt(sigmaEffective + tf.square(Linh)); # squaring Linh - edit 7/17 (july 2017)
     # ratio will be nTrials x nTrials
-    ratio         = tf.pow(tf.divide(numerator,denominator), respExp); 
+    ratio         = tf.pow(tf.maximum(tf.constant(0, dtype=tf.float32), tf.divide(numerator,denominator)), respExp); 
     meanRate      = tf.reduce_mean(ratio, axis=1);
     respModel     = noiseLate + (scale * meanRate); # noiseLate always >0, not just >=0, thus, all likelihood evaluations will have rate>0, no "blowing up" log values...
 
@@ -387,7 +387,7 @@ def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
         # 08 = mean of normalization weights gaussian || [>-2]
         # 09 = std of ... || >1e-3
         # Added/changed on 5/22/18:
-        # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 1]
+        # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 0.75]
         # 09 = standard deviation of the gaussian to the left of the peak || >0.1
         # 10 = "" to the right "" || >0.1
 
@@ -402,7 +402,7 @@ def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
     seven = tf.add(tf.nn.softplus(v_varGain), 1e-3);
     #eight = tf.add(tf.nn.softplus(v_normMean), -2);
     #nine = tf.add(tf.nn.softplus(v_normStd), 1e-3);
-    eight = tf.multiply(0.2, tf.sigmoid(v_sigOffset)); 
+    eight = tf.multiply(0.75, tf.sigmoid(v_sigOffset)); 
     nine = tf.add(tf.nn.softplus(v_stdLeft), 1e-1);
     ten = tf.add(tf.nn.softplus(v_stdRight), 1e-1);
     return [zero,one,two,three,four,five,six,seven,eight,nine,ten];
