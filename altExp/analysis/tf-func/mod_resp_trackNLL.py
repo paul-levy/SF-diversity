@@ -437,7 +437,7 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
     loc_data = '/home/pl1465/SF_diversity/altExp/analysis/structures/'; # Prince cluster
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/'; # Personal mac
 
-    fL_name = 'fitList_180521.npy';
+    fL_name = 'fitList_180521';
     if fitType == 1:
       fL_suffix = '_sqrt.npy';
     elif fitType == 2:
@@ -451,7 +451,7 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
     else:
       fitList = dict();
 
-    dataList = numpy.load(loc_data + 'dataList.npy').item();
+    dataList = numpy.load(loc_data + 'dataList.npy', encoding='latin1').item();
     dataNames = dataList['unitName'];
 
     S = numpy.load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy'), encoding='latin1').item(); # why -1? 0 indexing...
@@ -684,7 +684,7 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
             currParams = real_params;
 	    # reload fitlist in case changes have been made with the file elsewhere!
             if os.path.exists(loc_data + fitListName):
-              fitList = numpy.load(loc_data + fitListName).item();
+              fitList = numpy.load(loc_data + fitListName, encoding='latin1').item();
             # else, nothing to reload!!!
       	    # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
             if cellNum-1 not in fitList:
@@ -714,7 +714,7 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
     if NLL < currNLL:
       # reload (as above) to avoid overwriting changes made with the file elsewhere
       if os.path.exists(loc_data + fitListName):
-        fitList = numpy.load(loc_data + fitListName).item();
+        fitList = numpy.load(loc_data + fitListName, encoding='latin1').item();
       # else, nothing to reload...
       # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
       if cellNum-1 not in fitList:
@@ -739,7 +739,7 @@ if __name__ == '__main__':
     print('Running cell ' + sys.argv[1] + ' with NLL step threshold of ' + sys.argv[2] + ' with learning rate ' + sys.argv[3]);
 
     if len(sys.argv) > 4: # subsample data for each iteration
-      print('Additionally, each iteration will have ' + sys.argv[4] + ' of the data (subsample fraction)');
+      print('Additionally, each iteration will have ' + sys.argv[5] + ' of the data (subsample fraction)');
       setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5]), int(sys.argv[6]));
     else: # all trials in each iteration
       setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]));
