@@ -434,7 +434,7 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
     ########
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fL_name = 'fitList_180521';
+    fL_name = 'fitList_180531';
     if fitType == 1:
       fL_suffix = '_sqrt.npy';
     elif fitType == 2:
@@ -444,20 +444,20 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
     fitListName = str(fL_name + fL_suffix);
 
     if os.path.isfile(loc_data + fitListName):
-      fitList = numpy.load(str(loc_data + fitListName)).item(); # no .item() needed...
+      fitList = numpy.load(str(loc_data + fitListName), encoding='latin1').item();
     else:
       fitList = dict();
-    dataList = numpy.load(str(loc_data + 'dataList.npy')).item();
+    dataList = numpy.load(str(loc_data + 'dataList.npy'), encoding='latin1').item();
     dataNames = dataList['unitName'];
 
-    S = numpy.load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy')).item(); # why -1? 0 indexing...
+    print('loading data structure...');
+    S = numpy.load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy'), encoding='latin1').item(); # why -1? 0 indexing...
+    print('...finished loading');
     trial_inf = S['sfm']['exp']['trial'];
     prefOrEst = mode(trial_inf['ori'][1]).mode;
     trialsToCheck = trial_inf['con'][0] == 0.01;
     prefSfEst = mode(trial_inf['sf'][0][trialsToCheck==True]).mode;
-
-    ########
-    # Set up model parameters - i.e. trainable variables!
+    
     ########
 
     # 00 = preferred spatial frequency   (cycles per degree)
@@ -701,7 +701,7 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
             currParams = real_params;
 	    # reload fitlist in case changes have been made with the file elsewhere!
             if os.path.exists(loc_data + fitListName):
-              fitList = numpy.load(loc_data + fitListName).item();
+              fitList = numpy.load(loc_data + fitListName, encoding='latin1').item();
             # else, nothing to reload!!!
       	    # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
             if cellNum-1 not in fitList:
@@ -731,7 +731,7 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
     if NLL < currNLL:
       # reload (as above) to avoid overwriting changes made with the file elsewhere
       if os.path.exists(loc_data + fitListName):
-        fitList = numpy.load(loc_data + fitListName).item();
+        fitList = numpy.load(loc_data + fitListName, encoding='latin1').item();
       # else, nothing to reload...
       # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
       if cellNum-1 not in fitList:
