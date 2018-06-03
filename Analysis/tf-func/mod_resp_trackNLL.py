@@ -647,7 +647,7 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
           subsetWeight = objWeight[trialsToPick];
           subsetNormResp = normResp[trialsToPick,:,:];
 
-          opt, loss = m.run([optimizer, okok], feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
+          opt = m.run(optimizer, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
                           ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, ph_stimDur: subsetDur, ph_objWeight: subsetWeight, \
                           ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
 
@@ -655,9 +655,9 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
                                                v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight));
 
           if (iter/500.0) == round(iter/500.0):
-            NLL = m.run(full, feed_dict={ph_stimOr: fixedOr, ph_stimTfFull: fixedTf, ph_stimCo: fixedCo, \
-                        ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
-                        ph_stimDur: stim_dur, ph_objWeight: objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
+            NLL = m.run(okok, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
+                          ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, ph_stimDur: subsetDur, ph_objWeight: subsetWeight, \
+                          ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
 
         else:
 	  opt = \
@@ -715,9 +715,9 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
     # Now the fitting is done    
     # Now get "true" model parameters and NLL
     if subset_frac > 0:
-      NLL = m.run(full, feed_dict={ph_stimOr: fixedOr, ph_stimTfFull: fixedTf, ph_stimCo: fixedCo, \
-                            ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
-                            ph_stimDur: stim_dur, ph_objWeight: objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
+      NLL = m.run(okok, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
+                          ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, ph_stimDur: subsetDur, ph_objWeight: subsetWeight, \
+                          ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
     else:
       NLL = m.run(okok, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
                             ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
