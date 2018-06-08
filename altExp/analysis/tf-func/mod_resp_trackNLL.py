@@ -437,7 +437,7 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
     loc_data = '/home/pl1465/SF_diversity/altExp/analysis/structures/'; # Prince cluster
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/'; # Personal mac
 
-    fL_name = 'fitList_180521';
+    fL_name = 'fitList_180604';
     if fitType == 1:
       fL_suffix = '_sqrt.npy';
     elif fitType == 2:
@@ -617,20 +617,21 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
     diffNLL = 1e4; # just pick a large value
     iter = 1;
 
-    while (abs(diffNLL) > stopThresh):
-        # resample data...
-        if subset_frac > 0:
-          trialsToPick = numpy.random.randint(0, fixedOr.shape[-1], subsetShape[-1]);
-          subsetOr = fixedOr[:,trialsToPick];
-          subsetTf = fixedTf[:,trialsToPick];
-          subsetCo = fixedCo[:,trialsToPick];
-          subsetSf = fixedSf[:,trialsToPick];
-          subsetPh = fixedPh[:,trialsToPick];
-          subsetSpikes = spikes[trialsToPick];
-          subsetDur = stim_dur[trialsToPick];
-          subsetWeight = objWeight[trialsToPick];
-          subsetNormResp = normResp[trialsToPick,:,:];
+    # resample data...
+    if subset_frac > 0:
+      trialsToPick = numpy.random.randint(0, fixedOr.shape[-1], subsetShape[-1]);
+      subsetOr = fixedOr[:,trialsToPick];
+      subsetTf = fixedTf[:,trialsToPick];
+      subsetCo = fixedCo[:,trialsToPick];
+      subsetSf = fixedSf[:,trialsToPick];
+      subsetPh = fixedPh[:,trialsToPick];
+      subsetSpikes = spikes[trialsToPick];
+      subsetDur = stim_dur[trialsToPick];
+      subsetWeight = objWeight[trialsToPick];
+      subsetNormResp = normResp[trialsToPick,:,:];
 
+    while (abs(diffNLL) > stopThresh):
+        if subset_frac > 0:
           opt = m.run(optimizer, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
                           ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, ph_stimDur: subsetDur, ph_objWeight: subsetWeight, \
                           ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
