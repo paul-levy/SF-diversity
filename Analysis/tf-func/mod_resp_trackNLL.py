@@ -434,7 +434,7 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
     ########
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fL_name = 'fitList_180531';
+    fL_name = 'fitList_180604';
     if fitType == 1:
       fL_suffix = '_sqrt.npy';
     elif fitType == 2:
@@ -633,26 +633,27 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
     diffNLL = 1e4; # just pick a large value
     iter = 1;
 
-    while (abs(diffNLL) > stopThresh):
-        # resample data...
-        if subset_frac > 0:
-          trialsToPick = numpy.random.randint(0, fixedOr.shape[-1], subsetShape[-1]);
-          subsetOr = fixedOr[:,trialsToPick];
-          subsetTf = fixedTf[:,trialsToPick];
-          subsetCo = fixedCo[:,trialsToPick];
-          subsetSf = fixedSf[:,trialsToPick];
-          subsetPh = fixedPh[:,trialsToPick];
-          subsetSpikes = spikes[trialsToPick];
-          subsetDur = stim_dur[trialsToPick];
-          subsetWeight = objWeight[trialsToPick];
-          subsetNormResp = normResp[trialsToPick,:,:];
+    if subset_frac > 0:
+        trialsToPick = numpy.random.randint(0, fixedOr.shape[-1], subsetShape[-1]);
+        subsetOr = fixedOr[:,trialsToPick];
+        subsetTf = fixedTf[:,trialsToPick];
+        subsetCo = fixedCo[:,trialsToPick];
+        subsetSf = fixedSf[:,trialsToPick];
+        subsetPh = fixedPh[:,trialsToPick];
+        subsetSpikes = spikes[trialsToPick];
+        subsetDur = stim_dur[trialsToPick];
+        subsetWeight = objWeight[trialsToPick];
+        subsetNormResp = normResp[trialsToPick,:,:];
 
+    while (abs(diffNLL) > stopThresh):
+
+        if subset_frac > 0:
           opt = m.run(optimizer, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
                           ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, ph_stimDur: subsetDur, ph_objWeight: subsetWeight, \
                           ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
 
-    	  real_params = m.run(applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
-                                               v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight));
+    	  #real_params = m.run(applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
+          #                                     v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight));
 
           if (iter/500.0) == round(iter/500.0):
             NLL = m.run(okok, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
@@ -676,7 +677,7 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
     	  real_params = m.run(applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
                                                v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight));
           
-          print('iteration ' + str(iter) + '...NLL is ' + str(NLL) + ' and params are ' + str(curr_params));
+          print('iteration ' + str(iter) + '...NLL is ' + str(NLL) + ' and saved params are ' + str(curr_params));
           print('\tparams in current optimization are: ' + str(real_params));
 
           if numpy.isnan(prevNLL):
