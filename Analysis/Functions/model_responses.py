@@ -760,6 +760,8 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
       sigmaFilt = numpy.square(sigma); # i.e. normalization constant squared
 
     if norm_type == 1:
+      gs_mean = normTypeArr[1];
+      gs_std = normTypeArr[2];
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
     else: # norm_type == 0 or anything else, we just go with 
       if norm_type == 0:
