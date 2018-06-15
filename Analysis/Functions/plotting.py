@@ -39,9 +39,9 @@ from matplotlib import rcParams
 rcParams['font.size'] = 20;
 rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
 rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['lines.linewidth'] = 3;
+rcParams['lines.linewidth'] = 2.5;
 rcParams['axes.linewidth'] = 1.5;
-rcParams['lines.markersize'] = 3;
+rcParams['lines.markersize'] = 5;
 rcParams['font.style'] = 'oblique';
 rcParams['legend.fontsize'] ='large'; # using a named size
 
@@ -62,7 +62,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_180521';
+fitBase = 'fitList_180608';
 if fitType == 1:
   fitSuf = '_sqrt.npy';
 elif fitType == 2:
@@ -386,7 +386,7 @@ for disp in range(nFam):
           # if modFit doesn't have inhAsym parameter, add it!
           if norm_type == 1:
             unweighted = 1;
-            _, _, _, normRespSimple, _ = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
+            _, _, _, normRespSimple = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
             nTrials = normRespSimple.shape[0];
             nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
             inhWeightMat  = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
