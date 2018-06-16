@@ -30,15 +30,15 @@ def descr_loss(params, data, contrast, baseline = []):
     for i in range(len(all_sfs)):
       if all_sfs[i] > 0: # sf can be 0; ignore these...
         
-        obs_spikes = np.round(obs_counts[i][~np.isnan(obs_counts[i])]); # only get the non-NaN values; round since the values are nearly but not quite integer values (Sach artifact?)...
+        obs_spikes = obs_counts[i][~np.isnan(obs_counts[i])]; # only get the non-NaN values;
         if baseline:
-          obs_spikes = obs_spikes - baseline;
+          obs_spikes = np.maximum(0, obs_spikes - baseline); # cannot have <0 spikes!
 
-        pred_spikes, _ = hf.DiffOfGauss(*params, all_sfs[i]*np.ones_like(obs_spikes));
+        pred_spikes, _ = hf.DiffOfGauss(*params, stim_sf=all_sfs[i]*np.ones_like(obs_spikes));
         #pred_spikes = hf.flexible_Gauss(params, all_sfs[i]*np.ones_like(obs_spikes), minThresh=0);
 
         # poisson model of spiking
-        poiss = poisson.pmf(obs_spikes, pred_spikes);
+        poiss = poisson.pmf(np.round(obs_spikes), pred_spikes); # round since the values are nearly but not quite integer values (Sach artifact?)...
         ps = np.sum(poiss == 0);
         if ps > 0:
           poiss = np.maximum(poiss, 1e-6); # anything, just so we avoid log(0)
@@ -51,13 +51,13 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0):
     nParam = 4;
     
     # load cell information
-    dataList = np.load(data_loc + 'sachData.npy').item();
+    dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     fLname = 'descrFits';
     if baseline_sub:
       fLname = str(fLname + '_baseSub');
     fLname = str(data_loc + fLname + '.npy');
     if os.path.isfile(fLname):
-        descrFits = np.load(fLname).item();
+        descrFits = hf.np_smart_load(fLname);
     else:
         descrFits = dict();
     data = dataList[cell_num-1]['data'];
@@ -121,7 +121,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0):
     # update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(fLname):
         print('reloading descrFits...');
-        descrFits = np.load(fLname).item();
+        descrFits = hf.np_smart_load(fLname);
     if cell_num-1 not in descrFits:
       descrFits[cell_num-1] = dict();
     descrFits[cell_num-1]['NLL'] = bestNLL;
@@ -135,9 +135,9 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
     nParam = 5;
     
     # load cell information
-    dataList = np.load(data_loc + 'sachData.npy').item();
+    dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     if os.path.isfile(data_loc + 'descrFits.npy'):
-        descrFits = np.load(data_loc + 'descrFits.npy').item();
+        descrFits = hf.np_smart_load(data_loc + 'descrFits.npy');
     else:
         descrFits = dict();
     data = dataList[cell_num-1]['data'];
@@ -233,7 +233,7 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
     # update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(data_loc + 'descrFits.npy'):
         print('reloading descrFits...');
-        descrFits = np.load(data_loc + 'descrFits.npy').item();
+        descrFits = hf.np_smart_load(data_loc + 'descrFits.npy');
     if cell_num-1 not in descrFits:
       descrFits[cell_num-1] = dict();
     descrFits[cell_num-1]['NLL'] = bestNLL;
@@ -244,8 +244,8 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
                 
 if __name__ == '__main__':
 
-    #data_loc = '/home/pl1465/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
-    data_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
+    data_loc = '/home/pl1465/SF_diversity/LGN/sach-data/';
+    #data_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
 
     if len(sys.argv) < 2:
       print('uhoh...you need at least one argument here');

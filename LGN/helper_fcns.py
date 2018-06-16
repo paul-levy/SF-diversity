@@ -1,6 +1,10 @@
 import numpy as np
+import os
 import random
+from time import sleep
 import pdb
+
+# np_smart_load - loading that will account for parallelization issues - keep trying to load
 # bw_lin_to_log 
 # bw_log_to_lin
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
@@ -10,6 +14,20 @@ import pdb
 # blankResp - return mean/std of blank responses (i.e. baseline firing rate) for Sach's experiment
 # tabulateResponses - Organizes measured and model responses for Sach's experiment
 # random_in_range - random real number between a and b
+
+def np_smart_load(file_path, encoding_str='latin1'):
+
+   if not os.path.isfile(file_path):
+     return [];
+   loaded = [];
+   while(True):
+     try:
+         loaded = np.load(file_path, encoding=encoding_str).item();
+         break;
+     except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
+         sleep(10); # i.e. wait for 10 seconds
+
+   return loaded;
 
 def bw_lin_to_log( lin_low, lin_high ):
     # Given the low/high sf in cpd, returns number of octaves separating the
