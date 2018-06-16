@@ -14,9 +14,9 @@ def invalid(params, bounds):
     if params[p] < bounds[p][0] or params[p] > bounds[p][1]:
       return True;
   return False;
-    
 
-def descr_loss(params, data, contrast):
+
+def descr_loss(params, data, contrast, baseline = []):
     '''Given the model params (i.e. flexible gaussian params), the data, and the desired contrast
     (where contrast will be given as an index into the list of unique contrasts), return the loss
     '''
@@ -30,7 +30,9 @@ def descr_loss(params, data, contrast):
     for i in range(len(all_sfs)):
       if all_sfs[i] > 0: # sf can be 0; ignore these...
         
-        obs_spikes = obs_counts[i][~np.isnan(obs_counts[i])]; # only get the non-NaN values...
+        obs_spikes = np.round(obs_counts[i][~np.isnan(obs_counts[i])]); # only get the non-NaN values; round since the values are nearly but not quite integer values (Sach artifact?)...
+        if baseline:
+          obs_spikes = obs_spikes - baseline;
 
         pred_spikes, _ = hf.DiffOfGauss(*params, all_sfs[i]*np.ones_like(obs_spikes));
         #pred_spikes = hf.flexible_Gauss(params, all_sfs[i]*np.ones_like(obs_spikes), minThresh=0);
@@ -44,14 +46,18 @@ def descr_loss(params, data, contrast):
     
     return NLL;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats = 4):
+def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0):
 
     nParam = 4;
     
     # load cell information
     dataList = np.load(data_loc + 'sachData.npy').item();
-    if os.path.isfile(data_loc + 'descrFits.npy'):
-        descrFits = np.load(data_loc + 'descrFits.npy').item();
+    fLname = 'descrFits';
+    if baseline_sub:
+      fLname = str(fLname + '_baseSub');
+    fLname = str(data_loc + fLname + '.npy');
+    if os.path.isfile(fLname):
+        descrFits = np.load(fLname).item();
     else:
         descrFits = dict();
     data = dataList[cell_num-1]['data'];
@@ -59,6 +65,10 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4):
     print('Doing the work, now');
 
     to_unpack = hf.tabulateResponses(data);
+    if baseline_sub:
+      base_mean, _ = hf.blankResp(data);
+    else:
+      base_mean = [];
     [f0, f1] = to_unpack[0];
     [all_cons, all_sfs] = to_unpack[1];
     [f0arr, f1arr] = to_unpack[2];
@@ -87,7 +97,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4):
           init_gain = hf.random_in_range((0.5*maxResp, 0.9*maxResp))[0];
           init_charFreq = hf.random_in_range((1, 5))[0];
           init_gainSurr = hf.random_in_range((0.25, 0.75))[0];
-          init_charFreqSurr = hf.random_in_range((0.25, 0.5))[0];          
+          init_charFreqSurr = hf.random_in_range((0.25, 0.5))[0];
 
           init_params = [init_gain, init_charFreq, init_gainSurr, init_charFreqSurr];
 
@@ -97,7 +107,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4):
           else:
               methodStr = 'TNC';
 
-          obj = lambda params: descr_loss(params, data, con);
+          obj = lambda params: descr_loss(params, data, con, base_mean);
           wax = opt.minimize(obj, init_params, method=methodStr); # unbounded...
 
           # compare
@@ -109,15 +119,15 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4):
               currParams[con, :] = params;
 
     # update stuff - load again in case some other run has saved/made changes
-    if os.path.isfile(data_loc + 'descrFits.npy'):
+    if os.path.isfile(fLname):
         print('reloading descrFits...');
-        descrFits = np.load(data_loc + 'descrFits.npy').item();
+        descrFits = np.load(fLname).item();
     if cell_num-1 not in descrFits:
       descrFits[cell_num-1] = dict();
     descrFits[cell_num-1]['NLL'] = bestNLL;
     descrFits[cell_num-1]['params'] = currParams;
 
-    np.save(data_loc + 'descrFits.npy', descrFits);
+    np.save(fLname, descrFits);
     print('saving for cell ' + str(cell_num));
 
 def fit_descr(cell_num, data_loc, n_repeats = 4):
@@ -234,6 +244,7 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
                 
 if __name__ == '__main__':
 
+    #data_loc = '/home/pl1465/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
     data_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
 
     if len(sys.argv) < 2:
@@ -243,7 +254,10 @@ if __name__ == '__main__':
 
     print('Running cell ' + sys.argv[1] + '...');
 
-    if len(sys.argv) > 2: # specify number of fit iterations
+    if len(sys.argv) > 3: # specify baseline subtraction
+      print(' for ' + sys.argv[2] + ' iterations' + ' with baseline sub? ' + sys.argv[3]);
+      fit_descr_DoG(int(sys.argv[1]), data_loc, int(sys.argv[2]), int(sys.argv[3]));
+    elif len(sys.argv) > 2: # specify number of fit iterations
       print(' for ' + sys.argv[2] + ' iterations');
       fit_descr_DoG(int(sys.argv[1]), data_loc, int(sys.argv[2]));
     else: # all trials in each iteration
