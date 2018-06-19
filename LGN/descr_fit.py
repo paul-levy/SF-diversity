@@ -80,7 +80,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0, fit_type 
         descrFits = hf.np_smart_load(fLname);
     else:
         descrFits = dict();
-    pdb.set_trace();
+
     data = dataList[cell_num-1]['data'];
     
     print('Doing the work, now');
@@ -265,8 +265,8 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
                 
 if __name__ == '__main__':
 
-    #data_loc = '/home/pl1465/SF_diversity/LGN/sach-data/';
-    data_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
+    data_loc = '/home/pl1465/SF_diversity/LGN/sach-data/';
+    #data_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
 
     if len(sys.argv) < 2:
       print('uhoh...you need at least one argument here');
