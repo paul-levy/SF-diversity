@@ -275,6 +275,9 @@ if __name__ == '__main__':
 
     print('Running cell ' + sys.argv[1] + '...');
 
+    if len(sys.argv) > 4: # specify baseline subtraction and loss type
+      print(' for ' + sys.argv[2] + ' iterations' + ' with baseline sub? ' + sys.argv[3] + ' fit type? ' + sys.argv[4]);
+      fit_descr_DoG(int(sys.argv[1]), data_loc, int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]));
     if len(sys.argv) > 3: # specify baseline subtraction
       print(' for ' + sys.argv[2] + ' iterations' + ' with baseline sub? ' + sys.argv[3]);
       fit_descr_DoG(int(sys.argv[1]), data_loc, int(sys.argv[2]), int(sys.argv[3]));
