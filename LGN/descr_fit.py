@@ -16,9 +16,13 @@ def invalid(params, bounds):
   return False;
 
 
-def descr_loss(params, data, contrast, baseline = []):
+def descr_loss(params, data, contrast, baseline = [], loss_type = 1):
     '''Given the model params (i.e. flexible gaussian params), the data, and the desired contrast
     (where contrast will be given as an index into the list of unique contrasts), return the loss
+    loss_type: 1 - poisson
+               2 - sqrt
+               3 - Sach sum{[(exp-obs)^2]/[k+sigma^2]} where
+                   k := 0.01*max(obs); sigma := measured variance of the response
     '''
     respsSummary, stims, allResps = hf.tabulateResponses(data);
 
@@ -35,31 +39,48 @@ def descr_loss(params, data, contrast, baseline = []):
           obs_spikes = np.maximum(0, obs_spikes - baseline); # cannot have <0 spikes!
 
         pred_spikes, _ = hf.DiffOfGauss(*params, stim_sf=all_sfs[i]*np.ones_like(obs_spikes));
-        #pred_spikes = hf.flexible_Gauss(params, all_sfs[i]*np.ones_like(obs_spikes), minThresh=0);
-
-        # poisson model of spiking
-        poiss = poisson.pmf(np.round(obs_spikes), pred_spikes); # round since the values are nearly but not quite integer values (Sach artifact?)...
-        ps = np.sum(poiss == 0);
-        if ps > 0:
-          poiss = np.maximum(poiss, 1e-6); # anything, just so we avoid log(0)
-        NLL = NLL + sum(-np.log(poiss));
+  
+        if loss_type == 1:
+          # poisson model of spiking
+          poiss = poisson.pmf(np.round(obs_spikes), pred_spikes); # round since the values are nearly but not quite integer values (Sach artifact?)...
+          ps = np.sum(poiss == 0);
+          if ps > 0:
+            poiss = np.maximum(poiss, 1e-6); # anything, just so we avoid log(0)
+          NLL = NLL + sum(-np.log(poiss));
+        elif loss_type == 2:
+          loss = np.square(np.sqrt(obs_spikes) - np.sqrt(pred_spikes));
+          NLL = NLL + loss;
+        elif loss_type == 3:
+          k = 0.01*np.max(obs_spikes);
+          sigma = np.std(obs_spikes);
+          sq_err = np.square(obs_spikes-pred_spikes);
+          NLL = NLL + (sq_err/(k+np.square(sigma)));
     
     return NLL;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0):
+def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0, fit_type = 1):
 
     nParam = 4;
     
     # load cell information
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
+    assert dataList!=[], "data file not found!"
+
     fLname = 'descrFits';
     if baseline_sub:
       fLname = str(fLname + '_baseSub');
-    fLname = str(data_loc + fLname + '.npy');
+    if fit_type == 1:
+      type_str = '_poiss';
+    elif fit_type == 2:
+      type_str = '_sqrt';
+    elif fit_type == 3:
+      type_str = '_sach';
+    fLname = str(data_loc + fLname + type_str + '.npy');
     if os.path.isfile(fLname):
         descrFits = hf.np_smart_load(fLname);
     else:
         descrFits = dict();
+    pdb.set_trace();
     data = dataList[cell_num-1]['data'];
     
     print('Doing the work, now');
@@ -244,8 +265,8 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
                 
 if __name__ == '__main__':
 
-    data_loc = '/home/pl1465/SF_diversity/LGN/sach-data/';
-    #data_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
+    #data_loc = '/home/pl1465/SF_diversity/LGN/sach-data/';
+    data_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
 
     if len(sys.argv) < 2:
       print('uhoh...you need at least one argument here');
