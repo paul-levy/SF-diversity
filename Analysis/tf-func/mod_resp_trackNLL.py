@@ -462,16 +462,13 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
 
     if os.path.isfile(loc_data + fitListName):
       fitList = np_smart_load(str(loc_data + fitListName));
-      #fitList = numpy.load(str(loc_data + fitListName), encoding='latin1').item();
     else:
       fitList = dict();
     dataList = np_smart_load(str(loc_data + 'dataList.npy'));
-    #dataList = numpy.load(str(loc_data + 'dataList.npy'), encoding='latin1').item();
     dataNames = dataList['unitName'];
 
     print('loading data structure...');
     S = np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy')); # why -1? 0 indexing...
-    #S = numpy.load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy'), encoding='latin1').item(); # why -1? 0 indexing...
     print('...finished loading');
     trial_inf = S['sfm']['exp']['trial'];
     prefOrEst = mode(trial_inf['ori'][1]).mode;
@@ -723,7 +720,6 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
 	    # reload fitlist in case changes have been made with the file elsewhere!
             if os.path.exists(loc_data + fitListName):
               fitList = np_smart_load(str(loc_data + fitListName));
-              #fitList = numpy.load(loc_data + fitListName, encoding='latin1').item();
             # else, nothing to reload!!!
       	    # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
             if cellNum-1 not in fitList:
@@ -754,7 +750,6 @@ def setModel(cellNum, stopThresh, lr, fitType = 1, subset_frac = 0, initFromCurr
       # reload (as above) to avoid overwriting changes made with the file elsewhere
       if os.path.exists(loc_data + fitListName):
         fitList = np_smart_load(str(loc_data + fitListName));
-        #fitList = numpy.load(loc_data + fitListName, encoding='latin1').item();
       # else, nothing to reload...
       # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
       if cellNum-1 not in fitList:
