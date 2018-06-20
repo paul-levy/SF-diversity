@@ -31,9 +31,10 @@ rcParams['font.style'] = 'oblique';
 
 which_cell = int(sys.argv[1]);
 fit_type = int(sys.argv[2]);
+crf_fit_type = int(sys.argv[3]);
 normTypeArr = [];
-nArgsIn = len(sys.argv) - 3; # we've already taken 3 arguments off (function all, which_cell, fit_type)
-argInd = 3;
+argInd = 4; # we've already taken 4 arguments off (function all, which_cell, fit_type, crf_fit_type) 
+nArgsIn = len(sys.argv) - argInd; 
 while nArgsIn > 0:
   normTypeArr.append(float(sys.argv[argInd]));
   nArgsIn = nArgsIn - 1;
@@ -51,19 +52,29 @@ save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
 if fit_type == 1:
   loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
-  type_str = '-lsq';
+  type_str = '_lsq';
 if fit_type == 2:
   loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
-  type_str = '-sqrt';
+  type_str = '_sqrt';
 if fit_type == 3:
   loss = lambda resp, pred: poisson.logpmf(resp, pred);
-  type_str = '-poiss';
+  type_str = '_poiss';
 if fit_type == 4:
   loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
-  type_str = '-poissMod';
+  type_str = '_modPoiss';
 
-fitListName = str('fitList_180521' + type_str + '.npy');
-crfFitName = str('crfFits' + type_str + '.npy');
+if crf_fit_type == 1:
+  crf_type_str = '-lsq';
+if fit_type == 2:
+  crf_type_str = '-sqrt';
+if fit_type == 3:
+  crf_type_str = '-poiss';
+if fit_type == 4:
+  crf_type_str = '-poissMod';
+
+
+fitListName = str('fitList_180608' + type_str + '.npy');
+crfFitName = str('crfFits' + crf_type_str + '.npy');
 
 rpt_fit = 1; # i.e. take the multi-start result
 if rpt_fit:

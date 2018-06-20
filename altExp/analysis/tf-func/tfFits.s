@@ -15,7 +15,12 @@ module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 
 # cellNum errThresh learningRate fitType subsampleFrac initFromCurr
-python mod_resp_trackNLL.py $SLURM_ARRAY_TASK_ID 1e-7 0.01 2 0.9 0
+#   fitType:
+#     1 - sqrt
+#     2 - poisson
+#     3 - modPoiss
+#   subset_frac = 0 means take all data (no subsampling)
+python mod_resp_trackNLL.py $SLURM_ARRAY_TASK_ID 1e-7 0.01 3 0 0
 
 # leave a blank line at the end
 

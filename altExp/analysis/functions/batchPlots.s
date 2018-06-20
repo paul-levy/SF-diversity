@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=00:15:00
+#SBATCH --time=00:25:00
 #SBATCH --mem=1500MB
 
 #SBATCH --job-name=sfPlots
@@ -20,12 +20,14 @@ module load seaborn/0.7.1
 	# 2 - square root
 	# 3 - poisson
 	# 4 - modulated poission
-# third param is 1 (gaussian) or 0 (helper_functions asymmetry) calculation for normalization
-# if third param is 1:
-#   4/5 [optional] params are (in log coordinates) mean and std of gaussian
+# third param is crf_fit_type: (i.e. what loss function for naka-rushton fits)
+        # same as above
+# fourth param is 1 (gaussian) or 0 (helper_functions asymmetry) calculation for normalization
+# if fourth param is 1:
+#   5/6 [optional] params are (in log coordinates) mean and std of gaussian
 # if third param is 2:
-#   4/5/6 [optional] params are std of left/right halves, and offset (i.e. bottom/lowest c50)
-python plotting.py $SLURM_ARRAY_TASK_ID 2 2
+#   5/6/7 [optional] params are std of left/right halves, and offset (i.e. bottom/lowest c50)
+python plotting.py $SLURM_ARRAY_TASK_ID 4 1 0
  
 # leave a blank line at the end
 
