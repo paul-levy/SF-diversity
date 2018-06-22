@@ -7,6 +7,8 @@ import pdb
 # np_smart_load - loading that will account for parallelization issues - keep trying to load
 # bw_lin_to_log 
 # bw_log_to_lin
+# DiffOfGauss - difference of gaussian models - formulation discussed with Tony
+# DoGsach - difference of gaussian models - formulation discussed in Sach Sokol's NYU thesis
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
@@ -50,7 +52,7 @@ def bw_log_to_lin(log_bw, pref_sf):
 def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
   ''' Difference of gaussians 
   gain      - overall gain term
-  f_c       - characteristic frequency of the surround, i.e. freq at which response is 1/e of maximum
+  f_c       - characteristic frequency of the center, i.e. freq at which response is 1/e of maximum
   gain_s    - relative gain of surround (e.g. gain_s of 0.5 says peak surround response is half of peak center response
   j_s       - relative characteristic freq. of surround (i.e. char_surround = f_c * j_s)
   '''
@@ -62,6 +64,23 @@ def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
   dog_norm = lambda f: dog(f) / norm;
 
   return dog(stim_sf), dog_norm(stim_sf);
+
+def DoGsach(gain_c, f_c, gain_s, f_s, stim_sf):
+  ''' Difference of gaussians 
+  gain_c    - gain of the center mechanism
+  f_c       - characteristic frequency of the center, i.e. freq at which response is 1/e of maximum
+  gain_s    - gain of surround mechanism
+  f_s       - characteristic freq. of surround
+  '''
+
+  dog = lambda f: np.maximum(0, gain*np.exp(-np.square(f/f_c)) - gain_s*np.exp(-np.square(f/(f_s))));
+
+  norm = np.max(dog(stim_sf));
+
+  dog_norm = lambda f: dog(f) / norm;
+
+  return dog(stim_sf), dog_norm(stim_sf);
+
 
 def deriv_gauss(params, stimSf = np.logspace(np.log10(0.1), np.log10(10), 101)):
 
