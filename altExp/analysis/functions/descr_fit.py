@@ -38,7 +38,7 @@ def flexible_Gauss(params, stim_sf):
                 
     return np.maximum(0.1, respFloor + respRelFloor*shape);
 
-def descr_loss(params, data, family, contrast):
+def descr_loss(params, data, family, contrast, loss_type = 0):
     
     # set constants
     epsilon = 1e-4;
@@ -61,26 +61,35 @@ def descr_loss(params, data, family, contrast):
     pred_rate = flexible_Gauss(params, trial['sf'][0][indices]);
     stim_dur = trial['duration'][indices];
 
-    # poisson model of spiking
-    poiss = poisson.pmf(obs_count, pred_rate * stim_dur);
-    ps = np.sum(poiss == 0);
-    if ps > 0:
-      poiss = np.maximum(poiss, 1e-6); # anything, just so we avoid log(0)
-    NLL = sum(-np.log(poiss));
-    
+    if loss_type == 0:
+      # poisson model of spiking
+      poiss = poisson.pmf(obs_count, pred_rate * stim_dur);
+      ps = np.sum(poiss == 0);
+      if ps > 0:
+        poiss = np.maximum(poiss, 1e-6); # anything, just so we avoid log(0)
+      NLL = sum(-np.log(poiss));
+    else:
+      curr_loss = np.square(np.sqrt(pred_rate) - np.sqrt(stim_dur));
+      NLL = sum(curr_loss);
+
     return NLL;
 
-def fit_descr(cell_num, data_loc, n_repeats = 4):
+def fit_descr(cell_num, data_loc, n_repeats = 4, loss_type = 0):
 
     nParam = 5;
     
+    if loss_type == 0:
+      loss_str = '_poiss.npy';
+    elif loss_type == 1:
+      loss_str = '_sqrt.npy';    
+
     # load cell information
-    dataList = np.load(data_loc + 'dataList.npy').item();
-    if os.path.isfile(data_loc + 'descrFits.npy'):
-        descrFits = np.load(data_loc + 'descrFits.npy').item();
+    dataList = hfunc.np_smart_load(data_loc + 'dataList.npy');
+    if os.path.isfile(data_loc + 'descrFits' +  loss_str):
+        descrFits = hfunc.np_smart_load(data_loc + 'descrFits' + loss_str);
     else:
         descrFits = dict();
-    data = np.load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy').item();
+    data = hfunc.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
     
     print('Doing the work, now');
 
@@ -142,7 +151,6 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
             bound_range = (0, 1.5*max_resp);
             bound_mu = (0.01, 10);
             bound_sig = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
-            
             all_bounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
 
             for n_try in range(n_repeats):
@@ -162,7 +170,7 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
                 else:
                     methodStr = 'TNC';
                 
-                obj = lambda params: descr_loss(params, data, family, con);
+                obj = lambda params: descr_loss(params, data, family, con, loss_type);
                 wax = opt.minimize(obj, init_params, method=methodStr, bounds=all_bounds);
                 
                 # compare
@@ -174,28 +182,32 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
                     currParams[family, con, :] = params;
 
     # update stuff - load again in case some other run has saved/made changes
-    if os.path.isfile(data_loc + 'descrFits.npy'):
+    if os.path.isfile(data_loc + 'descrFits' + loss_str):
         print('reloading descrFits...');
-        descrFits = np.load(data_loc + 'descrFits.npy').item();
+        descrFits = hfunc.np_smart_load(data_loc + 'descrFits' + loss_str);
     if cell_num-1 not in descrFits:
       descrFits[cell_num-1] = dict();
     descrFits[cell_num-1]['NLL'] = bestNLL;
     descrFits[cell_num-1]['params'] = currParams;
 
-    np.save(data_loc + 'descrFits.npy', descrFits);
+    np.save(data_loc + 'descrFits' + loss_str, descrFits);
     print('saving for cell ' + str(cell_num));
                 
 if __name__ == '__main__':
 
+    #data_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
     data_loc = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
 
     if len(sys.argv) < 2:
       print('uhoh...you need at least one argument here');
-      print('First be cell number, second [optional] is number of fit iterations');
+      print('First be cell number, second [optional] is number of fit iterations, third [optional] is which loss function');
       exit();
 
     print('Running cell ' + sys.argv[1] + '...');
 
+    if len(sys.argv) > 3: # specify number of fit iterations and loss type
+      print(' for ' + sys.argv[2] + ' iterations and loss type ' + sys.argv[3]);
+      fit_descr(int(sys.argv[1]), data_loc, int(sys.argv[2]), int(sys.argv[3]));
     if len(sys.argv) > 2: # specify number of fit iterations
       print(' for ' + sys.argv[2] + ' iterations');
       fit_descr(int(sys.argv[1]), data_loc, int(sys.argv[2]));

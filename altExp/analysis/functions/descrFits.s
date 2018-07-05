@@ -14,8 +14,11 @@
 module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 
-# cellNum, numRepititions
-python descr_fit.py $SLURM_ARRAY_TASK_ID 4
+# cellNum, numRepititions, loss function
+# loss function:
+#   0 - poisson
+#   1 - sqrt
+python descr_fit.py $SLURM_ARRAY_TASK_ID 4 1
   
 # leave a blank line at the end
 

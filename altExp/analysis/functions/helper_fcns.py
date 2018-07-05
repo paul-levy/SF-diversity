@@ -3,20 +3,24 @@ from scipy.stats import norm, mode, poisson, nbinom
 from scipy.stats.mstats import gmean as geomean
 from numpy.matlib import repmat
 import scipy.optimize as opt
+import os
+from time import sleep
 sqrt = math.sqrt
 log = math.log
 exp = math.exp
 import pdb
 
 # Functions:
+# np_smart_load - be smart about using numpy load
 # bw_lin_to_log
 # bw_log_to_lin
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
+# get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
 # blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
-# tabulateResponses - Organizes measured and model responses for sfMixAlt experiment
+# tabulate_responses - Organizes measured and model responses for sfMixAlt experiment
 # random_in_range - random real-valued number between A and B
 # nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
 # getSuppressiveSFtuning - returns the normalization pool response
@@ -25,6 +29,20 @@ import pdb
 # setSigmaFilter - create the filter we use for determining c50 with SF
 # evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
 # setNormTypeArr - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters
+
+def np_smart_load(file_path, encoding_str='latin1'):
+
+   if not os.path.isfile(file_path):
+     return [];
+   loaded = [];
+   while(True):
+     try:
+         loaded = numpy.load(file_path, encoding=encoding_str).item();
+         break;
+     except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
+         sleep(10); # i.e. wait for 10 seconds
+
+   return loaded;
 
 def bw_lin_to_log( lin_low, lin_high ):
     # Given the low/high sf in cpd, returns number of octaves separating the
@@ -56,6 +74,11 @@ def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10
     selSf = sNl;
 
     return selSf, stimSf;
+
+def get_prefSF(flexGauss_fit):
+   ''' Given a set of parameters for a flexible gaussian fit, return the preferred SF
+   '''
+   return flexGauss_fit[2];
 
 def compute_SF_BW(fit, height, sf_range):
 
@@ -125,6 +148,13 @@ def blankResp(cellStruct):
     return mu, sig, blank_tr;
     
 def tabulate_responses(cellStruct, modResp = []):
+    ''' Given cell structure (and opt model responses), returns the following:
+        (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
+        (ii) all_disps, all_cons, all_sfs - i.e. the stimulus conditions of the experiment
+        (iii) the valid contrasts for each dispersion level
+        (iv) valid_disp, valid_con, valid_sf - which conditions are valid for this particular cell
+        (v) modRespOrg - the model responses organized as in (i) - only if modResp argument passed in
+    '''
     np = numpy;
     conDig = 3; # round contrast to the thousandth
     
