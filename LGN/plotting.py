@@ -32,8 +32,11 @@ baseline_sub = int(sys.argv[2]); # subtract the baseline when plotting one curve
 sf_fit_type = int(sys.argv[3]);
 
 # personal mac
-dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
-save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/figures/';
+#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
+#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/figures/';
+# prince cluster
+dataPath = '/home/pl1465/SF_diversity/LGN/sach-data/';
+save_loc = '/home/pl1465/SF_diversity/LGN/figures/';
 
 conDig = 3; # round contrast to the 3rd digit
 

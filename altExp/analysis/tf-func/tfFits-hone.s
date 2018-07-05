@@ -20,7 +20,7 @@ source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 #     2 - poisson
 #     3 - modPoiss
 #   subset_frac = 0 means take all data (no subsampling)
-python mod_resp_trackNLL.py $SLURM_ARRAY_TASK_ID 1e-8 0.005 2 0.9 1
+python mod_resp_trackNLL.py $SLURM_ARRAY_TASK_ID 1e-8 0.01 2 0 1
  
 # leave a blank line at the end
 

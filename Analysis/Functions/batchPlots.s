@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=00:10:00
+#SBATCH --time=00:20:00
 #SBATCH --mem=1500MB
 
 #SBATCH --job-name=sfPlots
@@ -26,7 +26,7 @@ module load seaborn/0.7.1
 #   if not given, then they will be chosen from the optimization (if done) or randomly from a distrubition
 # if third param is 2:
 #   4/5/6 [optional] params are std of left/right halves, and offset (i.e. bottom/lowest c50)
-python plotting.py $SLURM_ARRAY_TASK_ID 2 2
+python plotting.py $SLURM_ARRAY_TASK_ID 2 0
  
 # leave a blank line at the end
 
