@@ -18,7 +18,7 @@ source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 # loss_type: 1 - poiss
 #            2 - sqrt
 #            3 - sach (see descr_fit.py for details)
-python descr_fit.py $SLURM_ARRAY_TASK_ID 8 0 3
+python descr_fit.py $SLURM_ARRAY_TASK_ID 4 0 3
   
 # leave a blank line at the end
 
