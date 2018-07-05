@@ -8,11 +8,11 @@ fprintf('NOTE: Must have CNS shared expo resources to run (best if on CNS machin
 cellNames = {'m670l14', 'm670l16', 'm670l22', 'm670l38', 'm670l41', 'm670l46'};
 cellId = 6;
 % at CNS
-% dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
-% savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
+dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
+savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 % personal mac
-dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
-savePath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
+% dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
+% savePath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 
 %% Run?
 sfMixAltLoad(cellNames{cellId}, 'loadPath', dataPath, 'savePath', savePath);
