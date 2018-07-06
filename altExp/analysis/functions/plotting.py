@@ -33,8 +33,9 @@ which_cell = int(sys.argv[1]);
 fit_type = int(sys.argv[2]);
 crf_fit_type = int(sys.argv[3]);
 descr_fit_type = int(sys.argv[4]);
+norm_sim_on = int(sys.argv[5]);
 normTypeArr = [];
-argInd = 5; # we've already taken 5 arguments off (function all, which_cell, fit_type, crf_fit_type, descr_fit_type) 
+argInd = 6; # we've already taken 6 arguments off (function all, which_cell, fit_type, crf_fit_type, descr_fit_type, norm_sim_on) 
 nArgsIn = len(sys.argv) - argInd; 
 while nArgsIn > 0:
   normTypeArr.append(float(sys.argv[argInd]));
@@ -458,66 +459,68 @@ sns.despine(ax=curr_ax, offset=5, trim=False);
 #########
 # Normalization pool simulations
 #########
-conLevels = [1, 0.75, 0.5, 0.33, 0.1];
-nCons = len(conLevels);
-sfCenters = np.logspace(-2, 2, 21); # just for now...
-#sfCenters = allSfs;
-fNorm, conDisp_plots = plt.subplots(nCons, nDisps, sharey=True, figsize=(40,30));
-norm_sim = np.nan * np.empty((nDisps, nCons, len(sfCenters)));
-if len(modParamsCurr) < 9:
-    modParamsCurr.append(helper_fcns.random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
+if norm_sim_on:
 
-# simulations
-for disp in range(nDisps):
-    for conLvl in range(nCons):
-      print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
-      for sfCent in range(len(sfCenters)):
-          # if modParamsCurr doesn't have inhAsym parameter, add it!
+    conLevels = [1, 0.75, 0.5, 0.33, 0.1];
+    nCons = len(conLevels);
+    sfCenters = np.logspace(-2, 2, 21); # just for now...
+    #sfCenters = allSfs;
+    fNorm, conDisp_plots = plt.subplots(nCons, nDisps, sharey=True, figsize=(40,30));
+    norm_sim = np.nan * np.empty((nDisps, nCons, len(sfCenters)));
+    if len(modParamsCurr) < 9:
+        modParamsCurr.append(helper_fcns.random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
+
+    # simulations
+    for disp in range(nDisps):
+        for conLvl in range(nCons):
+          print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
+          for sfCent in range(len(sfCenters)):
+              # if modParamsCurr doesn't have inhAsym parameter, add it!
+              if norm_type == 1:
+                unweighted = 1;
+                _, _, _, normRespSimple, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
+                nTrials = normRespSimple.shape[0];
+                nInhChan = cellStruct['sfm']['mod']['normalization']['pref']['sf'];
+                inhWeightMat  = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
+                normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
+                norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
+              else: # norm_type == 0:
+                #_, normResp, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+                _, _, _, _, normResp = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], normTypeArr = normTypeArr);
+                norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
+
           if norm_type == 1:
-            unweighted = 1;
-            _, _, _, normRespSimple, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
-            nTrials = normRespSimple.shape[0];
-            nInhChan = cellStruct['sfm']['mod']['normalization']['pref']['sf'];
-            inhWeightMat  = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
-            normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
-            norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
+            maxResp = np.max(norm_sim[disp, conLvl, :]);
+            conDisp_plots[conLvl, disp].text(0.5, 0.0, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8], modParamsCurr[9]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
           else: # norm_type == 0:
-            #_, normResp, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
-            _, _, _, _, normResp = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], normTypeArr = normTypeArr);
-            norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-     
-      if norm_type == 1:
-        maxResp = np.max(norm_sim[disp, conLvl, :]);
-        conDisp_plots[conLvl, disp].text(0.5, 0.0, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8], modParamsCurr[9]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
-      else: # norm_type == 0:
-        conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
+            conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
 
-      conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);
-      conDisp_plots[conLvl, disp].set_xlim([1e-2, 1e2]);
+          conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);
+          conDisp_plots[conLvl, disp].set_xlim([1e-2, 1e2]);
 
-      conDisp_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8, direction='out');
-      conDisp_plots[conLvl, disp].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
-      if conLvl == 0:
-          conDisp_plots[conLvl, disp].set_xlabel('sf center (cpd)', fontsize=20);
-      if disp == 0:
-          conDisp_plots[conLvl, disp].set_ylabel('Response (ips)', fontsize=20);
-      # remove axis from top and right, set ticks to be only bottom and left
-      conDisp_plots[conLvl, disp].spines['right'].set_visible(False);
-      conDisp_plots[conLvl, disp].spines['top'].set_visible(False);
-      conDisp_plots[conLvl, disp].xaxis.set_ticks_position('bottom');
-      conDisp_plots[conLvl, disp].yaxis.set_ticks_position('left');
-conDisp_plots[0, 2].text(0.5, 1.2, 'Normalization pool responses', fontsize=16, horizontalalignment='center', verticalalignment='center', transform=conDisp_plots[0, 2].transAxes);
+          conDisp_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8, direction='out');
+          conDisp_plots[conLvl, disp].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
+          if conLvl == 0:
+              conDisp_plots[conLvl, disp].set_xlabel('sf center (cpd)', fontsize=20);
+          if disp == 0:
+              conDisp_plots[conLvl, disp].set_ylabel('Response (ips)', fontsize=20);
+          # remove axis from top and right, set ticks to be only bottom and left
+          conDisp_plots[conLvl, disp].spines['right'].set_visible(False);
+          conDisp_plots[conLvl, disp].spines['top'].set_visible(False);
+          conDisp_plots[conLvl, disp].xaxis.set_ticks_position('bottom');
+          conDisp_plots[conLvl, disp].yaxis.set_ticks_position('left');
+    conDisp_plots[0, 2].text(0.5, 1.2, 'Normalization pool responses', fontsize=16, horizontalalignment='center', verticalalignment='center', transform=conDisp_plots[0, 2].transAxes);
 
-### now save all figures (sfMix contrasts, details, normalization stuff)
-#pdb.set_trace()
-allFigs = [f, fDetails, fNorm];
-saveName = "/cell_%d.pdf" % (which_cell)
-full_save = os.path.dirname(str(save_loc + 'sfMixOnly/'));
-pdfSv = pltSave.PdfPages(full_save + saveName);
-for fig in range(len(allFigs)):
-    pdfSv.savefig(allFigs[fig])
-    plt.close(allFigs[fig])
-pdfSv.close()
+    ### now save all figures (sfMix contrasts, details, normalization stuff)
+    #pdb.set_trace()
+    allFigs = [f, fDetails, fNorm];
+    saveName = "/cell_%d.pdf" % (which_cell)
+    full_save = os.path.dirname(str(save_loc + 'sfMixOnly/'));
+    pdfSv = pltSave.PdfPages(full_save + saveName);
+    for fig in range(len(allFigs)):
+        pdfSv.savefig(allFigs[fig])
+        plt.close(allFigs[fig])
+    pdfSv.close()
 
 #########
 # #### Plot contrast response functions with Naka-Rushton fits
