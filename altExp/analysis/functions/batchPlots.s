@@ -22,12 +22,14 @@ module load seaborn/0.7.1
 	# 4 - modulated poission
 # third param is crf_fit_type: (i.e. what loss function for naka-rushton fits)
         # same as above
-# fourth param is 1 (gaussian) or 0 (helper_functions asymmetry) calculation for normalization
+# fourth param is descr_fit_type: (i.e. what loss function for descriptive gaussian fits)
+        # same as above
+# fifth param is 1 (gaussian) or 0 (helper_functions asymmetry) calculation for normalization
 # if fourth param is 1:
 #   5/6 [optional] params are (in log coordinates) mean and std of gaussian
 # if third param is 2:
 #   5/6/7 [optional] params are std of left/right halves, and offset (i.e. bottom/lowest c50)
-python plotting.py $SLURM_ARRAY_TASK_ID 3 1 0
+python plotting.py $SLURM_ARRAY_TASK_ID 3 1 2 0
  
 # leave a blank line at the end
 

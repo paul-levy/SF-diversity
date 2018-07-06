@@ -38,7 +38,7 @@ def flexible_Gauss(params, stim_sf):
                 
     return np.maximum(0.1, respFloor + respRelFloor*shape);
 
-def descr_loss(params, data, family, contrast, loss_type = 0):
+def descr_loss(params, data, family, contrast, loss_type = 1):
     
     # set constants
     epsilon = 1e-4;
@@ -61,27 +61,32 @@ def descr_loss(params, data, family, contrast, loss_type = 0):
     pred_rate = flexible_Gauss(params, trial['sf'][0][indices]);
     stim_dur = trial['duration'][indices];
 
-    if loss_type == 0:
+    if loss_type == 1:
+      curr_loss = np.square(pred_rate * stim_dur - obs_count);
+      NLL = sum(curr_loss);
+    elif loss_type == 2:
+      curr_loss = np.square(np.sqrt(pred_rate * stim_dur) - np.sqrt(obs_count));
+      NLL = sum(curr_loss);
+    elif loss_type == 3:
       # poisson model of spiking
       poiss = poisson.pmf(obs_count, pred_rate * stim_dur);
       ps = np.sum(poiss == 0);
       if ps > 0:
         poiss = np.maximum(poiss, 1e-6); # anything, just so we avoid log(0)
       NLL = sum(-np.log(poiss));
-    else:
-      curr_loss = np.square(np.sqrt(pred_rate) - np.sqrt(stim_dur));
-      NLL = sum(curr_loss);
 
     return NLL;
 
-def fit_descr(cell_num, data_loc, n_repeats = 4, loss_type = 0):
+def fit_descr(cell_num, data_loc, n_repeats = 4, loss_type = 1):
 
     nParam = 5;
     
-    if loss_type == 0:
-      loss_str = '_poiss.npy';
-    elif loss_type == 1:
+    if loss_type == 1:
+      loss_str = '_lsq.npy';    
+    elif loss_type == 2:
       loss_str = '_sqrt.npy';    
+    elif loss_type == 3:
+      loss_str = '_poiss.npy';
 
     # load cell information
     dataList = hfunc.np_smart_load(data_loc + 'dataList.npy');

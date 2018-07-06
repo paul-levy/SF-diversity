@@ -32,8 +32,9 @@ rcParams['font.style'] = 'oblique';
 which_cell = int(sys.argv[1]);
 fit_type = int(sys.argv[2]);
 crf_fit_type = int(sys.argv[3]);
+descr_fit_type = int(sys.argv[4]);
 normTypeArr = [];
-argInd = 4; # we've already taken 4 arguments off (function all, which_cell, fit_type, crf_fit_type) 
+argInd = 5; # we've already taken 5 arguments off (function all, which_cell, fit_type, crf_fit_type, descr_fit_type) 
 nArgsIn = len(sys.argv) - argInd; 
 while nArgsIn > 0:
   normTypeArr.append(float(sys.argv[argInd]));
@@ -72,9 +73,16 @@ if fit_type == 3:
 if fit_type == 4:
   crf_type_str = '-poissMod';
 
+if descr_fit_type == 1:
+  descr_type_str = '_lsq';
+if descr_fit_type == 2:
+  descr_type_str = '_sqrt';
+if descr_fit_type == 3:
+  descr_type_str = '_poiss';
 
 fitListName = str('fitList_180608' + type_str + '.npy');
 crfFitName = str('crfFits' + crf_type_str + '.npy');
+descrFitName = str('descrFits' + descr_type_str + '.npy');
 
 rpt_fit = 1; # i.e. take the multi-start result
 if rpt_fit:
@@ -90,7 +98,7 @@ cellStruct = np.load(str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.n
 
 # #### Load descriptive model fits, comp. model fits
 
-descrFits = np.load(str(dataPath + 'descrFits.npy'), encoding = 'latin1').item();
+descrFits = np.load(str(dataPath + descrFitName), encoding = 'latin1').item();
 descrFits = descrFits[which_cell-1]['params']; # just get this cell
 
 modParams = np.load(str(dataPath + fitListName), encoding= 'latin1').item();
