@@ -505,23 +505,24 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     ########
     # Load cell
     ########
+    #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal mac
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fL_name = 'fitList_180608';
-    # lossType
-    if lossType == 1:
-      fL_suffix1 = '_sqrt';
-    elif lossType == 2:
-      fL_suffix1 = '_poiss';
-    elif lossType == 3:
-      fL_suffix1 = '_modPoiss';
+    fL_name = 'fitList_180712';
     # fitType
     if fitType == 1:
-      fL_suffix2 = '_flat.npy';
+      fL_suffix1 = '_flat';
     elif fitType == 2:
-      fL_suffix2 = '_wght.npy';
+      fL_suffix1 = '_wght';
     elif fitType == 3:
-      fL_suffix2 = '_c50.npy';
+      fL_suffix1 = '_c50';
+    # lossType
+    if lossType == 1:
+      fL_suffix2 = '_sqrt.npy';
+    elif lossType == 2:
+      fL_suffix2 = '_poiss.npy';
+    elif lossType == 3:
+      fL_suffix2 = '_modPoiss.npy';
     fitListName = str(fL_name + fL_suffix1 + fL_suffix2);
 
     if os.path.isfile(loc_data + fitListName):
@@ -750,7 +751,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
                           ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
 
         else: # pass in the full dataset
-	  opt = \
+          opt = \
                 m.run(optimizer, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
                             ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
                             ph_stimDur: stim_dur, ph_objWeight: objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
@@ -763,8 +764,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
 
         if (iter/500.0) == round(iter/500.0): # save every once in a while!!!
           
-    	  real_params = m.run(applyConstraints(fitType, *param_list));
-                    
+          real_params = m.run(applyConstraints(fitType, *param_list));
           print('iteration ' + str(iter) + '...NLL is ' + str(NLL) + ' and saved params are ' + str(curr_params));
           print('\tparams in current optimization are: ' + str(real_params));
 

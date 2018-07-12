@@ -1,5 +1,4 @@
 #!/bin/bash
-
 #SBATCH --time=5:00:00
 #SBATCH --mem=16GB
 
