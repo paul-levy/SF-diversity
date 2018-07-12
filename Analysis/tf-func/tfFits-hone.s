@@ -15,13 +15,17 @@
 module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 
-# params are: cellNum, stopThresh, learning rate, fitType, subset_frac, initFromCurr
-#   fitType: 
-# 1 - sqrt
-# 2 - poiss 
-# 3 - modPoiss               
-# subset_frac = 0 means take all data (no subsampling)
-python mod_resp_trackNLL.py $SLURM_ARRAY_TASK_ID 1e-9 0.01 2 0 1
+# params are: cellNum, stopThresh, learning rate, lossType, fitType, subset_frac, initFromCurr
+#   lossType:
+#     1 - sqrt
+#     2 - poisson
+#     3 - modPoiss
+#   fitType:
+#     1 - flat normalization
+#     2 - gaussian weighting of norm responses
+#     3 - (flexible) gaussian c50 filter
+#   subset_frac = 0 means take all data (no subsampling)
+python mod_resp_trackNLL.py $SLURM_ARRAY_TASK_ID 1e-9 0.01 2 2 1 1
  
 # leave a blank line at the end
 
