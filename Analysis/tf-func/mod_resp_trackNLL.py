@@ -357,7 +357,7 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     # Evaluate the c50 filter at the center frequencies present in the stimulus set
       centerSfs = ph_stimSf[0, :]; # is this valid? CHECK CHECK CHECK
       scaleSig = -(1-sigOffset);
-      sigEff = flexible_gauss(stdLeft, stdRight, prefSf, centerSfs);
+      sigEff = flexible_gauss(stdLeft, stdRight, sigPeak, centerSfs); # sigPeak not necessarily equal to sfPref, the model parameter for the filter; want separate control for the c50 filter
       sigmaEff = tf.expand_dims(sigEff, axis=-1);
       '''
       Multiply sigmaEff by scaleSig (where scaleSig < 0) to create function on range [scaleSig, 0] 
