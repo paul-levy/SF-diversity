@@ -563,19 +563,20 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     # 06 = late additive noise
     # 07 = variance of response gain    
 
-    # normTypeArr should be [0 or 1 or 2, *params]
-    # if normTypeArr[0] = 0
+    # normTypeArr should be [1 or 2 or 3, *params]
+    # if normTypeArr[0] = 1
     #   08 = asymmetry of normalization
     #   normTypeArr = [0, [inhAsym]]
-    # if normTypeArr[0] = 1 (Gaussian weights)
+    # if normTypeArr[0] = 2 (Gaussian weights)
     #   08 = mean of Gaussian
     #   09 = std of Gaussian
     #   normTypeArr = [1, [mean], [std]]
-    # if normTypeArr[0] = 2 (freq-dep c50)
+    # if normTypeArr[0] = 3 (freq-dep c50)
     #   08 = std of left half (rel. to peak)
     #   09 = std of right half (rel. to peak)
     #   10 = offset (i.e. what is c50 at peak sensitivity, where c50 is lowest)
-    #   normTypeArr = [2, [offset], [leftSigma], [rightSigma]]
+    #   11 = peak of filter (sf in cpd)
+    #   normTypeArr = [2, [offset], [leftSigma], [rightSigma], [peak]]
 
     print('ha!');
     
@@ -614,12 +615,12 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     normTypeArr = setNormTypeArr(params, normTypeArr);
     norm_type = int(normTypeArr[0]);
 
-    if norm_type == 2:
+    if norm_type == 3:
       # sigma calculation
-      sfPref = params[0];
+      sfPeak = normTypeArr[4];
       stdLeft = normTypeArr[2];
       stdRight = normTypeArr[3];
-      filter = setSigmaFilter(sfPref, stdLeft, stdRight);
+      filter = setSigmaFilter(sfPeak, stdLeft, stdRight);
 
       offset_sigma = normTypeArr[1];
       scale_sigma = -(1-offset_sigma);
@@ -629,13 +630,13 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     else:
       sigmaFilt = numpy.square(sigma); # i.e. square the normalization constant
 
-    if norm_type == 1:
+    if norm_type == 2:
       gs_mean = normTypeArr[1];
       gs_std = normTypeArr[2];
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
-    else: # norm_type == 0 or anything else,
-      if norm_type == 0:
-        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 0
+    else: # norm_type == 1 or anything else,
+      if norm_type == 1:
+        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 1
       else:
         inhAsym = 0; # otherwise, just set to 0
       for iP in range(len(nInhChan)):
@@ -744,12 +745,12 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     inhWeight = [];
     nFrames = 120; # always
 
-    if norm_type == 2:
+    if norm_type == 3:
       # sigma calculation
-      sfPref = params[0];
+      filterPeak = normTypeArr[4];
       stdLeft = normTypeArr[2];
       stdRight = normTypeArr[3];
-      filter = setSigmaFilter(sfPref, stdLeft, stdRight);
+      filter = setSigmaFilter(filterPeak, stdLeft, stdRight);
 
       offset_sigma = normTypeArr[1];
       scale_sigma = -(1-offset_sigma);
@@ -759,13 +760,13 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     else:
       sigmaFilt = numpy.square(sigma); # i.e. normalization constant squared
 
-    if norm_type == 1:
+    if norm_type == 2:
       gs_mean = normTypeArr[1];
       gs_std = normTypeArr[2];
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
-    else: # norm_type == 0 or anything else, we just go with 
-      if norm_type == 0:
-        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 0
+    else: # norm_type == 1 or anything else, we just go with 
+      if norm_type == 1:
+        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 1
       else:
         inhAsym = 0; # otherwise, just set to 0
       for iP in range(len(nInhChan)):

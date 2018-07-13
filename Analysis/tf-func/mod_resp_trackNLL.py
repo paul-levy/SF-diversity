@@ -434,7 +434,7 @@ def applyConstraints(fitType, *args):
       eight = tf.multiply(0.75, tf.sigmoid(args[8]));
       nine = tf.add(tf.nn.softplus(args[9]), 1e-1);
       ten = tf.add(tf.nn.softplus(args[10]), 1e-1);
-      eleven = tf.add(tf.nn.softplus(args[0]), 0.05);
+      eleven = tf.add(tf.nn.softplus(args[11]), 0.05);
       return [zero,one,two,three,four,five,six,seven,eight,nine,ten,eleven];
     else: # mistake!
       return [];
@@ -798,6 +798,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
             fitList[cellNum-1]['NLL'] = NLL;
             fitList[cellNum-1]['params'] = real_params;
             numpy.save(loc_data + fitListName, fitList);   
+            curr_params = real_params; # update for when you print/display
 
         iter = iter+1;
 

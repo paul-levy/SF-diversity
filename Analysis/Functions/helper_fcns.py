@@ -476,7 +476,7 @@ def setNormTypeArr(params, normTypeArr = []):
   '''
 
   # constants
-  c50_len = 11; # 11 parameters if we've optimized for the filter which sets c50 in a frequency-dependent way
+  c50_len = 12; # 12 parameters if we've optimized for the filter which sets c50 in a frequency-dependent way
   gauss_len = 10; # 10 parameters in the model if we've optimized for the gaussian which weights the normalization filters
   asym_len = 9; # 9 parameters in the model if we've used the old asymmetry calculation for norm weights
 
@@ -485,11 +485,12 @@ def setNormTypeArr(params, normTypeArr = []):
   # now do the work
   if normTypeArr:
     norm_type = int(normTypeArr[0]); # typecast to int
-    if norm_type == 2:
+    if norm_type == 3: # c50 style
       if len(params) == c50_len:
         filt_offset = params[8];
         std_l = params[9];
         std_r = params[10];
+        filt_peak = params[11];
       else:
         if len(normTypeArr) > 1:
           filt_offset = normTypeArr[1];
@@ -503,9 +504,13 @@ def setNormTypeArr(params, normTypeArr = []):
           std_r = normTypeArr[3];
         else: 
           std_r = random_in_range([0.5, 5])[0]; 
-      normTypeArr = [norm_type, filt_offset, std_l, std_r];
+        if len(normTypeArr) > 4:
+          filt_peak = normTypeArr[4];
+        else: 
+          filt_peak = random_in_range([1, 6])[0]; 
+      normTypeArr = [norm_type, filt_offset, std_l, std_r, filt_peak];
 
-    elif norm_type == 1:
+    elif norm_type == 2:
       if len(params) == gauss_len: # we've optimized for these parameters
         gs_mean = params[8];
         gs_std = params[9];
@@ -520,12 +525,12 @@ def setNormTypeArr(params, normTypeArr = []):
           gs_std = numpy.power(10, random_in_range([-2, 2])[0]); # i.e. 1e-2, 1e2
       normTypeArr = [norm_type, gs_mean, gs_std]; # save in case we drew mean/std randomly
     
-    elif norm_type == 0:
+    elif norm_type == 2:
       if len(params) == asym_len:
         inhAsym = params[8];
       if len(normTypeArr) > 1: # then we've passed in inhAsym to override existing one, if there is one
         inhAsym = normTypeArr[1];
-      normTypeArr = [norm_type, inhAsym];
+      normTypeArr = [norm_type, inhAsym]; # if neither "if" above is true, we've already set inhAsym to 0
 
   else:
     norm_type = 0; # i.e. just run old asymmetry computation

@@ -48,28 +48,38 @@ rcParams['legend.fontsize'] ='large'; # using a named size
 import pdb
 
 cellNum = int(sys.argv[1]);
-fitType = int(sys.argv[2]);
+lossType = int(sys.argv[2]);
+fitType = int(sys.argv[3]);
 normTypeArr= [];
-nArgsIn = len(sys.argv) - 3; # we've already taken 3 arguments off (function all, which_cell, fit_type)
-argInd = 3;
+argInd = 3; # we've already taken 3 arguments off (function call, which_cell, loss_type); we'll get fitType again in the loop below
+nArgsIn = len(sys.argv) - argInd; 
 while nArgsIn > 0:
   normTypeArr.append(float(sys.argv[argInd]));
   nArgsIn = nArgsIn - 1;
   argInd = argInd + 1;
 
 save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
-#save_loc = '/ser/1.2/p2/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Figures/'# CNS
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_180608';
+fitBase = 'fitList_180712';
+# first the fit type
 if fitType == 1:
-  fitSuf = '_sqrt.npy';
+  fitSuf = '_flat';
 elif fitType == 2:
-  fitSuf = '_poiss.npy';
+  fitSuf = '_wght';
 elif fitType == 3:
-  fitSuf = '_modPoiss.npy';
-fitName = str(fitBase + fitSuf);
+  fitSuf = '_c50';
+# then the loss type
+if lossType == 1:
+  lossSuf = '_sqrt.npy';
+elif lossType == 2:
+  lossSuf = '_poiss.npy';
+elif lossType == 3:
+  lossSuf = '_modPoiss.npy';
+
+fitName = str(fitBase + fitSuf + lossSuf);
+
 descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
 
@@ -98,8 +108,8 @@ descrModFit = descrModFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 
 ignore, modResp, normTypeArr = mod_resp.SFMGiveBof(modFit, expData, normTypeArr);
 norm_type = normTypeArr[0];
-if norm_type == 1:
-  gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 1
+if norm_type == 2:
+  gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 2
   gs_std = normTypeArr[2]; # guaranteed to exist ...
 #modRespAll = mod_resp.SFMGiveBof(modParamsCurr, expData, normTypeArr)[1]; # NOTE: We're taking [1] (i.e. second) output of SFMGiveBof
 oriModResp, conModResp, sfmixModResp, allSfMix = organize_modResp(modResp, expData['sfm']['exp']['trial'])
@@ -257,7 +267,7 @@ inhSfTuning = getSuppressiveSFtuning();
 
 # Compute weights for suppressive signals
 nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
-if norm_type == 1:
+if norm_type == 2:
   nTrials =  inhSfTuning.shape[0];
   inhWeight = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
   inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
@@ -305,13 +315,13 @@ plt.text(0.5, 1.1, 'respExp: {:.2f}'.format(modFit[3]), fontsize=12, horizontala
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset=5);
 
-if norm_type == 2: # plot the c50 filter (i.e. effective c50 as function of SF)
+if norm_type == 3: # plot the c50 filter (i.e. effective c50 as function of SF)
   stimSf = np.logspace(-2, 2, 101);
-  sfPref = prefSf; # defined above
+  filtPeak = normTypeArr[4];
   stdLeft = normTypeArr[2];
   stdRight = normTypeArr[3];
   
-  filter = setSigmaFilter(sfPref, stdLeft, stdRight);
+  filter = setSigmaFilter(filtPeak, stdLeft, stdRight);
   offset_filt = normTypeArr[1];
   scale_filt = -(1-offset_filt); # we always scale so that range is [offset_sf, 1]
   c50_filt = evalSigmaFilter(filter, scale_filt, offset_filt, stimSf)
@@ -319,7 +329,7 @@ if norm_type == 2: # plot the c50 filter (i.e. effective c50 as function of SF)
   # now plot
   curr_ax = plt.subplot2grid(detailSize, (2, 4));
   plt.semilogx(stimSf, c50_filt);
-  plt.title('(mu, stdL/R, offset) = (%.2f, %.2f|%.2f, %.2f)' % (sfPref, stdLeft, stdRight, offset_filt));
+  plt.title('(mu, stdL/R, offset) = (%.2f, %.2f|%.2f, %.2f)' % (filtPeak, stdLeft, stdRight, offset_filt));
   plt.xlabel('sf (cpd)');
   plt.ylabel('c50 (con %)')
     
@@ -384,7 +394,7 @@ for disp in range(nFam):
       print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
       for sfCent in range(len(sfCenters)):
           # if modFit doesn't have inhAsym parameter, add it!
-          if norm_type == 1:
+          if norm_type == 2:
             unweighted = 1;
             _, _, _, normRespSimple = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
             nTrials = normRespSimple.shape[0];
@@ -392,11 +402,11 @@ for disp in range(nFam):
             inhWeightMat  = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
             normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-          else: # including norm_type == 0 or 2
+          else: # including norm_type == 1 or 3
             _, _, _, _, normResp = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], normTypeArr = normTypeArr);
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
 
-      if norm_type == 1:
+      if norm_type == 2:
         maxResp = np.max(norm_sim[disp, conLvl, :]);
         conDisp_plots[conLvl, disp].text(0.5, 1.1*maxResp, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, gs_mean, gs_std), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
       else:
