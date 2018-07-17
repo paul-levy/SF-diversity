@@ -266,14 +266,12 @@ def SFMSimpleResp(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, mod_par
         #'P': Ps, 'omega': omegaAll};
         
 def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, ph_objWeight, \
-               ph_normResp, ph_normCenteredSf, v_prefSf, v_dOrdSp, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, fitType):
+               ph_normResp, ph_normCenteredSf, lossType, fitType, *vArgs):
     
     # NOTE 4.26.18: ph_normCenteredSf is actually just the log SF centers of the normalization channels in one vector
     # Computes the negative log likelihood for the LN-LN model
 
-    params = applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
-                              v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain);
+    params = applyConstraints(fitType, *vArgs);
     
     # 00 = preferred spatial frequency   (cycles per degree)
     # 01 = derivative order in space
@@ -283,12 +281,13 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     # 05 = early additive noise
     # 06 = late additive noise
     # 07 = variance of response gain    
-    # Added 04/26/18:
+    # if fitType == 2
     # 08 = mean of normalization weights gaussian
     # 09 = std of ...
-    # OR Added 05/21/18:
+    # if fitType == 3
     # 08 = offset of c50 tuning filter (filter bounded between [sigOffset, 1]
     # 09/10 = standard deviations to the left and right of the peak of the c50 filter
+    # 11 = peak (in sf cpd) of c50 filter
 
     nFrames = 120; # hashtag always
     
@@ -312,6 +311,18 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     noiseLate  = params[6];  # late additive noise
     varGain    = params[7];  # multiplicative noise
 
+    if fitType == 2:
+      # gaussian weighting of normalization responses
+      normMean = params[8];
+      normStd  = params[9];
+
+    if fitType == 3:
+      # normalization weight parameters
+      sigOffset = params[8]; # c50 filter will range between [v_sigOffset, 1]
+      stdLeft   = params[9]; # std of the gaussian to the left of the peak
+      stdRight  = params[10]; # " to the right "
+      sigPeak   = params[11];
+
     ### Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
     #priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15));
     NLLExp = 0; # should use priorExp and NLLExp lines commented out below, but not for now
@@ -319,11 +330,13 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     # why divide by number of trials? because we take mean of NLLs, so this way it's fair to add them
 
     ### Compute weights for suppressive signals - will be 1-vector of length nFilt [27]
-    inhWeight = 1 + tf.multiply(tf.constant(0, dtype=tf.float32), ph_normCenteredSf); # assume no asymmetry
-    ''' # for gaussian normalization weighting
-    dist = tf.distributions.Normal(loc=normMean, scale=normStd)
-    inhWeight = dist.prob(ph_normCenteredSf);
-    '''
+    if fitType == 1 or fitType == 3:
+      inhWeight = 1 + tf.multiply(tf.constant(0, dtype=tf.float32), ph_normCenteredSf); # assume no asymmetry
+    if fitType == 2:
+      # for gaussian normalization weighting
+      dist = tf.distributions.Normal(loc=normMean, scale=normStd)
+      inhWeight = dist.prob(ph_normCenteredSf);
+
     # now we must exand inhWeight to match rank of ph_normResp - no need to match dimensions, since * will broadcast
     inhWeight = tf.expand_dims(inhWeight, axis=0);
     inhWeightMat = tf.expand_dims(inhWeight, axis=-1);
@@ -339,11 +352,26 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
     temp = tf.reduce_sum(temp, axis=1); # sum over filters to make nTrials x nFrames
     Linh = tf.sqrt(temp);
 
+    if fitType == 1 or fitType == 2:
+      sigmaEffective = tf.square(sigma);
+    elif fitType == 3:
+    # Evaluate the c50 filter at the center frequencies present in the stimulus set
+      centerSfs = ph_stimSf[0, :]; # is this valid? CHECK CHECK CHECK
+      scaleSig = -(1-sigOffset);
+      sigEff = flexible_gauss(stdLeft, stdRight, sigPeak, centerSfs); # sigPeak not necessarily equal to sfPref, the model parameter for the filter; want separate control for the c50 filter
+      sigmaEff = tf.expand_dims(sigEff, axis=-1);
+      '''
+      Multiply sigmaEff by scaleSig (where scaleSig < 0) to create function on range [scaleSig, 0] 
+      Then, add sigOffset and -scaleSig to make function [0, -scaleSig] --> [offset, offset-scaleSig] where offset-scaleSig typically = 1
+      '''
+      sigmaEffective = tf.add(tf.add(tf.multiply(scaleSig, sigmaEff), sigOffset), -scaleSig);
+
+
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     uno = tf.add(noiseEarly, tf.cast(Lexc, dtype=tf.float32));
     numerator     = uno;
     # taking the sqrt of the denominator (which is sum of squares) to bring in line with Carandini, Heeger, Movshon, '97
-    denominator   = tf.sqrt(tf.square(sigma) + tf.square(Linh)); # squaring Linh - edit 7/17
+    denominator   = tf.sqrt(sigmaEffective + tf.square(Linh)); # squaring Linh - edit 7/17
     # denominator   = tf.sqrt(tf.square(sigma) + tf.square(Linh)); # squaring Linh - edit 7/17
     # ratio will be nTrials x nTrials
     ratio         = tf.pow(tf.maximum(tf.constant(0, dtype=tf.float32), tf.divide(numerator,denominator)), respExp);
@@ -373,37 +401,46 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
 
     return NLL;
 
-def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain):
-        
+def applyConstraints(fitType, *args):
         # 00 = preferred spatial frequency   (cycles per degree) || [>0.05]
         # 01 = derivative order in space || [>0.1]
         # 02 = normalization constant (log10 basis) || unconstrained
         # 03 = response exponent || >1
         # 04 = response scalar || >1e-3
-        # 05 = early additive noise || [0,1]
-        # 06 = late additive noise || >0
-        # 07 = variance of response gain || >1e-3     
-        # Added 04/26/18:
+        # 05 = early additive noise || [0, 1]; was [0.001, 1] - see commented out line below
+        # 06 = late additive noise || >0.01
+        # 07 = variance of response gain || >1e-3
+        # if fitType == 2
         # 08 = mean of normalization weights gaussian || [>-2]
-        # 09 = std of ... || >1e-3
-        # Added/changed on 5/21/18:
+        # 09 = std of ... || >1e-3 or >5e-1
+        # if fitType == 3
         # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 0.75]
         # 09 = standard deviation of the gaussian to the left of the peak || >0.1
         # 10 = "" to the right "" || >0.1
+        # 11 = peak (i.e. sf location) of c50 tuning curve 
 
-    zero = tf.add(tf.nn.softplus(v_prefSf), 0.05);
-    one = tf.add(tf.nn.softplus(v_dOrdSp), 0.1);
-    two = v_normConst;
-    #three = tf.constant(2, tf.float32);
-    three = tf.add(tf.nn.softplus(v_respExp), 1);
-    four = tf.add(tf.nn.softplus(v_respScalar), 1e-3);
-    five = tf.sigmoid(v_noiseEarly);
-    six = tf.nn.softplus(v_noiseLate);
-    seven = tf.add(tf.nn.softplus(v_varGain), 1e-3);
-    #eight = tf.add(tf.nn.softplus(v_normMean), -2);
-    #nine = tf.add(tf.nn.softplus(v_normStd), 1e-3);
-    return [zero,one,two,three,four,five,six,seven];
+    zero = tf.add(tf.nn.softplus(args[0]), 0.05);
+    one = tf.add(tf.nn.softplus(args[1]), 0.1);
+    two = args[2];
+    three = tf.add(tf.nn.softplus(args[3]), 1);
+    four = tf.add(tf.nn.softplus(args[4]), 1e-3);
+    five = tf.sigmoid(args[5]); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
+    six = tf.add(0.01, tf.nn.softplus(args[6])); # if always positive, then no hard thresholding to ensure rate (strictly) > 0
+    seven = tf.add(tf.nn.softplus(args[7]), 1e-3);
+    if fitType == 1:
+      return [zero,one,two,three,four,five,six,seven];
+    if fitType == 2:
+      eight = tf.add(tf.nn.softplus(args[8]), -2);
+      nine = tf.add(tf.nn.softplus(args[9]), 5e-1);
+      return [zero,one,two,three,four,five,six,seven,eight,nine];
+    elif fitType == 3:
+      eight = tf.multiply(0.75, tf.sigmoid(args[8]));
+      nine = tf.add(tf.nn.softplus(args[9]), 1e-1);
+      ten = tf.add(tf.nn.softplus(args[10]), 1e-1);
+      eleven = tf.add(tf.nn.softplus(args[11]), 0.05);
+      return [zero,one,two,three,four,five,six,seven,eight,nine,ten,eleven];
+    else: # mistake!
+      return [];
 
 def negBinom(x, r, p):
     # We assume that r & p are tf placeholders/variables; x is a constant
@@ -418,35 +455,46 @@ def negBinom(x, r, p):
     
     return tf.add(naGam, haanGam);
     
-def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr = 1):
+def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, initFromCurr = 1):
     # Given just a cell number, will fit the Robbe V1 model to the data
     # stopThresh is the value (in NLL) at which we stop the fitting (i.e. if the difference in NLL between two full steps is < stopThresh, stop the fitting
     # LR is learning rate
-    # fitType
+    # lossType
     #   1 - loss := square(sqrt(resp) - sqrt(pred))
     #   2 - loss := poissonProb(spikes | modelRate)
     #   3 - loss := modPoiss model (a la Goris, 2014)
- 
+    # fitType - what is the model formulation?
+    #   1 := flat normalization
+    #   2 := gaussian-weighted normalization responses
+    #   3 := gaussian-weighted c50/norm "constant"
+
     ########
     # Load cell
     ########
     loc_data = '/home/pl1465/SF_diversity/altExp/analysis/structures/'; # Prince cluster
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/'; # Personal mac
 
-    fL_name = 'fitList_180608';
+    fL_name = 'fitList_180717';
+    # fitType
     if fitType == 1:
-      fL_suffix = '_sqrt.npy';
+      fL_suffix1 = '_flat';
     elif fitType == 2:
-      fL_suffix = '_poiss.npy';
+      fL_suffix1 = '_wght';
     elif fitType == 3:
-      fL_suffix = '_modPoiss.npy';
-    fitListName = str(fL_name + fL_suffix);
+      fL_suffix1 = '_c50';
+    # lossType
+    if lossType == 1:
+      fL_suffix2 = '_sqrt.npy';
+    elif lossType == 2:
+      fL_suffix2 = '_poiss.npy';
+    elif lossType == 3:
+      fL_suffix2 = '_modPoiss.npy';
+    fitListName = str(fL_name + fL_suffix1 + fL_suffix2);
 
     if os.path.exists(loc_data + fitListName):
       fitList = np_smart_load(str(loc_data + fitListName));
     else:
       fitList = dict();
-
     dataList = np_smart_load(str(loc_data + 'dataList.npy'));
     dataNames = dataList['unitName'];
 
@@ -458,7 +506,7 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
     ########
     # Set up model parameters - i.e. trainable variables!
     ########
-    
+
     # 00 = preferred spatial frequency   (cycles per degree)
     # 01 = derivative order in space
     # 02 = normalization constant        (log10 basis)
@@ -466,14 +514,15 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
     # 04 = response scalar
     # 05 = early additive noise
     # 06 = late additive noise
-    # 07 = variance of response gain
-    # As of 4/26/18:
+    # 07 = variance of response gain - only used if lossType = 3
+    # if fitType == 2
     # 08 = mean of (log)gaussian for normalization weights
     # 09 = std of (log)gaussian for normalization weights
-    # Added/changed on 5/21/18:
+    # if fitType == 3
     # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 1]
     # 09 = standard deviation of the gaussian to the left of the peak || >0.1
     # 10 = "" to the right "" || >0.1
+    # 11 = peak of offset curve
 
     if cellNum-1 in fitList:
       curr_params = fitList[cellNum-1]['params']; # load parameters from the fitList! this is what actually gets updated...
@@ -494,13 +543,16 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
     respExp = numpy.random.uniform(1, 3) if initFromCurr==0 else curr_params[3];
     respScal = numpy.random.uniform(10, 1000) if initFromCurr==0 else curr_params[4];
     noiseEarly = numpy.random.uniform(0.001, 0.1) if initFromCurr==0 else curr_params[5];
-    noiseLate = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[6];
-    varGain = numpy.random.uniform(0, 1) if initFromCurr==0 else curr_params[7];
-    #normMean = numpy.random.uniform(-1, 1) if initFromCurr==0 else curr_params[8];
-    #normStd = numpy.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[9];
-    #sigOffset = numpy.random.uniform(0, 0.05) if initFromCurr==0 else curr_params[8];
-    #stdLeft = numpy.random.uniform(1, 5) if initFromCurr==0 else curr_params[9];
-    #stdRight = numpy.random.uniform(1, 5) if initFromCurr==0 else curr_params[10];
+    noiseLate = numpy.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[6];
+    varGain = numpy.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
+    if fitType == 2:
+      normMean = numpy.random.uniform(-1, 1) if initFromCurr==0 else curr_params[8];
+      normStd = numpy.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[9];
+    if fitType == 3:
+      sigOffset = numpy.random.uniform(0, 0.05) if initFromCurr==0 else curr_params[8];
+      stdLeft = numpy.random.uniform(1, 5) if initFromCurr==0 else curr_params[9];
+      stdRight = numpy.random.uniform(1, 5) if initFromCurr==0 else curr_params[10];
+      sigPeak = float(prefSfEst) if initFromCurr==0 else curr_params[11];
 
     print('Initial parameters:\n\tsf: ' + str(pref_sf)  + '\n\td.ord: ' + str(dOrdSp) + '\n\tnormConst: ' + str(normConst));
     print('\n\trespExp ' + str(respExp) + '\n\trespScalar ' + str(respScal));
@@ -513,11 +565,14 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
     v_noiseEarly = tf.Variable(noiseEarly, dtype=tf.float32);
     v_noiseLate = tf.Variable(noiseLate, dtype=tf.float32);
     v_varGain = tf.Variable(varGain, dtype=tf.float32);
-    #v_normMean = tf.Variable(normMean, dtype=tf.float32);
-    #v_normStd = tf.Variable(normStd, dtype=tf.float32);
-    #v_sigOffset = tf.Variable(sigOffset, dtype=tf.float32);
-    #v_stdLeft = tf.Variable(stdLeft, dtype=tf.float32);
-    #v_stdRight = tf.Variable(stdRight, dtype=tf.float32);
+    if fitType == 2:
+      v_normMean = tf.Variable(normMean, dtype=tf.float32);
+      v_normStd = tf.Variable(normStd, dtype=tf.float32);
+    if fitType == 3:
+      v_sigOffset = tf.Variable(sigOffset, dtype=tf.float32);
+      v_stdLeft = tf.Variable(stdLeft, dtype=tf.float32);
+      v_stdRight = tf.Variable(stdRight, dtype=tf.float32);
+      v_sigPeak = tf.Variable(sigPeak, dtype=tf.float32);
  
     #########
     # Now get all the data we need for tf_placeholders 
@@ -571,7 +626,7 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
     subsetShape = [fixedTf.shape[0], int(round(fixedTf.shape[-1]*subset_frac))];
     
     ph_stimOr = tf.placeholder(tf.float32);
-    if subset_frac > 0:
+    if subset_frac < 1:
       ph_stimTf = tf.placeholder(tf.float32, shape=subsetShape);
     else:
       ph_stimTf = tf.placeholder(tf.float32, shape=fixedTf.shape);
@@ -587,18 +642,21 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
     ph_normCentSf = tf.placeholder(tf.float32);
 
     print('Setting network');
-     
-    # Set up model here - we return the NLL
-    okok = SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, ph_objWeight, \
-              ph_normResp, ph_normCentSf, v_prefSf, v_dOrdSp, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, fitType);
 
-    if subset_frac > 0:  # then we also need to create an optimization with the full dataset
+    if fitType == 1:
+      param_list = (v_prefSf, v_dOrdSp, v_normConst, v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain);
+    elif fitType == 2:
+      param_list = (v_prefSf, v_dOrdSp, v_normConst, v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_normMean, v_normStd);
+    elif fitType == 3:
+      param_list = (v_prefSf, v_dOrdSp, v_normConst, v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, v_sigOffset, v_stdLeft, v_stdRight, v_sigPeak);
+    # now make the call
+    okok = SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, ph_objWeight, \
+                        ph_normResp, ph_normCentSf, lossType, fitType, *param_list);
+
+    if subset_frac < 1:  # then we also need to create a network which can handle the full dataset
       ph_stimTfFull = tf.placeholder(tf.float32, shape=fixedTf.shape);
       full = SFMGiveBof(ph_stimOr, ph_stimTfFull, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCount, ph_stimDur, ph_objWeight, \
-              ph_normResp, ph_normCentSf, v_prefSf, v_dOrdSp, v_normConst, \
-                        v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain, fitType);
-    
+                ph_normResp, ph_normCentSf, lossType, fitType, *param_list);
     
     print('Setting optimizer');
     optimizer = tf.train.AdamOptimizer(learning_rate=lr).minimize(okok);
@@ -613,8 +671,7 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
     diffNLL = 1e4; # just pick a large value
     iter = 1;
 
-    # resample data...
-    if subset_frac > 0:
+    if subset_frac < 1: # do the subsampling ONCE
       trialsToPick = numpy.random.randint(0, fixedOr.shape[-1], subsetShape[-1]);
       subsetOr = fixedOr[:,trialsToPick];
       subsetTf = fixedTf[:,trialsToPick];
@@ -627,7 +684,8 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
       subsetNormResp = normResp[trialsToPick,:,:];
 
     while (abs(diffNLL) > stopThresh):
-        if subset_frac > 0:
+
+        if subset_frac < 1: # pass in the subsampled data
           opt = m.run(optimizer, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
                           ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, ph_stimDur: subsetDur, ph_objWeight: subsetWeight, \
                           ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
@@ -651,9 +709,7 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
 
         if (iter/500.0) == round(iter/500.0): # save every once in a while!!!
 
-          real_params = m.run(applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
-                                               v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain));
-
+          real_params = m.run(applyConstraints(fitType, *param_list));
           
           print('iteration ' + str(iter) + '...NLL is ' + str(NLL) + ' and params are ' + str(curr_params));
           print('\tparams in current optimization are: ' + str(real_params));
@@ -671,7 +727,6 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
             if numpy.any(numpy.isnan(real_params)): # don't save a fit with NaN!
               print('.nanParam.');
               iter = iter+1;
-              real_params = curr_params; # likely, curr_params will not be NaN; if real_params has a NaN, then we're ruined!
               continue;
 
             print('.update.');
@@ -689,23 +744,23 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
             fitList[cellNum-1]['NLL'] = NLL;
             fitList[cellNum-1]['params'] = real_params;
             numpy.save(loc_data + fitListName, fitList);   
+            curr_params = real_params; # update for when you print/display
 
         iter = iter+1;
 
     # Now the fitting is done    
     # Now get "true" model parameters and NLL
-    if subset_frac > 0:
-      NLL = m.run(full, feed_dict={ph_stimOr: fixedOr, ph_stimTfFull: fixedTf, ph_stimCo: fixedCo, \
-                            ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
-                            ph_stimDur: stim_dur, ph_objWeight: objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
+    if subset_frac < 1:
+      NLL = m.run(okok, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
+                          ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, ph_stimDur: subsetDur, ph_objWeight: subsetWeight, \
+                          ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
     else:
       NLL = m.run(okok, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
                             ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
                             ph_stimDur: stim_dur, ph_objWeight: objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
 
 
-    x = m.run(applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
-                               v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain));
+    x = m.run(applyConstraints(fitType, *param_list));
 
     # Put those into fitList and save...ONLY if better than before
     if NLL < currNLL:
@@ -721,22 +776,23 @@ def setModel(cellNum, stopThresh, lr, fitType=1, subset_frac = 0, initFromCurr =
 
       numpy.save(loc_data + fitListName, fitList);
 
-    print('Final parameters are ' + str(fitList[cellNum-1]['params']));
+    if cellNum-1 in fitList:
+      print('Final parameters are ' + str(fitList[cellNum-1]['params']));
+    else:
+      print('Optimization failed: no parameter set');
     
     return NLL, x;
 
 
 if __name__ == '__main__':
 
-    if len(sys.argv) < 4:
-      print('uhoh...you need three arguments here'); # and one is the script itself...
-      print('First should be cell number, second is number of fit iterations/updates, third is fraction of data to be used in subsample...currently ignored, anyway');
+    if len(sys.argv) < 8:
+      print('uhoh...you need seven arguments here'); # and one is the script itself...
+      print('See mod_resp_trackNLL.py or tfFits-thresh.s for guidance');
       exit();
 
     print('Running cell ' + sys.argv[1] + ' with NLL step threshold of ' + sys.argv[2] + ' with learning rate ' + sys.argv[3]);
 
-    if len(sys.argv) > 4: # subsample data for each iteration
-      print('Additionally, each iteration will have ' + sys.argv[5] + ' of the data (subsample fraction)');
-      setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5]), int(sys.argv[6]));
-    else: # all trials in each iteration
-      setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]));
+    print('Additionally, each iteration will have ' + sys.argv[6] + ' of the data (subsample fraction)');
+    setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]), float(sys.argv[6]), int(sys.argv[7]));
+

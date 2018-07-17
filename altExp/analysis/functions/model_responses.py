@@ -617,12 +617,12 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     normTypeArr = setNormTypeArr(params, normTypeArr);
     norm_type = int(normTypeArr[0]);
 
-    if norm_type == 2:
+    if norm_type == 3:
       # sigma calculation
-      sfPref = params[0];
+      sfPeak = normTypeArr[4];
       stdLeft = normTypeArr[2];
       stdRight = normTypeArr[3];
-      filter = setSigmaFilter(sfPref, stdLeft, stdRight);
+      filter = setSigmaFilter(sfPeak, stdLeft, stdRight);
 
       offset_sigma = normTypeArr[1];
       scale_sigma = -(1-offset_sigma);
@@ -632,13 +632,13 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     else:
       sigmaFilt = numpy.square(sigma); # i.e. square the normalization constant
 
-    if norm_type == 1:
+    if norm_type == 2:
       gs_mean = normTypeArr[1];
       gs_std = normTypeArr[2];
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
-    else: # norm_type == 0 or anything else,
-      if norm_type == 0:
-        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 0
+    else: # norm_type == 1 or anything else,
+      if norm_type == 1:
+        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 1
       else:
         inhAsym = 0; # otherwise, just set to 0
       for iP in range(len(nInhChan)):
@@ -747,12 +747,12 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     inhWeight = [];
     nFrames = 120; # always
 
-    if norm_type == 2:
+    if norm_type == 3:
       # sigma calculation
-      sfPref = params[0];
+      filterPeak = normTypeArr[4];
       stdLeft = normTypeArr[2];
       stdRight = normTypeArr[3];
-      filter = setSigmaFilter(sfPref, stdLeft, stdRight);
+      filter = setSigmaFilter(filterPeak, stdLeft, stdRight);
 
       offset_sigma = normTypeArr[1];
       scale_sigma = -(1-offset_sigma);
@@ -762,11 +762,13 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     else:
       sigmaFilt = numpy.square(sigma); # i.e. normalization constant squared
 
-    if norm_type == 1:
+    if norm_type == 2:
+      gs_mean = normTypeArr[1];
+      gs_std = normTypeArr[2];
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
-    else: # norm_type == 0 or anything else, we just go with 
-      if norm_type == 0:
-        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 0
+    else: # norm_type == 1 or anything else, we just go with 
+      if norm_type == 1:
+        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 1
       else:
         inhAsym = 0; # otherwise, just set to 0
       for iP in range(len(nInhChan)):
@@ -777,7 +779,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
       inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
       inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
       inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
-    
+
     # Evaluate sfmix experiment
     T = structureSFM['sfm']; # [iR]
     
@@ -798,7 +800,6 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     numerator     = noiseEarly + Lexc;
     # taking square root of denominator (after summing squares...) to bring in line with computation in Carandini, Heeger, Movshon, '97
     denominator   = pow(sigmaFilt + pow(Linh, 2), 0.5); # squaring Linh - edit 7/17
-    # denominator   = pow(pow(sigma, 2) + pow(Linh, 2), 0.5); # squaring Linh - edit 7/17
     ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
     meanRate      = ratio.mean(0);
     respModel     = noiseLate + scale*meanRate; # respModel[iR]

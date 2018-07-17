@@ -790,7 +790,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to bring everything in linear contrast scale again)
     normResp = GetNormResp(structureSFM, [], stimParams);
     if unweighted == 1:
-      return [], [], Lexc, normResp['normResp'];
+      return [], [], Lexc, normResp['normResp'], [];
     Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)

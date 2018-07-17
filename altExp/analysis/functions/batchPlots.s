@@ -27,9 +27,9 @@ module load seaborn/0.7.1
 # fifth param is 0 (no norm sims) or 1 (do normalization simulations)
 # sixth param is 1 (gaussian) or 0 (helper_functions asymmetry) calculation for normalization
 # if sixth param is 1:
-#   5/6 [optional] params are (in log coordinates) mean and std of gaussian
+#   7/8 [optional] params are (in log coordinates) mean and std of gaussian
 # if sixth param is 2:
-#   5/6/7 [optional] params are std of left/right halves, and offset (i.e. bottom/lowest c50)
+#   7/8/9 [optional] params are std of left/right halves, and offset (i.e. bottom/lowest c50)
 python plotting.py $SLURM_ARRAY_TASK_ID 3 1 1 0 0
  
 # leave a blank line at the end

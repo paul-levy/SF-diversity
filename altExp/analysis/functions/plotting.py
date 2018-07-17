@@ -24,18 +24,19 @@ from matplotlib import rcParams
 rcParams['font.size'] = 20;
 rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
 rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['lines.linewidth'] = 5;
-rcParams['axes.linewidth'] = 3;
-rcParams['lines.markersize'] = 5
+rcParams['lines.linewidth'] = 2.5;
+rcParams['axes.linewidth'] = 1.5;
+rcParams['lines.markersize'] = 5;
 rcParams['font.style'] = 'oblique';
 
 which_cell = int(sys.argv[1]);
-fit_type = int(sys.argv[2]);
-crf_fit_type = int(sys.argv[3]);
-descr_fit_type = int(sys.argv[4]);
-norm_sim_on = int(sys.argv[5]);
+lossType = int(sys.argv[2]);
+fitType = int(sys.argv[3]);
+crf_fit_type = int(sys.argv[4]);
+descr_fit_type = int(sys.argv[5]);
+norm_sim_on = int(sys.argv[6]);
 normTypeArr = [];
-argInd = 6; # we've already taken 6 arguments off (function all, which_cell, fit_type, crf_fit_type, descr_fit_type, norm_sim_on) 
+argInd = 7; # we've already taken 7 arguments off (function call, which_cell, loss_type, fit_type, crf_fit_type, descr_fit_type, norm_sim_on) 
 nArgsIn = len(sys.argv) - argInd; 
 while nArgsIn > 0:
   normTypeArr.append(float(sys.argv[argInd]));
@@ -52,18 +53,27 @@ while nArgsIn > 0:
 dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
-if fit_type == 1:
-  loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
-  type_str = '_lsq';
-if fit_type == 2:
-  loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
-  type_str = '_sqrt';
-if fit_type == 3:
-  loss = lambda resp, pred: poisson.logpmf(resp, pred);
-  type_str = '_poiss';
-if fit_type == 4:
-  loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
-  type_str = '_modPoiss';
+expName = 'dataList.npy'
+fitBase = 'fitList_180713';
+
+# first the fit type
+if fitType == 1:
+  fitSuf = '_flat';
+elif fitType == 2:
+  fitSuf = '_wght';
+elif fitType == 3:
+  fitSuf = '_c50';
+# then the loss type
+if lossType == 1:
+  lossSuf = '_lsq.npy';
+elif lossType == 2:
+  lossSuf = '_sqrt.npy';
+elif lossType == 3:
+  lossSuf = '_poiss.npy';
+elif lossType == 4:
+  lossSuf = '_modPoiss.npy';
+
+fitListName = str(fitBase + fitSuf + lossSuf);
 
 if crf_fit_type == 1:
   crf_type_str = '-lsq';
@@ -81,7 +91,6 @@ if descr_fit_type == 2:
 if descr_fit_type == 3:
   descr_type_str = '_poiss';
 
-fitListName = str('fitList_180608' + type_str + '.npy');
 crfFitName = str('crfFits' + crf_type_str + '.npy');
 descrFitName = str('descrFits' + descr_type_str + '.npy');
 
@@ -93,7 +102,7 @@ else:
 
 conDig = 3; # round contrast to the 3rd digit
 
-dataList = np.load(str(dataPath + 'dataList.npy'), encoding='latin1').item();
+dataList = np.load(str(dataPath + expName), encoding='latin1').item();
 
 cellStruct = np.load(str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy'), encoding='latin1').item();
 
@@ -113,8 +122,8 @@ data = cellStruct['sfm']['exp']['trial'];
 ignore, modRespAll, normTypeArr = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr);
 norm_type = normTypeArr[0];
 print('norm type %d' % (norm_type));
-if norm_type == 1:
-  gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 1
+if norm_type == 2:
+  gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 2
   gs_std = normTypeArr[2]; # guaranteed to exist ...
 #modRespAll = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr)[1]; # NOTE: We're taking [1] (i.e. second) output of SFMGiveBof
 resp, stimVals, val_con_by_disp, validByStimVal, modResp = helper_fcns.tabulate_responses(cellStruct, modRespAll);
@@ -412,17 +421,17 @@ plt.text(0.5, 1.1, 'respExp: {:.2f}'.format(modParamsCurr[3]), fontsize=12, hori
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset=5, trim=False);
     
-if norm_type == 2: # plot the c50 filter (i.e. effective c50 as function of SF)
+if norm_type == 3: # plot the c50 filter (i.e. effective c50 as function of SF)
   stimSf = np.logspace(-2, 2, 101);
-  sfPref = prefSf; # defined above
+  filtPeak = normTypeArr[4];
   stdLeft = normTypeArr[2];
   stdRight = normTypeArr[3];
   
-  filter = helper_fcns.setSigmaFilter(sfPref, stdLeft, stdRight);
+  filter = setSigmaFilter(filtPeak, stdLeft, stdRight);
   offset_filt = normTypeArr[1];
   scale_filt = -(1-offset_filt); # we always scale so that range is [offset_sf, 1]
   c50_filt = helper_fcns.evalSigmaFilter(filter, scale_filt, offset_filt, stimSf)
- 
+
   # now plot
   curr_ax = plt.subplot2grid(detailSize, (2, 4));
   plt.semilogx(stimSf, c50_filt);
@@ -476,7 +485,7 @@ if norm_sim_on:
           print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
           for sfCent in range(len(sfCenters)):
               # if modParamsCurr doesn't have inhAsym parameter, add it!
-              if norm_type == 1:
+              if norm_type == 2:
                 unweighted = 1;
                 _, _, _, normRespSimple, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
                 nTrials = normRespSimple.shape[0];
@@ -484,15 +493,14 @@ if norm_sim_on:
                 inhWeightMat  = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
                 normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
                 norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-              else: # norm_type == 0:
-                #_, normResp, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent]);
+              else: # norm_type == 1 or 3:
                 _, _, _, _, normResp = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], normTypeArr = normTypeArr);
                 norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
 
-          if norm_type == 1:
+          if norm_type == 2:
             maxResp = np.max(norm_sim[disp, conLvl, :]);
             conDisp_plots[conLvl, disp].text(0.5, 0.0, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8], modParamsCurr[9]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
-          else: # norm_type == 0:
+          else: # norm_type == 1 or 3:
             conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
 
           conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);

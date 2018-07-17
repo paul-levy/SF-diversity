@@ -12,11 +12,6 @@
     # 06 = late additive noise
     # 07 = variance of response gain
     
-    # 08 = asymmetry of normalization (weights +/- linearly about SF mean)
-    # OR
-    # 08 = mean of gaussian which is used to apply weights to norm pool filters (as f'n of sf)
-    # 09 = std of ...
-
 # ### SF Diversity Project - plotting data, descriptive fits, and functional model fits
 
 import os
@@ -62,7 +57,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_180712';
+fitBase = 'fitList_180713';
 # first the fit type
 if fitType == 1:
   fitSuf = '_flat';
@@ -396,7 +391,7 @@ for disp in range(nFam):
           # if modFit doesn't have inhAsym parameter, add it!
           if norm_type == 2:
             unweighted = 1;
-            _, _, _, normRespSimple = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
+            _, _, _, normRespSimple, _ = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
             nTrials = normRespSimple.shape[0];
             nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
             inhWeightMat  = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);

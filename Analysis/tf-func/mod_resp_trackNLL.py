@@ -439,43 +439,6 @@ def applyConstraints(fitType, *args):
     else: # mistake!
       return [];
 
-'''
-def applyConstraints(v_prefSf, v_dOrdSp, v_normConst, \
-                      v_respExp, v_respScalar, v_noiseEarly, v_noiseLate, v_varGain):
-        
-        # 00 = preferred spatial frequency   (cycles per degree) || [>0.05]
-        # 01 = derivative order in space || [>0.1]
-        # 02 = normalization constant (log10 basis) || unconstrained
-        # 03 = response exponent || >1
-        # 04 = response scalar || >1e-3
-        # 05 = early additive noise || [0, 1]; was [0.001, 1] - see commented out line below
-        # 06 = late additive noise || >0.01
-        # 07 = variance of response gain || >1e-3     
-        # Added 04/30/18:
-        # 08 = mean of normalization weights gaussian || [>-2]
-        # 09 = std of ... || >1e-3
-        # Added/changed on 5/22/18:
-        # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 0.75]
-        # 09 = standard deviation of the gaussian to the left of the peak || >0.1
-        # 10 = "" to the right "" || >0.1
-
-    zero = tf.add(tf.nn.softplus(v_prefSf), 0.05);
-    one = tf.add(tf.nn.softplus(v_dOrdSp), 0.1);
-    two = v_normConst;
-    #three = tf.constant(2, tf.float32);
-    three = tf.add(tf.nn.softplus(v_respExp), 1);
-    four = tf.add(tf.nn.softplus(v_respScalar), 1e-3);
-    five = tf.sigmoid(v_noiseEarly); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
-    six = tf.add(0.01, tf.nn.softplus(v_noiseLate)); # if always positive, then no hard thresholding to ensure rate (strictly) > 0
-    seven = tf.add(tf.nn.softplus(v_varGain), 1e-3);
-    #eight = tf.add(tf.nn.softplus(v_normMean), -2);
-    #nine = tf.add(tf.nn.softplus(v_normStd), 1e-3);
-    #eight = tf.multiply(0.75, tf.sigmoid(v_sigOffset)); 
-    #nine = tf.add(tf.nn.softplus(v_stdLeft), 1e-1);
-    #ten = tf.add(tf.nn.softplus(v_stdRight), 1e-1);
-    return [zero,one,two,three,four,five,six,seven];
-'''
-
 def negBinom(x, r, p):
     # We assume that r & p are tf placeholders/variables; x is a constant
     # Negative binomial is:
@@ -746,9 +709,9 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
                           ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
 
           if (iter/500.0) == round(iter/500.0):
-            NLL = m.run(okok, feed_dict={ph_stimOr: subsetOr, ph_stimTf: subsetTf, ph_stimCo: subsetCo, \
-                          ph_stimSf: subsetSf, ph_stimPh: subsetPh, ph_spikeCount: subsetSpikes, ph_stimDur: subsetDur, ph_objWeight: subsetWeight, \
-                          ph_normResp: subsetNormResp, ph_normCentSf: normCentSf});
+             NLL = m.run(full, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
+                        ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
+                        ph_stimDur: stim_dur, ph_objWeight:objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
 
         else: # pass in the full dataset
           opt = \
@@ -758,7 +721,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
 
         
           if (iter/500.0) == round(iter/500.0):
-            NLL = m.run(okok, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
+             NLL = m.run(okok, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
                         ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
                         ph_stimDur: stim_dur, ph_objWeight:objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
 
