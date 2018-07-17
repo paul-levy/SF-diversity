@@ -409,7 +409,7 @@ def applyConstraints(fitType, *args):
         # 07 = variance of response gain || >1e-3
         # if fitType == 2
         # 08 = mean of normalization weights gaussian || [>-2]
-        # 09 = std of ... || >1e-3
+        # 09 = std of ... || >1e-3 or >5e-1
         # if fitType == 3
         # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 0.75]
         # 09 = standard deviation of the gaussian to the left of the peak || >0.1
@@ -428,7 +428,7 @@ def applyConstraints(fitType, *args):
       return [zero,one,two,three,four,five,six,seven];
     if fitType == 2:
       eight = tf.add(tf.nn.softplus(args[8]), -2);
-      nine = tf.add(tf.nn.softplus(args[9]), 1e-3);
+      nine = tf.add(tf.nn.softplus(args[9]), 5e-1);
       return [zero,one,two,three,four,five,six,seven,eight,nine];
     elif fitType == 3:
       eight = tf.multiply(0.75, tf.sigmoid(args[8]));
@@ -508,7 +508,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal mac
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fL_name = 'fitList_180712';
+    fL_name = 'fitList_180713';
     # fitType
     if fitType == 1:
       fL_suffix1 = '_flat';

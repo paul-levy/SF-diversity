@@ -25,7 +25,7 @@ source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 #     2 - gaussian weighting of norm responses
 #     3 - (flexible) gaussian c50 filter
 #   subset_frac = 0 means take all data (no subsampling)
-python mod_resp_trackNLL.py $SLURM_ARRAY_TASK_ID 1e-9 0.01 2 2 1 1
+python mod_resp_trackNLL.py $SLURM_ARRAY_TASK_ID 1e-10 0.01 3 2 1 1
  
 # leave a blank line at the end
 
