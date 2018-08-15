@@ -48,11 +48,11 @@ while nArgsIn > 0:
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
 # savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 # personal mac
-dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/data/sfMixLGN/';
-save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
+#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/data/sfMixLGN/';
+#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
 # prince cluster
-#dataPath = '/home/pl1465/SF_diversity/LGN/data/sfMixLGN/';
-#save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
+dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
+save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
 fitBase = 'fitList_180713';

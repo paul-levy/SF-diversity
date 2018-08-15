@@ -20,7 +20,7 @@ module load seaborn/0.7.1
 	# 1 - poisson
 	# 2 - square root
 	# 3 - sach's loss function (See descr_fit.py)
-python plotting.py $SLURM_ARRAY_TASK_ID 0 1
+python plotting.py $SLURM_ARRAY_TASK_ID 1 2
  
 # leave a blank line at the end
 
