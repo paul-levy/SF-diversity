@@ -11,6 +11,10 @@ altExp/analysis/structures/m*
 **/._*
 altExp/firstPass/**
 altExp/recordings/**
+LGN/analysis/structures/matlab/
+LGN/analysis/structures/*sfm*.npy*
+LGN/analysis/figures/
+LGN/sach/figures/
 **/*~
 **/*.out
 **/*.err
