@@ -48,11 +48,11 @@ while nArgsIn > 0:
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
 # savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 # personal mac
-#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/data/sfMixLGN/';
-#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
+dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
+save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
 # prince cluster
-dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
-save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
+#dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
+#save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
 fitBase = 'fitList_180713';
@@ -188,6 +188,8 @@ for d in range(nDisps):
     fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(25, n_v_cons*8), sharey=False);
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
+
+    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
     
     maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
     maxf1 = np.max(np.max(f1Mean[d, ~np.isnan(f1Mean[d, :, :])]));
@@ -263,6 +265,8 @@ for d in range(nDisps):
     fCurr, dispCurr = plt.subplots(1, 2, figsize=(20, 20)); # left side for data, right side for model predictions
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
+
+    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
 
     for i in range(2):
     
@@ -345,6 +349,8 @@ if plotType == 2:
 
 f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(20, 15));
 
+f.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
+
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
 
 for d in range(nDisps):
@@ -402,7 +408,8 @@ if modParamsCurr:
   fDetails = plt.figure();
   fDetails.set_size_inches(w=25,h=10)
   #fDetails, all_plots = plt.subplots(3,5, figsize=(25,10))
-
+  fDetails.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1)); 
+ 
   detailSize = (3, 5);
 
   '''
@@ -538,6 +545,7 @@ if norm_sim_on and modParamsCurr:
     sfCenters = np.logspace(-2, 2, 21); # just for now...
     #sfCenters = allSfs;
     fNorm, conDisp_plots = plt.subplots(nCons, nDisps, sharey=True, figsize=(40,30));
+    fNorm.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
     norm_sim = np.nan * np.empty((nDisps, nCons, len(sfCenters)));
     if len(modParamsCurr) < 9:
         modParamsCurr.append(helper_fcns.random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
@@ -603,8 +611,11 @@ pdfSv.close()
 
 crfAx = []; fCRF = [];
 fSum, crfSum = plt.subplots(nDisps, 2, figsize=(30, 30), sharex=False, sharey=False);
+
 fCRF.append(fSum);
 crfAx.append(crfSum);
+
+fSum.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
 
 if crfFitName:
   fits = np.load(str(dataPath + crfFitName), encoding='latin1').item();
@@ -622,6 +633,8 @@ for d in range(nDisps):
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
     
+    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
+
     c50_sep = np.zeros((n_v_sfs, 1));
     c50_all = np.zeros((n_v_sfs, 1));
 
@@ -696,7 +709,7 @@ for d in range(nDisps):
         crfAx[plt_x][plt_y].set_xscale('symlog', linthreshx=0.01); # symlog will allow us to go down to 0 
         crfAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
         crfAx[plt_x][plt_y].set_ylabel('resp (sps)', fontsize='medium');
-        crfAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
+        crfAx[plt_x][plt_y].set_title('D%d: sf: %.3f cpd' % (d+1, all_sfs[sf_ind]), fontsize='large');
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         sns.despine(ax = crfAx[plt_x][plt_y], offset = 10, trim=False);
@@ -758,7 +771,7 @@ for d in range(nDisps):
     fRVC.append(fCurr)
     rvcAx.append(rvcCurr);
     
-    #rvc_plots = [];
+    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
 
     for sf in range(n_v_sfs):
         row_ind = int(sf/n_cols);
@@ -851,6 +864,8 @@ for d in range(nDisps):
     fCurr, crfCurr = plt.subplots(1, 2, figsize=(20, 25), sharex = False, sharey = False); # left side for data, right side for model predictions
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
+
+    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
 
     for i in range(2):
       
