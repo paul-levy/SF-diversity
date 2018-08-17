@@ -48,11 +48,11 @@ while nArgsIn > 0:
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
 # savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 # personal mac
-dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
-save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
+#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
+#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
 # prince cluster
-#dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
-#save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
+dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
+save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
 fitBase = 'fitList_180713';
@@ -243,7 +243,7 @@ for d in range(nDisps):
         dispAx[d][c_plt_ind, 1].set_yscale('log');
 
 
-saveName = "/cell_%d.pdf" % (which_cell)
+saveName = "/cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fDisp:
@@ -327,7 +327,7 @@ for d in range(nDisps):
       if plotType == 2:
         dispAx[d][i].legend((lines, linesf1), (con_strs, con_strs), loc=0);
 
-saveName = "/allCons_cell_%d.pdf" % (which_cell)
+saveName = "/allCons_cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fDisp:
@@ -597,7 +597,7 @@ if fDetails:
   allFigs.append(fDetails);
 if fNorm:
   allFigs.append(fNorm);
-saveName = "/cell_%d.pdf" % (which_cell)
+saveName = "/cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'sfMixOnly/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for fig in range(len(allFigs)):
@@ -746,7 +746,7 @@ for d in range(nDisps):
       crfAx[0][d, 1].set_ylabel('c50', fontsize='large');
       crfAx[0][d, 1].legend((sepC50s[0], allC50s[0], invSF[0]), ('c50 free', 'c50 fixed', 'rescaled SF tuning'), fontsize='large', loc='center left');
     
-saveName = "/cell_NR_%d.pdf" % (which_cell)
+saveName = "/cell_NR_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
@@ -847,7 +847,7 @@ for d in range(nDisps):
         rvcAx[plt_x][plt_y].tick_params(labelsize=25, width=2, length=16, direction='out');
         rvcAx[plt_x][plt_y].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
 
-saveName = "/cell_%d.pdf" % (which_cell)
+saveName = "/cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fRVC:
@@ -925,7 +925,7 @@ for d in range(nDisps):
       if plotType == 1 or plotType == 2:
         crfAx[d][i].legend(lines_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
 
-saveName = "/allSfs_log_cell_%d.pdf" % (which_cell)
+saveName = "/allSfs_log_cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
