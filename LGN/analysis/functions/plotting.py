@@ -48,11 +48,11 @@ while nArgsIn > 0:
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
 # savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 # personal mac
-dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
-save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
+#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
+#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
 # prince cluster
-#dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
-#save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
+dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
+save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
 fitBase = 'fitList_180713';
@@ -144,7 +144,6 @@ else:
   resp, stimVals, val_con_by_disp, validByStimVal, _ = helper_fcns.tabulate_responses(cellStruct);
 
 blankMean, blankStd, _ = helper_fcns.blankResp(cellStruct); 
-# all responses on log ordinate (y axis) should be baseline subtracted
 
 all_disps = stimVals[0];
 all_cons = stimVals[1];
@@ -243,7 +242,7 @@ for d in range(nDisps):
         dispAx[d][c_plt_ind, 1].set_yscale('log');
 
 
-saveName = "/cell_%d.pdf" % (which_cell)
+saveName = "/cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fDisp:
@@ -272,8 +271,9 @@ for d in range(nDisps):
     
       if i == 0:
         curr_resps = respMean;
-        curr_mean = blankMean;
+        curr_base_f0 = blankMean;
         f1_resps = f1Mean;
+
         maxResp = np.max(np.max(curr_resps[d, ~np.isnan(curr_resps[d, :, :])]));
         maxf1 = np.max(np.max(f1_resps[d, ~np.isnan(f1_resps[d, :, :])]));
         if plotType == 1:
@@ -282,7 +282,7 @@ for d in range(nDisps):
           maxResp = np.maximum(maxf1, maxResp);
       elif i == 1 and modResp:
         curr_resps = modAvg;
-        curr_mean = modBlankMean;
+        curr_base_f0 = modBlankMean;
         maxResp = np.max(np.max(curr_resps[d, ~np.isnan(curr_resps[d, :, :])]));
       elif i == 1 and not modResp:
         continue;
@@ -296,7 +296,7 @@ for d in range(nDisps):
           col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
           if i == 0:
             if plotType == 0 or plotType == 2:
-              respAbBaseline = curr_resps[d, v_sfs, v_cons[c]] - curr_mean;
+              respAbBaseline = curr_resps[d, v_sfs, v_cons[c]] - curr_base_f0;
               curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
               lines.append(curr_line);
             if plotType == 1 or plotType == 2:
@@ -327,7 +327,7 @@ for d in range(nDisps):
       if plotType == 2:
         dispAx[d][i].legend((lines, linesf1), (con_strs, con_strs), loc=0);
 
-saveName = "/allCons_cell_%d.pdf" % (which_cell)
+saveName = "/allCons_cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fDisp:
@@ -597,7 +597,7 @@ if fDetails:
   allFigs.append(fDetails);
 if fNorm:
   allFigs.append(fNorm);
-saveName = "/cell_%d.pdf" % (which_cell)
+saveName = "/cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'sfMixOnly/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for fig in range(len(allFigs)):
@@ -746,7 +746,7 @@ for d in range(nDisps):
       crfAx[0][d, 1].set_ylabel('c50', fontsize='large');
       crfAx[0][d, 1].legend((sepC50s[0], allC50s[0], invSF[0]), ('c50 free', 'c50 fixed', 'rescaled SF tuning'), fontsize='large', loc='center left');
     
-saveName = "/cell_NR_%d.pdf" % (which_cell)
+saveName = "/cell_NR_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
@@ -847,7 +847,7 @@ for d in range(nDisps):
         rvcAx[plt_x][plt_y].tick_params(labelsize=25, width=2, length=16, direction='out');
         rvcAx[plt_x][plt_y].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
 
-saveName = "/cell_%d.pdf" % (which_cell)
+saveName = "/cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fRVC:
@@ -871,12 +871,12 @@ for d in range(nDisps):
       
       if i == 0:
         curr_resps = respMean;
-        curr_base = blankMean;
+        curr_blank_f0 = blankMean;
         curr_f1 = f1Mean;
         title_str = 'data';
       elif i == 1 and modParamsCurr:
         curr_resps = modAvg;
-        curr_base = modBlankMean;
+        curr_blank_f0 = modBlankMean;
         title_str = 'model';
       elif i == 1 and not modParamsCurr:
         continue;
@@ -896,13 +896,14 @@ for d in range(nDisps):
           n_cons = sum(v_cons);
 
           col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
-          plot_resps = np.reshape([curr_resps[d, sf_ind, v_cons]], (n_cons, ));
-          respAbBaseline = plot_resps-curr_base;
+
           if i == 1 or (i ==0 and (plotType == 0 or plotType == 2)): # if we're plotting the model OR (plotting data AND f0)
+            plot_resps = np.reshape([curr_resps[d, sf_ind, v_cons]], (n_cons, ));
+            respAbBaseline = plot_resps-curr_blank_f0;
             line_curr, = crfAx[d][i].plot(all_cons[v_cons][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
             lines_log.append(line_curr);
           if plotType == 1 or plotType == 2:
-            plot_f1 = np.reshape([curr_resps[d, sf_ind, v_cons]], (n_cons, ));
+            plot_f1 = np.reshape([curr_f1[d, sf_ind, v_cons]], (n_cons, ));
             line_curr, = crfAx[d][i].plot(all_cons[v_cons][plot_f1>1e-1], plot_f1[plot_f1>1e-1], '-o', color=col, clip_on=False);
             lines_f1_log.append(line_curr);
 
@@ -925,7 +926,7 @@ for d in range(nDisps):
       if plotType == 1 or plotType == 2:
         crfAx[d][i].legend(lines_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
 
-saveName = "/allSfs_log_cell_%d.pdf" % (which_cell)
+saveName = "/allSfs_log_cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
