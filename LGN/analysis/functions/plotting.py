@@ -111,7 +111,6 @@ dataList = np.load(str(dataPath + expName), encoding='latin1').item();
 cellStruct = np.load(str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy'), encoding='latin1').item();
 
 # #### Load descriptive model fits, comp. model fits
-
 if descr_fit_type == 0:
   descrFits = [];
 else:
