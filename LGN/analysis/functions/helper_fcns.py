@@ -14,6 +14,7 @@ import pdb
 # np_smart_load - be smart about using numpy load
 # bw_lin_to_log
 # bw_log_to_lin
+# make_psth - create a psth for a given spike train
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -61,6 +62,33 @@ def bw_log_to_lin(log_bw, pref_sf):
     lin_bw = more_half - less_half;
     
     return lin_bw, sf_range
+
+def make_psth(binWidth, stimDur, spikeTimes):
+    # given an array of arrays of spike times, create the PSTH for a given bin width and stimulus duration
+    # i.e. spikeTimes has N arrays, each of which is an array of spike times
+    # TODO: Add a smoothing to the psth and return for plotting purposes only
+
+    binEdges = numpy.linspace(0, stimDur, 1+stimDur/binWidth);
+    
+    all = [numpy.histogram(x, bins=binEdges) for x in spikeTimes]; 
+    psth = [x[0] for x in all];
+    bins = [x[1] for x in all];
+    return psth, bins;
+
+def spike_fft(psth, tfs = None):
+    # given a psth (and optional list of component TFs), compute the fourier transform of the PSTH
+    # if the component TFs are given, return the FT power at the DC, and at all component TFs
+    # note: if only one TF is given, also return the power at f2 (i.e. twice f1, the stimulus frequency)
+    np = numpy;
+
+    spectrum = [np.abs(np.fft.fft(x)) for x in psth];
+
+    if tfs:
+      rel_power = [spectrum[i][tfs[i]] for i in range(len(tfs))];
+    else:
+      rel_power = [];
+
+    return spectrum, rel_power;
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
