@@ -188,7 +188,7 @@ for d in range(nDisps):
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
 
-    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
+    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
     
     maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
     maxf1 = np.max(np.max(f1Mean[d, ~np.isnan(f1Mean[d, :, :])]));
@@ -265,7 +265,7 @@ for d in range(nDisps):
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
 
-    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
+    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
 
     for i in range(2):
     
@@ -349,7 +349,7 @@ if plotType == 2:
 
 f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(20, 15));
 
-f.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
+f.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
 
@@ -408,7 +408,7 @@ if modParamsCurr:
   fDetails = plt.figure();
   fDetails.set_size_inches(w=25,h=10)
   #fDetails, all_plots = plt.subplots(3,5, figsize=(25,10))
-  fDetails.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1)); 
+  fDetails.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell)); 
  
   detailSize = (3, 5);
 
@@ -545,7 +545,7 @@ if norm_sim_on and modParamsCurr:
     sfCenters = np.logspace(-2, 2, 21); # just for now...
     #sfCenters = allSfs;
     fNorm, conDisp_plots = plt.subplots(nCons, nDisps, sharey=True, figsize=(40,30));
-    fNorm.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
+    fNorm.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
     norm_sim = np.nan * np.empty((nDisps, nCons, len(sfCenters)));
     if len(modParamsCurr) < 9:
         modParamsCurr.append(helper_fcns.random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
@@ -615,7 +615,7 @@ fSum, crfSum = plt.subplots(nDisps, 2, figsize=(30, 30), sharex=False, sharey=Fa
 fCRF.append(fSum);
 crfAx.append(crfSum);
 
-fSum.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
+fSum.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
 
 if crfFitName:
   fits = np.load(str(dataPath + crfFitName), encoding='latin1').item();
@@ -633,7 +633,7 @@ for d in range(nDisps):
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
     
-    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
+    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
 
     c50_sep = np.zeros((n_v_sfs, 1));
     c50_all = np.zeros((n_v_sfs, 1));
@@ -865,7 +865,7 @@ for d in range(nDisps):
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
 
-    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell-1));
+    fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
 
     for i in range(2):
       
@@ -924,7 +924,7 @@ for d in range(nDisps):
       if plotType == 0 or plotType == 2:
         crfAx[d][i].legend(lines_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
       if plotType == 1 or plotType == 2:
-        crfAx[d][i].legend(lines_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
+        crfAx[d][i].legend(lines_f1_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
 
 saveName = "/allSfs_log_cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
