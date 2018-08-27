@@ -11,7 +11,7 @@ import matplotlib.backends.backend_pdf as pltSave
 import seaborn as sns
 sns.set(style='ticks')
 import helper_fcns
-from scipy.stats import poisson, nbinom
+from scipy.stats import poisson, nbinom, norm
 from scipy.stats.mstats import gmean
 
 import pdb
@@ -48,11 +48,11 @@ while nArgsIn > 0:
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
 # savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 # personal mac
-dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
-save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
+#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
+#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
 # prince cluster
-#dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
-#save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
+dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
+save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
 fitBase = 'fitList_180713';
@@ -208,6 +208,8 @@ for d in range(nDisps):
     maxPlotComp = np.nanmax([np.max(x) for x in f1MeanAll[1, :, :].flatten()]);
 
     for c in reversed(range(n_v_cons)):
+        leftLines = []; leftStr = []; # lines/string for legend of left side of plot
+
         c_plt_ind = len(v_cons) - c - 1;
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
 
@@ -216,19 +218,23 @@ for d in range(nDisps):
         
         # plot data (and predicted response, if dispersion > 1)
         if plotType == 0 or plotType == 2:
-          dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
+          respPlt = dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
                                       respStd[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+          leftLines.append(respPlt); leftStr.append('response');
           if d>0:
             dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], predMean[d, v_sfs, v_cons[c]], 'b-', alpha=0.7, clip_on=False);
-            dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], predMean[d, v_sfs, v_cons[c]] - predStd[d, v_sfs, v_cons[c]],
+            predPlt = dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], predMean[d, v_sfs, v_cons[c]] - predStd[d, v_sfs, v_cons[c]],
                                              predMean[d, v_sfs, v_cons[c]] + predStd[d, v_sfs, v_cons[c]], color='b', alpha=0.2);
+            leftLines.append(predPlt); leftStr.append('prediction');
         if plotType == 1 or plotType == 2:
-          dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], f1Mean[d, v_sfs, v_cons[c]], 
+          respPlt = dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], f1Mean[d, v_sfs, v_cons[c]], 
                                       f1Std[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+          leftLines.append(respPlt); leftStr.append('response');
           if d>0:
             dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], predF1mean[d, v_sfs, v_cons[c]], 'b-', alpha=0.7, clip_on=False);
-            dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], predF1mean[d, v_sfs, v_cons[c]] - predF1std[d, v_sfs, v_cons[c]],
+            predPlt = dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], predF1mean[d, v_sfs, v_cons[c]] - predF1std[d, v_sfs, v_cons[c]],
                                              predF1mean[d, v_sfs, v_cons[c]] + predF1std[d, v_sfs, v_cons[c]], color='b', alpha=0.2);
+            leftLines.append(predPlt); leftStr.append('prediction');
 
         # plot descriptive model fit
         if descrFits: # i.e. descrFits isn't empty, then plot it
@@ -237,11 +243,14 @@ for d in range(nDisps):
         
 	# plot model fits
         if modParamsCurr: # i.e. modParamsCurr isn't [] 
-          dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
+          modPlt = dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
                                       modHigh[d, v_sfs, v_cons[c]], color='r', alpha=0.2);
           dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
+          leftLines.append(modPlt); leftStr.append('model resp');
 
-        # if plotType == 1 or 2 (i.e. plotting f1), plot response to individual components
+        dispAx[d][c_plt_ind, 0].legend(leftLines, leftStr, loc=0);
+
+        # if plotType == 1 or 2 (i.e. plotting f1), plot response to individual components (right column of plot)
         if d>0 and (plotType == 1 or plotType == 2):
           comps = [];
           curr_f1 = f1MeanAll[d, v_sfs, v_cons[c]]; # get the component responses only at the relevant conditions
@@ -252,7 +261,7 @@ for d in range(nDisps):
           for i in range(n_comps):
             curr_resps = [x[i] for x in curr_f1]; # go through each response "list" and get the correct component
             curr_std = [x[i] for x in curr_f1_std];
-            curr_comp = dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs], curr_resps, curr_std, fmt='o', clip_on=False);
+            curr_comp = dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs] + norm.rvs(0, 0.1, len(curr_resps)), curr_resps, curr_std, fmt='-o', clip_on=False); # scatter the x-coordinate for better visibility
             comps.append(curr_comp[0]);
           comp_str = [str(i) for i in range(n_comps)];
           dispAx[d][c_plt_ind, 1].legend(comps, comp_str, loc=0);
