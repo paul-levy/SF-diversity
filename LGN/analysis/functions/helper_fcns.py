@@ -205,8 +205,10 @@ def tabulate_responses(cellStruct, modResp = []):
     respStd = np.nan * np.empty((nDisps, nSfs, nCons));
     predMean = np.nan * np.empty((nDisps, nSfs, nCons));
     predStd = np.nan * np.empty((nDisps, nSfs, nCons));
-    f1Mean = np.nan * np.empty((nDisps, nSfs, nCons));
-    f1Std = np.nan * np.empty((nDisps, nSfs, nCons));
+    f1Mean = np.array(np.nan * np.empty((nDisps, nSfs, nCons)), dtype='O'); # create f1Mean/Std so that each entry can accomodate an array, rather than just one value
+    f1Std = np.array(np.nan * np.empty((nDisps, nSfs, nCons)), dtype='O');
+    predMeanF1 = np.nan * np.empty((nDisps, nSfs, nCons));
+    predStdF1 = np.nan * np.empty((nDisps, nSfs, nCons));
 
     if len(modResp) == 0: # as in, if it isempty
         modRespOrg = [];
@@ -241,11 +243,12 @@ def tabulate_responses(cellStruct, modResp = []):
 
                 respMean[d, sf, con] = np.mean(data['spikeCount'][valid_tr]);
                 respStd[d, sf, con] = np.std((data['spikeCount'][valid_tr]));
-                f1Mean[d, sf, con] = np.mean(np.abs(data['f1'][valid_tr]));
-                f1Std[d, sf, con] = np.std(np.abs(data['f1'][valid_tr]));
-                
+                f1Mean[d, sf, con] = np.mean(data['power_f1'][valid_tr]); # default axis takes avg within components (and across trials)
+                f1Std[d, sf, con] = np.std(data['power_f1'][valid_tr]); # that is the axis we want!
                 curr_pred = 0;
                 curr_var = 0; # variance (std^2) adds
+                curr_pred_f1 = 0;
+                curr_var_f1 = 0; # variance (std^2) adds
                 for n_comp in range(all_disps[d]):
                     # find information for each component, find corresponding trials, get response, sum
                         # Note: unique(.) will only be one value, since all equiv stim have same equiv componentss 
@@ -262,9 +265,13 @@ def tabulate_responses(cellStruct, modResp = []):
                     
                     curr_pred = curr_pred + np.mean(data['spikeCount'][val_tr]);
                     curr_var = curr_var + np.var(data['spikeCount'][val_tr]);
+                    curr_pred_f1 = curr_pred_f1 + np.sum(np.mean(data['power_f1'][val_tr]));
+                    curr_var_f1 = curr_var_f1 + np.sum(np.var(data['power_f1'][val_tr]));
                     
                 predMean[d, sf, con] = curr_pred;
                 predStd[d, sf, con] = np.sqrt(curr_var);
+                predMeanF1[d, sf, con] = curr_pred_f1;
+                predStdF1[d, sf, con] = np.sqrt(curr_var_f1);
                 
                 if mod:
                     nTrCurr = sum(valid_tr); # how many trials are we getting?
@@ -274,7 +281,7 @@ def tabulate_responses(cellStruct, modResp = []):
                 if ~np.isnan(np.nanmean(respMean[d, :, con])):
                     val_con_by_disp[d].append(con);
                     
-    return [respMean, respStd, predMean, predStd, f1Mean, f1Std], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
+    return [respMean, respStd, predMean, predStd, f1Mean, f1Std, predMeanF1, predStdF1], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
 
 def mod_poiss(mu, varGain):
     np = numpy;
