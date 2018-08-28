@@ -1,5 +1,4 @@
 # coding: utf-8
-
 ######################## To do:
 
 import os
@@ -250,35 +249,50 @@ for d in range(nDisps):
 
         dispAx[d][c_plt_ind, 0].legend(leftLines, leftStr, loc=0);
 
-        # if plotType == 1 or 2 (i.e. plotting f1), plot response to individual components (right column of plot)
+        # if plotType == 1 or 2 (i.e. plotting f1), 
+        #   plot response to individual components (right side of figure; left) 
+        #   AND response to components when presented individually (right side of figure; right)
+        v_sfs_inds = np.where(v_sfs)[0];
         if d>0 and (plotType == 1 or plotType == 2):
-          comps = [];
-          curr_f1 = f1MeanAll[d, v_sfs, v_cons[c]]; # get the component responses only at the relevant conditions
-          curr_f1_std = f1StdAll[d, v_sfs, v_cons[c]];
+          xticks = np.array([]); xticklabels = np.array([]);
+          for j in range(len(v_sfs_inds)):
+            comps = [];
 
-          n_comps = len(curr_f1[0]); # how many components per stimulus/response?
+            curr_f1 = f1MeanAll[d, v_sfs_inds[j], v_cons[c]]; # get the component responses only at the relevant conditions
+            curr_f1_std = f1StdAll[d, v_sfs_inds[j], v_cons[c]];
+            # now get the individual responses
+            n_comps = all_disps[d];
 
-          for i in range(n_comps):
-            curr_resps = [x[i] for x in curr_f1]; # go through each response "list" and get the correct component
-            curr_std = [x[i] for x in curr_f1_std];
-            curr_comp = dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs] + norm.rvs(0, 0.1, len(curr_resps)), curr_resps, curr_std, fmt='-o', clip_on=False); # scatter the x-coordinate for better visibility
-            comps.append(curr_comp[0]);
+            _, _, curr_trials = helper_fcns.get_condition(data, n_comps, all_cons[v_cons[c]], all_sfs[v_sfs_inds[j]]);
+            _, isolf1, _, isolf1all = helper_fcns.get_isolated_response(data, curr_trials);
+            isolf1mean = isolf1[:, 0];
+            isolf1std = isolf1[:, 1];
+
+            # first, reset color cycle so that it's the same each time around
+            dispAx[d][c_plt_ind, 1].set_prop_cycle(None); 
+            x_pos = [j-0.25, j+0.25];
+            xticks = np.append(xticks, x_pos);
+            xticklabels = np.append(xticklabels, ['mix', 'isol']);
+            for i in range(n_comps): # difficult to make pythonic/array, so just iterate over each component
+              curr_means = [curr_f1[i], isolf1mean[i]];
+              curr_stds = [curr_f1_std[i], isolf1std[i]];
+              curr_comp = dispAx[d][c_plt_ind, 1].errorbar(x_pos, curr_means, curr_stds, fmt='-o', clip_on=False);
+              comps.append(curr_comp[0]);
+
           comp_str = [str(i) for i in range(n_comps)];
+          dispAx[d][c_plt_ind, 1].set_xticks(xticks);
+          dispAx[d][c_plt_ind, 1].set_xticklabels(xticklabels);
           dispAx[d][c_plt_ind, 1].legend(comps, comp_str, loc=0);
-            
 
         for i in range(2):
-
-          dispAx[d][c_plt_ind, i].set_xlim((min(all_sfs), max(all_sfs)));
-        
-          dispAx[d][c_plt_ind, i].set_xscale('log');
-          dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
-
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
           dispAx[d][c_plt_ind, i].tick_params(labelsize=15, width=1, length=8, direction='out');
           dispAx[d][c_plt_ind, i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
           sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
 
+        dispAx[d][c_plt_ind, 0].set_xlim((min(all_sfs), max(all_sfs)));
+        dispAx[d][c_plt_ind, 0].set_xscale('log');
+        dispAx[d][c_plt_ind, 0].set_xlabel('sf (c/deg)'); 
         dispAx[d][c_plt_ind, 0].set_title('Resp: D%d, contrast: %.3f' % (d, all_cons[v_cons[c]]));
         dispAx[d][c_plt_ind, 0].set_ylim((0, 1.5*maxPlot));
         dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');

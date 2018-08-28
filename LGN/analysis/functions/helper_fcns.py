@@ -8,6 +8,7 @@ from time import sleep
 sqrt = math.sqrt
 log = math.log
 exp = math.exp
+import warnings
 import pdb
 
 # Functions:
@@ -174,7 +175,62 @@ def blankResp(cellStruct):
     sig = numpy.std(blank_tr);
     
     return mu, sig, blank_tr;
+
+def get_condition(data, n_comps, con, sf):
+    ''' Returns the trial responses (f0 and f1) and correspondign trials for a given 
+        dispersion level (note: # of components), contrast, and spatial frequency
+    '''
+    np = numpy;
+    conDig = 3; # default...
+
+    val_disp = data['num_comps'] == n_comps;
+    val_con = np.round(data['total_con'], conDig) == con;
+    val_sf = data['cent_sf'] == sf;
+
+    #val_trials = val_disp & val_con & val_sf;
+    val_trials = np.where(val_disp & val_con & val_sf)[0]; # get as int array of indices rather than boolean array
+ 
+    f0 = data['spikeCount'][val_trials];
+    f1 = data['power_f1'][val_trials];
+
+    return f0, f1, val_trials;
     
+def get_isolated_response(data, trials):
+   ''' Given a set of trials (assumed to be all from one unique disp-con-sf set), collect the responses to the components of the 
+       stimulus when presented in isolation - returns the mean/std and individual trial responses
+       Assumed to be for mixture stimuli
+   '''
+   np = numpy; conDig = 3;
+   n_comps = np.unique(data['num_comps'][trials]);
+   if len(n_comps) > 1:
+     warnings.warn('must have only one level of dispersion for the requested trials');
+     return [], [], [], [];
+   n_comps = n_comps[0]; # get just the value so it's an integer rather than array
+
+   # assumption is that #trials of mixture stimulus will be >= the number of repetitions of the isolated presentations of that stimulus component
+   f0all = np.nan * np.zeros((n_comps, len(trials)));
+   f1all = np.nan * np.zeros((n_comps, len(trials)));
+   f0summary = np.nan * np.zeros((n_comps, 2)); # mean/std in [:, 0 or 1], respectively
+   f1summary = np.nan * np.zeros((n_comps, 2));
+
+   for i in range(n_comps):
+
+     # now go through for each component and get the response to that stimulus component when presented alone
+     con = np.unique(data['con'][i][trials]);
+     sf = np.unique(data['sf'][i][trials]);
+     if len(con)>1 or len(sf)>1:
+       warnings.warn('the trials requested must have only one sf/con for a given stimulus component');
+       return [], [], [], [];
+     
+     f0curr, f1curr, _ = get_condition(data, 1, np.round(con, conDig), sf); # 1 is for #components - we're looking for single component trials/responses
+     f0all[i, np.arange(len(f0curr))] = f0curr;
+     f1all[i, np.arange(len(f1curr))] = f1curr;
+
+     f0summary[i, :] = [np.nanmean(f0all[i, :]), np.nanstd(f0all[i, :])]; # nanmean/std in case fewer presentations of individual component than mixture
+     f1summary[i, :] = [np.nanmean(f1all[i, :]), np.nanstd(f1all[i, :])];
+
+   return f0summary, f1summary, f0all, f1all
+
 def tabulate_responses(cellStruct, modResp = []):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
@@ -249,6 +305,7 @@ def tabulate_responses(cellStruct, modResp = []):
                 curr_var = 0; # variance (std^2) adds
                 curr_pred_f1 = 0;
                 curr_var_f1 = 0; # variance (std^2) adds
+
                 for n_comp in range(all_disps[d]):
                     # find information for each component, find corresponding trials, get response, sum
                         # Note: unique(.) will only be one value, since all equiv stim have same equiv componentss 
