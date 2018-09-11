@@ -27,9 +27,9 @@ save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
 
-dataList = np.load(str(dataPath + expName), encoding='latin1').item();
+dataList = hf.np_smart_load(str(dataPath + expName));
 loadName = str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy');
-cellStruct = np.load(loadName, encoding='latin1').item();
+cellStruct = hf.np_smart_load(loadName);
 
 data = cellStruct['sfm']['exp']['trial'];
 
@@ -37,7 +37,7 @@ allSpikes = data['spikeTimes'];
 
 # Create PSTH, spectrum for all cells
 psth_all, _ = hf.make_psth(binWidth, stimDur, allSpikes);
-spect_all, _ = hf.spike_fft(psth_all);
+spect_all, _, _ = hf.spike_fft(psth_all);
 
 # now for valid trials (i.e. non-blanks), compute the stimulus-relevant power
 n_stim_comp = np.max(data['num_comps']);
@@ -52,7 +52,7 @@ all_tfs = all_tfs.astype(int)
 rel_tfs = [[x[0]] if x[0] == x[1] else x for x in all_tfs];
 
 psth_val, _ = hf.make_psth(binWidth, stimDur, allSpikes[val_trials]);
-_, rel_power = hf.spike_fft(psth_val, rel_tfs);
+_, rel_power, _ = hf.spike_fft(psth_val, rel_tfs);
 
 stim_power[val_trials] = rel_power;
 
