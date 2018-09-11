@@ -97,9 +97,6 @@ def spike_fft(psth, tfs = None):
 
     return spectrum, rel_power, full_fourier;
 
-# fold_psth - fold a psth for a given number of cycles (given spike times)
-# first_ph0 - for a given stimulus start phase, compute how much of a cycle (and how much time) before the stimulus gets to the start of a cycle (i.e. ph=0)
-# get_true_phase - compute the response phase relative to the stimulus phase given a response phase (rel. to trial time window) and a stimulus phase (rel. to trial start)
 def first_ph0(start_phase, stim_tf, dir=-1):
     ''' returns fraction of cycle until ph=0 and time until ph=0 
     use this function to determine how much of the cycle needs to be completed before the phase reaches 0 again
@@ -109,10 +106,10 @@ def first_ph0(start_phase, stim_tf, dir=-1):
     if dir = 1, then we have 360-"start_phase" deg to go before ph = 0
     '''
     if dir == -1:
-      cycle_until_ph0 = numpy.mod(start_phase, 360)/360;
+      cycle_until_ph0 = numpy.mod(start_phase, 360.0)/360.0;
     if dir == 1:
-       cycle_until_ph0 = numpy.mod(numpy.subtract(360, start_phase), 360)/360;
-    stim_period = numpy.divide(1, stim_tf);
+       cycle_until_ph0 = numpy.mod(numpy.subtract(360, start_phase), 360.0)/360.0;
+    stim_period = numpy.divide(1.0, stim_tf); # divide by 1.0 so that stimPeriod is a float (and not just an int!)
     time_until_ph0 = cycle_until_ph0 * stim_period;
     return cycle_until_ph0, time_until_ph0;
 
@@ -123,10 +120,10 @@ def fold_psth(spikeTimes, stimTf, stimPh, n_cycles, n_bins, dir=-1):
     '''
     np = numpy;
 
-    stimPeriod = numpy.divide(1, stimTf);
+    stimPeriod = np.divide(1.0, stimTf); # divide by 1.0 so that stimPeriod is a float (and not just an int!)
     _, ph0 = first_ph0(stimPh, stimTf, dir);
     folded = np.mod(spikeTimes-ph0[0], np.multiply(n_cycles, stimPeriod[0])); # center the spikes relative to the 0 phase of the stim
-    bin_edges = np.linspace(0, n_cycles*stimPeriod[0], 1+n_cycles*n_bins)
+    bin_edges = np.linspace(0, n_cycles*stimPeriod[0], 1+n_cycles*n_bins);
     psth_fold = np.histogram(folded, bin_edges, normed=False)[0];
     psth_norm = np.divide(psth_fold, np.max(psth_fold));
     return psth_fold, bin_edges, psth_norm;

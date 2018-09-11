@@ -3,7 +3,10 @@
 
 ### Lines
 lines.markeredgewidth: 1     # the line width around the marker symbol
-lines.markersize     : 8            # markersize, in points
+lines.markersize     : 16            # markersize, in points
+
+### errorbar
+errorbar.capsize     : 0	# don't want the "cap" on errorbar
 
 ### FONT
 text.usetex          : False

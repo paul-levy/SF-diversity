@@ -28,6 +28,7 @@ rcParams['lines.linewidth'] = 2.5;
 rcParams['axes.linewidth'] = 1.5;
 rcParams['lines.markersize'] = 5;
 rcParams['font.style'] = 'oblique';
+rcParams['errorbar.capsize'] = 0;
 
 # personal mac
 #dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
@@ -86,18 +87,19 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
   for i in range(len(relSpikes)):
       ax.scatter(relSpikes[i], i*np.ones_like(relSpikes[i]), color=colors[i]);
       stimPh = stim_ph[i];
-      stimPeriod = np.divide(1, all_tf[i]);
+      stimPeriod = np.divide(1.0, all_tf[i]);
       # i.e. at what point during the trial (in s) does the stimulus component first begin a cycle?
       firstPh0 = hf.first_ph0(stimPh, all_tf[i])[1];
+
       for j in range(len(all_tf[i])):
           allPh0 = [stimPeriod[j]*np.arange(-1, all_tf[i][j]) + firstPh0[j]];
           allPh90 = allPh0 + stimPeriod[j]/4;
           allPh180 = allPh90 + stimPeriod[j]/4;
           allPh270 = allPh180 + stimPeriod[j]/4;
-      ax.errorbar(allPh0[0], i*np.ones_like(allPh0[0]), 0.25, linestyle='none', color='k')
-      ax.errorbar(allPh90[0], i*np.ones_like(allPh0[0]), 0.05, linestyle='none', color='k')
-      ax.errorbar(allPh180[0], i*np.ones_like(allPh0[0]), 0.05, linestyle='none', color='k')
-      ax.errorbar(allPh270[0], i*np.ones_like(allPh0[0]), 0.05, linestyle='none', color='k')
+      ax.errorbar(allPh0[0], i*np.ones_like(allPh0[0]), 0.25, linestyle='none', color='k', linewidth=1)
+      ax.errorbar(allPh90[0], i*np.ones_like(allPh0[0]), 0.05, linestyle='none', color='k', linewidth=1)
+      ax.errorbar(allPh180[0], i*np.ones_like(allPh0[0]), 0.05, linestyle='none', color='k', linewidth=1)
+      ax.errorbar(allPh270[0], i*np.ones_like(allPh0[0]), 0.05, linestyle='none', color='k', linewidth=1)
   ax.set_xlabel('time (s)');
   ax.set_ylabel('repetition #');
   ax.set_title('Spike rasters');
@@ -109,12 +111,14 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
   for i in range(len(relSpikes)):
       _, bin_edges, psth_norm = hf.fold_psth(relSpikes[i], all_tf[i], stim_ph[i], cycle_fold, n_bins_fold);
       plt.plot(bin_edges[0:-1], i-0.5+psth_norm, color=colors[i])
+      stimPeriod = np.divide(1.0, all_tf[i]);
       for j in range(cycle_fold):
           cycStart = plt.axvline(j*stimPeriod[0]);
           cycHalf = plt.axvline((j+0.5)*stimPeriod[0], linestyle='--');
   ax.set_xlabel('time (s)');
   ax.set_ylabel('spike count (normalized by trial)');
   ax.set_title('PSTH folded');
+  ax.set_xlim([-stimPeriod[0]/4.0, (cycle_fold+0.25)*stimPeriod[0]]);
   ax.legend((cycStart, cycHalf), ('ph = 0', 'ph = 180'));
 
   # response phase - without accounting for stimulus phase
@@ -174,3 +178,15 @@ def batch_phase_by_cond(cell_num, disp, cons=[], sfs=[], dp=dataPath):
     for s in sfs:
       print('analyzing cell %d, dispersion %d, contrast %d, sf %d\n' % (cell_num, disp, c, s));
       phase_by_cond(cell_num, cellStruct, disp, c, s);    
+
+if __name__ == '__main__':
+
+    if len(sys.argv) < 3:
+      print('uhoh...you need at least two arguments here');
+      exit();
+
+    cell_num = int(sys.argv[1]);
+    disp = int(sys.argv[2]);
+    print('Running cell %d, dispersion %d' % (cell_num, disp+1));
+
+    batch_phase_by_cond(cell_num, disp);
