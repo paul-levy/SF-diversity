@@ -36,7 +36,7 @@ module load seaborn/0.7.1
 # sixth  param is descr_fit_type: (i.e. what loss function for descriptive gaussian fits)
         # same as above, no mod_poiss
 # seventh param is 0 (no norm sims) or 1 (do normalization simulations)
-python plotting.py $SLURM_ARRAY_TASK_ID 1 0 0 0 0 0 0
+python plotting.py $SLURM_ARRAY_TASK_ID 0 0 0 0 0 0 0
  
 # leave a blank line at the end
 

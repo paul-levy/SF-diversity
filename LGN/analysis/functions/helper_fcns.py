@@ -170,6 +170,8 @@ def polar_vec_mean(amps, phases):
    if len(phases) != n_conds:
      print('the number of conditions in amps is not the same as the number of conditions in phases --> giving up');
      return [], [];
+
+   all_r = []; all_phi = [];
    for cond in range(n_conds):
      curr_amps = amps[cond];
      curr_phis = phases[cond];
@@ -183,7 +185,10 @@ def polar_vec_mean(amps, phases):
      r = np.sqrt(np.square(x_avg) + np.square(y_avg));
      theta = np.rad2deg(np.arccos(x_avg/r));
 
-     return r, theta
+     all_r.append(r);
+     all_phi.append(theta);
+
+   return all_r, all_phi;
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
