@@ -208,8 +208,8 @@ def get_isolated_response(data, trials):
    n_comps = n_comps[0]; # get just the value so it's an integer rather than array
 
    # assumption is that #trials of mixture stimulus will be >= the number of repetitions of the isolated presentations of that stimulus component
-   f0all = np.nan * np.zeros((n_comps, len(trials)));
-   f1all = np.nan * np.zeros((n_comps, len(trials)));
+   f0all = np.array(np.nan * np.zeros((n_comps, )), dtype='O'); # might have different number of responses for each component, so create object/flexible array
+   f1all = np.array(np.nan * np.zeros((n_comps, )), dtype='O');
    f0summary = np.nan * np.zeros((n_comps, 2)); # mean/std in [:, 0 or 1], respectively
    f1summary = np.nan * np.zeros((n_comps, 2));
 
@@ -223,11 +223,11 @@ def get_isolated_response(data, trials):
        return [], [], [], [];
      
      f0curr, f1curr, _ = get_condition(data, 1, np.round(con, conDig), sf); # 1 is for #components - we're looking for single component trials/responses
-     f0all[i, np.arange(len(f0curr))] = f0curr;
-     f1all[i, np.arange(len(f1curr))] = f1curr;
+     f0all[i] = f0curr;
+     f1all[i] = f1curr;
 
-     f0summary[i, :] = [np.nanmean(f0all[i, :]), np.nanstd(f0all[i, :])]; # nanmean/std in case fewer presentations of individual component than mixture
-     f1summary[i, :] = [np.nanmean(f1all[i, :]), np.nanstd(f1all[i, :])];
+     f0summary[i, :] = [np.nanmean(f0all[i]), np.nanstd(f0all[i])]; # nanmean/std in case fewer presentations of individual component than mixture
+     f1summary[i, :] = [np.nanmean(f1all[i]), np.nanstd(f1all[i])];
 
    return f0summary, f1summary, f0all, f1all
 
