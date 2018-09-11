@@ -85,7 +85,7 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
   # draw the beginning of each cycle for each trial
   ax = plt.subplot(3, 1, 1)
   for i in range(len(relSpikes)):
-      ax.scatter(relSpikes[i], i*np.ones_like(relSpikes[i]), color=colors[i]);
+      ax.scatter(relSpikes[i], i*np.ones_like(relSpikes[i]), s=30, color=colors[i]);
       stimPh = stim_ph[i];
       stimPeriod = np.divide(1.0, all_tf[i]);
       # i.e. at what point during the trial (in s) does the stimulus component first begin a cycle?
@@ -123,14 +123,14 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
 
   # response phase - without accounting for stimulus phase
   ax = plt.subplot(3, 2, 5, projection='polar')
-  ax.scatter(np.radians(resp_ph), rel_amp, color=colors, clip_on=False);
+  ax.scatter(np.radians(resp_ph), rel_amp, s=45, color=colors, clip_on=False);
   ax.set_title('Stimulus-blind')
   ax.set_ylim(auto='True')
   polar_ylim = ax.get_ylim();
 
   # response phase - relative to stimulus phase
   ax = plt.subplot(3, 2, 6, projection='polar')
-  ax.scatter(np.radians(ph_rel_stim), rel_amp, color=colors, clip_on=False);
+  ax.scatter(np.radians(ph_rel_stim), rel_amp, s=45, color=colors, clip_on=False);
   ax.set_ylim(polar_ylim);
   ax.set_title('Stimulus-accounted');
 
