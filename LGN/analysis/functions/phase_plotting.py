@@ -80,7 +80,7 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
   relSpikes = data['spikeTimes'][val_trials];
   colors = cm.rainbow(np.linspace(0, 1, len(val_trials[0])))
 
-  # spike raster - trial-by-trial
+  # plot spike raster - trial-by-trial
   # only works for SINGLE GRATINGS
   # draw the beginning of each cycle for each trial
   ax = plt.subplot(3, 1, 1)
@@ -104,7 +104,7 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
   ax.set_ylabel('repetition #');
   ax.set_title('Spike rasters');
 
-  # PSTH - per trial, but folded over N cycles
+  # plot PSTH - per trial, but folded over N cycles
   # only works for SINGLE GRATINGS
   ax = plt.subplot(3, 1, 2)
 
@@ -121,16 +121,20 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
   ax.set_xlim([-stimPeriod[0]/4.0, (cycle_fold+0.25)*stimPeriod[0]]);
   ax.legend((cycStart, cycHalf), ('ph = 0', 'ph = 180'));
 
-  # response phase - without accounting for stimulus phase
+  # plot response phase - without accounting for stimulus phase
   ax = plt.subplot(3, 2, 5, projection='polar')
   ax.scatter(np.radians(resp_ph), rel_amp, s=45, color=colors, clip_on=False);
   ax.set_title('Stimulus-blind')
   ax.set_ylim(auto='True')
   polar_ylim = ax.get_ylim();
 
-  # response phase - relative to stimulus phase
+  # now, compute the average amplitude/phase over all trials
+  [avg_r, avg_ph] = hf.polar_vec_mean([rel_amp], [ph_rel_stim]);
+
+  # plot response phase - relative to stimulus phase
   ax = plt.subplot(3, 2, 6, projection='polar')
   ax.scatter(np.radians(ph_rel_stim), rel_amp, s=45, color=colors, clip_on=False);
+  ax.plot([0, np.radians(avg_ph)], [0, avg_r], color='k', linestyle='--', clip_on=False);
   ax.set_ylim(polar_ylim);
   ax.set_title('Stimulus-accounted');
 

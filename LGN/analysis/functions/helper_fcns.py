@@ -20,6 +20,7 @@ import pdb
 # first_ph0 - for a given stimulus start phase, compute how much of a cycle (and how much time) before the stimulus gets to the start of a cycle (i.e. ph=0)
 # fold_psth - fold a psth for a given number of cycles (given spike times)
 # get_true_phase - compute the response phase relative to the stimulus phase given a response phase (rel. to trial time window) and a stimulus phase (rel. to trial start)
+# polar_vec_mean - compute the vector mean given a set of amplitude/phase pairs for responses on individual trials
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -156,6 +157,33 @@ def get_true_phase(data, val_trials, dir = -1, psth_binWidth=1e-3, stimDur=1):
     phase_rel_stim = np.mod(np.multiply(dir, np.add(resp_phase, stim_phase)), 360);
 
     return phase_rel_stim, stim_phase, resp_phase, all_tf;
+
+def polar_vec_mean(amps, phases):
+   ''' Given a set of amplitudes ("r") and phases ("theta"; in degrees) for a given stimulus condition (or set of conditions)
+       RETURN the mean amplitude and phase (in degrees) computed by vector summation/averaging
+       Note: amps/phases must be passed in as arrays of arrays, so that we can compute the vec mean for multiple different
+             stimulus conditions just by calling this function once
+   '''
+   np = numpy;
+  
+   n_conds = len(amps);
+   if len(phases) != n_conds:
+     print('the number of conditions in amps is not the same as the number of conditions in phases --> giving up');
+     return [], [];
+   for cond in range(n_conds):
+     curr_amps = amps[cond];
+     curr_phis = phases[cond];
+
+     n_reps = len(curr_amps);
+     # convert each amp/phase value to x, y
+     [x_polar, y_polar] = [curr_amps*np.cos(np.radians(curr_phis)), curr_amps*np.sin(np.radians(curr_phis))]
+     # take the average
+     [x_avg, y_avg] = [np.sum(x_polar)/n_reps, np.sum(y_polar)/n_reps]
+     # now compute (and return) r and theta
+     r = np.sqrt(np.square(x_avg) + np.square(y_avg));
+     theta = np.rad2deg(np.arccos(x_avg/r));
+
+     return r, theta
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
