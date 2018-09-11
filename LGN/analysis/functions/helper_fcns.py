@@ -181,8 +181,16 @@ def polar_vec_mean(amps, phases):
      [x_avg, y_avg] = [np.sum(x_polar)/n_reps, np.sum(y_polar)/n_reps]
      # now compute (and return) r and theta
      r = np.sqrt(np.square(x_avg) + np.square(y_avg));
-     theta = np.rad2deg(np.arccos(x_avg/r));
-
+     # for angle - we have to be careful!
+     th = np.rad2deg(np.arctan(np.abs(y_avg/x_avg)));
+     if x_avg>0 and y_avg>0: # i.e. quadrant 1
+       theta = th;
+     if x_avg<0 and y_avg>0: # i.e. quadrant 2
+       theta = 180 - th;
+     if x_avg<0 and y_avg<0: # i.e. quadrant 3
+       theta = 180 + th;
+     if x_avg>0 and y_avg<0:
+       theta = 360 - th;
      return r, theta
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
