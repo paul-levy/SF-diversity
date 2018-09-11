@@ -16,6 +16,10 @@ import pdb
 # bw_lin_to_log
 # bw_log_to_lin
 # make_psth - create a psth for a given spike train
+# spike_fft - compute the FFT for a given PSTH, extract the power at a given set of frequencies 
+# first_ph0 - for a given stimulus start phase, compute how much of a cycle (and how much time) before the stimulus gets to the start of a cycle (i.e. ph=0)
+# fold_psth - fold a psth for a given number of cycles (given spike times)
+# get_true_phase - compute the response phase relative to the stimulus phase given a response phase (rel. to trial time window) and a stimulus phase (rel. to trial start)
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -77,11 +81,13 @@ def make_psth(binWidth, stimDur, spikeTimes):
     return psth, bins;
 
 def spike_fft(psth, tfs = None):
-    # given a psth (and optional list of component TFs), compute the fourier transform of the PSTH
-    # if the component TFs are given, return the FT power at the DC, and at all component TFs
-    # note: if only one TF is given, also return the power at f2 (i.e. twice f1, the stimulus frequency)
+    ''' given a psth (and optional list of component TFs), compute the fourier transform of the PSTH
+        if the component TFs are given, return the FT power at the DC, and at all component TFs
+        note: if only one TF is given, also return the power at f2 (i.e. twice f1, the stimulus frequency)
+    '''
     np = numpy;
 
+    full_fourier = [np.fft.fft(x) for x in psth];
     spectrum = [np.abs(np.fft.fft(x)) for x in psth];
 
     if tfs:
@@ -89,7 +95,70 @@ def spike_fft(psth, tfs = None):
     else:
       rel_power = [];
 
-    return spectrum, rel_power;
+    return spectrum, rel_power, full_fourier;
+
+# fold_psth - fold a psth for a given number of cycles (given spike times)
+# first_ph0 - for a given stimulus start phase, compute how much of a cycle (and how much time) before the stimulus gets to the start of a cycle (i.e. ph=0)
+# get_true_phase - compute the response phase relative to the stimulus phase given a response phase (rel. to trial time window) and a stimulus phase (rel. to trial start)
+def first_ph0(start_phase, stim_tf, dir=-1):
+    ''' returns fraction of cycle until ph=0 and time until ph=0 
+    use this function to determine how much of the cycle needs to be completed before the phase reaches 0 again
+    given the start phase of the stimulus --> the same comments in the section with "get_phase" above 
+    explain why we simply take the start phase as an indicator of the "cycle-distance until ph=0"
+    if dir = -1, then we assume we have "start_phase" degrees to go before ph = 0
+    if dir = 1, then we have 360-"start_phase" deg to go before ph = 0
+    '''
+    if dir == -1:
+      cycle_until_ph0 = numpy.mod(start_phase, 360)/360;
+    if dir == 1:
+       cycle_until_ph0 = numpy.mod(numpy.subtract(360, start_phase), 360)/360;
+    stim_period = numpy.divide(1, stim_tf);
+    time_until_ph0 = cycle_until_ph0 * stim_period;
+    return cycle_until_ph0, time_until_ph0;
+
+def fold_psth(spikeTimes, stimTf, stimPh, n_cycles, n_bins, dir=-1):
+    ''' Returns the folded_psth (bin counts), the bin edges of the folded psth, and a normalized folded psth
+        Compute the psth and fold over a given number of cycles, with a set number of bins per cycle 
+        For now, works only for single components...
+    '''
+    np = numpy;
+
+    stimPeriod = numpy.divide(1, stimTf);
+    _, ph0 = first_ph0(stimPh, stimTf, dir);
+    folded = np.mod(spikeTimes-ph0[0], np.multiply(n_cycles, stimPeriod[0])); # center the spikes relative to the 0 phase of the stim
+    bin_edges = np.linspace(0, n_cycles*stimPeriod[0], 1+n_cycles*n_bins)
+    psth_fold = np.histogram(folded, bin_edges, normed=False)[0];
+    psth_norm = np.divide(psth_fold, np.max(psth_fold));
+    return psth_fold, bin_edges, psth_norm;
+
+def get_true_phase(data, val_trials, dir = -1, psth_binWidth=1e-3, stimDur=1):
+    ''' Returns resp-phase-rel-to-stim, stimulus phase, response phase
+        Given the data and the set of valid trials, first compute the response phase
+        and stimulus phase - then determine the response phase relative to the stimulus phase
+    '''
+    np = numpy;
+    # prepare the TF information for each component - we know there are 5 components per stimulus
+    all_tfs = np.vstack((data['tf'][0], data['tf'][1], data['tf'][2], data['tf'][3], data['tf'][4]));
+    all_tfs = np.transpose(all_tfs)[val_trials];
+    all_tfs = all_tfs.astype(int); # we know all TF are integers - convert to that so we can use as an index
+    all_tf = [[x[0]] if x[0] == x[1] else x for x in all_tfs];
+
+    # and the phase...
+    all_phis = np.vstack((data['ph'][0], data['ph'][1], data['ph'][2], data['ph'][3], data['ph'][4]));
+    all_phis = np.transpose(all_phis)[val_trials];
+    all_phis = all_phis.astype(int);
+    # only get PHI for the components we need - use the length of all_tf as a guide
+    stim_phase = [all_phis[x][range(len(all_tf[x]))] for x in range(len(all_phis))]
+
+    # perform the fourier analysis we need
+    psth_val, _ = make_psth(psth_binWidth, stimDur, data['spikeTimes'][val_trials])
+    _, rel_amp, full_fourier = spike_fft(psth_val, all_tf)
+    # and finally get the stimulus-relative phase of each response
+    resp_phase = [np.angle(full_fourier[x][all_tf[x]], True) for x in range(len(full_fourier))];
+
+    phase_rel_stim = np.mod(np.multiply(dir, np.add(resp_phase, stim_phase)), 360);
+
+    return phase_rel_stim, stim_phase, resp_phase, all_tf;
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
