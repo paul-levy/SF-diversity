@@ -36,7 +36,7 @@ data = cellStruct['sfm']['exp']['trial'];
 allSpikes = data['spikeTimes'];
 
 # Create PSTH, spectrum for all cells
-psth_all, _ = hf.make_psth(binWidth, stimDur, allSpikes);
+psth_all, _ = hf.make_psth(allSpikes, binWidth, stimDur);
 spect_all, _, _ = hf.spike_fft(psth_all);
 
 # now for valid trials (i.e. non-blanks), compute the stimulus-relevant power
@@ -51,7 +51,7 @@ all_tfs = np.transpose(all_tfs)[val_trials];
 all_tfs = all_tfs.astype(int)
 rel_tfs = [[x[0]] if x[0] == x[1] else x for x in all_tfs];
 
-psth_val, _ = hf.make_psth(binWidth, stimDur, allSpikes[val_trials]);
+psth_val, _ = hf.make_psth(allSpikes[val_trials], binWidth, stimDur);
 _, rel_power, _ = hf.spike_fft(psth_val, rel_tfs);
 
 stim_power[val_trials] = rel_power;

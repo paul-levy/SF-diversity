@@ -21,6 +21,7 @@ import pdb
 # fold_psth - fold a psth for a given number of cycles (given spike times)
 # get_true_phase - compute the response phase relative to the stimulus phase given a response phase (rel. to trial time window) and a stimulus phase (rel. to trial start)
 # polar_vec_mean - compute the vector mean given a set of amplitude/phase pairs for responses on individual trials
+# phase_advance - compute the phase advance (a la Movshon/Kiorpes/+ 2005)
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -28,6 +29,7 @@ import pdb
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
 # blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
 # tabulate_responses - Organizes measured and model responses for sfMixAlt experiment
+# get_valid_trials - get the list of valid trials given a disp/con/sf combination - and return the list of all disps/cons/sfs
 # random_in_range - random real-valued number between A and B
 # nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
 # getSuppressiveSFtuning - returns the normalization pool response
@@ -69,7 +71,7 @@ def bw_log_to_lin(log_bw, pref_sf):
     
     return lin_bw, sf_range
 
-def make_psth(binWidth, stimDur, spikeTimes):
+def make_psth(spikeTimes, binWidth=1e-3, stimDur=1):
     # given an array of arrays of spike times, create the PSTH for a given bin width and stimulus duration
     # i.e. spikeTimes has N arrays, each of which is an array of spike times
     # TODO: Add a smoothing to the psth and return for plotting purposes only
@@ -149,7 +151,7 @@ def get_true_phase(data, val_trials, dir = -1, psth_binWidth=1e-3, stimDur=1):
     stim_phase = [all_phis[x][range(len(all_tf[x]))] for x in range(len(all_phis))]
 
     # perform the fourier analysis we need
-    psth_val, _ = make_psth(psth_binWidth, stimDur, data['spikeTimes'][val_trials])
+    psth_val, _ = make_psth(data['spikeTimes'][val_trials], psth_binWidth, stimDur)
     _, rel_amp, full_fourier = spike_fft(psth_val, all_tf)
     # and finally get the stimulus-relative phase of each response
     resp_phase = [np.angle(full_fourier[x][all_tf[x]], True) for x in range(len(full_fourier))];
@@ -199,18 +201,76 @@ def polar_vec_mean(amps, phases):
 
    return all_r, all_phi;
 
+def rvc_fit(amps, cons):
+   ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
+       fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
+       Movshon, Kiorpes, Hawken, Cavanaugh; 2005
+       RETURNS: rvc_model (the model equation) and list of the optimal parameters
+       Vectorized - i.e. accepts arrays of amp/con arrays
+   '''
+   np = numpy;
+
+   rvc_model = lambda b, k, c0, cons: b + k*np.log(1+np.divide(cons, c0));
+   
+   all_opts = [];
+   n_amps = len(amps);
+   for i in range(n_amps):
+     curr_amps = amps[i];
+     curr_cons = cons[i];
+     obj = lambda params: np.sum(np.square(amps - rvc_model(params[0], params[1], params[2], curr_cons)));
+     init_params = [0, np.max(curr_amps), 0.5]; 
+     # init_b = 0 --> per the paper, most b = 0 (b <= 0)
+     # init_c0 = 0.5 --> halfway in the contrast range
+     # init_k = np.max(curr_amps) --> with c0=0.5, k*log(1+maxCon/0.5) is approx. k (maxCon is 1);
+     b_bounds = (None, 0);
+     k_bounds = (0, None);
+     c0_bounds = (0, 1);
+     all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
+     # now optimize
+     to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
+     opt_params = to_opt['x'];
+     all_opts.append(opt_params);
+
+   return rvc_model, all_opts;
+
+def phase_advance(amps, phis):
+   ''' Given the mean amplitude/phase of responses over a range of contrasts, compute the linear model
+       fit which describes the phase advance per unit contrast as described in Eq. 4 of
+       Movshon, Kiorpes, Hawken, Cavanaugh; 2005
+       RETURNS: phAdv_model (the model equation) and list of the optimal parameters
+       Vectorized - i.e. accepts arrays of amp/phi arrays
+   '''
+   np = numpy;
+
+   phAdv_model = lambda phi0, slope, amp: np.mod(phi0 + np.multiply(slope, amp), 360);
+   # must mod by 360! Otherwise, something like 340-355-005 will be fit poorly
+
+   all_opts = [];
+   for i in range(len(amps)):
+     curr_amps = amps[i];
+     curr_phis = phis[i];
+     obj = lambda params: np.sum(np.square(phis - phAdv_model(params[0], params[1], curr_amps))); # just least squares...
+     # phi0 (i.e. phase at zero response) --> just guess the phase at the lowest contrast response
+     # slope --> just compute the slope over the response range
+     init_params = [curr_phis[0], (curr_phis[-1]-curr_phis[0])/(curr_amps[-1]-curr_amps[0])]; 
+     to_opt = opt.minimize(obj, init_params);
+     opt_params = to_opt['x'];
+     all_opts.append(opt_params);
+
+   return phAdv_model, all_opts;
+
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
-    prefSf = params[0];
-    dOrdSp = params[1];
+   prefSf = params[0];
+   dOrdSp = params[1];
 
-    sfRel = stimSf / prefSf;
-    s     = pow(stimSf, dOrdSp) * numpy.exp(-dOrdSp/2 * pow(sfRel, 2));
-    sMax  = pow(prefSf, dOrdSp) * numpy.exp(-dOrdSp/2);
-    sNl   = s/sMax;
-    selSf = sNl;
+   sfRel = stimSf / prefSf;
+   s     = pow(stimSf, dOrdSp) * numpy.exp(-dOrdSp/2 * pow(sfRel, 2));
+   sMax  = pow(prefSf, dOrdSp) * numpy.exp(-dOrdSp/2);
+   sNl   = s/sMax;
+   selSf = sNl;
 
-    return selSf, stimSf;
+   return selSf, stimSf;
 
 def get_prefSF(flexGauss_fit):
    ''' Given a set of parameters for a flexible gaussian fit, return the preferred SF
@@ -447,6 +507,26 @@ def tabulate_responses(cellStruct, modResp = []):
                     val_con_by_disp[d].append(con);
                     
     return [respMean, respStd, predMean, predStd, f1Mean, f1Std, predMeanF1, predStdF1], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
+
+def get_valid_trials(cellStruct, disp, con, sf):
+   ''' Given a cellStruct and the disp/con/sf indices (i.e. integers into the list of all disps/cons/sfs
+       Determine which trials are valid (i.e. have those stimulus criteria)
+       RETURN list of valid trials, lists for all dispersion values, all contrast values, all sf values
+   '''
+   _, stimVals, _, validByStimVal, _ = tabulate_responses(cellStruct);
+
+   # gather the conditions we need so that we can index properly
+   valDisp = validByStimVal[0];
+   valCon = validByStimVal[1];
+   valSf = validByStimVal[2];
+
+   allDisps = stimVals[0];
+   allCons = stimVals[1];
+   allSfs = stimVals[2];
+
+   val_trials = numpy.where(valDisp[disp] & valCon[con] & valSf[sf]);
+
+   return val_trials, allDisps, allCons, allSfs;
 
 def mod_poiss(mu, varGain):
     np = numpy;
