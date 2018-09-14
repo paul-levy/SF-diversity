@@ -19,7 +19,7 @@ import pdb
 import sys # so that we can import model_responses (in different folder)
 import model_responses
 
-plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/Analysis/Functions/paul_plt_style.mplstyle');
+plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/Analysis/Functions/paul_plt_cluster.mplstyle');
 from matplotlib import rcParams
 rcParams['font.size'] = 20;
 rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
@@ -148,7 +148,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
   # basics
   dataList = hf.np_smart_load(str(dp + expName))
   cellStruct = hf.np_smart_load(str(dp + dataList['unitName'][which_cell-1] + '_sfm.npy'));
-  save_base = sv_loc + 'phasePlots/summary/';
+  save_base = sv_loc + 'phasePlots/';
 
   # gather/compute everything we need
   data = cellStruct['sfm']['exp']['trial'];
@@ -186,13 +186,15 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
 
     r, th = hf.polar_vec_mean(amps, phis); # mean amp/phase
     # get the models/fits that we need:
-    # phase advance
-    phAdv_model, opt_params_phAdv = hf.phase_advance([r], [th]);
-    opt_params_phAdv = opt_params_phAdv[0];  # returns as list of param list --> just get 1st
-    # rvc
     con_values = allCons[con_inds];
-    rvc_model, opt_params_rvc = hf.rvc_fit([r], [con_values]);
+    # phase advance
+    phAdv_model, opt_params_phAdv, ph_adv = hf.phase_advance([r], [th], [con_values], [all_tf]);
+    opt_params_phAdv = opt_params_phAdv[0];  # returns as list of param list --> just get 1st
+    ph_adv = ph_adv[0];
+    # rvc
+    rvc_model, opt_params_rvc, con_gain = hf.rvc_fit([r], [con_values]);
     opt_params_rvc = opt_params_rvc[0]; # returns as list of param list --> just get 1st
+    con_gain = con_gain[0];
 
     # now get ready to plot!
     f, ax = plt.subplots(2, 2, figsize=(20, 10))
@@ -211,15 +213,16 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     ax.set_xlabel('contrast');
     ax.set_ylabel('response (f1)');
     ax.set_title('response versus contrast')
-    ax.legend((plt_measured, plt_fit[0]), ('data', 'model fit'))
+    ax.legend((plt_measured, plt_fit[0]), ('data', 'model fit'), loc='upper left')
 
     # also summarize the model fit on the plot
     ymax = np.maximum(np.max(r), np.max(mod_fit));
-    plt.text(0.8, 0.25 * ymax, 'b: %.2f' % (opt_params_rvc[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-    plt.text(0.8, 0.15 * ymax, 'slope:%.2f' % (opt_params_rvc[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-    plt.text(0.8, 0.05 * ymax, 'c0: %.2f' % (opt_params_rvc[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+    plt.text(0.8, 0.30 * ymax, 'b: %.2f' % (opt_params_rvc[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+    plt.text(0.8, 0.20 * ymax, 'slope:%.2f' % (opt_params_rvc[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+    plt.text(0.8, 0.10 * ymax, 'c0: %.2f' % (opt_params_rvc[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+    plt.text(0.8, 0.0 * ymax, 'con gain: %.2f' % (con_gain), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
-    # then the fit/plot of phase as a function of ampltude
+    # 2. then the fit/plot of phase as a function of ampltude
     plot_amps = np.linspace(0, np.max(r), 100);
     mod_fit = phAdv_model(opt_params_phAdv[0], opt_params_phAdv[1], plot_amps);
 
@@ -229,7 +232,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     ax.set_xlabel('response amplitude');
     ax.set_ylabel('response phase');
     ax.set_title('phase advance with amplitude')
-    ax.legend((plt_measured, plt_fit[0]), ('data', 'model fit'))
+    ax.legend((plt_measured, plt_fit[0]), ('data', 'model fit'), loc='upper left')
 
     # and again, summarize the model fit on the plot
     xmax = np.maximum(np.max(r), np.max(plot_amps));
@@ -238,13 +241,18 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     yrange = ymax-ymin;
     plt.text(0.8*xmax, ymin + 0.25 * yrange, 'phi0: %.2f' % (opt_params_phAdv[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
     plt.text(0.8*xmax, ymin + 0.15 * yrange, 'slope:%.2f' % (opt_params_phAdv[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-    #plt.text(0.8*xmax, ymin + 0.05 * ymax, 'c0: %.2f' % (opt_params_phAdv[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+    plt.text(0.8*xmax, ymin + 0.05 * yrange, 'phase advance: %.2f ms' % (ph_adv), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
     # now the polar plot of resp/phase together
     ax = plt.subplot(2, 2, 2, projection='polar')
     # ax.scatter(np.radians(th), r, color=colors)
-    ax.scatter(np.radians(th-th[-1]+90), r, color=colors)
-    ax.plot(np.radians(mod_fit-th[-1]+90), plot_amps, linestyle='--', color='k');
+    data_centered = th-th[-1]+90; 
+    model_centered = mod_fit-th[-1]+90;
+    ax.scatter(np.deg2rad(data_centered), r, color=colors)
+    ax.plot(np.deg2rad(model_centered), plot_amps, linestyle='--', color='k');
+    print('data|model');
+    print(data_centered);
+    print(model_centered);
     ax.set_ylim(0, 1.25*np.max(r))
     ax.set_title('phase advance')
 
@@ -253,8 +261,9 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     f.suptitle('%s #%d: disp %d, sf %.2f cpd' % (dataList['unitType'][which_cell-1], which_cell, allDisps[disp], allSfs[sf]));
 
   saveName = "/cell_%03d_d%d_phaseAdv.pdf" % (which_cell, disp);
-  save_loc = save_base;
+  save_loc = save_base + 'summary/';
   full_save = os.path.dirname(str(save_loc));
+  print('saving at: %s' % str(full_save + saveName));
   if not os.path.exists(full_save):
     os.makedirs(full_save)
   pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -304,6 +313,6 @@ if __name__ == '__main__':
 
     if phase_by_cond:
       batch_phase_by_cond(cell_num, disp);
-    if phase_by_cond:
+    if phase_adv_summary:
       plot_phase_advance(cell_num, disp);
      

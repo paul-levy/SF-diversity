@@ -205,7 +205,7 @@ def rvc_fit(amps, cons):
    ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
        fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
-       RETURNS: rvc_model (the model equation) and list of the optimal parameters
+       RETURNS: rvc_model (the model equation), list of the optimal parameters, and the contrast gain measure
        Vectorized - i.e. accepts arrays of amp/con arrays
    '''
    np = numpy;
@@ -213,6 +213,7 @@ def rvc_fit(amps, cons):
    rvc_model = lambda b, k, c0, cons: b + k*np.log(1+np.divide(cons, c0));
    
    all_opts = [];
+   all_conGain = [];
    n_amps = len(amps);
    for i in range(n_amps):
      curr_amps = amps[i];
@@ -229,15 +230,30 @@ def rvc_fit(amps, cons):
      # now optimize
      to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
      opt_params = to_opt['x'];
+
+     # now determine the contrast gain
+     b = opt_params[0]; k = opt_params[1]; c0 = opt_params[2];
+     if b < 0: 
+       # find the contrast value at which the rvc_model crosses/reaches 0
+       obj_whenR0 = lambda con: np.square(0 - rvc_model(b, k, c0, con));
+       con_bound = (0, 1);
+       init_r0cross = 0;
+       r0_cross = opt.minimize(obj_whenR0, init_r0cross, bounds=(con_bound, ));
+       con_r0 = r0_cross['x'];
+       conGain = k/(c0*(1+con_r0/c0));
+     else:
+       conGain = k/c0;
+
      all_opts.append(opt_params);
+     all_conGain.append(conGain);
 
-   return rvc_model, all_opts;
+   return rvc_model, all_opts, all_conGain;
 
-def phase_advance(amps, phis):
+def phase_advance(amps, phis, cons, tfs):
    ''' Given the mean amplitude/phase of responses over a range of contrasts, compute the linear model
        fit which describes the phase advance per unit contrast as described in Eq. 4 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
-       RETURNS: phAdv_model (the model equation) and list of the optimal parameters
+       RETURNS: phAdv_model (the model equation), the list of the optimal parameters, and the phase advance (in milliseconds)
        Vectorized - i.e. accepts arrays of amp/phi arrays
    '''
    np = numpy;
@@ -245,7 +261,7 @@ def phase_advance(amps, phis):
    phAdv_model = lambda phi0, slope, amp: np.mod(phi0 + np.multiply(slope, amp), 360);
    # must mod by 360! Otherwise, something like 340-355-005 will be fit poorly
 
-   all_opts = [];
+   all_opts = []; all_phAdv = [];
    for i in range(len(amps)):
      curr_amps = amps[i];
      curr_phis = phis[i];
@@ -257,7 +273,16 @@ def phase_advance(amps, phis):
      opt_params = to_opt['x'];
      all_opts.append(opt_params);
 
-   return phAdv_model, all_opts;
+     # now compute phase advance (in ms)
+     curr_cons = cons[i];
+     curr_tfs = tfs[i][0];
+     cycle_fraction = opt_params[1] * curr_amps[-1] / 360; # slope*respAmpAtMaxCon --> phase shift (in degrees) from 0 to responseAtMaxCon
+     # then, divide this by 360 to get fractions of a cycle
+     phase_adv = 1e3*cycle_fraction/curr_tfs[0]; # get just the first grating's TF...
+     # 1e3 to get into ms;
+     all_phAdv.append(phase_adv);
+
+   return phAdv_model, all_opts, all_phAdv;
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
