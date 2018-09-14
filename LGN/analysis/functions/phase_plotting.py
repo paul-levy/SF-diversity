@@ -75,7 +75,7 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
   # draw the beginning of each cycle for each trial
   ax = plt.subplot(3, 1, 1)
   for i in range(len(relSpikes)):
-      ax.scatter(relSpikes[i], i*np.ones_like(relSpikes[i]), s=30, color=colors[i]);
+      ax.scatter(relSpikes[i], i*np.ones_like(relSpikes[i]), s=45, color=colors[i]);
       stimPh = stim_ph[i];
       stimPeriod = np.divide(1.0, all_tf[i]);
       # i.e. at what point during the trial (in s) does the stimulus component first begin a cycle?
@@ -113,7 +113,7 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
 
   # plot response phase - without accounting for stimulus phase
   ax = plt.subplot(3, 2, 5, projection='polar')
-  ax.scatter(np.radians(resp_ph), rel_amp, s=45, color=colors, clip_on=False);
+  ax.scatter(np.radians(resp_ph), rel_amp, s=60, color=colors, clip_on=False);
   ax.set_title('Stimulus-blind')
   ax.set_ylim(auto='True')
   polar_ylim = ax.get_ylim();
@@ -125,7 +125,7 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
 
   # plot response phase - relative to stimulus phase
   ax = plt.subplot(3, 2, 6, projection='polar')
-  ax.scatter(np.radians(ph_rel_stim), rel_amp, s=45, color=colors, clip_on=False);
+  ax.scatter(np.radians(ph_rel_stim), rel_amp, s=60, color=colors, clip_on=False);
   ax.plot([0, np.radians(avg_ph)], [0, avg_r], color='k', linestyle='--', clip_on=False);
   ax.set_ylim(polar_ylim);
   ax.set_title('Stimulus-accounted');
@@ -208,7 +208,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     mod_fit = rvc_model(opt_params_rvc[0], opt_params_rvc[1], opt_params_rvc[2], plot_cons);
 
     ax = plt.subplot(2, 2, 1);
-    plt_measured = ax.scatter(allCons[con_inds], r, color=colors);
+    plt_measured = ax.scatter(allCons[con_inds], r, s=100, color=colors);
     plt_fit = ax.plot(plot_cons, mod_fit, linestyle='--', color='k');
     ax.set_xlabel('contrast');
     ax.set_ylabel('response (f1)');
@@ -227,7 +227,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     mod_fit = phAdv_model(opt_params_phAdv[0], opt_params_phAdv[1], plot_amps);
 
     ax = plt.subplot(2, 1, 2);
-    plt_measured = ax.scatter(r, th, color=colors);
+    plt_measured = ax.scatter(r, th, s=100, color=colors);
     plt_fit = ax.plot(plot_amps, mod_fit, linestyle='--', color='k');
     ax.set_xlabel('response amplitude');
     ax.set_ylabel('response phase');
@@ -245,10 +245,9 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
 
     # now the polar plot of resp/phase together
     ax = plt.subplot(2, 2, 2, projection='polar')
-    # ax.scatter(np.radians(th), r, color=colors)
-    data_centered = th-th[-1]+90; 
-    model_centered = mod_fit-th[-1]+90;
-    ax.scatter(np.deg2rad(data_centered), r, color=colors)
+    data_centered = np.mod(th-th[-1]+90, 360); 
+    model_centered = np.mod(mod_fit-th[-1]+90, 360);
+    ax.scatter(np.deg2rad(data_centered), r, s=50, color=colors)
     ax.plot(np.deg2rad(model_centered), plot_amps, linestyle='--', color='k');
     print('data|model');
     print(data_centered);

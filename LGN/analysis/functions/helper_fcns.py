@@ -223,7 +223,7 @@ def rvc_fit(amps, cons):
      # init_b = 0 --> per the paper, most b = 0 (b <= 0)
      # init_c0 = 0.5 --> halfway in the contrast range
      # init_k = np.max(curr_amps) --> with c0=0.5, k*log(1+maxCon/0.5) is approx. k (maxCon is 1);
-     b_bounds = (None, 0);
+     b_bounds = (0, 0); # 9.14.18 - per Tony, set to be just 0 for now
      k_bounds = (0, None);
      c0_bounds = (0, 1);
      all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
