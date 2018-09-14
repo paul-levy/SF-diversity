@@ -12,16 +12,30 @@ import warnings
 import pdb
 
 # Functions:
+
+### basics
+
 # np_smart_load - be smart about using numpy load
 # bw_lin_to_log
 # bw_log_to_lin
+
+### fourier
+
 # make_psth - create a psth for a given spike train
 # spike_fft - compute the FFT for a given PSTH, extract the power at a given set of frequencies 
+### phase/more psth
+
+# project_resp - project the measured response onto the true/predicted phase and determine the "true" response amplitude
 # first_ph0 - for a given stimulus start phase, compute how much of a cycle (and how much time) before the stimulus gets to the start of a cycle (i.e. ph=0)
 # fold_psth - fold a psth for a given number of cycles (given spike times)
 # get_true_phase - compute the response phase relative to the stimulus phase given a response phase (rel. to trial time window) and a stimulus phase (rel. to trial start)
 # polar_vec_mean - compute the vector mean given a set of amplitude/phase pairs for responses on individual trials
+# get_all_fft - extract the amp/phase for a condition or set of conditions
+# rvc_fit - fit response versus contrast with a model used in Movshon/Kiorpes/+ 2005
 # phase_advance - compute the phase advance (a la Movshon/Kiorpes/+ 2005)
+
+### descriptive fits to sf tuning/basic data analyses
+
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -71,6 +85,8 @@ def bw_log_to_lin(log_bw, pref_sf):
     
     return lin_bw, sf_range
 
+### Basic Fourier analyses
+
 def make_psth(spikeTimes, binWidth=1e-3, stimDur=1):
     # given an array of arrays of spike times, create the PSTH for a given bin width and stimulus duration
     # i.e. spikeTimes has N arrays, each of which is an array of spike times
@@ -100,6 +116,22 @@ def spike_fft(psth, tfs = None):
 
     return spectrum, rel_power, full_fourier;
 
+### phase and amplitude analyses
+
+def project_resp(amp, phi_resp, phAdv_model, phAdv_params):
+  ''' Using our model fit of (expected) response phase as a function of response amplitude, we can
+      determine the difference in angle between the expected and measured phase and then project the
+      measured response vector (i.e. amp/phase in polar coordinates) onto the expected phase line
+      eq: adjResp = measuredResp * cos(expPhi - measuredPhi)
+      vectorized: expects/returns lists of amplitudes/phis
+  '''
+  all_proj = [];
+  for i in range(len(amp)):
+    proj = numpy.multiply(amp[i], numpy.cos(numpy.deg2rad(phi_resp[i])-numpy.deg2rad(phi_true[i])));
+    all_proj.append(proj);
+  
+  return all_proj;
+  
 def first_ph0(start_phase, stim_tf, dir=-1):
     ''' returns fraction of cycle until ph=0 and time until ph=0 
     use this function to determine how much of the cycle needs to be completed before the phase reaches 0 again
@@ -118,6 +150,7 @@ def first_ph0(start_phase, stim_tf, dir=-1):
 
 def fold_psth(spikeTimes, stimTf, stimPh, n_cycles, n_bins, dir=-1):
     ''' Returns the folded_psth (bin counts), the bin edges of the folded psth, and a normalized folded psth
+        The psth is centered relative to the 0 phase of the stimulus cycle
         Compute the psth and fold over a given number of cycles, with a set number of bins per cycle 
         For now, works only for single components...
     '''
@@ -171,9 +204,10 @@ def polar_vec_mean(amps, phases):
    n_conds = len(amps);
    if len(phases) != n_conds:
      print('the number of conditions in amps is not the same as the number of conditions in phases --> giving up');
-     return [], [];
+     return [], [], [], [];
 
    all_r = []; all_phi = [];
+   all_r_std = []; all_phi_std = [];
    for cond in range(n_conds):
      curr_amps = amps[cond];
      curr_phis = phases[cond];
@@ -181,8 +215,10 @@ def polar_vec_mean(amps, phases):
      n_reps = len(curr_amps);
      # convert each amp/phase value to x, y
      [x_polar, y_polar] = [curr_amps*np.cos(np.radians(curr_phis)), curr_amps*np.sin(np.radians(curr_phis))]
-     # take the average
-     [x_avg, y_avg] = [np.sum(x_polar)/n_reps, np.sum(y_polar)/n_reps]
+     # take the mean/std - TODO: HOW TO COMPUTE STD OF VECTOR MEAN IN POLAR COORD
+     pdb.set_trace();
+     [x_avg, y_avg] = [np.mean(x_polar), np.mean(y_polar)]
+     #[x_std, y_std] = [np.std(x_polar), np.std(y_polar)]
      # now compute (and return) r and theta
      r = np.sqrt(np.square(x_avg) + np.square(y_avg));
      # for angle - we have to be careful!
@@ -199,7 +235,43 @@ def polar_vec_mean(amps, phases):
      all_r.append(r);
      all_phi.append(theta);
 
-   return all_r, all_phi;
+   return all_r, all_phi, all_r_std, all_phi_std;
+
+def get_all_fft(cellStruct, disp, cons=[], sfs=[], dir=1, psth_binWidth=1e-3, stimDur=1):
+  ''' for a given cell and condition or set of conditions, compute the mean amplitude and phase
+  '''
+
+  resp, stimVals, val_con_by_disp, validByStimVal, mdRsp = tabulate_responses(cellStruct);
+  data = cellStruct['sfm']['exp']['trial'];
+
+  # gather the sf indices in case we need - this is a dictionary whose keys are the valid sf indices
+  valSf = validByStimVal[2];
+
+  if cons == []: # then get all valid cons for this dispersion
+    cons = val_con_by_disp[disp];
+  if sfs == []: # then get all valid sfs for this dispersion
+    sfs = list(valSf.keys());
+
+  all_r = []; all_ph = [];
+  for c in cons:
+    for s in sfs:
+      val_trials, allDisps, allCons, allSfs = get_valid_trials(cellStruct, disp, c, s);
+
+      if not numpy.any(val_trials[0]): # val_trials[0] will be the array of valid trial indices --> if it's empty, leave!
+        warnings.warn('this condition is not valid');
+        continue;
+
+      # get the phase relative to the stimulus
+      ph_rel_stim, stim_ph, resp_ph, all_tf = get_true_phase(data, val_trials, dir, psth_binWidth, stimDur);
+      # compute the fourier amplitudes
+      psth_val, _ = make_psth(data['spikeTimes'][val_trials]);
+      _, rel_amp, full_fourier = spike_fft(psth_val, all_tf)
+
+      [avg_r, avg_ph] = polar_vec_mean([rel_amp], [ph_rel_stim]);
+      all_r.append(avg_r);
+      all_ph.append(avg_ph);
+
+  return all_r, all_ph;
 
 def rvc_fit(amps, cons):
    ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
