@@ -38,6 +38,8 @@ dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
+phAdvName = 'phaseAdvanceFits.npy';
+rvcName = 'rvcFits.npy';
 
 def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1, cycle_fold=2, n_bins_fold=8, dp=dataPath, expName=expName):
   ''' Given a cell and the disp/con/sf indices, plot the spike raster for each trial, a folded PSTH,

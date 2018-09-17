@@ -18,11 +18,13 @@ import pdb
 # np_smart_load - be smart about using numpy load
 # bw_lin_to_log
 # bw_log_to_lin
+# angle_xy - compute the angle of a vector given x, y coordinate
 
 ### fourier
 
 # make_psth - create a psth for a given spike train
 # spike_fft - compute the FFT for a given PSTH, extract the power at a given set of frequencies 
+
 ### phase/more psth
 
 # project_resp - project the measured response onto the true/predicted phase and determine the "true" response amplitude
@@ -85,6 +87,24 @@ def bw_log_to_lin(log_bw, pref_sf):
     
     return lin_bw, sf_range
 
+def angle_xy(x_coord, y_coord):
+   ''' return list of angles (in deg) given list of x/y coordinates (i.e. polar coordinates)
+   ''' 
+   np = numpy;
+   def smart_angle(x, y, th): 
+     if x>=0 and y>=0: # i.e. quadrant 1
+       return th;
+     if x<=0 and y>=0: # i.e. quadrant 2
+       return 180 - th;
+     if x<=0 and y<=0: # i.e. quadrant 3
+       return 180 + th;
+     if x>=0 and y<=0:
+       return 360 - th;
+
+   th = [np.rad2deg(np.arctan(np.abs(y_coord[i]/x_coord[i]))) for i in range(len(x_coord))];
+   theta = [smart_angle(x_coord[i], y_coord[i], th[i]) for i in range(len(th))];
+   return theta;
+
 ### Basic Fourier analyses
 
 def make_psth(spikeTimes, binWidth=1e-3, stimDur=1):
@@ -127,7 +147,8 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params):
   '''
   all_proj = [];
   for i in range(len(amp)):
-    proj = numpy.multiply(amp[i], numpy.cos(numpy.deg2rad(phi_resp[i])-numpy.deg2rad(phi_true[i])));
+    phi_true = phAdv_model(phAdv_params[i][0], phAdv_params[i][1], amp[i]);
+    proj = numpy.multiply(amp[i], numpy.cos(numpy.deg2rad(phi_resp[i])-numpy.deg2rad(phi_true)));
     all_proj.append(proj);
   
   return all_proj;
@@ -165,7 +186,7 @@ def fold_psth(spikeTimes, stimTf, stimPh, n_cycles, n_bins, dir=-1):
     return psth_fold, bin_edges, psth_norm;
 
 def get_true_phase(data, val_trials, dir = -1, psth_binWidth=1e-3, stimDur=1):
-    ''' Returns resp-phase-rel-to-stim, stimulus phase, response phase
+    ''' Returns resp-phase-rel-to-stim, stimulus phase, response phase, and stimulus tf
         Given the data and the set of valid trials, first compute the response phase
         and stimulus phase - then determine the response phase relative to the stimulus phase
     '''
@@ -206,8 +227,13 @@ def polar_vec_mean(amps, phases):
      print('the number of conditions in amps is not the same as the number of conditions in phases --> giving up');
      return [], [], [], [];
 
+   def circ_var(deg_phi): # compute and return a measure of circular variance [0, 1]
+     s = np.sum(np.sin(np.deg2rad(deg_phi)));
+     c = np.sum(np.cos(np.deg2rad(deg_phi)));
+     return 1 - np.sqrt(np.square(s) + np.square(c))/len(deg_phi);
+
    all_r = []; all_phi = [];
-   all_r_std = []; all_phi_std = [];
+   all_r_std = []; all_phi_var = [];
    for cond in range(n_conds):
      curr_amps = amps[cond];
      curr_phis = phases[cond];
@@ -216,29 +242,25 @@ def polar_vec_mean(amps, phases):
      # convert each amp/phase value to x, y
      [x_polar, y_polar] = [curr_amps*np.cos(np.radians(curr_phis)), curr_amps*np.sin(np.radians(curr_phis))]
      # take the mean/std - TODO: HOW TO COMPUTE STD OF VECTOR MEAN IN POLAR COORD
-     pdb.set_trace();
-     [x_avg, y_avg] = [np.mean(x_polar), np.mean(y_polar)]
-     #[x_std, y_std] = [np.std(x_polar), np.std(y_polar)]
+     x_avg, y_avg = [np.mean(x_polar), np.mean(y_polar)]
+     x_std, y_std = [np.std(x_polar), np.std(y_polar)]
      # now compute (and return) r and theta
      r = np.sqrt(np.square(x_avg) + np.square(y_avg));
-     # for angle - we have to be careful!
-     th = np.rad2deg(np.arctan(np.abs(y_avg/x_avg)));
-     if x_avg>0 and y_avg>0: # i.e. quadrant 1
-       theta = th;
-     if x_avg<0 and y_avg>0: # i.e. quadrant 2
-       theta = 180 - th;
-     if x_avg<0 and y_avg<0: # i.e. quadrant 3
-       theta = 180 + th;
-     if x_avg>0 and y_avg<0:
-       theta = 360 - th;
+     r_std = np.sqrt(np.square(x_std) + np.square(y_std));
+     # now the angle
+     theta = angle_xy([y_avg], [x_avg])[0]; # just get the one value (will be packed in list)
+     theta_var = circ_var(curr_phis); # compute on the original phases
 
      all_r.append(r);
      all_phi.append(theta);
+     all_r_std.append(r_std);
+     all_phi_var.append(theta_var);
 
-   return all_r, all_phi, all_r_std, all_phi_std;
+   return all_r, all_phi, all_r_std, all_phi_var;
 
 def get_all_fft(cellStruct, disp, cons=[], sfs=[], dir=1, psth_binWidth=1e-3, stimDur=1):
   ''' for a given cell and condition or set of conditions, compute the mean amplitude and phase
+      also return the temporal frequencies which correspond to each condition
   '''
 
   resp, stimVals, val_con_by_disp, validByStimVal, mdRsp = tabulate_responses(cellStruct);
@@ -252,9 +274,13 @@ def get_all_fft(cellStruct, disp, cons=[], sfs=[], dir=1, psth_binWidth=1e-3, st
   if sfs == []: # then get all valid sfs for this dispersion
     sfs = list(valSf.keys());
 
-  all_r = []; all_ph = [];
-  for c in cons:
-    for s in sfs:
+  all_r = []; all_ph = []; all_tf = []; 
+  # all_r = dict(); all_ph = dict(); all_tf = dict();
+
+  for s in sfs:
+    #all_r[s] = dict(); all_ph[s] = dict(); all_tf[s] = dict();
+    curr_r = []; curr_ph = []; curr_tf = [];
+    for c in cons:
       val_trials, allDisps, allCons, allSfs = get_valid_trials(cellStruct, disp, c, s);
 
       if not numpy.any(val_trials[0]): # val_trials[0] will be the array of valid trial indices --> if it's empty, leave!
@@ -262,46 +288,75 @@ def get_all_fft(cellStruct, disp, cons=[], sfs=[], dir=1, psth_binWidth=1e-3, st
         continue;
 
       # get the phase relative to the stimulus
-      ph_rel_stim, stim_ph, resp_ph, all_tf = get_true_phase(data, val_trials, dir, psth_binWidth, stimDur);
+      ph_rel_stim, stim_ph, resp_ph, curr_tf = get_true_phase(data, val_trials, dir, psth_binWidth, stimDur);
       # compute the fourier amplitudes
       psth_val, _ = make_psth(data['spikeTimes'][val_trials]);
-      _, rel_amp, full_fourier = spike_fft(psth_val, all_tf)
+      _, rel_amp, full_fourier = spike_fft(psth_val, curr_tf)
 
-      [avg_r, avg_ph] = polar_vec_mean([rel_amp], [ph_rel_stim]);
-      all_r.append(avg_r);
-      all_ph.append(avg_ph);
+      avg_r, avg_ph, std_r, std_ph = polar_vec_mean([rel_amp], [ph_rel_stim]);
+      curr_r.append([avg_r[0], std_r[0]]); # we can just grab 0 element, since we're going one value at a time, but it's packed in array
+      curr_ph.append([avg_ph[0], std_ph[0]]); # same as above
+      curr_tf.append(curr_tf);
 
-  return all_r, all_ph;
+      #all_r[s][c] = [avg_r, std_r];
+      #all_ph[s][c] = [avg_ph, std_ph];
+      #all_tf[s][c] = curr_tf;
+    all_r.append(curr_r);
+    all_ph.append(curr_ph);
+    all_tf.append(curr_tf);
 
-def rvc_fit(amps, cons):
+  return all_r, all_ph, all_tf;
+
+def get_rvc_model():
+  ''' simply return the rvc model used in the fits
+  '''
+  rvc_model = lambda b, k, c0, cons: b + k*numpy.log(1+numpy.divide(cons, c0));
+
+  return rvc_model  
+
+def get_phAdv_model():
+  ''' simply return the phase advance model used in the fits
+  '''
+  phAdv_model = lambda phi0, slope, amp: numpy.mod(phi0 + numpy.multiply(slope, amp), 360);
+  # must mod by 360! Otherwise, something like 340-355-005 will be fit poorly
+  return phAdv_model;
+
+def rvc_fit(amps, cons, var = None):
    ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
        fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
+       Optionally, can include a measure of variability in each response to perform weighted least squares
        RETURNS: rvc_model (the model equation), list of the optimal parameters, and the contrast gain measure
        Vectorized - i.e. accepts arrays of amp/con arrays
    '''
    np = numpy;
 
-   rvc_model = lambda b, k, c0, cons: b + k*np.log(1+np.divide(cons, c0));
+   rvc_model = get_rvc_model();
    
-   all_opts = [];
+   all_opts = []; all_loss = [];
    all_conGain = [];
    n_amps = len(amps);
+
    for i in range(n_amps):
      curr_amps = amps[i];
      curr_cons = cons[i];
-     obj = lambda params: np.sum(np.square(amps - rvc_model(params[0], params[1], params[2], curr_cons)));
+     if var:
+       loss_weights = np.divide(1, var[i]);
+     else:
+       loss_weights = np.ones_like(var[i]);
+     obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - rvc_model(params[0], params[1], params[2], curr_cons))));
      init_params = [0, np.max(curr_amps), 0.5]; 
      # init_b = 0 --> per the paper, most b = 0 (b <= 0)
      # init_c0 = 0.5 --> halfway in the contrast range
      # init_k = np.max(curr_amps) --> with c0=0.5, k*log(1+maxCon/0.5) is approx. k (maxCon is 1);
      b_bounds = (0, 0); # 9.14.18 - per Tony, set to be just 0 for now
      k_bounds = (0, None);
-     c0_bounds = (0, 1);
+     c0_bounds = (1e-3, 1);
      all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
      # now optimize
      to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
      opt_params = to_opt['x'];
+     opt_loss = to_opt['fun'];
 
      # now determine the contrast gain
      b = opt_params[0]; k = opt_params[1]; c0 = opt_params[2];
@@ -317,44 +372,51 @@ def rvc_fit(amps, cons):
        conGain = k/c0;
 
      all_opts.append(opt_params);
+     all_loss.append(opt_loss);
      all_conGain.append(conGain);
 
-   return rvc_model, all_opts, all_conGain;
+   return rvc_model, all_opts, all_conGain, all_loss;
 
 def phase_advance(amps, phis, cons, tfs):
    ''' Given the mean amplitude/phase of responses over a range of contrasts, compute the linear model
        fit which describes the phase advance per unit contrast as described in Eq. 4 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
        RETURNS: phAdv_model (the model equation), the list of the optimal parameters, and the phase advance (in milliseconds)
-       Vectorized - i.e. accepts arrays of amp/phi arrays
+       "Vectorized" - i.e. accepts arrays of amp/phi arrays
    '''
    np = numpy;
 
-   phAdv_model = lambda phi0, slope, amp: np.mod(phi0 + np.multiply(slope, amp), 360);
-   # must mod by 360! Otherwise, something like 340-355-005 will be fit poorly
+   get_mean = lambda y: [x[0] for x in y]; # for curr_phis and curr_amps, loc [0] is the mean, [1] is variance measure
+   get_var = lambda y: [x[1] for x in y]; # for curr_phis and curr_amps, loc [0] is the mean, [1] is variance measure
 
-   all_opts = []; all_phAdv = [];
+   phAdv_model = get_phAdv_model()
+   all_opts = []; all_loss = []; all_phAdv = [];
+
    for i in range(len(amps)):
-     curr_amps = amps[i];
-     curr_phis = phis[i];
-     obj = lambda params: np.sum(np.square(phis - phAdv_model(params[0], params[1], curr_amps))); # just least squares...
+     curr_amps = amps[i]; # amp for each of the different contrast conditions
+     curr_ampMean = get_mean(curr_amps);
+     curr_phis = phis[i]; # phase for ...
+     curr_phiMean = get_mean(curr_phis);
+     obj = lambda params: np.sum(np.square(curr_phiMean - phAdv_model(params[0], params[1], curr_ampMean))); # just least squares...
      # phi0 (i.e. phase at zero response) --> just guess the phase at the lowest contrast response
      # slope --> just compute the slope over the response range
-     init_params = [curr_phis[0], (curr_phis[-1]-curr_phis[0])/(curr_amps[-1]-curr_amps[0])]; 
+     init_params = [curr_phiMean[0], (curr_phiMean[-1]-curr_phiMean[0])/(curr_ampMean[-1]-curr_ampMean[0])]; 
      to_opt = opt.minimize(obj, init_params);
      opt_params = to_opt['x'];
+     opt_loss = to_opt['fun'];
      all_opts.append(opt_params);
+     all_loss.append(opt_loss);
 
      # now compute phase advance (in ms)
      curr_cons = cons[i];
      curr_tfs = tfs[i][0];
-     cycle_fraction = opt_params[1] * curr_amps[-1] / 360; # slope*respAmpAtMaxCon --> phase shift (in degrees) from 0 to responseAtMaxCon
+     cycle_fraction = opt_params[1] * curr_ampMean[-1] / 360; # slope*respAmpAtMaxCon --> phase shift (in degrees) from 0 to responseAtMaxCon
      # then, divide this by 360 to get fractions of a cycle
      phase_adv = 1e3*cycle_fraction/curr_tfs[0]; # get just the first grating's TF...
      # 1e3 to get into ms;
      all_phAdv.append(phase_adv);
 
-   return phAdv_model, all_opts, all_phAdv;
+   return phAdv_model, all_opts, all_phAdv, all_loss;
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
