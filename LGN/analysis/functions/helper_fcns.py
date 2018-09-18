@@ -395,17 +395,24 @@ def phase_advance(amps, phis, cons, tfs):
    all_opts = []; all_loss = []; all_phAdv = [];
 
    for i in range(len(amps)):
+     print('#######%d#######\n' % i);
      curr_amps = amps[i]; # amp for each of the different contrast conditions
      curr_ampMean = get_mean(curr_amps);
      curr_phis = phis[i]; # phase for ...
      curr_phiMean = get_mean(curr_phis);
      obj = lambda params: np.sum(np.square(curr_phiMean - phAdv_model(params[0], params[1], curr_ampMean))); # just least squares...
-     # phi0 (i.e. phase at zero response) --> just guess the phase at the lowest contrast response
+     # phi0 (i.e. phase at zero response) --> just guess the phase at the lowest amplitude response
      # slope --> just compute the slope over the response range
-     init_params = [curr_phiMean[0], (curr_phiMean[-1]-curr_phiMean[0])/(curr_ampMean[-1]-curr_ampMean[0])]; 
+     min_resp_ind = np.argmin(curr_ampMean);
+     max_resp_ind = np.argmax(curr_ampMean);
+     diff_sin = np.arcsin(np.sin(np.deg2rad(curr_phiMean[max_resp_ind]) - np.deg2rad(curr_phiMean[min_resp_ind])));
+     init_slope = (np.rad2deg(diff_sin))/(curr_ampMean[max_resp_ind]-curr_ampMean[min_resp_ind]);
+     init_params = [curr_phiMean[min_resp_ind], init_slope];
+     print(init_params);
      to_opt = opt.minimize(obj, init_params);
      opt_params = to_opt['x'];
      opt_loss = to_opt['fun'];
+     print(opt_params);
      all_opts.append(opt_params);
      all_loss.append(opt_loss);
 
