@@ -33,6 +33,8 @@ import pdb
 # get_true_phase - compute the response phase relative to the stimulus phase given a response phase (rel. to trial time window) and a stimulus phase (rel. to trial start)
 # polar_vec_mean - compute the vector mean given a set of amplitude/phase pairs for responses on individual trials
 # get_all_fft - extract the amp/phase for a condition or set of conditions
+# get_rvc_model - return the lambda function describing the rvc model
+# get_phAdv_model - return the lambda function describing the responsePhase-as-function-of-respAmplitude model
 # rvc_fit - fit response versus contrast with a model used in Movshon/Kiorpes/+ 2005
 # phase_advance - compute the phase advance (a la Movshon/Kiorpes/+ 2005)
 

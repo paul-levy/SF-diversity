@@ -145,12 +145,18 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
   plt.close(f);
   pdfSv.close();
 
-def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, expName=expName):
+def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, expName=expName, phAdvStr=phAdvName, rvcStr=rvcName):
 
   # basics
   dataList = hf.np_smart_load(str(dp + expName))
   cellStruct = hf.np_smart_load(str(dp + dataList['unitName'][which_cell-1] + '_sfm.npy'));
   save_base = sv_loc + 'phasePlots/';
+  rvcFits = hf.np_smart_load(str(dp + rvcStr));
+  rvcFits = rvcFits[which_cell-1];
+  rvc_model = hf.get_rvc_model();
+  phAdvFits = hf.np_smart_load(str(dp + phAdvStr));
+  phAdvFits = phAdvFits[which_cell-1];
+  phAdv_model = hf.get_phAdv_model();
 
   # gather/compute everything we need
   data = cellStruct['sfm']['exp']['trial'];
@@ -186,45 +192,45 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
         _, rel_amp, _ = hf.spike_fft(psth_val, all_tf)
         amps.append(rel_amp);
 
-    r, th = hf.polar_vec_mean(amps, phis); # mean amp/phase
+    r, th, _, _ = hf.polar_vec_mean(amps, phis); # mean amp/phase (outputs 1/2); std/var for amp/phase (outputs 3/4)
     # get the models/fits that we need:
     con_values = allCons[con_inds];
-    # phase advance
-    phAdv_model, opt_params_phAdv, ph_adv = hf.phase_advance([r], [th], [con_values], [all_tf]);
-    opt_params_phAdv = opt_params_phAdv[0];  # returns as list of param list --> just get 1st
-    ph_adv = ph_adv[0];
-    # rvc
-    rvc_model, opt_params_rvc, con_gain = hf.rvc_fit([r], [con_values]);
-    opt_params_rvc = opt_params_rvc[0]; # returns as list of param list --> just get 1st
-    con_gain = con_gain[0];
-
-    # now get ready to plot!
+    ## phase advance
+    opt_params_phAdv = phAdvFits['params'][sf];
+    ph_adv = phAdvFits['phAdv'][sf];
+    ## rvc
+    opt_params_rvc = rvcFits['params'][sf];
+    con_gain = rvcFits['conGain'][sf];
+    adj_means = rvcFits['adjMeans'][sf]; 
+    # (Above) remember that we have to project the amp/phase vector onto the "correct" phase for estimate of noiseless response
+    ## now get ready to plot!
     f, ax = plt.subplots(2, 2, figsize=(20, 10))
     fPhaseAdv.append(f);
 
     n_conds = len(r);
     colors = cm.viridis(np.linspace(0, 0.95, n_conds));
 
-    # now for plotting: first, response amplitude (with linear contrast)
+    ## now for plotting: first, response amplitude (with linear contrast)
     plot_cons = np.linspace(0, 1, 100);
     mod_fit = rvc_model(opt_params_rvc[0], opt_params_rvc[1], opt_params_rvc[2], plot_cons);
 
     ax = plt.subplot(2, 2, 1);
-    plt_measured = ax.scatter(allCons[con_inds], r, s=100, color=colors);
+    plot_amp = adj_means;
+    plt_measured = ax.scatter(allCons[con_inds], plot_amp, s=100, color=colors);
     plt_fit = ax.plot(plot_cons, mod_fit, linestyle='--', color='k');
     ax.set_xlabel('contrast');
     ax.set_ylabel('response (f1)');
     ax.set_title('response versus contrast')
     ax.legend((plt_measured, plt_fit[0]), ('data', 'model fit'), loc='upper left')
 
-    # also summarize the model fit on the plot
+    ## also summarize the model fit on the plot
     ymax = np.maximum(np.max(r), np.max(mod_fit));
     plt.text(0.8, 0.30 * ymax, 'b: %.2f' % (opt_params_rvc[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
     plt.text(0.8, 0.20 * ymax, 'slope:%.2f' % (opt_params_rvc[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
     plt.text(0.8, 0.10 * ymax, 'c0: %.2f' % (opt_params_rvc[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
     plt.text(0.8, 0.0 * ymax, 'con gain: %.2f' % (con_gain), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
-    # 2. then the fit/plot of phase as a function of ampltude
+    ## 2. then the fit/plot of phase as a function of ampltude
     plot_amps = np.linspace(0, np.max(r), 100);
     mod_fit = phAdv_model(opt_params_phAdv[0], opt_params_phAdv[1], plot_amps);
 
@@ -236,7 +242,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     ax.set_title('phase advance with amplitude')
     ax.legend((plt_measured, plt_fit[0]), ('data', 'model fit'), loc='upper left')
 
-    # and again, summarize the model fit on the plot
+    ## and again, summarize the model fit on the plot
     xmax = np.maximum(np.max(r), np.max(plot_amps));
     ymin = np.minimum(np.min(th), np.min(mod_fit));
     ymax = np.maximum(np.max(th), np.max(mod_fit));
@@ -245,7 +251,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     plt.text(0.8*xmax, ymin + 0.15 * yrange, 'slope:%.2f' % (opt_params_phAdv[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
     plt.text(0.8*xmax, ymin + 0.05 * yrange, 'phase advance: %.2f ms' % (ph_adv), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
-    # now the polar plot of resp/phase together
+    ## now the polar plot of resp/phase together
     ax = plt.subplot(2, 2, 2, projection='polar')
     data_centered = np.mod(th-th[-1]+90, 360); 
     model_centered = np.mod(mod_fit-th[-1]+90, 360);
