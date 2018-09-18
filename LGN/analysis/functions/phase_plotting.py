@@ -38,8 +38,8 @@ dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
-phAdvName = 'phaseAdvanceFits.npy';
-rvcName = 'rvcFits.npy';
+phAdvName = 'phaseAdvanceFits_alt.npy';
+rvcName = 'rvcFits_alt.npy';
 
 def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1, cycle_fold=2, n_bins_fold=8, dp=dataPath, expName=expName):
   ''' Given a cell and the disp/con/sf indices, plot the spike raster for each trial, a folded PSTH,
@@ -61,7 +61,7 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
     return;
 
   # get the phase relative to the stimulus
-  ph_rel_stim, stim_ph, resp_ph, all_tf = hf.get_true_phase(data, val_trials, dir, psth_binWidth, stimDur);
+  ph_rel_stim, stim_ph, resp_ph, all_tf = hf.get_true_phase(data, val_trials, dir);
   # compute the fourier amplitudes
   psth_val, _ = hf.make_psth(data['spikeTimes'][val_trials]);
   _, rel_amp, full_fourier = hf.spike_fft(psth_val, all_tf)
@@ -121,7 +121,7 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
   polar_ylim = ax.get_ylim();
 
   # now, compute the average amplitude/phase over all trials
-  [avg_r, avg_ph] = hf.polar_vec_mean([rel_amp], [ph_rel_stim]);
+  [avg_r, avg_ph, _, _] = hf.polar_vec_mean([rel_amp], [ph_rel_stim]);
   avg_r = avg_r[0]; # just get it out of the array!
   avg_ph = avg_ph[0]; # just get it out of the array!
 
@@ -279,7 +279,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     plt.close(f)
   pdfSv.close();
 
-def batch_phase_by_cond(cell_num, disp, cons=[], sfs=[], dp=dataPath, expName=expName):
+def batch_phase_by_cond(cell_num, disp, cons=[], sfs=[], dir=-1, dp=dataPath, expName=expName):
   ''' must specify dispersion (one value)
       if cons = [], then get/plot all valid contrasts for the given dispersion
       if sfs = [], then get/plot all valid contrasts for the given dispersion
@@ -303,8 +303,7 @@ def batch_phase_by_cond(cell_num, disp, cons=[], sfs=[], dp=dataPath, expName=ex
   for c in cons:
     for s in sfs:
       print('analyzing cell %d, dispersion %d, contrast %d, sf %d\n' % (cell_num, disp, c, s));
-      phase_by_cond(cell_num, cellStruct, disp, c, s);    
-
+      phase_by_cond(cell_num, cellStruct, disp, c, s, dir=dir);  
 
 if __name__ == '__main__':
 
@@ -314,12 +313,21 @@ if __name__ == '__main__':
 
     cell_num = int(sys.argv[1]);
     disp = int(sys.argv[2]);
-    phase_by_cond = int(sys.argv[3]);
-    phase_adv_summary = int(sys.argv[4]);
+    ph_by_cond = int(sys.argv[3]);
+    ph_adv_summary = int(sys.argv[4]);
+    if len(sys.argv) > 5:
+      dir = int(sys.argv[5]);
+    else:
+      dir = None;
     print('Running cell %d, dispersion %d' % (cell_num, disp+1));
 
-    if phase_by_cond:
-      batch_phase_by_cond(cell_num, disp);
-    if phase_adv_summary:
-      plot_phase_advance(cell_num, disp);
-     
+    if ph_by_cond:
+      if dir:
+        batch_phase_by_cond(cell_num, disp, dir=dir);
+      else:
+        batch_phase_by_cond(cell_num, disp);
+    if ph_adv_summary:
+      if dir:
+        plot_phase_advance(cell_num, disp, dir=dir);
+      else:
+        plot_phase_advance(cell_num, disp);
