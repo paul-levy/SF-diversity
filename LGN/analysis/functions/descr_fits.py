@@ -15,8 +15,8 @@ dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
 
 expName = 'dataList.npy'
-phAdvName = 'phaseAdvanceFits.npy'
-rvcName = 'rvcFits.npy'
+phAdvName = 'phaseAdvanceFits'
+rvcName = 'rvcFits'
 
 ### 1: Recreate Movshon, Kiorpes, Hawken, Cavanaugh '05 figure 6 analyses
 ''' These plots show response versus contrast data (with model fit) AND
@@ -40,7 +40,7 @@ rvcName = 'rvcFits.npy'
     Then, with these set of response amplitudes, fit an RVC (same model as in the '05 paper)
 '''
 
-def phase_advance_fit(cell_num, data_loc = dataPath, to_save = 1, disp=0, dir=1):
+def phase_advance_fit(cell_num, data_loc = dataPath, phAdvName=phAdvName, to_save = 1, disp=0, dir=-1):
   ''' Given the FFT-derived response amplitude and phase, determine the response phase relative
       to the stimulus by taking into account the stimulus phase. 
       Then, make a simple linear model fit (line + constant offset) of the response phase as a function
@@ -51,6 +51,10 @@ def phase_advance_fit(cell_num, data_loc = dataPath, to_save = 1, disp=0, dir=1)
 
   dataList = hf.np_smart_load(data_loc + 'dataList.npy');
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
+  if dir == 1:
+    phAdvName = phAdvName + '_pos.npy';
+  if dir == -1:
+    phAdvName = phAdvName + '_neg.npy';
 
   # first, get the set of stimulus values:
   _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(cellStruct);
@@ -89,13 +93,17 @@ def phase_advance_fit(cell_num, data_loc = dataPath, to_save = 1, disp=0, dir=1)
 
   return phAdv_model, all_opts;
 
-def rvc_adjusted_fit(cell_num, data_loc = dataPath, to_save = 1, disp=0, dir=1):
+def rvc_adjusted_fit(cell_num, data_loc = dataPath, rvcName=rvcName, to_save=1, disp=0, dir=-1):
   ''' Piggy-backing off of phase_advance_fit above, get prepare to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
   '''
 
   dataList = hf.np_smart_load(data_loc + 'dataList.npy');
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
+  if dir == 1:
+    rvcName = rvcName + '_pos.npy';
+  if dir == -1:
+    rvcName = rvcName + '_neg.npy';
 
   # first, get the set of stimulus values:
   _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(cellStruct);
@@ -105,7 +113,7 @@ def rvc_adjusted_fit(cell_num, data_loc = dataPath, to_save = 1, disp=0, dir=1):
 
   # calling phase_advance fit, use the phAdv_model and optimized paramters to compute the true response amplitude
   # given the measured/observed amplitude and phase of the response
-  phAdv_model, all_opts = phase_advance_fit(cell_num, to_save = 0); # don't save
+  phAdv_model, all_opts = phase_advance_fit(cell_num, dir=dir, to_save = 0); # don't save
   allAmp, allPhi, _ = hf.get_all_fft(cellStruct, disp, dir=dir);
   # get just the mean amp/phi and put into convenient lists
   allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)
@@ -148,8 +156,15 @@ if __name__ == '__main__':
       exit();
 
     cell_num = int(sys.argv[1]);
+    if len(sys.argv) > 2:
+      dir = int(sys.argv[2]);
+    else:
+      dir = None;
     print('Running cell %d' % cell_num);
 
     # then, put what to run here...
     phase_advance_fit(cell_num);
     rvc_adjusted_fit(cell_num);
+    if dir:
+      phase_advance_fit(cell_num, dir=dir);
+      rvc_adjusted_fit(cell_num, dir=dir);

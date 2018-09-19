@@ -38,8 +38,8 @@ dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
-phAdvName = 'phaseAdvanceFits_alt.npy';
-rvcName = 'rvcFits_alt.npy';
+phAdvName = 'phaseAdvanceFits.npy';
+rvcName = 'rvcFits.npy';
 
 def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1, cycle_fold=2, n_bins_fold=8, dp=dataPath, expName=expName):
   ''' Given a cell and the disp/con/sf indices, plot the spike raster for each trial, a folded PSTH,
@@ -185,7 +185,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
         val_trials = np.where(valDisp[disp] & valCon[i] & valSf[sf])
 
         # get the phase of the response relative to the stimulus (ph_rel_stim)
-        ph_rel_stim, stim_ph, resp_ph, all_tf = hf.get_true_phase(data, val_trials, dir=1);
+        ph_rel_stim, stim_ph, resp_ph, all_tf = hf.get_true_phase(data, val_trials, dir=dir);
         phis.append(ph_rel_stim);
         # get the relevant amplitudes (i.e. the amplitudes at the stimulus TF)
         psth_val, _ = hf.make_psth(data['spikeTimes'][val_trials])
@@ -217,6 +217,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     ax = plt.subplot(2, 2, 1);
     plot_amp = adj_means;
     plt_measured = ax.scatter(allCons[con_inds], plot_amp, s=100, color=colors);
+    plt_og = ax.plot(allCons[con_inds], r, linestyle='None', marker='o', markeredgecolor='k', markerfacecolor='None', alpha=0.5);
     plt_fit = ax.plot(plot_cons, mod_fit, linestyle='--', color='k');
     ax.set_xlabel('contrast');
     ax.set_ylabel('response (f1)');
@@ -251,10 +252,17 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     plt.text(0.8*xmax, ymin + 0.15 * yrange, 'slope:%.2f' % (opt_params_phAdv[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
     plt.text(0.8*xmax, ymin + 0.05 * yrange, 'phase advance: %.2f ms' % (ph_adv), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
+    #center_phi = lambda ph1, ph2: np.arcsin(np.sin(np.deg2rad(ph1) - np.deg2rad(ph2)));
+
     ## now the polar plot of resp/phase together
     ax = plt.subplot(2, 2, 2, projection='polar')
-    data_centered = np.mod(th-th[-1]+90, 360); 
-    model_centered = np.mod(mod_fit-th[-1]+90, 360);
+    th_center = np.rad2deg(np.radians(-90)+np.radians(th[np.argmax(r)])); # "anchor" to the phase at the highest amplitude response
+    #data_centered = center_phi(th, th_center);
+    #model_centered = center_phi(mod_fit, th_center);
+    #ax.scatter(data_centered, r, s=50, color=colors);
+    #ax.plot(model_centered, plot_amps, linestyle='--', color='k');
+    data_centered = np.mod(th-th_center, 360);
+    model_centered = np.mod(mod_fit-th_center, 360);
     ax.scatter(np.deg2rad(data_centered), r, s=50, color=colors)
     ax.plot(np.deg2rad(model_centered), plot_amps, linestyle='--', color='k');
     print('data|model');

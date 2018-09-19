@@ -187,7 +187,7 @@ def fold_psth(spikeTimes, stimTf, stimPh, n_cycles, n_bins, dir=-1):
     psth_norm = np.divide(psth_fold, np.max(psth_fold));
     return psth_fold, bin_edges, psth_norm;
 
-def get_true_phase(data, val_trials, dir = -1, psth_binWidth=1e-3, stimDur=1):
+def get_true_phase(data, val_trials, dir=-1, psth_binWidth=1e-3, stimDur=1):
     ''' Returns resp-phase-rel-to-stim, stimulus phase, response phase, and stimulus tf
         Given the data and the set of valid trials, first compute the response phase
         and stimulus phase - then determine the response phase relative to the stimulus phase
@@ -260,7 +260,7 @@ def polar_vec_mean(amps, phases):
 
    return all_r, all_phi, all_r_std, all_phi_var;
 
-def get_all_fft(cellStruct, disp, cons=[], sfs=[], dir=1, psth_binWidth=1e-3, stimDur=1):
+def get_all_fft(cellStruct, disp, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, stimDur=1):
   ''' for a given cell and condition or set of conditions, compute the mean amplitude and phase
       also return the temporal frequencies which correspond to each condition
   '''
@@ -394,13 +394,17 @@ def phase_advance(amps, phis, cons, tfs):
    phAdv_model = get_phAdv_model()
    all_opts = []; all_loss = []; all_phAdv = [];
 
+   abs_angle_diff = lambda deg1, deg2: np.arccos(np.cos(np.deg2rad(deg1) - np.deg2rad(deg2)));
+
    for i in range(len(amps)):
      print('#######%d#######\n' % i);
      curr_amps = amps[i]; # amp for each of the different contrast conditions
      curr_ampMean = get_mean(curr_amps);
      curr_phis = phis[i]; # phase for ...
      curr_phiMean = get_mean(curr_phis);
-     obj = lambda params: np.sum(np.square(curr_phiMean - phAdv_model(params[0], params[1], curr_ampMean))); # just least squares...
+     obj = lambda params: np.sum(np.square(abs_angle_diff(curr_phiMean, phAdv_model(params[0], params[1], curr_ampMean)))); 
+     # just least squares...
+     #obj = lambda params: np.sum(np.square(curr_phiMean - phAdv_model(params[0], params[1], curr_ampMean))); # just least squares...
      # phi0 (i.e. phase at zero response) --> just guess the phase at the lowest amplitude response
      # slope --> just compute the slope over the response range
      min_resp_ind = np.argmin(curr_ampMean);

@@ -16,7 +16,8 @@ source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 module load seaborn/0.7.1
 
 # 1st arg - cell #
-python descr_fits.py $SLURM_ARRAY_TASK_ID
+# 2nd arg - optional - direction for phase calculations (default is -1)
+python descr_fits.py $SLURM_ARRAY_TASK_ID -1
  
 # leave a blank line at the end
 
