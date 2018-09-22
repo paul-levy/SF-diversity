@@ -423,8 +423,10 @@ def phase_advance(amps, phis, cons, tfs):
      # now compute phase advance (in ms)
      curr_cons = cons[i];
      curr_tfs = tfs[i][0];
-     cycle_fraction = opt_params[1] * curr_ampMean[-1] / 360; # slope*respAmpAtMaxCon --> phase shift (in degrees) from 0 to responseAtMaxCon
+     #curr_sfs = sfs[i]; # TODO: Think about using the spatial frequency in the phase_adv calculation - if [p] = s^2/cycles, then we have to multiply by cycles/deg?
+     cycle_fraction = opt_params[1] * curr_ampMean[max_resp_ind] / 360; # slope*respAmpAtMaxCon --> phase shift (in degrees) from 0 to responseAtMaxCon
      # then, divide this by 360 to get fractions of a cycle
+     #phase_adv = 1e3*opt_params[1]/curr_tfs[0]; # get just the first grating's TF...
      phase_adv = 1e3*cycle_fraction/curr_tfs[0]; # get just the first grating's TF...
      # 1e3 to get into ms;
      all_phAdv.append(phase_adv);

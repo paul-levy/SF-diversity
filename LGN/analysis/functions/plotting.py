@@ -35,8 +35,9 @@ fitType = int(sys.argv[4]);
 crf_fit_type = int(sys.argv[5]);
 descr_fit_type = int(sys.argv[6]);
 norm_sim_on = int(sys.argv[7]);
+phase_dir = int(sys.argv[8]);
 normTypeArr = [];
-argInd = 8; # we've already taken 8 arguments off (function call, which_cell, plot_type, loss_type, fit_type, crf_fit_type, descr_fit_type, norm_sim_on) 
+argInd = 9; # we've already taken N arguments off (function call, which_cell, plot_type, loss_type, fit_type, crf_fit_type, descr_fit_type, norm_sim_on, phase_dir) 
 nArgsIn = len(sys.argv) - argInd; 
 while nArgsIn > 0:
   normTypeArr.append(float(sys.argv[argInd]));
@@ -55,6 +56,8 @@ save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
 fitBase = 'fitList_180713';
+rvcBase = 'rvcFits_';
+phAdvBase = 'phaseAdvanceFits_';
 
 # first the fit type
 if fitType == 1:
@@ -105,11 +108,20 @@ else:
 
 conDig = 3; # round contrast to the 3rd digit
 
+# load data, fits
 dataList = np.load(str(dataPath + expName), encoding='latin1').item();
-
 cellStruct = np.load(str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy'), encoding='latin1').item();
 
 # #### Load descriptive model fits, comp. model fits
+if phase_dir == -1:
+  dir_suff = 'neg.npy';
+elif phase_dir == 1:
+  dir_suff = 'pos.npy';
+rvcName = str(dataPath + rvcBase + dir_suff);
+rvcFits = helper_fcns.np_smart_load(rvcName);
+phAdvName = str(dataPath + phAdvBase + dir_suff);
+phAdvFits = helper_fcns.np_smart_load(phAdvName);
+
 if descr_fit_type == 0:
   descrFits = [];
 else:
@@ -918,6 +930,12 @@ pdfSv.close()
 
 crfAx = []; fCRF = [];
 
+adjFlag = ''; # are we plotting adjusted means?
+if which_cell-1 in rvcFits: # TODO: BAD - currently assume that if the fit exists, it's for single gratings (i.e. dispersion 0)
+  rvcFitCurr = rvcFits[which_cell-1];
+else:
+  rvcFitCurr = None;
+
 for d in range(nDisps):
     
     fCurr, crfCurr = plt.subplots(1, 2, figsize=(20, 25), sharex = False, sharey = False); # left side for data, right side for model predictions
@@ -962,15 +980,22 @@ for d in range(nDisps):
             line_curr, = crfAx[d][i].plot(all_cons[v_cons][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
             lines_log.append(line_curr);
           if plotType == 1 or plotType == 2:
-            plot_f1 = np.reshape([curr_f1[d, sf_ind, v_cons]], (n_cons, ));
+            if rvcFitCurr and d == 0: # only for single gratings (as of 9.19.2018)
+              plot_f1 = rvcFitCurr['adjMeans'][sf_ind];
+              adjFlag = '(adj)';
+            else:
+              plot_f1 = np.reshape([curr_f1[d, sf_ind, v_cons]], (n_cons, ));
+              adjFlag = '---';
             line_curr, = crfAx[d][i].plot(all_cons[v_cons][plot_f1>1e-1], plot_f1[plot_f1>1e-1], '-o', color=col, clip_on=False);
             lines_f1_log.append(line_curr);
 
-      crfAx[d][i].set_xlim([1e-2, 1]);
-      crfAx[d][i].set_ylim([1e-2, 1.5*maxResp]);
-      crfAx[d][i].set_aspect('equal', 'box')
-      crfAx[d][i].set_xscale('log');
-      crfAx[d][i].set_yscale('log');
+      crfAx[d][i].set_xlim([-0.1, 1]);
+      crfAx[d][i].set_ylim([-0.1*maxResp, 1.1*maxResp]);
+      #crfAx[d][i].set_aspect('equal', 'box')
+      #crfAx[d][i].set_xscale('log');
+      #crfAx[d][i].set_yscale('log');
+      #crfAx[d][i].set_xlim([1e2, 1]);
+      #crfAx[d][i].set_ylim([1e-2, 1.5*maxResp]);
       crfAx[d][i].set_xlabel('contrast');
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
@@ -978,14 +1003,15 @@ for d in range(nDisps):
       crfAx[d][i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
       sns.despine(ax = crfAx[d][i], offset=10, trim=False);
 
-      crfAx[d][i].set_ylabel('resp above baseline (sps)');
+      crfAx[d][i].set_ylabel('resp %s above baseline (sps)' % adjFlag);
       crfAx[d][i].set_title('D%d: sf:all - log resp %s' % (d, title_str));
       if plotType == 0 or plotType == 2:
         crfAx[d][i].legend(lines_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
       if plotType == 1 or plotType == 2:
         crfAx[d][i].legend(lines_f1_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
 
-saveName = "/allSfs_log_cell_%03d.pdf" % (which_cell)
+saveName = "/allSfs_cell_%03d.pdf" % (which_cell)
+#saveName = "/allSfs_log_cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
