@@ -19,6 +19,7 @@ import pdb
 # bw_lin_to_log
 # bw_log_to_lin
 # angle_xy - compute the angle of a vector given x, y coordinate
+# fit_name - return the fit name iwth the proper direction flag (i.e. pos or neg)
 
 ### fourier
 
@@ -40,6 +41,8 @@ import pdb
 
 ### descriptive fits to sf tuning/basic data analyses
 
+# DiffOfGauss - standard difference of gaussians
+# DoGsach - difference of gaussians as implemented in sach's thesis
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -106,6 +109,15 @@ def angle_xy(x_coord, y_coord):
    th = [np.rad2deg(np.arctan(np.abs(y_coord[i]/x_coord[i]))) for i in range(len(x_coord))];
    theta = [smart_angle(x_coord[i], y_coord[i], th[i]) for i in range(len(th))];
    return theta;
+
+def fit_name(base, dir):
+  ''' Given the base name for a file, append the flag for the phase direction
+  '''
+  if dir == 1:
+    base = base + '_pos.npy';
+  if dir == -1:
+    base = base + '_neg.npy';
+  return base;
 
 ### Basic Fourier analyses
 
@@ -433,6 +445,40 @@ def phase_advance(amps, phis, cons, tfs):
 
    return phAdv_model, all_opts, all_phAdv, all_loss;
 
+### Descriptive functions - fits to spatial frequency tuning, other related calculations
+
+def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
+  ''' Difference of gaussians 
+  gain      - overall gain term
+  f_c       - characteristic frequency of the center, i.e. freq at which response is 1/e of maximum
+  gain_s    - relative gain of surround (e.g. gain_s of 0.5 says peak surround response is half of peak center response
+  j_s       - relative characteristic freq. of surround (i.e. char_surround = f_c * j_s)
+  '''
+  np = numpy;
+  dog = lambda f: np.maximum(0, gain*(np.exp(-np.square(f/f_c)) - gain_s * np.exp(-np.square(f/(f_c*j_s)))));
+
+  norm = np.max(dog(stim_sf));
+
+  dog_norm = lambda f: dog(f) / norm;
+
+  return dog(stim_sf), dog_norm(stim_sf);
+
+def DoGsach(gain_c, f_c, gain_s, f_s, stim_sf):
+  ''' Difference of gaussians 
+  gain_c    - gain of the center mechanism
+  f_c       - characteristic frequency of the center, i.e. freq at which response is 1/e of maximum
+  gain_s    - gain of surround mechanism
+  f_s       - characteristic freq. of surround
+  '''
+  np = numpy;
+  dog = lambda f: np.maximum(0, gain_c*np.exp(-np.square(f/f_c)) - gain_s*np.exp(-np.square(f/(f_s))));
+
+  norm = np.max(dog(stim_sf));
+
+  dog_norm = lambda f: dog(f) / norm;
+
+  return dog(stim_sf), dog_norm(stim_sf);
+
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
    prefSf = params[0];
@@ -683,24 +729,46 @@ def tabulate_responses(cellStruct, modResp = []):
     return [respMean, respStd, predMean, predStd, f1Mean, f1Std, predMeanF1, predStdF1], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
 
 def get_valid_trials(cellStruct, disp, con, sf):
-   ''' Given a cellStruct and the disp/con/sf indices (i.e. integers into the list of all disps/cons/sfs
-       Determine which trials are valid (i.e. have those stimulus criteria)
-       RETURN list of valid trials, lists for all dispersion values, all contrast values, all sf values
-   '''
-   _, stimVals, _, validByStimVal, _ = tabulate_responses(cellStruct);
+  ''' Given a cellStruct and the disp/con/sf indices (i.e. integers into the list of all disps/cons/sfs
+      Determine which trials are valid (i.e. have those stimulus criteria)
+      RETURN list of valid trials, lists for all dispersion values, all contrast values, all sf values
+  '''
+  _, stimVals, _, validByStimVal, _ = tabulate_responses(cellStruct);
 
-   # gather the conditions we need so that we can index properly
-   valDisp = validByStimVal[0];
-   valCon = validByStimVal[1];
-   valSf = validByStimVal[2];
+  # gather the conditions we need so that we can index properly
+  valDisp = validByStimVal[0];
+  valCon = validByStimVal[1];
+  valSf = validByStimVal[2];
 
-   allDisps = stimVals[0];
-   allCons = stimVals[1];
-   allSfs = stimVals[2];
+  allDisps = stimVals[0];
+  allCons = stimVals[1];
+  allSfs = stimVals[2];
 
-   val_trials = numpy.where(valDisp[disp] & valCon[con] & valSf[sf]);
+  val_trials = numpy.where(valDisp[disp] & valCon[con] & valSf[sf]);
 
-   return val_trials, allDisps, allCons, allSfs;
+  return val_trials, allDisps, allCons, allSfs;
+
+def get_valid_sfs(cellStruct, disp, con):
+  '''
+  '''
+  _, stimVals, _, validByStimVal, _ = tabulate_responses(cellStruct);
+
+  # gather the conditions we need so that we can index properly
+  valDisp = validByStimVal[0];
+  valCon = validByStimVal[1];
+  valSf = validByStimVal[2];
+
+  allDisps = stimVals[0];
+  allCons = stimVals[1];
+  allSfs = stimVals[2];
+
+  val_sfs = [];
+  for i in range(len(allSfs)):
+    val_trials = numpy.where(valDisp[disp] & valCon[con] & valSf[i]);
+    if len(val_trials[0]) > 0:
+      val_sfs.append(i);
+
+  return val_sfs;
 
 def mod_poiss(mu, varGain):
     np = numpy;

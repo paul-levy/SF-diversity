@@ -8,11 +8,11 @@ import warnings
 import pdb
 
 # personal mac
-#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
-#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
+dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
+save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
 # prince cluster
-dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
-save_loc = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
+#dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
+#save_loc = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
 
 expName = 'dataList.npy'
 phAdvName = 'phaseAdvanceFits'
@@ -51,10 +51,7 @@ def phase_advance_fit(cell_num, data_loc = dataPath, phAdvName=phAdvName, to_sav
 
   dataList = hf.np_smart_load(data_loc + 'dataList.npy');
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
-  if dir == 1:
-    phAdvName = phAdvName + '_pos.npy';
-  if dir == -1:
-    phAdvName = phAdvName + '_neg.npy';
+  phAdvName = hf.fit_name(phAdvName, dir);
 
   # first, get the set of stimulus values:
   _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(cellStruct);
@@ -100,10 +97,7 @@ def rvc_adjusted_fit(cell_num, data_loc = dataPath, rvcName=rvcName, to_save=1, 
 
   dataList = hf.np_smart_load(data_loc + 'dataList.npy');
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
-  if dir == 1:
-    rvcName = rvcName + '_pos.npy';
-  if dir == -1:
-    rvcName = rvcName + '_neg.npy';
+  rvcName = hf.fit_name(rvcName, dir);
 
   # first, get the set of stimulus values:
   _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(cellStruct);
@@ -149,6 +143,146 @@ def rvc_adjusted_fit(cell_num, data_loc = dataPath, rvcName=rvcName, to_save=1, 
 
   return rvc_model, all_opts, all_conGains, adjMeans;
 
+### 2: Difference of gaussian fit to (adjusted) responses - i.e. F1 as a function of spatial frequency
+
+def invalid(params, bounds):
+# given parameters and bounds, are the parameters valid?
+  for p in range(len(params)):
+    if params[p] < bounds[p][0] or params[p] > bounds[p][1]:
+      return True;
+  return False;
+
+def DoG_loss(params, resps, contrast, sfs, loss_type = 3, dir=-1):
+  '''Given the model params (i.e. flexible gaussian params), the responses, and the desired contrast
+  (where contrast will be given as an index into the list of unique contrasts), return the loss
+  loss_type: 1 - poisson
+             2 - sqrt
+             3 - Sach sum{[(exp-obs)^2]/[k+sigma^2]} where
+                 k := 0.01*max(obs); sigma := measured variance of the response
+  '''
+  # NOTE: See version in LGN/sach/ for how to fit trial-by-trial responses (rather than avg. resp)
+  pred_spikes, _ = hf.DoGsach(*params, stim_sf=sfs);
+  NLL = 0;
+  if loss_type == 1:
+    # poisson model of spiking
+    poiss = poisson.pmf(np.round(resps), pred_spikes); # round since the values are nearly but not quite integer values (Sach artifact?)...
+    ps = np.sum(poiss == 0);
+    if ps > 0:
+      poiss = np.maximum(poiss, 1e-6); # anything, just so we avoid log(0)
+    NLL = NLL + sum(-np.log(poiss));
+  elif loss_type == 2:
+    loss = np.square(np.sqrt(resps) - np.sqrt(pred_spikes));
+    NLL = NLL + loss;
+  elif loss_type == 3:
+    k = 0.01*np.max(resps);
+    sigma = np.std(resps);
+    sq_err = np.square(resps-pred_spikes);
+    NLL = NLL + np.sum((sq_err/(k+np.square(sigma))));
+  return NLL;
+
+def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=4, fit_type=3, disp=0, rvcName=rvcName, dir=-1):
+
+  nParam = 4;
+
+  # load cell information
+  dataList = hf.np_smart_load(data_loc + 'dataList.npy');
+  assert dataList!=[], "data file not found!"
+
+  fLname = 'descrFits';
+  if fit_type == 1:
+    type_str = '_poiss';
+  elif fit_type == 2:
+    type_str = '_sqrt';
+  elif fit_type == 3:
+    type_str = '_sach';
+  fLname = str(data_loc + fLname + type_str + '.npy');
+  if os.path.isfile(fLname):
+      descrFits = hf.np_smart_load(fLname);
+  else:
+      descrFits = dict();
+
+  cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
+  rvcName = hf.fit_name(rvcName, dir);
+  rvcFits = hf.np_smart_load(data_loc + rvcName);
+  adjResps = rvcFits[cell_num-1]['adjMeans'];
+ 
+  print('Doing the work, now');
+
+  # first, get the set of stimulus values:
+  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(cellStruct);
+  all_cons = stimVals[1];
+  all_sfs = stimVals[2];
+  valCons = all_cons[valConByDisp[disp]];
+
+  nCons = len(valCons);
+
+  if cell_num-1 in descrFits:
+    if disp in descrFits[cell_num-1]:
+      bestNLL = descrFits[cell_num-1][disp]['NLL'];
+      currParams = descrFits[cell_num-1][disp]['params'];
+    else:
+      bestNLL = np.ones((nCons)) * np.nan;
+      currParams = np.ones((nCons, nParam)) * np.nan;
+  else: # set values to NaN...
+    bestNLL = np.ones((nCons)) * np.nan;
+    currParams = np.ones((nCons, nParam)) * np.nan;
+
+  for con in range(nCons):    
+
+    if all_cons[con] == 0: # skip 0 contrast, if it's there...
+        continue;
+
+    valSfInds = hf.get_valid_sfs(cellStruct, disp, valConByDisp[disp][con]);
+    valSfVals = all_sfs[valSfInds];
+
+    print('.');
+    # adjResponses (f1) in the rvcFits are separate by sf, values within contrast - so to get all responses for a given SF, 
+    # access all sfs and get the specific contrast response
+    resps = [x[con] for x in adjResps];
+    maxResp = np.max(resps);
+
+    for n_try in range(n_repeats):
+
+      # pick initial params
+      init_gainCent = hf.random_in_range((0.5*maxResp, 0.9*maxResp))[0];
+      init_charFreqCent = hf.random_in_range((1, 5))[0];
+      init_gainSurr = init_gainCent * hf.random_in_range((0.25, 0.75))[0];
+      init_charFreqSurr = init_charFreqCent * hf.random_in_range((0.25, 0.5))[0];
+
+      init_params = [init_gainCent, init_charFreqCent, init_gainSurr, init_charFreqSurr];
+
+      # choose optimization method
+      if np.mod(n_try, 2) == 0:
+          methodStr = 'L-BFGS-B';
+      else:
+          methodStr = 'TNC';
+
+      obj = lambda params: DoG_loss(params, resps, con, valSfVals, loss_type=fit_type, dir=dir);
+      wax = opt.minimize(obj, init_params, method=methodStr); # unbounded...
+
+      # compare
+      NLL = wax['fun'];
+      params = wax['x'];
+
+      if np.isnan(bestNLL[con]) or NLL < bestNLL[con]:
+          bestNLL[con] = NLL;
+          currParams[con, :] = params;
+
+    # update stuff - load again in case some other run has saved/made changes
+    if os.path.isfile(fLname):
+        print('reloading descrFits...');
+        descrFits = hf.np_smart_load(fLname);
+    if cell_num-1 not in descrFits:
+      descrFits[cell_num-1] = dict();
+      descrFits[cell_num-1][disp] = dict();    
+    descrFits[cell_num-1][disp]['NLL'] = bestNLL;
+    descrFits[cell_num-1][disp]['params'] = currParams;
+
+    np.save(fLname, descrFits);
+    print('saving for cell ' + str(cell_num));
+
+### Fin: Run the stuff!
+
 if __name__ == '__main__':
 
     if len(sys.argv) < 2:
@@ -165,6 +299,8 @@ if __name__ == '__main__':
     # then, put what to run here...
     phase_advance_fit(cell_num);
     rvc_adjusted_fit(cell_num);
+    fit_descr_DoG(cell_num);
     if dir:
       phase_advance_fit(cell_num, dir=dir);
       rvc_adjusted_fit(cell_num, dir=dir);
+      fit_descr_DoG(cell_num, dir=dir);
