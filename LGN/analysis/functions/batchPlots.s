@@ -33,10 +33,13 @@ module load seaborn/0.7.1
 	# 2 - square root
 	# 3 - poisson
 	# 4 - modulated poission
-# sixth  param is descr_fit_type: (i.e. what loss function for descriptive gaussian fits)
-        # same as above, no mod_poiss
+# sixth  param is descr_fit_type: (i.e. what loss function for difference of gaussian fits)
+        # 1 - poiss
+        # 2 - sqrt
+        # 3 - sach
 # seventh param is 0 (no norm sims) or 1 (do normalization simulations)
-python plotting.py $SLURM_ARRAY_TASK_ID 0 0 0 0 0 0 0
+# eigth param is -1 or +1 (phase direction for loading rvc/phAdv fits)
+python plotting.py $SLURM_ARRAY_TASK_ID 1 0 0 0 3 0 -1
  
 # leave a blank line at the end
 

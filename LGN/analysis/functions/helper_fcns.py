@@ -20,6 +20,7 @@ import pdb
 # bw_log_to_lin
 # angle_xy - compute the angle of a vector given x, y coordinate
 # fit_name - return the fit name iwth the proper direction flag (i.e. pos or neg)
+# flatten - unpacks a list of lists into one list...
 
 ### fourier
 
@@ -67,10 +68,10 @@ def np_smart_load(file_path, encoding_str='latin1'):
    loaded = [];
    while(True):
      try:
-         loaded = numpy.load(file_path, encoding=encoding_str).item();
-         break;
+       loaded = numpy.load(file_path, encoding=encoding_str).item();
+       break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-         sleep(10); # i.e. wait for 10 seconds
+       sleep(5); # i.e. wait for 5 seconds
 
    return loaded;
 
@@ -118,6 +119,10 @@ def fit_name(base, dir):
   if dir == -1:
     base = base + '_neg.npy';
   return base;
+
+def flatten(l):
+  flatten = lambda l: [item for sublist in l for item in sublist];
+  return flatten(l);
 
 ### Basic Fourier analyses
 
@@ -474,7 +479,6 @@ def DoGsach(gain_c, f_c, gain_s, f_s, stim_sf):
   dog = lambda f: np.maximum(0, gain_c*np.exp(-np.square(f/f_c)) - gain_s*np.exp(-np.square(f/(f_s))));
 
   norm = np.max(dog(stim_sf));
-
   dog_norm = lambda f: dog(f) / norm;
 
   return dog(stim_sf), dog_norm(stim_sf);
@@ -749,7 +753,7 @@ def get_valid_trials(cellStruct, disp, con, sf):
   return val_trials, allDisps, allCons, allSfs;
 
 def get_valid_sfs(cellStruct, disp, con):
-  '''
+  ''' 
   '''
   _, stimVals, _, validByStimVal, _ = tabulate_responses(cellStruct);
 

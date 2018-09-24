@@ -33,7 +33,7 @@ plotType = int(sys.argv[2]);
 lossType = int(sys.argv[3]);
 fitType = int(sys.argv[4]);
 crf_fit_type = int(sys.argv[5]);
-descr_fit_type = int(sys.argv[6]);
+descr_fit_type = int(sys.argv[6]); # sf tuning curve fits (Diff. of Gaussians)
 norm_sim_on = int(sys.argv[7]);
 phase_dir = int(sys.argv[8]);
 normTypeArr = [];
@@ -89,11 +89,11 @@ elif crf_fit_type == 4:
   crf_type_str = '-poissMod';
 
 if descr_fit_type == 1:
-  descr_type_str = '_lsq';
+  descr_type_str = '_poiss';
 elif descr_fit_type == 2:
   descr_type_str = '_sqrt';
 elif descr_fit_type == 3:
-  descr_type_str = '_poiss';
+  descr_type_str = '_sach';
 
 if crf_fit_type == 0:
   crfFitName = [];
@@ -109,8 +109,8 @@ else:
 conDig = 3; # round contrast to the 3rd digit
 
 # load data, fits
-dataList = np.load(str(dataPath + expName), encoding='latin1').item();
-cellStruct = np.load(str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy'), encoding='latin1').item();
+dataList = np.load(str(dataPath + expName)).item();
+cellStruct = np.load(str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy')).item();
 
 # #### Load descriptive model fits, comp. model fits
 if phase_dir == -1:
@@ -123,16 +123,16 @@ phAdvName = str(dataPath + phAdvBase + dir_suff);
 phAdvFits = helper_fcns.np_smart_load(phAdvName);
 
 if descr_fit_type == 0:
-  descrFits = [];
+  descrFits = None;
 else:
   descrFitName = str('descrFits' + descr_type_str + '.npy');
-  descrFits = np.load(str(dataPath + descrFitName), encoding = 'latin1').item();
+  descrFits = helper_fcns.np_smart_load(str(dataPath + descrFitName));
   descrFits = descrFits[which_cell-1]['params']; # just get this cell
 
 if fitType == 0 or lossType == 0:
   modParamsCurr = [];
 else:
-  modParams = np.load(str(dataPath + fitListName), encoding= 'latin1').item();
+  modParams = np.load(str(dataPath + fitListName)).item();
   modParamsCurr = modParams[which_cell-1]['params'];
 
 # ### Organize data
@@ -248,9 +248,11 @@ for d in range(nDisps):
             leftLines.append(predPlt); leftStr.append('prediction');
 
         # plot descriptive model fit
-        if descrFits: # i.e. descrFits isn't empty, then plot it
+        if descrFits is not None and d == 0: # i.e. descrFits isn't empty, then plot it
           curr_mod_params = descrFits[d, v_cons[c], :];
-          #dispAx[d][c_plt_ind, 0].plot(sfs_plot, helper_fcns.flexible_Gauss(curr_mod_params, sfs_plot), clip_on=False)
+          curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+          sfs_plot = np.logspace(np.log10(np.min(all_sfs[v_sfs])), np.log10(np.max(all_sfs[v_sfs])), 100);
+          dispAx[d][c_plt_ind, 0].plot(sfs_plot, curr_mod_resp, clip_on=False)
         
 	# plot model fits
         if modParamsCurr: # i.e. modParamsCurr isn't [] 
@@ -448,9 +450,10 @@ for d in range(nDisps):
 #                                       predStd[d, v_sfs, v_cons[c]], fmt='p', clip_on=False);
 
         # plot descriptive model fit
-        if descrFits:
+        if descrFits is not None:
           curr_mod_params = descrFits[d, v_cons[c], :];
-          sfMixAx[c_plt_ind, d].plot(sfs_plot, helper_fcns.flexible_Gauss(curr_mod_params, sfs_plot), clip_on=False)
+          curr_mod_resps = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+          sfMixAx[c_plt_ind, d].plot(sfs_plot, curr_mod_resps, clip_on=False)
 
 	# plot model fits
         if modParamsCurr:
@@ -689,7 +692,7 @@ crfAx.append(crfSum);
 fSum.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
 
 if crfFitName:
-  fits = np.load(str(dataPath + crfFitName), encoding='latin1').item();
+  fits = np.load(str(dataPath + crfFitName)).item();
   crfFitsSepC50 = fits[which_cell-1][str('fits_each' + is_rpt)];
   crfFitsOneC50 = fits[which_cell-1][str('fits' + is_rpt)];
 
@@ -875,7 +878,6 @@ for d in range(nDisps):
           curr_fit_sep = crfFitsSepC50[d][sf_ind]['params'];
           nrPlt = rvcAx[plt_x][plt_y].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
           #pdb.set_trace();
-
 
         # summary plots
         '''
