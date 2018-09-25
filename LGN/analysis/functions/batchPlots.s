@@ -15,31 +15,27 @@ module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 module load seaborn/0.7.1
 
-# second param is plotType:
-        # 0 - just f0 (i.e. DC mean)
-        # 1 - just f1 (i.e. response amplitude at stimulus frequency, meaning drift rate)
-        # 2 - f0 and f1
 # for the below: put 0 to avoid plotting/loading that type
-# third param is loss_type:
+# second param is loss_type:
 	# 1 - square root
 	# 2 - poisson
 	# 3 - modulated poission
-# fourth param is fit_type:
+# third param is fit_type:
 	# 1 - flat normalization
 	# 2 - gaussian weighting of normalization responses
 	# 3 - c50 controlled by gaussian
-# fifth param is crf_fit_type: (i.e. what loss function for naka-rushton fits)
+# fourth param is crf_fit_type: (i.e. what loss function for naka-rushton fits)
         # 1 - lsq
 	# 2 - square root
 	# 3 - poisson
 	# 4 - modulated poission
-# sixth  param is descr_fit_type: (i.e. what loss function for difference of gaussian fits)
+# fifth  param is descr_fit_type: (i.e. what loss function for difference of gaussian fits)
         # 1 - poiss
         # 2 - sqrt
         # 3 - sach
-# seventh param is 0 (no norm sims) or 1 (do normalization simulations)
-# eigth param is -1 or +1 (phase direction for loading rvc/phAdv fits)
-python plotting.py $SLURM_ARRAY_TASK_ID 1 0 0 0 3 0 -1
+# sixth param is 0 (no norm sims) or 1 (do normalization simulations)
+# seventh param is -1 or +1 (phase direction for loading rvc/phAdv fits)
+python plotting.py $SLURM_ARRAY_TASK_ID 0 0 0 3 0 -1
  
 # leave a blank line at the end
 

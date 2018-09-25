@@ -29,15 +29,14 @@ rcParams['lines.markersize'] = 5;
 rcParams['font.style'] = 'oblique';
 
 which_cell = int(sys.argv[1]);
-plotType = int(sys.argv[2]);
-lossType = int(sys.argv[3]);
-fitType = int(sys.argv[4]);
-crf_fit_type = int(sys.argv[5]);
-descr_fit_type = int(sys.argv[6]); # sf tuning curve fits (Diff. of Gaussians)
-norm_sim_on = int(sys.argv[7]);
-phase_dir = int(sys.argv[8]);
+lossType = int(sys.argv[2]);
+fitType = int(sys.argv[3]);
+crf_fit_type = int(sys.argv[4]);
+descr_fit_type = int(sys.argv[5]); # sf tuning curve fits (Diff. of Gaussians)
+norm_sim_on = int(sys.argv[6]);
+phase_dir = int(sys.argv[7]);
 normTypeArr = [];
-argInd = 9; # we've already taken N arguments off (function call, which_cell, plot_type, loss_type, fit_type, crf_fit_type, descr_fit_type, norm_sim_on, phase_dir) 
+argInd = 8; # we've already taken N arguments off (function call, which_cell, loss_type, fit_type, crf_fit_type, descr_fit_type, norm_sim_on, phase_dir) 
 nArgsIn = len(sys.argv) - argInd; 
 while nArgsIn > 0:
   normTypeArr.append(float(sys.argv[argInd]));
@@ -112,14 +111,10 @@ conDig = 3; # round contrast to the 3rd digit
 dataList = np.load(str(dataPath + expName)).item();
 cellStruct = np.load(str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy')).item();
 
-# #### Load descriptive model fits, comp. model fits
-if phase_dir == -1:
-  dir_suff = 'neg.npy';
-elif phase_dir == 1:
-  dir_suff = 'pos.npy';
-rvcName = str(dataPath + rvcBase + dir_suff);
+# #### Load rvc/phase advance models; sf tuning descriptive fits
+rvcName = str(dataPath + helper_fcns.fit_name(rvcBase, phase_dir));
 rvcFits = helper_fcns.np_smart_load(rvcName);
-phAdvName = str(dataPath + phAdvBase + dir_suff);
+phAdvName = str(dataPath + helper_fcns.fit_name(phAdvBase, phase_dir));
 phAdvFits = helper_fcns.np_smart_load(phAdvName);
 
 if descr_fit_type == 0:
@@ -163,22 +158,14 @@ nCons = len(all_cons);
 nSfs = len(all_sfs);
 nDisps = len(all_disps);
 
-# #### Unpack responses
-
-respMean = resp[0];
-respStd = resp[1];
-predMean = resp[2];
-predStd = resp[3];
-if len(resp)>4:
-  f1MeanAll = resp[4];
-  f1Mean = np.reshape([np.sum(x) for x in f1MeanAll.flatten()], f1MeanAll.shape);
-  f1StdAll = resp[5];
-  f1Std = np.reshape([np.sqrt(np.sum(np.square(x))) for x in f1StdAll.flatten()], f1StdAll.shape);
-  # why the above computation? variance adds, so we square the std to get variance of sum, sum, and take sqrt again to put back to std
-  predF1mean = resp[6];
-  predF1std = resp[7];
-else: # if we don't have the f1, just set the plotType to 0 (just mean, i.e. f0)
-  plotType = 0;
+# #### Unpack responses - only f1 stuff!
+f1MeanAll = resp[4];
+f1Mean = np.reshape([np.sum(x) for x in f1MeanAll.flatten()], f1MeanAll.shape);
+f1StdAll = resp[5];
+f1Std = np.reshape([np.sqrt(np.sum(np.square(x))) for x in f1StdAll.flatten()], f1StdAll.shape);
+# why the above computation? variance adds, so we square the std to get variance of sum, sum, and take sqrt again to put back to std
+predF1mean = resp[6];
+predF1std = resp[7];
 
 # modResp is (nFam, nSf, nCons, nReps) nReps is (currently; 2018.01.05) set to 20 to accommadate the current experiment with 10 repetitions
 if modResp:
@@ -190,6 +177,7 @@ if modResp:
 
 # #### Plots by dispersion
 
+# THIS PLOT - assumes fitType == 1 (i.e. plot f1 only)
 fDisp = []; dispAx = [];
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
@@ -205,98 +193,116 @@ for d in range(nDisps):
 
     fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
     
-    maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
-    maxPred = np.max(np.max(predMean[d, ~np.isnan(predMean[d, :, :])]));
-    maxf1 = np.max(np.max(f1Mean[d, ~np.isnan(f1Mean[d, :, :])]));
+    maxPred = np.max(np.max(predF1mean[d, ~np.isnan(predF1mean[d, :, :])]));
+    if d == 0 and which_cell-1 in rvcFits:
+      f1resps = rvcFits[which_cell-1]['adjMeans']; # for, no dispersion
+      reorg_f1 = np.nan * np.ones_like(f1Mean[d, :, :]);
+      for i in range(len(v_cons)):
+        reorg_f1[:, v_cons[i]] = [x[v_cons[i]] for x in f1resps];
+      f1resps = reorg_f1; # put the adjusted responses in the same shape/format as the ones from tabulate_responses...
+    else:
+      f1resps = f1Mean[d, :, :];
+    maxf1 = np.max([np.max(x) for x in f1resps]);
     maxF1Pred = np.max(np.max(predF1mean[d, ~np.isnan(predF1mean[d, :, :])]));
-    if plotType == 0:
-      maxPlot = np.maximum(maxResp, maxPred);
-    if plotType == 1:
-      maxPlot = np.maximum(maxf1, maxF1Pred);
-    if plotType == 2:
-      maxPlot = np.maximum(np.maximum(maxResp, maxf1), np.maximum(maxPred, maxF1Pred));
-
+    maxPlot = np.maximum(maxf1, maxF1Pred);
     maxPlotComp = np.nanmax([np.max(x) for x in f1MeanAll[1, :, :].flatten()]);
 
     for c in reversed(range(n_v_cons)):
-        leftLines = []; leftStr = []; # lines/string for legend of left side of plot
+      ### left side of plots
+      leftLines = []; leftStr = []; # lines/string for legend of left side of plot
+      c_plt_ind = len(v_cons) - c - 1;
+      v_sfs = ~np.isnan(f1Mean[d, :, v_cons[c]]);        
 
-        c_plt_ind = len(v_cons) - c - 1;
-        v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
+      # plot data
+      respPlt = dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], f1resps[v_sfs, v_cons[c]], 
+                                  f1Std[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+      leftLines.append(respPlt); leftStr.append('response');
+      if d>0: # also plot predicted response if d>0
+        dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], predF1mean[d, v_sfs, v_cons[c]], 'b-', alpha=0.7, clip_on=False);
+        predPlt = dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], predF1mean[d, v_sfs, v_cons[c]] - predF1std[d, v_sfs, v_cons[c]],
+                                         predF1mean[d, v_sfs, v_cons[c]] + predF1std[d, v_sfs, v_cons[c]], color='b', alpha=0.2);
+        leftLines.append(predPlt); leftStr.append('prediction');
 
-        #dispAx[d][c_plt_ind, 1].plot(all_sfs[v_sfs], np.divide(predMean[d, v_sfs, v_cons[c]]-blankMean, respMean[d, v_sfs, v_cons[c]]-blankMean), clip_on=False);
-        #dispAx[d][c_plt_ind, 1].axhline(1, clip_on=False, linestyle='dashed');
-        
-        # plot data (and predicted response, if dispersion > 1)
-        if plotType == 0 or plotType == 2:
-          respPlt = dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                      respStd[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
-          leftLines.append(respPlt); leftStr.append('response');
-          if d>0:
-            dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], predMean[d, v_sfs, v_cons[c]], 'b-', alpha=0.7, clip_on=False);
-            predPlt = dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], predMean[d, v_sfs, v_cons[c]] - predStd[d, v_sfs, v_cons[c]],
-                                             predMean[d, v_sfs, v_cons[c]] + predStd[d, v_sfs, v_cons[c]], color='b', alpha=0.2);
-            leftLines.append(predPlt); leftStr.append('prediction');
-        if plotType == 1 or plotType == 2:
-          respPlt = dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], f1Mean[d, v_sfs, v_cons[c]], 
-                                      f1Std[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
-          leftLines.append(respPlt); leftStr.append('response');
-          if d>0:
-            dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], predF1mean[d, v_sfs, v_cons[c]], 'b-', alpha=0.7, clip_on=False);
-            predPlt = dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], predF1mean[d, v_sfs, v_cons[c]] - predF1std[d, v_sfs, v_cons[c]],
-                                             predF1mean[d, v_sfs, v_cons[c]] + predF1std[d, v_sfs, v_cons[c]], color='b', alpha=0.2);
-            leftLines.append(predPlt); leftStr.append('prediction');
+      # plot descriptive model fit
+      if descrFits is not None and d == 0: # i.e. descrFits isn't empty, then plot it; descrFits only for single gratings as of 09.24.18
+        curr_mod_params = descrFits[d, v_cons[c], :];
+        curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+        sfs_plot = np.logspace(np.log10(np.min(all_sfs[v_sfs])), np.log10(np.max(all_sfs[v_sfs])), 100);
+        descrPlt = dispAx[d][c_plt_ind, 0].plot(sfs_plot, curr_mod_resp, clip_on=False)
+        leftLines.append(descrPlt[0]); leftStr.append('DoG');
+
+      # plot model fits
+      if modParamsCurr: # i.e. modParamsCurr isn't [] 
+        modPlt = dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
+                                    modHigh[d, v_sfs, v_cons[c]], color='r', alpha=0.2);
+        dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
+        leftLines.append(modPlt); leftStr.append('model resp');
+
+      dispAx[d][c_plt_ind, 0].legend(leftLines, leftStr, loc=0);
+
+      ### right side of plots
+      # plot response to individual components (right side of figure; left) 
+      # AND response to components when presented individually (right side of figure; right)
+      v_sfs_inds = np.where(v_sfs)[0];
+      rightLines = []; rightStr = []; # lines/string for legend of right side of plot
+      if d == 0:
+        # plot everything again on log-log coordinates...
+        respPlt = dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs], f1resps[v_sfs, v_cons[c]], 
+                                    f1Std[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+        rightLines.append(respPlt); rightStr.append('response');
 
         # plot descriptive model fit
-        if descrFits is not None and d == 0: # i.e. descrFits isn't empty, then plot it
+        if descrFits is not None: # i.e. descrFits isn't empty, then plot it
           curr_mod_params = descrFits[d, v_cons[c], :];
           curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
           sfs_plot = np.logspace(np.log10(np.min(all_sfs[v_sfs])), np.log10(np.max(all_sfs[v_sfs])), 100);
-          dispAx[d][c_plt_ind, 0].plot(sfs_plot, curr_mod_resp, clip_on=False)
-        
-	# plot model fits
+          descrPlt = dispAx[d][c_plt_ind, 1].plot(sfs_plot, curr_mod_resp, clip_on=False)
+          rightLines.append(descrPlt[0]); rightStr.append('DoG');
+
+        # plot model fits
         if modParamsCurr: # i.e. modParamsCurr isn't [] 
-          modPlt = dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
-                                      modHigh[d, v_sfs, v_cons[c]], color='r', alpha=0.2);
-          dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
-          leftLines.append(modPlt); leftStr.append('model resp');
+          modPlt = dispAx[d][c_plt_ind, 1].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
+                                        modHigh[d, v_sfs, v_cons[c]], color='r', alpha=0.2);
+          dispAx[d][c_plt_ind, 1].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
+          rightLines.append(modPlt); rightStr.append('model resp');
 
-        dispAx[d][c_plt_ind, 0].legend(leftLines, leftStr, loc=0);
+        dispAx[d][c_plt_ind, 1].legend(rightLines, rightStr, loc=0);
+        dispAx[d][c_plt_ind, 1].set_title('log-log');
+        dispAx[d][c_plt_ind, 1].set_xscale('log');
+        dispAx[d][c_plt_ind, 1].set_yscale('log'); # double log
 
-        # if plotType == 1 or 2 (i.e. plotting f1), 
-        #   plot response to individual components (right side of figure; left) 
-        #   AND response to components when presented individually (right side of figure; right)
-        v_sfs_inds = np.where(v_sfs)[0];
-        if d>0 and (plotType == 1 or plotType == 2):
-          xticks = np.array([]); xticklabels = np.array([]);
-          for j in range(len(v_sfs_inds)):
-            comps = [];
+      if d>0:
+        xticks = np.array([]); xticklabels = np.array([]);
+        for j in range(len(v_sfs_inds)):
+          comps = [];
 
-            curr_f1 = f1MeanAll[d, v_sfs_inds[j], v_cons[c]]; # get the component responses only at the relevant conditions
-            curr_f1_std = f1StdAll[d, v_sfs_inds[j], v_cons[c]];
-            # now get the individual responses
-            n_comps = all_disps[d];
+          curr_f1 = f1MeanAll[d, v_sfs_inds[j], v_cons[c]]; # get the component responses only at the relevant conditions
+          curr_f1_std = f1StdAll[d, v_sfs_inds[j], v_cons[c]];
+          # now get the individual responses
+          n_comps = all_disps[d];
 
-            _, _, curr_trials = helper_fcns.get_condition(data, n_comps, all_cons[v_cons[c]], all_sfs[v_sfs_inds[j]]);
-            _, isolf1, _, isolf1all = helper_fcns.get_isolated_response(data, curr_trials);
-            isolf1mean = isolf1[:, 0];
-            isolf1std = isolf1[:, 1];
+          _, _, curr_trials = helper_fcns.get_condition(data, n_comps, all_cons[v_cons[c]], all_sfs[v_sfs_inds[j]]);
+          _, isolf1, _, isolf1all = helper_fcns.get_isolated_response(data, curr_trials);
+          isolf1mean = isolf1[:, 0];
+          isolf1std = isolf1[:, 1];
 
-            # first, reset color cycle so that it's the same each time around
-            dispAx[d][c_plt_ind, 1].set_prop_cycle(None); 
-            x_pos = [j-0.25, j+0.25];
-            xticks = np.append(xticks, x_pos);
-            xticklabels = np.append(xticklabels, ['mix', 'isol']);
-            for i in range(n_comps): # difficult to make pythonic/array, so just iterate over each component
-              curr_means = [curr_f1[i], isolf1mean[i]];
-              curr_stds = [curr_f1_std[i], isolf1std[i]];
-              curr_comp = dispAx[d][c_plt_ind, 1].errorbar(x_pos, curr_means, curr_stds, fmt='-o', clip_on=False);
-              comps.append(curr_comp[0]);
+          # first, reset color cycle so that it's the same each time around
+          dispAx[d][c_plt_ind, 1].set_prop_cycle(None); 
+          x_pos = [j-0.25, j+0.25];
+          xticks = np.append(xticks, x_pos);
+          xticklabels = np.append(xticklabels, ['mix', 'isol']);
+          for i in range(n_comps): # difficult to make pythonic/array, so just iterate over each component
+            curr_means = [curr_f1[i], isolf1mean[i]];
+            curr_stds = [curr_f1_std[i], isolf1std[i]];
+            curr_comp = dispAx[d][c_plt_ind, 1].errorbar(x_pos, curr_means, curr_stds, fmt='-o', clip_on=False);
+            comps.append(curr_comp[0]);
 
           comp_str = [str(i) for i in range(n_comps)];
           dispAx[d][c_plt_ind, 1].set_xticks(xticks);
           dispAx[d][c_plt_ind, 1].set_xticklabels(xticklabels);
           dispAx[d][c_plt_ind, 1].legend(comps, comp_str, loc=0);
+          dispAx[d][c_plt_ind, 1].set_ylim((0, 1.5*maxPlotComp));
+          dispAx[d][c_plt_ind, 1].set_title('Component responses');
 
         for i in range(2):
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
@@ -304,16 +310,13 @@ for d in range(nDisps):
           dispAx[d][c_plt_ind, i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
           sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
 
-        dispAx[d][c_plt_ind, 0].set_xlim((min(all_sfs), max(all_sfs)));
-        dispAx[d][c_plt_ind, 0].set_xscale('log');
-        dispAx[d][c_plt_ind, 0].set_xlabel('sf (c/deg)'); 
-        dispAx[d][c_plt_ind, 0].set_title('Resp: D%d, contrast: %.3f' % (d, all_cons[v_cons[c]]));
-        dispAx[d][c_plt_ind, 0].set_ylim((0, 1.5*maxPlot));
-        dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
-        dispAx[d][c_plt_ind, 1].set_title('Component responses');
-        dispAx[d][c_plt_ind, 1].set_ylabel('resp (sps)');
-        dispAx[d][c_plt_ind, 1].set_ylim((0, 1.5*maxPlotComp));
-
+      dispAx[d][c_plt_ind, 0].set_xlim((min(all_sfs), max(all_sfs)));
+      dispAx[d][c_plt_ind, 0].set_xscale('log');
+      dispAx[d][c_plt_ind, 0].set_xlabel('sf (c/deg)'); 
+      dispAx[d][c_plt_ind, 0].set_title('Resp: D%d, contrast: %.3f' % (d, all_cons[v_cons[c]]));
+      #dispAx[d][c_plt_ind, 0].set_ylim((0, 1.5*maxPlot));
+      dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
+      dispAx[d][c_plt_ind, 1].set_ylabel('resp (sps)');
 
 saveName = "/cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
@@ -340,46 +343,36 @@ for d in range(nDisps):
 
     fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
 
-    for i in range(2):
+    for i in range(2): 
     
       if i == 0:
-        curr_resps = respMean;
-        curr_base_f0 = blankMean;
-        f1_resps = f1Mean;
-
-        maxResp = np.max(np.max(curr_resps[d, ~np.isnan(curr_resps[d, :, :])]));
-        maxf1 = np.max(np.max(f1_resps[d, ~np.isnan(f1_resps[d, :, :])]));
-        if plotType == 1:
-          maxResp = maxf1;
-        if plotType == 2:
-          maxResp = np.maximum(maxf1, maxResp);
+        curr_resps = f1Mean;
+        maxf1 = np.max(np.max(curr_resps[d, ~np.isnan(curr_resps[d, :, :])]));
       elif i == 1 and modResp:
         curr_resps = modAvg;
         curr_base_f0 = modBlankMean;
-        maxResp = np.max(np.max(curr_resps[d, ~np.isnan(curr_resps[d, :, :])]));
       elif i == 1 and not modResp:
         continue;
 
-      lines = [];
       linesf1 = [];
       for c in reversed(range(n_v_cons)):
           v_sfs = ~np.isnan(curr_resps[d, :, v_cons[c]]);        
 
-          # plot data
           col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
+          # plot data
           if i == 0:
-            if plotType == 0 or plotType == 2:
-              respAbBaseline = curr_resps[d, v_sfs, v_cons[c]] - curr_base_f0;
-              curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
-              lines.append(curr_line);
-            if plotType == 1 or plotType == 2:
-              curr_f1 = f1_resps[d, v_sfs, v_cons[c]];
-              curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][curr_f1>1e-1], curr_f1[curr_f1>1e-1], '--o', clip_on=False, color=col);
-              linesf1.append(curr_line);
+            curr_f1 = curr_resps[d, v_sfs, v_cons[c]];
+            curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][curr_f1>1e-1], curr_f1[curr_f1>1e-1], '--o', clip_on=False, color=col);
+            linesf1.append(curr_line);
+          # plot model
+          #if i == 1:
+          #  curr_f1 = f1_resps[d, v_sfs, v_cons[c]];
+          #  curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][curr_f1>1e-1], curr_f1[curr_f1>1e-1], '--o', clip_on=False, color=col);
+          #  linesf1.append(curr_line);
 
       dispAx[d][i].set_aspect('equal', 'box'); 
       dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
-      dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
+      dispAx[d][i].set_ylim((5e-2, 1.5*maxf1));
 
       dispAx[d][i].set_xscale('log');
       dispAx[d][i].set_yscale('log');
@@ -393,12 +386,7 @@ for d in range(nDisps):
       dispAx[d][i].set_ylabel('resp above baseline (sps)');
       dispAx[d][i].set_title('D%d - sf tuning' % (d));
       con_strs = [str(i) for i in reversed(all_cons[v_cons])];
-      if plotType == 0:
-        dispAx[d][i].legend(lines, con_strs, loc=0);
-      if plotType == 1:
-        dispAx[d][i].legend(linesf1, con_strs, loc=0);
-      if plotType == 2:
-        dispAx[d][i].legend((lines, linesf1), (con_strs, con_strs), loc=0);
+      dispAx[d][i].legend(linesf1, con_strs, loc=0);
 
 saveName = "/allCons_cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
@@ -413,12 +401,8 @@ pdfSv.close()
 # i.e. highest (up to) 4 contrasts for each dispersion
 
 mixCons = 4;
-maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
 maxf1 = np.max(np.max(np.max(f1Mean[~np.isnan(f1Mean)])));
-if plotType == 1:
-  maxResp = maxf1;
-if plotType == 2:
-  maxResp = np.maximum(maxResp, maxf1);
+maxResp = maxf1;
 
 f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(20, 15));
 
@@ -435,19 +419,11 @@ for d in range(nDisps):
     for c in reversed(range(n_v_cons)):
         c_plt_ind = n_v_cons - c - 1;
         sfMixAx[c_plt_ind, d].set_title('con:' + str(np.round(all_cons[v_cons[c]], 2)))
-        v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);
+        v_sfs = ~np.isnan(f1Mean[d, :, v_cons[c]]);
         
         # plot data
-        if plotType == 0 or plotType == 2:
-          sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                       respStd[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
-        if plotType == 1 or plotType == 2:
-          sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], f1Mean[d, v_sfs, v_cons[c]], 
+        sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], f1Mean[d, v_sfs, v_cons[c]], 
                                        f1Std[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
-
-        # plot linear superposition prediction
-#        sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], predMean[d, v_sfs, v_cons[c]], 
-#                                       predStd[d, v_sfs, v_cons[c]], fmt='p', clip_on=False);
 
         # plot descriptive model fit
         if descrFits is not None:
@@ -594,10 +570,10 @@ if modParamsCurr:
 
   # poisson test - mean/var for each condition (i.e. sfXdispXcon)
   curr_ax = plt.subplot2grid(detailSize, (0, 0), colspan=2, rowspan=2); # set the current subplot location/size[default is 1x1]
-  val_conds = ~np.isnan(respMean);
-  gt0 = np.logical_and(respMean[val_conds]>0, respStd[val_conds]>0);
+  val_conds = ~np.isnan(f1Mean);
+  gt0 = np.logical_and(f1Mean[val_conds]>0, respStd[val_conds]>0);
   plt.loglog([0.01, 1000], [0.01, 1000], 'k--');
-  plt.loglog(respMean[val_conds][gt0], np.square(respStd[val_conds][gt0]), 'o');
+  plt.loglog(f1Mean[val_conds][gt0], np.square(respStd[val_conds][gt0]), 'o');
   # skeleton for plotting modulated poisson prediction
   if fit_type == 4: # i.e. modPoiss
     mean_vals = np.logspace(-1, 2, 50);
@@ -699,7 +675,7 @@ if crfFitName:
 for d in range(nDisps):
     
     # which sfs have at least one contrast presentation?
-    v_sfs = np.where(np.sum(~np.isnan(respMean[d, :, :]), axis = 1) > 0);
+    v_sfs = np.where(np.sum(~np.isnan(f1Mean[d, :, :]), axis = 1) > 0);
     n_v_sfs = len(v_sfs[0])
     n_rows = 3; #int(np.floor(n_v_sfs/2));
     n_cols = 4; #n_v_sfs - n_rows
@@ -719,17 +695,13 @@ for d in range(nDisps):
         col_ind = np.mod(sf, n_cols);
         sf_ind = v_sfs[0][sf];
 
-        v_cons = ~np.isnan(respMean[d, sf_ind, :]);
+        v_cons = ~np.isnan(f1Mean[d, sf_ind, :]);
         n_cons = sum(v_cons);
         plot_cons = np.linspace(0, np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
 	#plot_cons = np.linspace(np.min(all_cons[v_cons]), np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
 
 	# organize responses
-        if plotType == 0 or plotType == 2:
-          resps_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
-          resps_w_blank = np.hstack((blankMean, resps_curr));
-        if plotType == 1 or plotType == 2:
-          f1_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
+        f1_curr = np.reshape([f1Mean[d, sf_ind, v_cons]], (n_cons, ));
 
         # CRF fit
         if crfFitName:
@@ -755,11 +727,8 @@ for d in range(nDisps):
           c50_all[sf] = curr_fit_all[3];
 
         # summary plots
-        if plotType == 0 or plotType == 2:
-          curr_rvc = crfAx[0][d, 0].plot(all_cons[v_cons], resps_curr, '-', clip_on=False);
-        if plotType == 1 or plotType == 2:
-          curr_rvc = crfAx[0][d, 0].plot(all_cons[v_cons], f1_curr, '-', clip_on=False);
-          rvc_plots.append(curr_rvc[0]);
+        curr_rvc = crfAx[0][d, 0].plot(all_cons[v_cons], f1_curr, '-', clip_on=False);
+        rvc_plots.append(curr_rvc[0]);
 
         # NR fit plots
         if crfFitName:
@@ -805,7 +774,7 @@ for d in range(nDisps):
       allC50s = crfAx[0][d, 1].plot(all_sfs[v_sfs[0]], c50_all);
       maxC50 = np.maximum(np.max(c50_sep), np.max(c50_all));
       v_cons = np.array(val_con_by_disp[d]);
-      sfRef = respMean[d, v_sfs[0], v_cons[-1]]; # plot highest contrast spatial frequency tuning curve
+      sfRef = f1Mean[d, v_sfs[0], v_cons[-1]]; # plot highest contrast spatial frequency tuning curve
           # we normalize the sf tuning, flip upside down so it matches the profile of c50, which is lowest near peak SF preference
       invSF = crfAx[0][d, 1].plot(all_sfs[v_sfs[0]],  maxC50*(1-sfRef/np.max(sfRef)), linestyle='dashed');
       crfAx[0][d, 1].set_xlim([all_sfs[0], all_sfs[-1]]);
@@ -837,7 +806,7 @@ rvcAx = []; fRVC = [];
 for d in range(nDisps):
     
     # which sfs have at least one contrast presentation?
-    v_sfs = np.where(np.sum(~np.isnan(respMean[d, :, :]), axis = 1) > 0);
+    v_sfs = np.where(np.sum(~np.isnan(f1Mean[d, :, :]), axis = 1) > 0);
     n_v_sfs = len(v_sfs[0])
     n_rows = 3; #int(np.floor(n_v_sfs/2));
     n_cols = 4; #n_v_sfs - n_rows
@@ -853,19 +822,14 @@ for d in range(nDisps):
         sf_ind = v_sfs[0][sf];
        	plt_x = d; plt_y = (row_ind, col_ind);
 
-        v_cons = ~np.isnan(respMean[d, sf_ind, :]);
+        v_cons = ~np.isnan(f1Mean[d, sf_ind, :]);
         n_cons = sum(v_cons);
         plot_cons = np.linspace(0, np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
 	#plot_cons = np.linspace(np.min(all_cons[v_cons]), np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
 
 	# organize responses
-        if plotType == 0 or plotType == 2:
-          resps_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
-          resps_w_blank = np.hstack((blankMean, resps_curr));
-          f0Plt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(resps_curr, 0.1), '-', clip_on=False);
-        if plotType == 1 or plotType == 2:
-          f1_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
-          f1Plt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(f1_curr, 0.1), '-', clip_on=False);
+        f1_curr = np.reshape([f1Mean[d, sf_ind, v_cons]], (n_cons, ));
+        f1Plt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(f1_curr, 0.1), '-', clip_on=False);
 
         # plot data
 
@@ -901,12 +865,8 @@ for d in range(nDisps):
         plotList = ();
         strList = ();
         
-        if plotType == 0 or plotType == 2:
-          plotList = plotList + (f0Plt[0], );
-          strList = strList + ('data - f0', );
-        if plotType == 1 or plotType == 2:
-          plotList = plotList + (f1Plt[0], );
-          strList = strList + ('data - f1', );
+        plotList = plotList + (f1Plt[0], );
+        strList = strList + ('data - f1', );
         if modParamsCurr:
           plotList = plotList + (modPlt[0], );
           strList = strList + ('model avg', );
@@ -949,9 +909,7 @@ for d in range(nDisps):
     for i in range(2):
       
       if i == 0:
-        curr_resps = respMean;
-        curr_blank_f0 = blankMean;
-        curr_f1 = f1Mean;
+        curr_resps = f1Mean;
         title_str = 'data';
       elif i == 1 and modParamsCurr:
         curr_resps = modAvg;
@@ -960,9 +918,6 @@ for d in range(nDisps):
       elif i == 1 and not modParamsCurr:
         continue;
       maxResp = np.max(np.max(np.max(curr_resps[~np.isnan(curr_resps)])));
-      if plotType == 1 or 2:
-        maxf1 = np.max(np.max(np.max(curr_f1[~np.isnan(curr_f1)])));
-        maxResp = np.maximum(maxResp, maxf1);
 
       # which sfs have at least one contrast presentation?
       v_sfs = np.where(np.sum(~np.isnan(curr_resps[d, :, :]), axis = 1) > 0); # will be the same for f1, if we're plotting that, too
@@ -976,20 +931,14 @@ for d in range(nDisps):
 
           col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
 
-          if i == 1 or (i ==0 and (plotType == 0 or plotType == 2)): # if we're plotting the model OR (plotting data AND f0)
-            plot_resps = np.reshape([curr_resps[d, sf_ind, v_cons]], (n_cons, ));
-            respAbBaseline = plot_resps-curr_blank_f0;
-            line_curr, = crfAx[d][i].plot(all_cons[v_cons][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
-            lines_log.append(line_curr);
-          if plotType == 1 or plotType == 2:
-            if rvcFitCurr and d == 0: # only for single gratings (as of 9.19.2018)
-              plot_f1 = rvcFitCurr['adjMeans'][sf_ind];
-              adjFlag = '(adj)';
-            else:
-              plot_f1 = np.reshape([curr_f1[d, sf_ind, v_cons]], (n_cons, ));
-              adjFlag = '---';
-            line_curr, = crfAx[d][i].plot(all_cons[v_cons][plot_f1>1e-1], plot_f1[plot_f1>1e-1], '-o', color=col, clip_on=False);
-            lines_f1_log.append(line_curr);
+          if rvcFitCurr and d == 0: # only for single gratings (as of 9.19.2018)
+            plot_f1 = rvcFitCurr['adjMeans'][sf_ind];
+            adjFlag = '(adj)';
+          else:
+            plot_f1 = np.reshape([curr_resps[d, sf_ind, v_cons]], (n_cons, ));
+            adjFlag = '---';
+          line_curr, = crfAx[d][i].plot(all_cons[v_cons][plot_f1>1e-1], plot_f1[plot_f1>1e-1], '-o', color=col, clip_on=False);
+          lines_f1_log.append(line_curr);
 
       crfAx[d][i].set_xlim([-0.1, 1]);
       crfAx[d][i].set_ylim([-0.1*maxResp, 1.1*maxResp]);
@@ -1007,10 +956,7 @@ for d in range(nDisps):
 
       crfAx[d][i].set_ylabel('resp %s above baseline (sps)' % adjFlag);
       crfAx[d][i].set_title('D%d: sf:all - log resp %s' % (d, title_str));
-      if plotType == 0 or plotType == 2:
-        crfAx[d][i].legend(lines_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
-      if plotType == 1 or plotType == 2:
-        crfAx[d][i].legend(lines_f1_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
+      crfAx[d][i].legend(lines_f1_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
 
 saveName = "/allSfs_cell_%03d.pdf" % (which_cell)
 #saveName = "/allSfs_log_cell_%03d.pdf" % (which_cell)
