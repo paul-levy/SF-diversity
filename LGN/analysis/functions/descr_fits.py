@@ -228,6 +228,13 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=4, fit_type=3, disp=0, 
     bestNLL = np.ones((nDisps, nCons)) * np.nan;
     currParams = np.ones((nDisps, nCons, nParam)) * np.nan;
 
+  # set bounds
+  bound_gainCent = (0, None);
+  bound_gainSurr = (0, None);
+  bound_charFreqCent = (0, None);
+  bound_charFreqSurr = (0, None);
+  allBounds = (bound_gainCent, bound_charFreqCent, bound_gainSurr, bound_charFreqSurr);
+
   for d in range(1): # should be nDisps - just setting to 0 for now...
     for con in range(nCons):
       if con not in valConByDisp[d]:
@@ -252,7 +259,7 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=4, fit_type=3, disp=0, 
         init_charFreqSurr = init_charFreqCent * hf.random_in_range((0.25, 0.5))[0];
 
         init_params = [init_gainCent, init_charFreqCent, init_gainSurr, init_charFreqSurr];
-
+ 
         # choose optimization method
         if np.mod(n_try, 2) == 0:
             methodStr = 'L-BFGS-B';
@@ -260,7 +267,7 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=4, fit_type=3, disp=0, 
             methodStr = 'TNC';
 
         obj = lambda params: DoG_loss(params, resps, valSfVals, resps_std=resps_std, loss_type=fit_type, dir=dir);
-        wax = opt.minimize(obj, init_params, method=methodStr); # unbounded...
+        wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
 
         # compare
         NLL = wax['fun'];
