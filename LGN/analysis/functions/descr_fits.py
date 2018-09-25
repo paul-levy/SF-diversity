@@ -224,9 +224,11 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=4, fit_type=3, disp=0, 
   if cell_num-1 in descrFits:
     bestNLL = descrFits[cell_num-1]['NLL'];
     currParams = descrFits[cell_num-1]['params'];
+    varExpl = descrFits[cell_num-1]['varExpl'];
   else: # set values to NaN...
     bestNLL = np.ones((nDisps, nCons)) * np.nan;
     currParams = np.ones((nDisps, nCons, nParam)) * np.nan;
+    varExpl = np.ones((nDisps, nCons)) * np.nan;
 
   # set bounds
   bound_gainCent = (0, None);
@@ -276,6 +278,7 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=4, fit_type=3, disp=0, 
         if np.isnan(bestNLL[d, con]) or NLL < bestNLL[d, con]:
           bestNLL[d, con] = NLL;
           currParams[d, con, :] = params;
+          varExpl[d, con] = hf.var_explained(resps, params, valSfVals);
 
     # update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(fLname):
@@ -285,6 +288,7 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=4, fit_type=3, disp=0, 
       descrFits[cell_num-1] = dict();
     descrFits[cell_num-1]['NLL'] = bestNLL;
     descrFits[cell_num-1]['params'] = currParams;
+    descrFits[cell_num-1]['varExpl'] = varExpl;
 
     np.save(fLname, descrFits);
     print('saving for cell ' + str(cell_num));

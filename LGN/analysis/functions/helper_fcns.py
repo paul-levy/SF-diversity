@@ -44,6 +44,7 @@ import pdb
 
 # DiffOfGauss - standard difference of gaussians
 # DoGsach - difference of gaussians as implemented in sach's thesis
+# var_explained - compute the variance explained for a given model fit/set of responses
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -482,6 +483,24 @@ def DoGsach(gain_c, f_c, gain_s, f_s, stim_sf):
   dog_norm = lambda f: dog(f) / norm;
 
   return dog(stim_sf), dog_norm(stim_sf);
+
+def var_explained(data_resps, modParams, sfVals, dog_model = 1):
+  ''' given a set of responses and model parameters, compute the variance explained by the model 
+  '''
+  np = numpy;
+  resp_dist = lambda x, y: np.sum(np.square(x-y))/np.maximum(len(x), len(y))
+  var_expl = lambda m, r, rr: 100 * (1 - resp_dist(m, r)/resp_dist(r, rr));
+
+  # organize data responses (adjusted)
+  data_mean = np.mean(data_resps) * np.ones_like(data_resps);
+
+  # compute model responses
+  if dog_model == 1:
+    mod_resps = DoGsach(*modParams, stim_sf=sfVals)[0];
+  if dog_model == 2:
+    mod_resps = DiffOfGauss(*modParams, stim_sf=sfVals)[0];
+
+  return var_expl(mod_resps, data_resps, data_mean);
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
