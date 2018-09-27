@@ -525,19 +525,21 @@ def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65):
   psf_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha) 
   # gather the values
   #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
-  validInds = np.where(descrFit['varExpl'][disp, :])[0];
+  validInds = np.where(descrFit['varExpl'][disp, :] > varThresh)[0];
+  if len(validInds) == 0: # i.e. no good fits...
+    return np.nan, [], [];
   prefSfs = descrFit['prefSf'][disp, validInds];
   conVals = allCons[validInds];
   weights = descrFit['varExpl'][disp, validInds];
   # set up the optimization
   obj = lambda params: np.sum(np.multiply(weights,
-        np.square(psf_model(params[0], params[1], params[2], allCons[val_cons]) - prefSfs)))
+        np.square(psf_model(params[0], params[1], params[2], conVals) - prefSfs)))
   init_offset = prefSfs[0];
   conRange = conVals[-1] - conVals[0];
   init_slope = (prefSfs[-1] - prefSfs[0]) / conRange;
-  init_alpha = 0.5; # most tend to be saturation (i.e. contrast exp < 1)
+  init_alpha = 0.4; # most tend to be saturation (i.e. contrast exp < 1)
   # run
-  optz = opt.minimize(obj, [init_offset, init_slope, init_alpha], bounds=((0, None), (None, None), (0.25, 4)))
+  optz = opt.minimize(obj, [init_offset, init_slope, init_alpha], bounds=((0, None), (None, None), (0.25, 4)));
   opt_params = optz['x'];
   # ratio:
   extrema = psf_model(*opt_params, con=(conVals[0], conVals[-1]))
