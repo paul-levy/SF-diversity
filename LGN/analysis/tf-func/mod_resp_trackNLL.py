@@ -1,12 +1,14 @@
 from math import pi
 import numpy
 import os
-from helper_fcns import np_smart_load
 from scipy.stats import norm, mode, lognorm, nbinom
 from scipy.stats.mstats import gmean
 from numpy.matlib import repmat
 from time import sleep
 import sys
+
+sys.path.insert(0, '../functions/');
+from helper_fcns import np_smart_load
 
 import tensorflow as tf
 
@@ -140,7 +142,7 @@ def SFMSimpleResp(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, mod_par
     
     # Pre-allocate memory
     nDims         = 3; # x, y, t
-    nGratings     = 7;
+    nGratings     = 5;
     nFrames       = 120;
     
     to_rad = tf_pi/180;
@@ -457,8 +459,8 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
     ########
     # Load cell
     ########
-    loc_data = '/home/pl1465/SF_diversity/LGN/analysis/structures/'; # Prince cluster
-    #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/'; # Personal mac
+    #loc_data = '/home/pl1465/SF_diversity/LGN/analysis/structures/'; # Prince cluster
+    loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/'; # Personal mac
 
     fL_name = 'fitList_180927';
     # fitType
@@ -521,6 +523,8 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
     if numpy.any(numpy.isnan(curr_params)): # if there are nans, we need to ignore...
       curr_params = [];
       initFromCurr = 0;
+
+    pdb.set_trace();
 
     pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
     dOrdSp = numpy.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];

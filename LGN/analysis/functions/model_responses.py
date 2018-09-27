@@ -100,7 +100,7 @@ def SFMSimpleResp(S, channel, stimParams = []):
     # Pre-allocate memory
     z             = T.get('exp').get('trial');
     nSf           = 1;
-    nGratings     = 7;
+    nGratings     = 5;
     nFrames       = 120;
     if make_own_stim == 1:
         nTrials = stimParams.get('repeats'); # to keep consistent with number of repetitions used for each stim. condition
@@ -327,7 +327,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
     # Pre-allocate memory
     z          = T['exp']['trial'];
     nSf        = 0;
-    nStimComp  = 7;
+    nStimComp  = 5;
     nFrames    = 120;
     
     if not isinstance(prefSf, int):
