@@ -160,7 +160,7 @@ def spike_fft(psth, tfs = None):
 
 ### phase and amplitude analyses
 
-def project_resp(amp, phi_resp, phAdv_model, phAdv_params):
+def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None, allSfs=None):
   ''' Using our model fit of (expected) response phase as a function of response amplitude, we can
       determine the difference in angle between the expected and measured phase and then project the
       measured response vector (i.e. amp/phase in polar coordinates) onto the expected phase line
@@ -169,9 +169,33 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params):
   '''
   all_proj = [];
   for i in range(len(amp)):
-    phi_true = phAdv_model(phAdv_params[i][0], phAdv_params[i][1], amp[i]);
-    proj = numpy.multiply(amp[i], numpy.cos(numpy.deg2rad(phi_resp[i])-numpy.deg2rad(phi_true)));
-    all_proj.append(proj);
+    if disp == 0:
+      if amp[i] == []: # this shouldn't ever happen for single gratings, but just in case...
+        continue;
+      phi_true = phAdv_model(phAdv_params[i][0], phAdv_params[i][1], amp[i]);
+      proj = numpy.multiply(amp[i], numpy.cos(numpy.deg2rad(phi_resp[i])-numpy.deg2rad(phi_true)));
+      all_proj.append(proj);
+    elif disp == 1: # then we'll need to use the allCompSf to get the right phase advance fit for each component
+      if amp[i] == []: # 
+        all_proj.append([]);
+        continue;
+      # now, for each valid amplitude, there are responses for each component for each total stim contrast
+      all_proj.append([]);
+      #pdb.set_trace();
+      for con_ind in range(len(amp[i])):
+        curr_proj_con = [];
+        for comp_ind in range(len(amp[i][con_ind])):
+          curr_amp = amp[i][con_ind][comp_ind];
+          curr_phi = phi_resp[i][con_ind][comp_ind];
+          # now, for that component, find out the SF and get the right phase advance fit
+          # note: where is array, so unpack one level to get  
+          sf_ind = numpy.where(allSfs == allCompSf[i][con_ind][comp_ind])[0][0];
+          
+          phi_true = phAdv_model(phAdv_params[sf_ind][0], phAdv_params[sf_ind][1], curr_amp);
+          # finally, project the response as usual
+          proj = numpy.multiply(curr_amp, numpy.cos(numpy.deg2rad(curr_phi)-numpy.deg2rad(phi_true)));
+          curr_proj_con.append(proj);
+        all_proj[i].append(curr_proj_con);
   
   return all_proj;
   
@@ -298,11 +322,13 @@ def get_all_fft(cellStruct, disp, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, s
     sfs = list(valSf.keys());
 
   all_r = []; all_ph = []; all_tf = []; 
-  # all_r = dict(); all_ph = dict(); all_tf = dict();
+  # the all_..Comp will be used only if disp=1 (i.e. mixture stimuli)
+  all_conComp = []; all_sfComp = [];
 
   for s in sfs:
     #all_r[s] = dict(); all_ph[s] = dict(); all_tf[s] = dict();
     curr_r = []; curr_ph = []; curr_tf = [];
+    curr_conComp = []; curr_sfComp = [];
     for c in cons:
       val_trials, allDisps, allCons, allSfs = get_valid_trials(cellStruct, disp, c, s);
 
@@ -312,23 +338,37 @@ def get_all_fft(cellStruct, disp, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, s
 
       # get the phase relative to the stimulus
       ph_rel_stim, stim_ph, resp_ph, curr_tf = get_true_phase(data, val_trials, dir, psth_binWidth, stimDur);
-      # compute the fourier amplitudes
-      psth_val, _ = make_psth(data['spikeTimes'][val_trials]);
-      _, rel_amp, full_fourier = spike_fft(psth_val, curr_tf)
+      if disp == 0:
+        # compute the fourier amplitudes
+        psth_val, _ = make_psth(data['spikeTimes'][val_trials]);
+        _, rel_amp, full_fourier = spike_fft(psth_val, curr_tf)
+        # compute mean, gather
+        avg_r, avg_ph, std_r, std_ph = polar_vec_mean([rel_amp], [ph_rel_stim]);
+        curr_r.append([avg_r[0], std_r[0]]); # we can just grab 0 element, since we're going one value at a time, but it's packed in array
+        curr_ph.append([avg_ph[0], std_ph[0]]); # same as above
+        curr_tf.append(curr_tf);
+      elif disp == 1: # for mixtures
+        switch_inner_outer = lambda arr: [[x[i] for x in arr] for i in range(len(arr[0]))]
+        _, _, _, rel_amp, conByComp, sfByComp = get_isolated_response(data, val_trials);
+        # need to switch ph_rel_stim (and resp_phase) to be lists of phases by component (rather than list of phases by trial)
+        ph_rel_stim = switch_inner_outer(ph_rel_stim);
 
-      avg_r, avg_ph, std_r, std_ph = polar_vec_mean([rel_amp], [ph_rel_stim]);
-      curr_r.append([avg_r[0], std_r[0]]); # we can just grab 0 element, since we're going one value at a time, but it's packed in array
-      curr_ph.append([avg_ph[0], std_ph[0]]); # same as above
-      curr_tf.append(curr_tf);
+        # compute vector mean, gather/organize
+        avg_r, avg_ph, std_r, std_ph = polar_vec_mean(rel_amp, ph_rel_stim);
+        curr_r.append([avg_r, std_r]);
+        curr_ph.append([avg_ph, std_ph]);
+        curr_tf.append(curr_tf);
+        curr_conComp.append(conByComp);
+        curr_sfComp.append(sfByComp);
 
-      #all_r[s][c] = [avg_r, std_r];
-      #all_ph[s][c] = [avg_ph, std_ph];
-      #all_tf[s][c] = curr_tf;
     all_r.append(curr_r);
     all_ph.append(curr_ph);
     all_tf.append(curr_tf);
+    if disp == 1:
+      all_conComp.append(curr_conComp);
+      all_sfComp.append(curr_sfComp);
 
-  return all_r, all_ph, all_tf;
+  return all_r, all_ph, all_tf, all_conComp, all_sfComp;
 
 def get_rvc_model():
   ''' simply return the rvc model used in the fits

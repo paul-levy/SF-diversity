@@ -67,7 +67,7 @@ def phase_advance_fit(cell_num, data_loc = dataPath, phAdvName=phAdvName, to_sav
   allSfs = stimVals[2];
 
   # for all con/sf values for this dispersion, compute the mean amplitude/phase per condition
-  allAmp, allPhi, allTf = hf.get_all_fft(cellStruct, disp, dir=dir); 
+  allAmp, allPhi, allTf, _, _ = hf.get_all_fft(cellStruct, disp, dir=dir); 
      
   # now, compute the phase advance
   conInds = valConByDisp[disp];
@@ -114,16 +114,19 @@ def rvc_adjusted_fit(cell_num, data_loc = dataPath, rvcName=rvcName, to_save=1, 
 
   # calling phase_advance fit, use the phAdv_model and optimized paramters to compute the true response amplitude
   # given the measured/observed amplitude and phase of the response
+  # NOTE: We always call phase_advance_fit with disp=0 (default), since we don't make a fit
+  # for the mixtrue stimuli - instead, we use the fits made on single gratings to project the
+  # individual-component-in-mixture responses
   phAdv_model, all_opts = phase_advance_fit(cell_num, dir=dir, to_save = 0); # don't save
-  allAmp, allPhi, _ = hf.get_all_fft(cellStruct, disp, dir=dir);
+  allAmp, allPhi, _, allCompCon, allCompSf = hf.get_all_fft(cellStruct, disp, dir=dir);
   # get just the mean amp/phi and put into convenient lists
   allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)
   allPhiMeans = [[x[0] for x in sf] for sf in allPhi]; # mean is in the first element; do that for each [mean, var] pair in each list (split by sf)
-
+  
   # use the original measure of varaibility if/when using weighted loss function in hf.rvc_fit
   allAmpStd = [[x[1] for x in sf] for sf in allAmp]; # std is in the first element; do that for each [mean, std] pair in each list (split by sf)
 
-  adjMeans = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts);
+  adjMeans = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
   consRepeat = [valCons] * len(adjMeans);
   rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, allAmpStd);
 
