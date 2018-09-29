@@ -973,9 +973,9 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
 # taken from the template, which will be actual stimuli from that cell
 
     # Fixed parameters
-    num_families = 4;
-    num_gratings = 7;
-    comps = [1, 3, 5, 7]; # number of components for each family
+    num_families = 2;
+    num_gratings = 5;
+    comps = [1, 5]; # number of components for each family
 
     spreadVec = numpy.logspace(math.log10(.125), math.log10(1.25), num_families);
     octSeries  = numpy.linspace(1.5, -1.5, num_gratings);

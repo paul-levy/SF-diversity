@@ -38,6 +38,12 @@ rvcName = 'rvcFits'
     from what it should be, then there was noise, and that noise shouldn't contribute to our response.
   
     Then, with these set of response amplitudes, fit an RVC (same model as in the '05 paper)
+
+    For mixture stimuli, we will do the following (per conversations with JAM and EPS): Get the mean amplitude/phase
+    of each component for a given condition (as done for single gratings) -- using the phase/amplitude relationship established
+    for that component when presented in isolation, perform the same projection.
+    To fit the RVC curve, then, simply fit the model to the sum of the adjusted individual component responses.
+    The Sach DoG curves should also be fit to this sum.
 '''
 
 def phase_advance_fit(cell_num, data_loc = dataPath, phAdvName=phAdvName, to_save = 1, disp=0, dir=-1):
@@ -47,6 +53,8 @@ def phase_advance_fit(cell_num, data_loc = dataPath, phAdvName=phAdvName, to_sav
       of response amplitude.
       SAVES loss/optimized parameters/and phase advance (if default "to_save" value is kept)
       RETURNS phAdv_model, all_opts
+
+      Do ONLY for single gratings
   '''
 
   dataList = hf.np_smart_load(data_loc + 'dataList.npy');
@@ -176,12 +184,13 @@ def DoG_loss(params, resps, sfs, loss_type = 3, dir=-1, resps_std=None, gain_reg
     k = 0.01*np.max(resps);
     if resps_std is None:
       sigma = np.ones_like(resps);
-    sigma = resps_std;
+    else:
+      sigma = resps_std;
     sq_err = np.square(resps-pred_spikes);
     loss = loss + np.sum((sq_err/(k+np.square(sigma)))) + gain_reg*(params[0] + params[2]); # regularize - want gains as low as possible
   return loss;
 
-def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=250, fit_type=3, disp=0, rvcName=rvcName, dir=-1, gain_reg=0):
+def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, fit_type=3, disp=0, rvcName=rvcName, dir=-1, gain_reg=0):
 
   nParam = 4;
 
@@ -252,7 +261,8 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=250, fit_type=3, disp=0
       # access all sfs and get the specific contrast response
       respConInd = np.where(np.asarray(valConByDisp[d]) == con)[0];
       resps = hf.flatten([x[respConInd] for x in adjResps]);
-      resps_std = hf.flatten(f1_std[d, valSfInds, con]);
+      resps_std = None;
+      #resps_std = hf.flatten(f1_std[d, valSfInds, con]);
       maxResp = np.max(resps);
 
       for n_try in range(n_repeats):

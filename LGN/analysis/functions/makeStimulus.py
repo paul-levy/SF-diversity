@@ -52,7 +52,7 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
 
     # Fixed parameters
     num_families = 5;
-    num_gratings = 9;
+    num_gratings = 5;
 
     spreadVec = numpy.logspace(math.log10(.125), math.log10(1.25), num_families);
     octSeries  = numpy.linspace(1.5, -1.5, num_gratings);

@@ -17,27 +17,6 @@ import pdb
 fft = numpy.fft
 tf_pi = tf.constant(pi);
 
-def ph_test(S, p):
-    
-    nStimComp = 7;    
-
-    z = S['sfm']['exp']['trial'];
-    
-    stimOr = numpy.empty((nGratings,));
-    stimTf = numpy.empty((nGratings,));
-    stimCo = numpy.empty((nGratings,));
-    stimPh = numpy.empty((nGratings,));
-    stimSf = numpy.empty((nGratings,));
-               
-    for iC in range(nStimComp):
-        stimOr[iC] = z.get('ori')[iC][p] * pi/180; # in radians
-        stimTf[iC] = z.get('tf')[iC][p];          # in cycles per second
-        stimCo[iC] = z.get('con')[iC][p];         # in Michelson contrast
-        stimPh[iC] = z.get('ph')[iC][p] * pi/180;  # in radians
-        stimSf[iC] = z.get('sf')[iC][p];          # in cycles per degree
-                
-    return StimOr, stimTf, stimCo, stimPh, stimSf;
-
 def flexible_gauss(v_sigmaLow, v_sigmaHigh, sfPref, stim_sf):
 
     nPartitions = 2;
@@ -459,8 +438,8 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
     ########
     # Load cell
     ########
-    #loc_data = '/home/pl1465/SF_diversity/LGN/analysis/structures/'; # Prince cluster
-    loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/'; # Personal mac
+    loc_data = '/home/pl1465/SF_diversity/LGN/analysis/structures/'; # Prince cluster
+    #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/'; # Personal mac
 
     fL_name = 'fitList_180927';
     # fitType
@@ -524,8 +503,6 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
       curr_params = [];
       initFromCurr = 0;
 
-    pdb.set_trace();
-
     pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
     dOrdSp = numpy.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
     normConst = -0.8 if initFromCurr==0 else curr_params[2]; # why -0.8? Talked with Tony, he suggests starting with lower sigma rather than higher/non-saturating one
@@ -581,8 +558,6 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
 
     objWeight = numpy.ones((stimOr.shape[1]));    
 
-    #pdb.set_trace();
-
     fixedOr = stimOr[:,~mask];
     fixedTf = stimTf[:,~mask];
     fixedCo = stimCo[:,~mask];
@@ -590,7 +565,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
     fixedPh = stimPh[:,~mask];
     
     # cell responses
-    spikes = trial_inf['spikeCount'][~mask];
+    spikes = [numpy.sum(x) for x in trial_inf['power_f1'][~mask]];
     stim_dur = trial_inf['duration'][~mask];
     objWeight = objWeight[~mask];        
 

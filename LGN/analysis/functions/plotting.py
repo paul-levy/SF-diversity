@@ -35,7 +35,7 @@ crf_fit_type = int(sys.argv[4]);
 descr_fit_type = int(sys.argv[5]); # sf tuning curve fits (Diff. of Gaussians)
 norm_sim_on = int(sys.argv[6]);
 phase_dir = int(sys.argv[7]);
-normTypeArr = [];
+normTypeArr = [fitType]; # i.e., the first parameter of the normTypeArr is what type of normalization, which is specified in fitType
 argInd = 8; # we've already taken N arguments off (function call, which_cell, loss_type, fit_type, crf_fit_type, descr_fit_type, norm_sim_on, phase_dir) 
 nArgsIn = len(sys.argv) - argInd; 
 while nArgsIn > 0:
@@ -54,16 +54,16 @@ dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_180713';
-rvcBase = 'rvcFits_';
-phAdvBase = 'phaseAdvanceFits_';
+fitBase = 'fitList_180927';
+rvcBase = 'rvcFits';
+phAdvBase = 'phaseAdvanceFits';
 
 # first the fit type
-if fitType == 1:
+if fitType == 0:
   fitSuf = '_flat';
-elif fitType == 2:
+elif fitType == 1:
   fitSuf = '_wght';
-elif fitType == 3:
+elif fitType == 2:
   fitSuf = '_c50';
 # then the loss type
 if lossType == 1:
@@ -124,7 +124,7 @@ else:
   descrFits = helper_fcns.np_smart_load(str(dataPath + descrFitName));
   descrFits = descrFits[which_cell-1]['params']; # just get this cell
 
-if fitType == 0 or lossType == 0:
+if lossType == 0:
   modParamsCurr = [];
 else:
   modParams = np.load(str(dataPath + fitListName)).item();
@@ -140,12 +140,12 @@ if modParamsCurr: # i.e. modParamsCurr isn't []
   ignore, modRespAll, normTypeArr = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr);
   norm_type = normTypeArr[0];
   print('norm type %d' % (norm_type));
-  if norm_type == 2:
-    gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 2
+  if norm_type == 1:
+    gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 1
     gs_std = normTypeArr[2]; # guaranteed to exist ...
   resp, stimVals, val_con_by_disp, validByStimVal, modResp = helper_fcns.tabulate_responses(cellStruct, modRespAll);
 else:
-  modResp = [];
+  modResp = None;
   resp, stimVals, val_con_by_disp, validByStimVal, _ = helper_fcns.tabulate_responses(cellStruct);
 
 blankMean, blankStd, _ = helper_fcns.blankResp(cellStruct); 
@@ -168,7 +168,7 @@ predF1mean = resp[6];
 predF1std = resp[7];
 
 # modResp is (nFam, nSf, nCons, nReps) nReps is (currently; 2018.01.05) set to 20 to accommadate the current experiment with 10 repetitions
-if modResp:
+if modResp is not None:
   modLow = np.nanmin(modResp, axis=3);
   modHigh = np.nanmax(modResp, axis=3);
   modAvg = np.nanmean(modResp, axis=3);
@@ -177,7 +177,7 @@ if modResp:
 
 # #### Plots by dispersion
 
-# THIS PLOT - assumes fitType == 1 (i.e. plot f1 only)
+# THIS PLOT
 fDisp = []; dispAx = [];
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
@@ -195,10 +195,11 @@ for d in range(nDisps):
     
     maxPred = np.max(np.max(predF1mean[d, ~np.isnan(predF1mean[d, :, :])]));
     if d == 0 and which_cell-1 in rvcFits:
+      print('getting the adjusted responses');
       f1resps = rvcFits[which_cell-1]['adjMeans']; # for, no dispersion
       reorg_f1 = np.nan * np.ones_like(f1Mean[d, :, :]);
       for i in range(len(v_cons)):
-        reorg_f1[:, v_cons[i]] = [x[v_cons[i]] for x in f1resps];
+        reorg_f1[:, v_cons[i]] = [x[i] for x in f1resps];
       f1resps = reorg_f1; # put the adjusted responses in the same shape/format as the ones from tabulate_responses...
     else:
       f1resps = f1Mean[d, :, :];
@@ -348,10 +349,9 @@ for d in range(nDisps):
       if i == 0:
         curr_resps = f1Mean;
         maxf1 = np.max(np.max(curr_resps[d, ~np.isnan(curr_resps[d, :, :])]));
-      elif i == 1 and modResp:
+      elif i == 1 and modResp is not None:
         curr_resps = modAvg;
-        curr_base_f0 = modBlankMean;
-      elif i == 1 and not modResp:
+      elif i == 1 and modResp is None:
         continue;
 
       linesf1 = [];
@@ -365,10 +365,10 @@ for d in range(nDisps):
             curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][curr_f1>1e-1], curr_f1[curr_f1>1e-1], '--o', clip_on=False, color=col);
             linesf1.append(curr_line);
           # plot model
-          #if i == 1:
-          #  curr_f1 = f1_resps[d, v_sfs, v_cons[c]];
-          #  curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][curr_f1>1e-1], curr_f1[curr_f1>1e-1], '--o', clip_on=False, color=col);
-          #  linesf1.append(curr_line);
+          if i == 1:
+            curr_f1 = curr_resps[d, v_sfs, v_cons[c]];
+            curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][curr_f1>1e-1], curr_f1[curr_f1>1e-1], '--o', clip_on=False, color=col);
+            linesf1.append(curr_line);
 
       dispAx[d][i].set_aspect('equal', 'box'); 
       dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
@@ -497,15 +497,21 @@ if modParamsCurr:
   inhSfTuning = helper_fcns.getSuppressiveSFtuning();
 
   # Compute weights for suppressive signals
-  inhAsym = 0;
-  #inhAsym = modParamsCurr[8];
   nInhChan = cellStruct['sfm']['mod']['normalization']['pref']['sf'];
-  inhWeight = [];
-  for iP in range(len(nInhChan)):
-      # 0* if we ignore asymmetry; inhAsym* otherwise
+  if norm_type == 1:
+    nTrials =  inhSfTuning.shape[0];
+    inhWeight = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
+    inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
+  else:
+    if len(modFit) == 9: # i.e. if right number of model parameters...
+      inhAsym = modFit[8];
+    else:
+      inhAsym = 0;
+    inhWeight = [];
+    
+    for iP in range(len(nInhChan)):
       inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(cellStruct['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(cellStruct['sfm']['mod']['normalization']['pref']['sf'][iP]))));
 
-  sfInh = 0 * np.ones(omega.shape) / np.amax(modHigh); # mult by 0 because we aren't including a subtractive inhibition in model for now 7/19/17
   sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
   sfNorm = sfNorm/np.amax(np.abs(sfNorm));
 
@@ -519,7 +525,7 @@ if modParamsCurr:
   plt.semilogx([100, 100], [-1.5, 1], 'k--')
   # now the real stuff
   plt.semilogx(omega, sfExc, 'k-')
-  plt.semilogx(omega, sfInh, 'r--', linewidth=2);
+  #plt.semilogx(omega, sfInh, 'r--', linewidth=2);
   plt.semilogx(omega, sfNorm, 'r-', linewidth=1);
   plt.xlim([omega[0], omega[-1]]);
   plt.ylim([-1.5, 1]);
@@ -540,7 +546,7 @@ if modParamsCurr:
   # Remove top/right axis, put ticks only on bottom/left
   sns.despine(ax=curr_ax, offset=5, trim=False);
 
-  if norm_type == 3: # plot the c50 filter (i.e. effective c50 as function of SF)
+  if norm_type == 2: # plot the c50 filter (i.e. effective c50 as function of SF)
     stimSf = np.logspace(-2, 2, 101);
     filtPeak = normTypeArr[4];
     stdLeft = normTypeArr[2];
@@ -564,18 +570,18 @@ if modParamsCurr:
   plt.text(0.5, 0.4, 'derivative order: {:.3f}'.format(modParamsCurr[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
   plt.text(0.5, 0.3, 'response scalar: {:.3f}'.format(modParamsCurr[4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
   plt.text(0.5, 0.2, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modParamsCurr[2]), modParamsCurr[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-  if fit_type == 4:
+  if lossType == 4:
     varGain = modParamsCurr[7];
     plt.text(0.5, 0.1, 'varGain: {:.3f}'.format(varGain), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
   # poisson test - mean/var for each condition (i.e. sfXdispXcon)
   curr_ax = plt.subplot2grid(detailSize, (0, 0), colspan=2, rowspan=2); # set the current subplot location/size[default is 1x1]
   val_conds = ~np.isnan(f1Mean);
-  gt0 = np.logical_and(f1Mean[val_conds]>0, respStd[val_conds]>0);
+  gt0 = np.logical_and(f1Mean[val_conds]>0, f1Std[val_conds]>0);
   plt.loglog([0.01, 1000], [0.01, 1000], 'k--');
-  plt.loglog(f1Mean[val_conds][gt0], np.square(respStd[val_conds][gt0]), 'o');
+  plt.loglog(f1Mean[val_conds][gt0], np.square(f1Std[val_conds][gt0]), 'o');
   # skeleton for plotting modulated poisson prediction
-  if fit_type == 4: # i.e. modPoiss
+  if lossType == 4: # i.e. modPoiss
     mean_vals = np.logspace(-1, 2, 50);
     plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals));
   plt.xlabel('Mean (sps)');
@@ -593,7 +599,6 @@ if norm_sim_on and modParamsCurr:
     conLevels = [1, 0.75, 0.5, 0.33, 0.1];
     nCons = len(conLevels);
     sfCenters = np.logspace(-2, 2, 21); # just for now...
-    #sfCenters = allSfs;
     fNorm, conDisp_plots = plt.subplots(nCons, nDisps, sharey=True, figsize=(40,30));
     fNorm.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
     norm_sim = np.nan * np.empty((nDisps, nCons, len(sfCenters)));
@@ -606,7 +611,7 @@ if norm_sim_on and modParamsCurr:
           print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
           for sfCent in range(len(sfCenters)):
               # if modParamsCurr doesn't have inhAsym parameter, add it!
-              if norm_type == 2:
+              if norm_type == 1: # gaussian weighting...
                 unweighted = 1;
                 _, _, _, normRespSimple, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
                 nTrials = normRespSimple.shape[0];
@@ -614,14 +619,14 @@ if norm_sim_on and modParamsCurr:
                 inhWeightMat  = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
                 normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
                 norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-              else: # norm_type == 1 or 3:
+              else: # norm_type == 0 or 2:
                 _, _, _, _, normResp = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], normTypeArr = normTypeArr);
                 norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
 
-          if norm_type == 2:
+          if norm_type == 1:
             maxResp = np.max(norm_sim[disp, conLvl, :]);
             conDisp_plots[conLvl, disp].text(0.5, 0.0, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8], modParamsCurr[9]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
-          else: # norm_type == 1 or 3:
+          else: # norm_type == 0 or 2:
             conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
 
           conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);
@@ -638,7 +643,7 @@ if norm_sim_on and modParamsCurr:
           conDisp_plots[conLvl, disp].spines['top'].set_visible(False);
           conDisp_plots[conLvl, disp].xaxis.set_ticks_position('bottom');
           conDisp_plots[conLvl, disp].yaxis.set_ticks_position('left');
-    conDisp_plots[0, 2].text(0.5, 1.2, 'Normalization pool responses', fontsize=16, horizontalalignment='center', verticalalignment='center', transform=conDisp_plots[0, 2].transAxes);
+    conDisp_plots[0, nDisps].text(0.5, 1.2, 'Normalization pool responses', fontsize=16, horizontalalignment='center', verticalalignment='center', transform=conDisp_plots[0, 2].transAxes);
 
 ### now save all figures (sfMix contrasts, details, normalization stuff)
 #pdb.set_trace()
@@ -711,15 +716,15 @@ for d in range(nDisps):
           sep_pred = helper_fcns.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_sep[0:4]);
           all_pred = helper_fcns.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_all[0:4]);
 
-          if fit_type == 4:
+          if lossType == 4:
             r_sep, p_sep = helper_fcns.mod_poiss(sep_pred, curr_fit_sep[4]);
             r_all, p_all = helper_fcns.mod_poiss(all_pred, curr_fit_all[4]);
             sep_loss = -np.sum(loss(np.round(resps_w_blank), r_sep, p_sep));
             all_loss = -np.sum(loss(np.round(resps_w_blank), r_all, p_all));
-          elif fit_type == 3:	
+          elif lossType == 3:	
             sep_loss = -np.sum(loss(np.round(resps_w_blank), sep_pred));
             all_loss = -np.sum(loss(np.round(resps_w_blank), all_pred));
-          else: # i.e. fit_type == 1 || == 2
+          else: # i.e. lossType == 1 || == 2
             sep_loss = np.sum(loss(np.round(resps_w_blank), sep_pred));
             all_loss = np.sum(loss(np.round(resps_w_blank), all_pred));
 
@@ -732,7 +737,7 @@ for d in range(nDisps):
 
         # NR fit plots
         if crfFitName:
-          stdPts = np.hstack((0, np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, ))));
+          stdPts = np.hstack((0, np.reshape([f1Std[d, sf_ind, v_cons]], (n_cons, ))));
           expPts = crfAx[d+1][row_ind, col_ind].errorbar(np.hstack((0, all_cons[v_cons])), resps_w_blank, stdPts, fmt='o', clip_on=False);
 
           sepPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
@@ -966,3 +971,126 @@ for f in fCRF:
     pdfSv.savefig(f)
     plt.close(f)
 pdfSv.close()
+
+### SIMULATION PLOTS###
+# We'll simulate from the model, now
+
+# construct by hand for now
+val_con_by_disp = [];
+val_con_by_disp.append(np.array([1, 0.688, 0.473, 0.325, 0.224, 0.154, 0.106, 0.073, 0.05, 0.01]));
+val_con_by_disp.append(np.array([1, 0.688, 0.473, 0.325]));
+
+v_sfs = np.logspace(np.log10(np.min(all_sfs)), np.log10(np.max(all_sfs)), 11); # for now
+print('\nSimulating enhanced range of contrasts from model\n\n');
+print('\tTesting at range of spatial frequencies: ' + str(v_sfs));
+
+fSims = []; simsAx = [];
+
+# first, just plot the (normalized) excitatory filter and normalization pool response on the same plot
+# and for ease of comparison, also duplicate the SF and RVC tuning for single gratings here
+# calculations done above in fDetails (sfExc, sfNorm)
+fFilt, axCurr = plt.subplots(1, 1, figsize=(10, 10));
+fSims.append(fFilt);
+simsAx.append(axCurr);
+
+# plot model details - filter
+simsAx[0].semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+simsAx[0].semilogx([.01, .01], [-0.1, 1], 'k--')
+simsAx[0].semilogx([.1, .1], [-0.1, 1], 'k--')
+simsAx[0].semilogx([1, 1], [-0.1, 1], 'k--')
+simsAx[0].semilogx([10, 10], [-0.1, 1], 'k--')
+simsAx[0].semilogx([100, 100], [-0.1, 1], 'k--')
+# now the real stuff
+ex = simsAx[0].semilogx(omega, sfExc, 'k-')
+nm = simsAx[0].semilogx(omega, -sfNorm, 'r-', linewidth=2.5);
+simsAx[0].set_xlim([omega[0], omega[-1]]);
+simsAx[0].set_ylim([-0.1, 1.1]);
+simsAx[0].set_xlabel('SF (cpd)', fontsize=12);
+simsAx[0].set_ylabel('Normalized response (a.u.)', fontsize=12);
+simsAx[0].set_title('CELL %d' % (which_cell), fontsize=20);
+simsAx[0].legend([ex[0], nm[0]], ('excitatory %.2f' % (modParamsCurr[0]), 'normalization %.2f' % (np.exp(modParamsCurr[-2]))));
+# Remove top/right axis, put ticks only on bottom/left
+sns.despine(ax=simsAx[0], offset=5);
+
+for d in range(len(val_con_by_disp)):
+    
+    v_cons = val_con_by_disp[d];
+    n_v_cons = len(v_cons);
+    
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(20, 20)); # left side for SF simulations, right side for RVC simulations
+    fSims.append(fCurr)
+    simsAx.append(dispCurr);
+
+    # SF tuning - NEED TO SIMULATE
+    lines = [];
+    for c in reversed(range(n_v_cons)):
+        curr_resps = [];
+        for sf_i in v_sfs:
+          print('Testing SF tuning: disp %d, con %.2f, sf %.2f' % (d+1, v_cons[c], sf_i));
+          sf_iResp, _, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, d+1, v_cons[c], sf_i, normTypeArr = normTypeArr);
+          curr_resps.append(sf_iResp[0]); # SFMsimulate returns array - unpack it
+
+        # plot data
+        col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
+        respAbBaseline = np.asarray(curr_resps);
+        print('resps: %s' % respAbBaseline);
+        #print('Simulated at %d|%d sfs: %d above baseline' % (len(v_sfs), len(curr_resps), sum(respAbBaseline>1e-1)));
+        curr_line, = simsAx[d+1][0].plot(v_sfs[respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
+        lines.append(curr_line);
+
+    simsAx[d+1][0].set_aspect('equal', 'box'); 
+    simsAx[d+1][0].set_xlim((0.5*min(v_sfs), 1.2*max(v_sfs)));
+    #simsAx[d+1][0].set_ylim((5e-2, 1.5*maxResp));
+    simsAx[d+1][0].set_xlabel('sf (c/deg)'); 
+
+    simsAx[d+1][0].set_ylabel('resp above baseline (sps)');
+    simsAx[d+1][0].set_title('D%d - sf tuning' % (d));
+    simsAx[d+1][0].legend(lines, [str(i) for i in reversed(v_cons)], loc=0);
+
+    # RVCs - NEED TO SIMULATE
+    n_v_sfs = len(v_sfs)
+
+    lines_log = [];
+    for sf_i in range(n_v_sfs):
+        sf_curr = v_sfs[sf_i];
+
+        curr_resps = [];
+        for con_i in v_cons:
+          print('Testing RVC: disp %d, con %.2f, sf %.2f' % (d+1, con_i, sf_curr));
+          con_iResp, _, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, d+1, con_i, sf_curr, normTypeArr = normTypeArr);
+          curr_resps.append(con_iResp[0]); # unpack the array returned by SFMsimulate
+
+        col = [sf_i/float(n_v_sfs), sf_i/float(n_v_sfs), sf_i/float(n_v_sfs)];
+        respAbBaseline = np.asarray(curr_resps);
+        print('rAB = %s ||| v_cons %s' % (respAbBaseline, v_cons));
+        line_curr, = simsAx[d+1][1].plot(v_cons[respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
+        lines_log.append(line_curr);
+
+    simsAx[d+1][1].set_xlim([1e-2, 1]);
+    #simsAx[d+1][1].set_ylim([1e-2, 1.5*maxResp]);
+    simsAx[d+1][1].set_aspect('equal', 'box')
+    simsAx[d+1][1].set_xscale('log');
+    simsAx[d+1][1].set_yscale('log');
+    simsAx[d+1][1].set_xlabel('contrast');
+
+    simsAx[d+1][1].set_ylabel('resp above baseline (sps)');
+    simsAx[d+1][1].set_title('D%d: sf:all - log resp' % (d));
+    simsAx[d+1][1].legend(lines_log, [str(i) for i in np.round(v_sfs, 2)], loc='upper left');
+
+    for ii in range(2):
+    
+      simsAx[d+1][ii].set_xscale('log');
+      simsAx[d+1][ii].set_yscale('log');
+
+      # Set ticks out, remove top/right axis, put ticks only on bottom/left
+      simsAx[d+1][ii].tick_params(labelsize=15, width=2, length=16, direction='out');
+      simsAx[d+1][ii].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+      sns.despine(ax=simsAx[d+1][ii], offset=10, trim=False); 
+
+# fSims must be saved separately...
+saveName = "cell_%d_simulate.pdf" % (which_cell)
+pdfSv = pltSave.PdfPages(str(save_loc + 'simulate/' + saveName));
+for ff in fSims:
+    pdfSv.savefig(ff)
+    plt.close(ff)
+pdfSv.close();

@@ -395,7 +395,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
             continue;
                 
         # I. Orientation, spatial frequency and temporal frequency
-        # matrix size: 9 x nFilt (i.e., number of stimulus components by number of orientation filters)
+        # matrix size: 5 x nFilt (i.e., number of stimulus components by number of orientation filters)
           
         # Compute SF tuning
         for iB in range(len(normPool.get('n'))):
@@ -617,7 +617,7 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     normTypeArr = setNormTypeArr(params, normTypeArr);
     norm_type = int(normTypeArr[0]);
 
-    if norm_type == 3:
+    if norm_type == 2:
       # sigma calculation
       sfPeak = normTypeArr[4];
       stdLeft = normTypeArr[2];
@@ -632,13 +632,13 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     else:
       sigmaFilt = numpy.square(sigma); # i.e. square the normalization constant
 
-    if norm_type == 2:
+    if norm_type == 1:
       gs_mean = normTypeArr[1];
       gs_std = normTypeArr[2];
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
-    else: # norm_type == 1 or anything else,
-      if norm_type == 1:
-        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 1
+    else: # norm_type == 0 or anything else,
+      if norm_type == 0:
+        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 0
       else:
         inhAsym = 0; # otherwise, just set to 0
       for iP in range(len(nInhChan)):
@@ -723,7 +723,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     normTypeArr = setNormTypeArr(params, normTypeArr);
     norm_type = normTypeArr[0];
 
-    # Other (nonlinear) model components
+    # Other (nonlinear)  components
     sigma    = pow(10, params[2]); # normalization constant
     # respExp  = 2; # response exponent
     respExp  = params[3]; # response exponent
@@ -747,7 +747,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     inhWeight = [];
     nFrames = 120; # always
 
-    if norm_type == 3:
+    if norm_type == 2:
       # sigma calculation
       filterPeak = normTypeArr[4];
       stdLeft = normTypeArr[2];
@@ -762,13 +762,13 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     else:
       sigmaFilt = numpy.square(sigma); # i.e. normalization constant squared
 
-    if norm_type == 2:
+    if norm_type == 1:
       gs_mean = normTypeArr[1];
       gs_std = normTypeArr[2];
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
-    else: # norm_type == 1 or anything else, we just go with 
-      if norm_type == 1:
-        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 1
+    else: # norm_type == 0 or anything else, we just go with 
+      if norm_type == 0:
+        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 0
       else:
         inhAsym = 0; # otherwise, just set to 0
       for iP in range(len(nInhChan)):
