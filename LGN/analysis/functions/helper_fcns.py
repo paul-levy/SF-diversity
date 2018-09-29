@@ -256,6 +256,7 @@ def polar_vec_mean(amps, phases):
 
    all_r = []; all_phi = [];
    all_r_std = []; all_phi_var = [];
+
    for cond in range(n_conds):
      curr_amps = amps[cond];
      curr_phis = phases[cond];
@@ -270,7 +271,7 @@ def polar_vec_mean(amps, phases):
      r = np.sqrt(np.square(x_avg) + np.square(y_avg));
      r_std = np.sqrt(np.square(x_std) + np.square(y_std));
      # now the angle
-     theta = angle_xy([y_avg], [x_avg])[0]; # just get the one value (will be packed in list)
+     theta = angle_xy([x_avg], [y_avg])[0]; # just get the one value (will be packed in list)
      theta_var = circ_var(curr_phis); # compute on the original phases
 
      all_r.append(r);
@@ -669,11 +670,13 @@ def get_isolated_response(data, trials):
    f0summary = np.nan * np.zeros((n_comps, 2)); # mean/std in [:, 0 or 1], respectively
    f1summary = np.nan * np.zeros((n_comps, 2));
 
+   cons = []; sfs = [];
    for i in range(n_comps):
 
      # now go through for each component and get the response to that stimulus component when presented alone
-     con = np.unique(data['con'][i][trials]);
-     sf = np.unique(data['sf'][i][trials]);
+     con = np.unique(data['con'][i][trials]); cons.append(np.round(con, conDig));
+     sf = np.unique(data['sf'][i][trials]); sfs.append(sf);
+
      if len(con)>1 or len(sf)>1:
        warnings.warn('the trials requested must have only one sf/con for a given stimulus component');
        return [], [], [], [];
@@ -685,7 +688,7 @@ def get_isolated_response(data, trials):
      f0summary[i, :] = [np.nanmean(f0all[i]), np.nanstd(f0all[i])]; # nanmean/std in case fewer presentations of individual component than mixture
      f1summary[i, :] = [np.nanmean(f1all[i]), np.nanstd(f1all[i])];
 
-   return f0summary, f1summary, f0all, f1all
+   return f0summary, f1summary, f0all, f1all, cons, sfs;
 
 def tabulate_responses(cellStruct, modResp = []):
     ''' Given cell structure (and opt model responses), returns the following:

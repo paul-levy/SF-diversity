@@ -60,78 +60,142 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
     warnings.warn('this condition is not valid');
     return;
 
-  # get the phase relative to the stimulus
-  ph_rel_stim, stim_ph, resp_ph, all_tf = hf.get_true_phase(data, val_trials, dir);
-  # compute the fourier amplitudes
-  psth_val, _ = hf.make_psth(data['spikeTimes'][val_trials]);
-  _, rel_amp, full_fourier = hf.spike_fft(psth_val, all_tf)
+  ### SINGLE GRATINGS
+  if disp == 0: 
 
-  # now plot!
-  f, ax = plt.subplots(3, 2, figsize=(20, 30))
+    # get the phase relative to the stimulus
+    ph_rel_stim, stim_ph, resp_ph, all_tf = hf.get_true_phase(data, val_trials, dir);
+    # compute the fourier amplitudes
+    psth_val, _ = hf.make_psth(data['spikeTimes'][val_trials]);
+    _, rel_amp, full_fourier = hf.spike_fft(psth_val, all_tf)
 
-  relSpikes = data['spikeTimes'][val_trials];
-  colors = cm.rainbow(np.linspace(0, 1, len(val_trials[0])))
+    # now plot!
+    f, ax = plt.subplots(3, 2, figsize=(20, 30))
 
-  # plot spike raster - trial-by-trial
-  # only works for SINGLE GRATINGS
-  # draw the beginning of each cycle for each trial
-  ax = plt.subplot(3, 1, 1)
-  for i in range(len(relSpikes)):
-      ax.scatter(relSpikes[i], i*np.ones_like(relSpikes[i]), s=45, color=colors[i]);
-      stimPh = stim_ph[i];
-      stimPeriod = np.divide(1.0, all_tf[i]);
-      # i.e. at what point during the trial (in s) does the stimulus component first begin a cycle?
-      firstPh0 = hf.first_ph0(stimPh, all_tf[i])[1];
+    relSpikes = data['spikeTimes'][val_trials];
+    colors = cm.rainbow(np.linspace(0, 1, len(val_trials[0])))
 
-      for j in range(len(all_tf[i])):
-          allPh0 = [stimPeriod[j]*np.arange(-1, all_tf[i][j]) + firstPh0[j]];
-          allPh90 = allPh0 + stimPeriod[j]/4;
-          allPh180 = allPh90 + stimPeriod[j]/4;
-          allPh270 = allPh180 + stimPeriod[j]/4;
-      ax.errorbar(allPh0[0], i*np.ones_like(allPh0[0]), 0.25, linestyle='none', color='k', linewidth=1)
-      ax.errorbar(allPh90[0], i*np.ones_like(allPh0[0]), 0.05, linestyle='none', color='k', linewidth=1)
-      ax.errorbar(allPh180[0], i*np.ones_like(allPh0[0]), 0.05, linestyle='none', color='k', linewidth=1)
-      ax.errorbar(allPh270[0], i*np.ones_like(allPh0[0]), 0.05, linestyle='none', color='k', linewidth=1)
-  ax.set_xlabel('time (s)');
-  ax.set_ylabel('repetition #');
-  ax.set_title('Spike rasters');
+    # plot spike raster - trial-by-trial
+    # only works for SINGLE GRATINGS
+    # draw the beginning of each cycle for each trial
+    ax = plt.subplot(3, 1, 1)
+    for i in range(len(relSpikes)):
+        ax.scatter(relSpikes[i], i*np.ones_like(relSpikes[i]), s=45, color=colors[i]);
+        stimPh = stim_ph[i];
+        stimPeriod = np.divide(1.0, all_tf[i]);
+        # i.e. at what point during the trial (in s) does the stimulus component first begin a cycle?
+        firstPh0 = hf.first_ph0(stimPh, all_tf[i])[1];
 
-  # plot PSTH - per trial, but folded over N cycles
-  # only works for SINGLE GRATINGS
-  ax = plt.subplot(3, 1, 2)
+        for j in range(len(all_tf[i])):
+            allPh0 = [stimPeriod[j]*np.arange(-1, all_tf[i][j]) + firstPh0[j]];
+            allPh90 = allPh0 + stimPeriod[j]/4;
+            allPh180 = allPh90 + stimPeriod[j]/4;
+            allPh270 = allPh180 + stimPeriod[j]/4;
+        ax.errorbar(allPh0[0], i*np.ones_like(allPh0[0]), 0.25, linestyle='none', color='k', linewidth=1)
+        ax.errorbar(allPh90[0], i*np.ones_like(allPh0[0]), 0.05, linestyle='none', color='k', linewidth=1)
+        ax.errorbar(allPh180[0], i*np.ones_like(allPh0[0]), 0.05, linestyle='none', color='k', linewidth=1)
+        ax.errorbar(allPh270[0], i*np.ones_like(allPh0[0]), 0.05, linestyle='none', color='k', linewidth=1)
+    ax.set_xlabel('time (s)');
+    ax.set_ylabel('repetition #');
+    ax.set_title('Spike rasters');
 
-  for i in range(len(relSpikes)):
-      _, bin_edges, psth_norm = hf.fold_psth(relSpikes[i], all_tf[i], stim_ph[i], cycle_fold, n_bins_fold);
-      plt.plot(bin_edges[0:-1], i-0.5+psth_norm, color=colors[i])
-      stimPeriod = np.divide(1.0, all_tf[i]);
-      for j in range(cycle_fold):
-          cycStart = plt.axvline(j*stimPeriod[0]);
-          cycHalf = plt.axvline((j+0.5)*stimPeriod[0], linestyle='--');
-  ax.set_xlabel('time (s)');
-  ax.set_ylabel('spike count (normalized by trial)');
-  ax.set_title('PSTH folded');
-  ax.set_xlim([-stimPeriod[0]/4.0, (cycle_fold+0.25)*stimPeriod[0]]);
-  ax.legend((cycStart, cycHalf), ('ph = 0', 'ph = 180'));
+    # plot PSTH - per trial, but folded over N cycles
+    # only works for SINGLE GRATINGS
+    ax = plt.subplot(3, 1, 2)
 
-  # plot response phase - without accounting for stimulus phase
-  ax = plt.subplot(3, 2, 5, projection='polar')
-  ax.scatter(np.radians(resp_ph), rel_amp, s=60, color=colors, clip_on=False);
-  ax.set_title('Stimulus-blind')
-  ax.set_ylim(auto='True')
-  polar_ylim = ax.get_ylim();
+    for i in range(len(relSpikes)):
+        _, bin_edges, psth_norm = hf.fold_psth(relSpikes[i], all_tf[i], stim_ph[i], cycle_fold, n_bins_fold);
+        plt.plot(bin_edges[0:-1], i-0.5+psth_norm, color=colors[i])
+        stimPeriod = np.divide(1.0, all_tf[i]);
+        for j in range(cycle_fold):
+            cycStart = plt.axvline(j*stimPeriod[0]);
+            cycHalf = plt.axvline((j+0.5)*stimPeriod[0], linestyle='--');
+    ax.set_xlabel('time (s)');
+    ax.set_ylabel('spike count (normalized by trial)');
+    ax.set_title('PSTH folded');
+    ax.set_xlim([-stimPeriod[0]/4.0, (cycle_fold+0.25)*stimPeriod[0]]);
+    ax.legend((cycStart, cycHalf), ('ph = 0', 'ph = 180'));
 
-  # now, compute the average amplitude/phase over all trials
-  [avg_r, avg_ph, _, _] = hf.polar_vec_mean([rel_amp], [ph_rel_stim]);
-  avg_r = avg_r[0]; # just get it out of the array!
-  avg_ph = avg_ph[0]; # just get it out of the array!
+    # plot response phase - without accounting for stimulus phase
+    ax = plt.subplot(3, 2, 5, projection='polar')
+    ax.scatter(np.radians(resp_ph), rel_amp, s=60, color=colors, clip_on=False);
+    ax.set_title('Stimulus-blind')
+    ax.set_ylim(auto='True')
+    polar_ylim = ax.get_ylim();
 
-  # plot response phase - relative to stimulus phase
-  ax = plt.subplot(3, 2, 6, projection='polar')
-  ax.scatter(np.radians(ph_rel_stim), rel_amp, s=60, color=colors, clip_on=False);
-  ax.plot([0, np.radians(avg_ph)], [0, avg_r], color='k', linestyle='--', clip_on=False);
-  ax.set_ylim(polar_ylim);
-  ax.set_title('Stimulus-accounted');
+    # now, compute the average amplitude/phase over all trials
+    [avg_r, avg_ph, _, _] = hf.polar_vec_mean([rel_amp], [ph_rel_stim]);
+    avg_r = avg_r[0]; # just get it out of the array!
+    avg_ph = avg_ph[0]; # just get it out of the array!
 
+    # plot response phase - relative to stimulus phase
+    ax = plt.subplot(3, 2, 6, projection='polar')
+    ax.scatter(np.radians(ph_rel_stim), rel_amp, s=60, color=colors, clip_on=False);
+    ax.plot([0, np.radians(avg_ph)], [0, avg_r], color='k', linestyle='--', clip_on=False);
+    ax.set_ylim(polar_ylim);
+    ax.set_title('Stimulus-accounted');
+
+  ### MIXTURE STIMULI
+  elif disp == 1:
+    nComp = 5; # Fixed by experiment (09.29.18)
+    # a useful function for swapping inside/outside of nested list...
+    switch_inner_outer = lambda arr: [[x[i] for x in arr] for i in range(len(arr[0]))];
+  
+    ### first, gather the isolated component responses from the mixture
+    val_trials, allDisp, allCons, allSfs = hf.get_valid_trials(cellStruct, disp, con, sf)
+    # outer-most list (for ph_rel_stim, stim_phase, resp_phase) is trial/repetition, inner lists are by component
+    ph_rel_stim, stim_phase, resp_phase, all_tf = hf.get_true_phase(data, val_trials, dir=dir);
+    # f1all is nComp lists, each with nReps/nTrials values
+    _, _, _, f1all, conByComp, sfByComp = hf.get_isolated_response(data, val_trials);
+    # need to switch ph_rel_stim (and resp_phase) to be lists of phases by component (rather than list of phases by trial)
+    ph_rel_stim = switch_inner_outer(ph_rel_stim);
+    resp_phase = switch_inner_outer(resp_phase);
+    # compute vector means
+    r_comp, th_comp, _, _ = hf.polar_vec_mean(f1all, ph_rel_stim)
+
+    nrow = 1+nComp;
+    ncol = 2;
+    f, ax = plt.subplots(nrow, ncol, figsize=(ncol*10, nrow*10))
+
+    # in-mixture response phase - NOT stimulus-aligned; just demonstrate for 1st component
+    colors = cm.rainbow(np.linspace(0, 1, len(val_trials[0])))
+    ax = plt.subplot(nrow, 1, 1, projection='polar') # pretend only one column, i.e. take up whole top row
+    ax.scatter(np.radians(resp_phase[0]), hf.flatten(f1all[0]), s=45, color=colors, clip_on=False);
+    ax.set_ylim([0, 1.1*np.max(hf.flatten(f1all[0]))]);
+    ax.set_title('Stimulus-blind (compound; comp #1)');
+
+    for i in range(nComp):
+
+        # compute the isolated response
+        # Then, pick one of the components and get the response (when presented in isolation) 
+        # phases/amplitudes and align relative to the stimulus phase
+        isolConInd = np.where(allCons == conByComp[i])[0][0]; # unwrap fully (will be only one value...)
+        isolSfInd = np.where(allSfs == sfByComp[i])[0][0];
+        val_trials_isol, _, _, _ = hf.get_valid_trials(cellStruct, disp=0, con=isolConInd, sf=isolSfInd)
+
+        ph_rel_stim_isol, stim_phase_isol, resp_phase_isol, all_tf_isol = hf.get_true_phase(data, val_trials_isol, dir=dir);
+        psth_val, _ = hf.make_psth(data['spikeTimes'][val_trials_isol])
+        _, rel_amp_isol, _ = hf.spike_fft(psth_val, all_tf_isol)
+        # and compute vector mean
+        r_isol, th_isol, _, _ = hf.polar_vec_mean([rel_amp_isol], [ph_rel_stim_isol]);
+
+        # isolated response phase - relative to stimulus phase
+        colors = cm.rainbow(np.linspace(0, 1, len(val_trials[0])))
+        ax = plt.subplot(nrow, ncol, 2*(i+1) + 1, projection='polar')
+        ax.scatter(np.radians(ph_rel_stim_isol), rel_amp_isol, s=45, color=colors, clip_on=False);
+        ax.plot([0, np.radians(th_isol[0])], [0, r_isol[0]], ls='--', color='k');
+        ax.set_ylim([0, 1.1*np.max(rel_amp_isol)]);
+        ax.set_title('isolated (r, phi) = (%.2f, %.2f)' % (r_isol[0], th_isol[0]));
+
+        # in-mixture response phase - relative to stimulus phase
+        colors = cm.rainbow(np.linspace(0, 1, len(val_trials[0])))
+        ax = plt.subplot(nrow, ncol, 2*(i+2), projection='polar')
+        ax.scatter(np.radians(ph_rel_stim[i]), hf.flatten(f1all[i]), s=45, color=colors, clip_on=False);
+        ax.plot([0, np.radians(th_comp[i])], [0, r_comp[i]], ls='--', color='k');
+        ax.set_ylim([0, 1.1*np.max(rel_amp_isol)]);
+        ax.set_title('compound (r, phi) = (%.2f, %.2f)' % (r_comp[i], th_comp[i]));
+
+  ## Common to all
   f.subplots_adjust(wspace=0.2, hspace=0.25);
   f.suptitle('%s #%d: disp %d, con %.2f, sf %.2f' % (dataList['unitType'][which_cell-1], which_cell, allDisps[disp], allCons[con], allSfs[sf]));
 
@@ -327,7 +391,7 @@ if __name__ == '__main__':
       dir = int(sys.argv[5]);
     else:
       dir = None;
-    print('Running cell %d, dispersion %d' % (cell_num, disp+1));
+    print('Running cell %d, dispersion %d' % (cell_num, disp));
 
     if ph_by_cond:
       if dir:
