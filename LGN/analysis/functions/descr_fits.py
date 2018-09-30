@@ -128,7 +128,13 @@ def rvc_adjusted_fit(cell_num, data_loc = dataPath, rvcName=rvcName, to_save=1, 
 
   adjMeans = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
   consRepeat = [valCons] * len(adjMeans);
-  rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, allAmpStd);
+  
+  if disp == 1: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)
+    adjSumResp  = [np.sum(x, 1) if x else [] for x in adjMeans];
+    allSumStd = [np.sqrt(np.sum(np.square(x), 1)) if x else [] for x in allAmpStd];
+    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, allSumStd);
+  elif disp == 0:
+    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, allAmpStd);
 
   if os.path.isfile(data_loc + rvcNameFinal):
       rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
@@ -141,11 +147,16 @@ def rvc_adjusted_fit(cell_num, data_loc = dataPath, rvcName=rvcName, to_save=1, 
     rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
   if cell_num-1 not in rvcFits:
     rvcFits[cell_num-1] = dict();
-  rvcFits[cell_num-1]['loss'] = all_loss;
-  rvcFits[cell_num-1]['params'] = all_opts;
-  rvcFits[cell_num-1]['conGain'] = all_conGains;
-  rvcFits[cell_num-1]['adjMeans'] = adjMeans;
-  rvcFits[cell_num-1]['stds'] = allAmpStd;
+    rvcFits[cell_num-1][disp] = dict();
+  else: # cell_num-1 is a key in rvcFits
+    if disp not in rvcFits[cell_num-1]:
+      rvcFits[cell_num-1][disp] = dict();
+
+  rvcFits[cell_num-1][disp]['loss'] = all_loss;
+  rvcFits[cell_num-1][disp]['params'] = all_opts;
+  rvcFits[cell_num-1][disp]['conGain'] = all_conGains;
+  rvcFits[cell_num-1][disp]['adjMeans'] = adjMeans;
+  rvcFits[cell_num-1][disp]['stds'] = allAmpStd;
 
   if to_save:
     np.save(data_loc + rvcNameFinal, rvcFits);
@@ -217,8 +228,9 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, fit_type=3, disp=
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
   rvcNameFinal = hf.fit_name(rvcName, dir);
   rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
-  adjResps = rvcFits[cell_num-1]['adjMeans'];
- 
+  adjResps = rvcFits[disp][cell_num-1]['adjMeans'];
+  if disp == 1:
+    adjResps = [np.sum(x, 1) if x else [] for x in adjResps];
   print('Doing the work, now');
 
   # first, get the set of stimulus values:
@@ -320,19 +332,32 @@ if __name__ == '__main__':
       exit();
 
     cell_num = int(sys.argv[1]);
-    ph_fits = int(sys.argv[2]);
-    rvc_fits = int(sys.argv[3]);
-    descr_fits = int(sys.argv[4]);
-    if len(sys.argv) > 5:
-      gainReg = float(sys.argv[5]);
+    disp = int(sys.argv[2]);
+    ph_fits = int(sys.argv[3]);
+    rvc_fits = int(sys.argv[4]);
+    descr_fits = int(sys.argv[5]);
+    if len(sys.argv) > 6:
+      dir = float(sys.argv[6]);
+    else:
+      dir = None;
+    if len(sys.argv) > 7:
+      gainReg = float(sys.argv[7]);
     else:
       gainReg = 0;
     print('Running cell %d' % cell_num);
 
     # then, put what to run here...
-    if ph_fits == 1:
-      phase_advance_fit(cell_num);
-    if rvc_fits == 1:
-      rvc_adjusted_fit(cell_num);
-    if descr_fits == 1:
-      fit_descr_DoG(cell_num, gain_reg=gainReg);
+    if dir == None:
+      if ph_fits == 1:
+        phase_advance_fit(cell_num, disp=disp);
+      if rvc_fits == 1:
+        rvc_adjusted_fit(cell_num, disp=disp);
+      if descr_fits == 1:
+        fit_descr_DoG(cell_num, gain_reg=gainReg, disp=disp);
+    else:
+      if ph_fits == 1:
+        phase_advance_fit(cell_num, disp=disp, dir=dir);
+      if rvc_fits == 1:
+        rvc_adjusted_fit(cell_num, disp=disp, dir=dir);
+      if descr_fits == 1:
+        fit_descr_DoG(cell_num, gain_reg=gainReg, disp=disp, dir=dir);

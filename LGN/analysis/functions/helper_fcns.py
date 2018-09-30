@@ -403,15 +403,20 @@ def rvc_fit(amps, cons, var = None):
    for i in range(n_amps):
      curr_amps = amps[i];
      curr_cons = cons[i];
+     
+     if curr_amps == [] or curr_cons == []:
+       # nothing to do - set to blank and move on
+       all_opts.append([]);
+       all_loss.append([]);
+       all_conGain.append([]);
+       continue;
+
      if var:
        loss_weights = np.divide(1, var[i]);
      else:
        loss_weights = np.ones_like(var[i]);
      obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - rvc_model(params[0], params[1], params[2], curr_cons))));
      init_params = [0, np.max(curr_amps), 0.5]; 
-     # init_b = 0 --> per the paper, most b = 0 (b <= 0)
-     # init_c0 = 0.5 --> halfway in the contrast range
-     # init_k = np.max(curr_amps) --> with c0=0.5, k*log(1+maxCon/0.5) is approx. k (maxCon is 1);
      b_bounds = (0, 0); # 9.14.18 - per Tony, set to be just 0 for now
      k_bounds = (0, None);
      c0_bounds = (1e-3, 1);

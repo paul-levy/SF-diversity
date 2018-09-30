@@ -38,8 +38,8 @@ dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
-phAdvName = 'phaseAdvanceFits.npy';
-rvcName = 'rvcFits.npy';
+phAdvName = 'phaseAdvanceFits';
+rvcName = 'rvcFits';
 
 def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1, cycle_fold=2, n_bins_fold=8, dp=dataPath, expName=expName):
   ''' Given a cell and the disp/con/sf indices, plot the spike raster for each trial, a folded PSTH,
@@ -215,10 +215,10 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
   dataList = hf.np_smart_load(str(dp + expName))
   cellStruct = hf.np_smart_load(str(dp + dataList['unitName'][which_cell-1] + '_sfm.npy'));
   save_base = sv_loc + 'phasePlots/';
-  rvcFits = hf.np_smart_load(str(dp + rvcStr));
+  rvcFits = hf.np_smart_load(str(dp + hf.fit_name(rvcStr, dir)));
   rvcFits = rvcFits[which_cell-1];
   rvc_model = hf.get_rvc_model();
-  phAdvFits = hf.np_smart_load(str(dp + phAdvStr));
+  phAdvFits = hf.np_smart_load(str(dp + hf.fit_name(phAdvStr, dir)));
   phAdvFits = phAdvFits[which_cell-1];
   phAdv_model = hf.get_phAdv_model();
 
@@ -263,9 +263,11 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     opt_params_phAdv = phAdvFits['params'][sf];
     ph_adv = phAdvFits['phAdv'][sf];
     ## rvc
-    opt_params_rvc = rvcFits['params'][sf];
-    con_gain = rvcFits['conGain'][sf];
-    adj_means = rvcFits['adjMeans'][sf]; 
+    opt_params_rvc = rvcFits[disp]['params'][sf];
+    con_gain = rvcFits[disp]['conGain'][sf];
+    adj_means = rvcFits[disp]['adjMeans'][sf]; 
+    if disp == 1: # then sum adj_means (saved by component)
+      adj_means  = [np.sum(x, 1) if x else [] for x in adj_means];
     # (Above) remember that we have to project the amp/phase vector onto the "correct" phase for estimate of noiseless response
     ## now get ready to plot!
     f, ax = plt.subplots(2, 2, figsize=(20, 10))

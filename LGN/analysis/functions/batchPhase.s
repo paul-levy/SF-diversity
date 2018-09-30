@@ -20,7 +20,8 @@ module load seaborn/0.7.1
 # 3rd arg - plot phase/response by condition?
 # 4th arg - make summary plots of rvc fits, phase advance fits?
 # 5th arg - optional: direction (default is -1) 
-python phase_plotting.py $SLURM_ARRAY_TASK_ID 0 0 1 +1
+python phase_plotting.py $SLURM_ARRAY_TASK_ID 0 1 1 1
+python phase_plotting.py $SLURM_ARRAY_TASK_ID 1 1 0 1
  
 # leave a blank line at the end
 
