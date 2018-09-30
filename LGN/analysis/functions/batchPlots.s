@@ -36,7 +36,7 @@ module load seaborn/0.7.1
         # 3 - sach
 # sixth param is 0 (no norm sims) or 1 (do normalization simulations)
 # seventh param is -1 or +1 (phase direction for loading rvc/phAdv fits)
-python plotting.py $SLURM_ARRAY_TASK_ID 2 1 0 3 0 -1
+python plotting.py $SLURM_ARRAY_TASK_ID 2 1 0 3 0 1
  
 # leave a blank line at the end
 

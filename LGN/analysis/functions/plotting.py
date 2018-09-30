@@ -54,7 +54,7 @@ dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_180927';
+fitBase = 'fitList_180930';
 rvcBase = 'rvcFits';
 phAdvBase = 'phaseAdvanceFits';
 
@@ -143,12 +143,12 @@ if modParamsCurr: # i.e. modParamsCurr isn't []
   if norm_type == 1:
     gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 1
     gs_std = normTypeArr[2]; # guaranteed to exist ...
-  resp, stimVals, val_con_by_disp, validByStimVal, modResp = helper_fcns.tabulate_responses(cellStruct, modRespAll);
+  resp, stimVals, val_con_by_disp, validByStimVal, modResp = helper_fcns.tabulate_responses(data, modRespAll);
 else:
   modResp = None;
-  resp, stimVals, val_con_by_disp, validByStimVal, _ = helper_fcns.tabulate_responses(cellStruct);
+  resp, stimVals, val_con_by_disp, validByStimVal, _ = helper_fcns.tabulate_responses(data);
 
-blankMean, blankStd, _ = helper_fcns.blankResp(cellStruct); 
+blankMean, blankStd, _ = helper_fcns.blankResp(data); 
 
 all_disps = stimVals[0];
 all_cons = stimVals[1];
@@ -159,12 +159,12 @@ nSfs = len(all_sfs);
 nDisps = len(all_disps);
 
 # #### Unpack responses - only f1 stuff!
-f1MeanAll = resp[4];
-f1Mean = np.reshape([np.sum(x) for x in f1MeanAll.flatten()], f1MeanAll.shape);
+f1Mean, f1MeanByTrial, f1MeanAll, f1Pred = helper_fcns.organize_adj_responses(data, rvcFits[which_cell-1]);
+
+# std predictions are based on unprojected responses, since these have variance (proj are all same for cond)
 f1StdAll = resp[5];
 f1Std = np.reshape([np.sqrt(np.sum(np.square(x))) for x in f1StdAll.flatten()], f1StdAll.shape);
 # why the above computation? variance adds, so we square the std to get variance of sum, sum, and take sqrt again to put back to std
-predF1mean = resp[6];
 predF1std = resp[7];
 
 # modResp is (nFam, nSf, nCons, nReps) nReps is (currently; 2018.01.05) set to 20 to accommadate the current experiment with 10 repetitions
@@ -176,8 +176,6 @@ if modResp is not None:
 # ### Plots
 
 # #### Plots by dispersion
-
-# THIS PLOT
 fDisp = []; dispAx = [];
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
@@ -193,18 +191,10 @@ for d in range(nDisps):
 
     fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
     
-    maxPred = np.max(np.max(predF1mean[d, ~np.isnan(predF1mean[d, :, :])]));
-    if d == 0 and which_cell-1 in rvcFits:
-      print('getting the adjusted responses');
-      f1resps = rvcFits[which_cell-1]['adjMeans']; # for, no dispersion
-      reorg_f1 = np.nan * np.ones_like(f1Mean[d, :, :]);
-      for i in range(len(v_cons)):
-        reorg_f1[:, v_cons[i]] = [x[i] for x in f1resps];
-      f1resps = reorg_f1; # put the adjusted responses in the same shape/format as the ones from tabulate_responses...
-    else:
-      f1resps = f1Mean[d, :, :];
+    maxPred = np.max(np.max(f1Pred[d, ~np.isnan(f1Pred[d, :, :])]));
+    f1resps = f1Mean[d, :, :];
     maxf1 = np.max([np.max(x) for x in f1resps]);
-    maxF1Pred = np.max(np.max(predF1mean[d, ~np.isnan(predF1mean[d, :, :])]));
+    maxF1Pred = np.max(np.max(f1Pred[d, ~np.isnan(f1Pred[d, :, :])]));
     maxPlot = np.maximum(maxf1, maxF1Pred);
     maxPlotComp = np.nanmax([np.max(x) for x in f1MeanAll[1, :, :].flatten()]);
 
@@ -219,9 +209,9 @@ for d in range(nDisps):
                                   f1Std[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
       leftLines.append(respPlt); leftStr.append('response');
       if d>0: # also plot predicted response if d>0
-        dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], predF1mean[d, v_sfs, v_cons[c]], 'b-', alpha=0.7, clip_on=False);
-        predPlt = dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], predF1mean[d, v_sfs, v_cons[c]] - predF1std[d, v_sfs, v_cons[c]],
-                                         predF1mean[d, v_sfs, v_cons[c]] + predF1std[d, v_sfs, v_cons[c]], color='b', alpha=0.2);
+        dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], f1Pred[d, v_sfs, v_cons[c]], 'b-', alpha=0.7, clip_on=False);
+        predPlt = dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], f1Pred[d, v_sfs, v_cons[c]] - predF1std[d, v_sfs, v_cons[c]],
+                                         f1Pred[d, v_sfs, v_cons[c]] + predF1std[d, v_sfs, v_cons[c]], color='b', alpha=0.2);
         leftLines.append(predPlt); leftStr.append('prediction');
 
       # plot descriptive model fit
@@ -282,19 +272,19 @@ for d in range(nDisps):
           # now get the individual responses
           n_comps = all_disps[d];
 
-          _, _, curr_trials = helper_fcns.get_condition(data, n_comps, all_cons[v_cons[c]], all_sfs[v_sfs_inds[j]]);
-          _, isolf1, _, isolf1all = helper_fcns.get_isolated_response(data, curr_trials);
-          isolf1mean = isolf1[:, 0];
-          isolf1std = isolf1[:, 1];
+          val_trials, _, _, _ = helper_fcns.get_valid_trials(data, d, v_cons[c], v_sfs_inds[j])
+          isolResp, _, _, _ = helper_fcns.get_isolated_responseAdj(data, val_trials, f1MeanByTrial);
 
           # first, reset color cycle so that it's the same each time around
           dispAx[d][c_plt_ind, 1].set_prop_cycle(None); 
           x_pos = [j-0.25, j+0.25];
           xticks = np.append(xticks, x_pos);
           xticklabels = np.append(xticklabels, ['mix', 'isol']);
+
           for i in range(n_comps): # difficult to make pythonic/array, so just iterate over each component
-            curr_means = [curr_f1[i], isolf1mean[i]];
-            curr_stds = [curr_f1_std[i], isolf1std[i]];
+            # NOTE: for now, we will use the response-in-mixture std for both response stds...
+            curr_means = [curr_f1[i], isolResp[i][0]]; # isolResp[i] is [mean, std] --> just get mean ([0])
+            curr_stds = [curr_f1_std[i], curr_f1_std[i]];
             curr_comp = dispAx[d][c_plt_ind, 1].errorbar(x_pos, curr_means, curr_stds, fmt='-o', clip_on=False);
             comps.append(curr_comp[0]);
 
@@ -905,7 +895,7 @@ else:
 
 for d in range(nDisps):
     
-    fCurr, crfCurr = plt.subplots(1, 2, figsize=(20, 25), sharex = False, sharey = False); # left side for data, right side for model predictions
+    fCurr, crfCurr = plt.subplots(1, 2, figsize=(20, 25), sharex = False, sharey = True); # left side for data, right side for model predictions
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
 
@@ -918,7 +908,6 @@ for d in range(nDisps):
         title_str = 'data';
       elif i == 1 and modParamsCurr:
         curr_resps = modAvg;
-        curr_blank_f0 = modBlankMean;
         title_str = 'model';
       elif i == 1 and not modParamsCurr:
         continue;
@@ -935,13 +924,8 @@ for d in range(nDisps):
           n_cons = sum(v_cons);
 
           col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
+          plot_f1 = f1Mean[d, sf_ind, v_cons];
 
-          if rvcFitCurr and d == 0: # only for single gratings (as of 9.19.2018)
-            plot_f1 = rvcFitCurr['adjMeans'][sf_ind];
-            adjFlag = '(adj)';
-          else:
-            plot_f1 = np.reshape([curr_resps[d, sf_ind, v_cons]], (n_cons, ));
-            adjFlag = '---';
           line_curr, = crfAx[d][i].plot(all_cons[v_cons][plot_f1>1e-1], plot_f1[plot_f1>1e-1], '-o', color=col, clip_on=False);
           lines_f1_log.append(line_curr);
 
@@ -959,12 +943,11 @@ for d in range(nDisps):
       crfAx[d][i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
       sns.despine(ax = crfAx[d][i], offset=10, trim=False);
 
-      crfAx[d][i].set_ylabel('resp %s above baseline (sps)' % adjFlag);
+      crfAx[d][i].set_ylabel('resp (adj) above baseline (sps)');
       crfAx[d][i].set_title('D%d: sf:all - log resp %s' % (d, title_str));
       crfAx[d][i].legend(lines_f1_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
 
 saveName = "/allSfs_cell_%03d.pdf" % (which_cell)
-#saveName = "/allSfs_log_cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
@@ -973,6 +956,7 @@ for f in fCRF:
 pdfSv.close()
 
 ### SIMULATION PLOTS###
+## NOTE: NOT adjusted for changes in adjusted responses - 09.30.18
 # We'll simulate from the model, now
 
 # construct by hand for now

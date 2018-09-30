@@ -8,7 +8,7 @@ from time import sleep
 import sys
 
 sys.path.insert(0, '../functions/');
-from helper_fcns import np_smart_load
+from helper_fcns import np_smart_load, organize_adj_responses
 
 import tensorflow as tf
 
@@ -441,7 +441,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
     loc_data = '/home/pl1465/SF_diversity/LGN/analysis/structures/'; # Prince cluster
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/'; # Personal mac
 
-    fL_name = 'fitList_180927';
+    fL_name = 'fitList_180930';
     # fitType
     if fitType == 1:
       fL_suffix1 = '_flat';
@@ -466,6 +466,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
     dataNames = dataList['unitName'];
 
     S = np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy')); # why -1? 0 indexing...
+    rvcFits = np_smart_load(str(loc_data + 'rvcFits_pos.npy'));
     trial_inf = S['sfm']['exp']['trial'];
     #prefOrEst = mode(trial_inf['ori'][1]).mode;
     prefSfEst = gmean(trial_inf['sf'][0][~numpy.isnan(trial_inf['sf'][0])]); # avoid NaN trials...
@@ -565,7 +566,9 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
     fixedPh = stimPh[:,~mask];
     
     # cell responses
-    spikes = [numpy.sum(x) for x in trial_inf['power_f1'][~mask]];
+    _, spks = organize_adj_responses(S, rvcFits[cellNum-1]);
+    spikes = spks[~mask];
+    #spikes = [numpy.sum(x) for x in trial_inf['power_f1'][~mask]];
     stim_dur = trial_inf['duration'][~mask];
     objWeight = objWeight[~mask];        
 
@@ -629,6 +632,12 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
     m = tf.Session();
     init = tf.global_variables_initializer();
     m.run(init);
+
+    # compute initial loss
+    NLL = m.run(okok, feed_dict={ph_stimOr: fixedOr, ph_stimTf: fixedTf, ph_stimCo: fixedCo, \
+                ph_stimSf: fixedSf, ph_stimPh: fixedPh, ph_spikeCount: spikes, \
+                ph_stimDur: stim_dur, ph_objWeight:objWeight, ph_normResp: normResp, ph_normCentSf: normCentSf});
+    print('\n\n*** Initial loss: %.3f ***\n' % NLL);
     
     # guaranteed to have NLL for this cell by now (even if just placeholder)
     currNLL = fitList[cellNum-1]['NLL'];

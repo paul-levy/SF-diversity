@@ -30,7 +30,6 @@ expName = 'dataList.npy'
 dataList = hf.np_smart_load(str(dataPath + expName));
 loadName = str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy');
 cellStruct = hf.np_smart_load(loadName);
-
 data = cellStruct['sfm']['exp']['trial'];
 
 allSpikes = data['spikeTimes'];
