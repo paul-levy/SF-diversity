@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=00:20:00
+#SBATCH --time=00:30:00
 #SBATCH --mem=1500MB
 
 #SBATCH --job-name=sfPlots
@@ -23,13 +23,14 @@ module load seaborn/0.7.1
 	# 1 - flat normalization
 	# 2 - gaussian weighted normalization
 	# 3 - c50/normalization "constant" filter
+# fourth param is log_y: (1 for log y coordinate)
 # if third param is 1: standard asymmetric normalization (or just flat...)
 # if third param is 2:
 #   4/5 [optional] params are (in log coordinates) mean and std of gaussian
 #   if not given, then they will be chosen from the optimization (if done) or randomly from a distrubition
 # if third param is 3:
 #   4/5/6 [optional] params are std of left/right halves, and offset (i.e. bottom/lowest c50), and peak of c50 curve
-python plotting.py $SLURM_ARRAY_TASK_ID 3 3
+python plotting.py $SLURM_ARRAY_TASK_ID 3 2 1
  
 # leave a blank line at the end
 
