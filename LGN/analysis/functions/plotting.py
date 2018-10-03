@@ -20,12 +20,23 @@ import model_responses
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/Analysis/Functions/paul_plt_cluster.mplstyle');
 from matplotlib import rcParams
-rcParams['font.size'] = 20;
+rcParams['font.size'] = 35;
 rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
 rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['lines.linewidth'] = 2.5;
-rcParams['axes.linewidth'] = 1.5;
-rcParams['lines.markersize'] = 5;
+rcParams['lines.linewidth'] = 6;
+rcParams['axes.linewidth'] = 4;
+rcParams['lines.markersize'] = 15;
+
+rcParams['xtick.major.size'] = 25
+rcParams['xtick.minor.size'] = 12
+rcParams['ytick.major.size'] = 25
+rcParams['ytick.minor.size'] = 12
+
+rcParams['xtick.major.width'] = 6
+rcParams['xtick.minor.width'] = 3
+rcParams['ytick.major.width'] = 6
+rcParams['ytick.minor.width'] = 3
+
 rcParams['font.style'] = 'oblique';
 
 which_cell = int(sys.argv[1]);
@@ -190,6 +201,7 @@ for d in range(nDisps):
     dispAx.append(dispCurr);
 
     fCurr.suptitle('%s #%d' % (dataList['unitType'][which_cell-1], which_cell));
+    fCurr.subplots_adjust(wspace=0.5, hspace=0.5);
     
     maxPred = np.max(np.max(f1Pred[d, ~np.isnan(f1Pred[d, :, :])]));
     f1resps = f1Mean[d, :, :];
@@ -219,11 +231,15 @@ for d in range(nDisps):
         curr_mod_params = descrFits[d, v_cons[c], :];
         curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
         sfs_plot = np.logspace(np.log10(np.min(all_sfs[v_sfs])), np.log10(np.max(all_sfs[v_sfs])), 100);
-        descrPlt = dispAx[d][c_plt_ind, 0].plot(sfs_plot, curr_mod_resp, clip_on=False)
+        descrPlt = dispAx[d][c_plt_ind, 0].plot(sfs_plot, curr_mod_resp, color='k', clip_on=False)
         leftLines.append(descrPlt[0]); leftStr.append('DoG');
+        # now plot characteristic frequency!  
+        char_freq = np.divide(1, 2*np.pi*curr_mod_params[1]); # 1/(2*pi*center radius)
+        freqPlt = dispAx[d][c_plt_ind, 0].plot(char_freq, 1, 'v', color='k');
+        leftLines.append(freqPlt[0]); leftStr.append(r'$f_c$');
 
-      # plot model fits
-      if modParamsCurr: # i.e. modParamsCurr isn't [] 
+      # plot model fits - FOR NOW, only for single gratings
+      if modParamsCurr and d == 0: # i.e. modParamsCurr isn't [] 
         modPlt = dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
                                     modHigh[d, v_sfs, v_cons[c]], color='r', alpha=0.2);
         dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], 'r-', alpha=0.7, clip_on=False);
@@ -242,7 +258,7 @@ for d in range(nDisps):
                                     f1Std[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
         rightLines.append(respPlt); rightStr.append('response');
 
-        # plot descriptive model fit
+        # plot descriptive model fit -- and inferred characteristic frequency
         if descrFits is not None: # i.e. descrFits isn't empty, then plot it
           curr_mod_params = descrFits[d, v_cons[c], :];
           curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
@@ -295,11 +311,11 @@ for d in range(nDisps):
           dispAx[d][c_plt_ind, 1].set_ylim((0, 1.5*maxPlotComp));
           dispAx[d][c_plt_ind, 1].set_title('Component responses');
 
-        for i in range(2):
-	# Set ticks out, remove top/right axis, put ticks only on bottom/left
-          dispAx[d][c_plt_ind, i].tick_params(labelsize=15, width=1, length=8, direction='out');
-          dispAx[d][c_plt_ind, i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
-          sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
+      for i in range(2):
+      # Set ticks out, remove top/right axis, put ticks only on bottom/left
+        dispAx[d][c_plt_ind, i].tick_params(direction='out', top='off', right='off');
+        dispAx[d][c_plt_ind, i].tick_params(which='minor', direction='out', top='off', right='off'); # minor ticks, too...	
+        sns.despine(ax=dispAx[d][c_plt_ind, i], offset=25, trim=False); 
 
       dispAx[d][c_plt_ind, 0].set_xlim((min(all_sfs), max(all_sfs)));
       dispAx[d][c_plt_ind, 0].set_xscale('log');
@@ -317,7 +333,7 @@ for f in fDisp:
     plt.close(f)
 pdfSv.close();
 
-# #### All SF tuning on one graph, split by dispersio
+# #### All SF tuning on one graph, split by dispersion
 # left side of plots for data, right side for model predictions
 fDisp = []; dispAx = [];
 
@@ -955,126 +971,130 @@ for f in fCRF:
     plt.close(f)
 pdfSv.close()
 
+
+
 ### SIMULATION PLOTS###
 ## NOTE: NOT adjusted for changes in adjusted responses - 09.30.18
 # We'll simulate from the model, now
 
-# construct by hand for now
-val_con_by_disp = [];
-val_con_by_disp.append(np.array([1, 0.688, 0.473, 0.325, 0.224, 0.154, 0.106, 0.073, 0.05, 0.01]));
-val_con_by_disp.append(np.array([1, 0.688, 0.473, 0.325]));
+if norm_sim_on and modParamsCurr:
 
-v_sfs = np.logspace(np.log10(np.min(all_sfs)), np.log10(np.max(all_sfs)), 11); # for now
-print('\nSimulating enhanced range of contrasts from model\n\n');
-print('\tTesting at range of spatial frequencies: ' + str(v_sfs));
+  # construct by hand for now
+  val_con_by_disp = [];
+  val_con_by_disp.append(np.array([1, 0.688, 0.473, 0.325, 0.224, 0.154, 0.106, 0.073, 0.05, 0.01]));
+  val_con_by_disp.append(np.array([1, 0.688, 0.473, 0.325]));
 
-fSims = []; simsAx = [];
+  v_sfs = np.logspace(np.log10(np.min(all_sfs)), np.log10(np.max(all_sfs)), 11); # for now
+  print('\nSimulating enhanced range of contrasts from model\n\n');
+  print('\tTesting at range of spatial frequencies: ' + str(v_sfs));
 
-# first, just plot the (normalized) excitatory filter and normalization pool response on the same plot
-# and for ease of comparison, also duplicate the SF and RVC tuning for single gratings here
-# calculations done above in fDetails (sfExc, sfNorm)
-fFilt, axCurr = plt.subplots(1, 1, figsize=(10, 10));
-fSims.append(fFilt);
-simsAx.append(axCurr);
+  fSims = []; simsAx = [];
 
-# plot model details - filter
-simsAx[0].semilogx([omega[0], omega[-1]], [0, 0], 'k--')
-simsAx[0].semilogx([.01, .01], [-0.1, 1], 'k--')
-simsAx[0].semilogx([.1, .1], [-0.1, 1], 'k--')
-simsAx[0].semilogx([1, 1], [-0.1, 1], 'k--')
-simsAx[0].semilogx([10, 10], [-0.1, 1], 'k--')
-simsAx[0].semilogx([100, 100], [-0.1, 1], 'k--')
-# now the real stuff
-ex = simsAx[0].semilogx(omega, sfExc, 'k-')
-nm = simsAx[0].semilogx(omega, -sfNorm, 'r-', linewidth=2.5);
-simsAx[0].set_xlim([omega[0], omega[-1]]);
-simsAx[0].set_ylim([-0.1, 1.1]);
-simsAx[0].set_xlabel('SF (cpd)', fontsize=12);
-simsAx[0].set_ylabel('Normalized response (a.u.)', fontsize=12);
-simsAx[0].set_title('CELL %d' % (which_cell), fontsize=20);
-simsAx[0].legend([ex[0], nm[0]], ('excitatory %.2f' % (modParamsCurr[0]), 'normalization %.2f' % (np.exp(modParamsCurr[-2]))));
-# Remove top/right axis, put ticks only on bottom/left
-sns.despine(ax=simsAx[0], offset=5);
+  # first, just plot the (normalized) excitatory filter and normalization pool response on the same plot
+  # and for ease of comparison, also duplicate the SF and RVC tuning for single gratings here
+  # calculations done above in fDetails (sfExc, sfNorm)
+  fFilt, axCurr = plt.subplots(1, 1, figsize=(10, 10));
+  fSims.append(fFilt);
+  simsAx.append(axCurr);
 
-for d in range(len(val_con_by_disp)):
-    
-    v_cons = val_con_by_disp[d];
-    n_v_cons = len(v_cons);
-    
-    fCurr, dispCurr = plt.subplots(1, 2, figsize=(20, 20)); # left side for SF simulations, right side for RVC simulations
-    fSims.append(fCurr)
-    simsAx.append(dispCurr);
+  # plot model details - filter
+  simsAx[0].semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+  simsAx[0].semilogx([.01, .01], [-0.1, 1], 'k--')
+  simsAx[0].semilogx([.1, .1], [-0.1, 1], 'k--')
+  simsAx[0].semilogx([1, 1], [-0.1, 1], 'k--')
+  simsAx[0].semilogx([10, 10], [-0.1, 1], 'k--')
+  simsAx[0].semilogx([100, 100], [-0.1, 1], 'k--')
+  # now the real stuff
+  ex = simsAx[0].semilogx(omega, sfExc, 'k-')
+  nm = simsAx[0].semilogx(omega, -sfNorm, 'r-', linewidth=2.5);
+  simsAx[0].set_xlim([omega[0], omega[-1]]);
+  simsAx[0].set_ylim([-0.1, 1.1]);
+  simsAx[0].set_xlabel('SF (cpd)', fontsize=12);
+  simsAx[0].set_ylabel('Normalized response (a.u.)', fontsize=12);
+  simsAx[0].set_title('CELL %d' % (which_cell), fontsize=20);
+  simsAx[0].legend([ex[0], nm[0]], ('excitatory %.2f' % (modParamsCurr[0]), 'normalization %.2f' % (np.exp(modParamsCurr[-2]))));
+  # Remove top/right axis, put ticks only on bottom/left
+  sns.despine(ax=simsAx[0], offset=5);
 
-    # SF tuning - NEED TO SIMULATE
-    lines = [];
-    for c in reversed(range(n_v_cons)):
-        curr_resps = [];
-        for sf_i in v_sfs:
-          print('Testing SF tuning: disp %d, con %.2f, sf %.2f' % (d+1, v_cons[c], sf_i));
-          sf_iResp, _, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, d+1, v_cons[c], sf_i, normTypeArr = normTypeArr);
-          curr_resps.append(sf_iResp[0]); # SFMsimulate returns array - unpack it
+  for d in range(len(val_con_by_disp)):
 
-        # plot data
-        col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
-        respAbBaseline = np.asarray(curr_resps);
-        print('resps: %s' % respAbBaseline);
-        #print('Simulated at %d|%d sfs: %d above baseline' % (len(v_sfs), len(curr_resps), sum(respAbBaseline>1e-1)));
-        curr_line, = simsAx[d+1][0].plot(v_sfs[respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
-        lines.append(curr_line);
+      v_cons = val_con_by_disp[d];
+      n_v_cons = len(v_cons);
 
-    simsAx[d+1][0].set_aspect('equal', 'box'); 
-    simsAx[d+1][0].set_xlim((0.5*min(v_sfs), 1.2*max(v_sfs)));
-    #simsAx[d+1][0].set_ylim((5e-2, 1.5*maxResp));
-    simsAx[d+1][0].set_xlabel('sf (c/deg)'); 
+      fCurr, dispCurr = plt.subplots(1, 2, figsize=(20, 20)); # left side for SF simulations, right side for RVC simulations
+      fSims.append(fCurr)
+      simsAx.append(dispCurr);
 
-    simsAx[d+1][0].set_ylabel('resp above baseline (sps)');
-    simsAx[d+1][0].set_title('D%d - sf tuning' % (d));
-    simsAx[d+1][0].legend(lines, [str(i) for i in reversed(v_cons)], loc=0);
+      # SF tuning - NEED TO SIMULATE
+      lines = [];
+      for c in reversed(range(n_v_cons)):
+          curr_resps = [];
+          for sf_i in v_sfs:
+            print('Testing SF tuning: disp %d, con %.2f, sf %.2f' % (d+1, v_cons[c], sf_i));
+            sf_iResp, _, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, d+1, v_cons[c], sf_i, normTypeArr = normTypeArr);
+            curr_resps.append(sf_iResp[0]); # SFMsimulate returns array - unpack it
 
-    # RVCs - NEED TO SIMULATE
-    n_v_sfs = len(v_sfs)
+          # plot data
+          col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
+          respAbBaseline = np.asarray(curr_resps);
+          print('resps: %s' % respAbBaseline);
+          #print('Simulated at %d|%d sfs: %d above baseline' % (len(v_sfs), len(curr_resps), sum(respAbBaseline>1e-1)));
+          curr_line, = simsAx[d+1][0].plot(v_sfs[respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
+          lines.append(curr_line);
 
-    lines_log = [];
-    for sf_i in range(n_v_sfs):
-        sf_curr = v_sfs[sf_i];
+      simsAx[d+1][0].set_aspect('equal', 'box'); 
+      simsAx[d+1][0].set_xlim((0.5*min(v_sfs), 1.2*max(v_sfs)));
+      #simsAx[d+1][0].set_ylim((5e-2, 1.5*maxResp));
+      simsAx[d+1][0].set_xlabel('sf (c/deg)'); 
 
-        curr_resps = [];
-        for con_i in v_cons:
-          print('Testing RVC: disp %d, con %.2f, sf %.2f' % (d+1, con_i, sf_curr));
-          con_iResp, _, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, d+1, con_i, sf_curr, normTypeArr = normTypeArr);
-          curr_resps.append(con_iResp[0]); # unpack the array returned by SFMsimulate
+      simsAx[d+1][0].set_ylabel('resp above baseline (sps)');
+      simsAx[d+1][0].set_title('D%d - sf tuning' % (d));
+      simsAx[d+1][0].legend(lines, [str(i) for i in reversed(v_cons)], loc=0);
 
-        col = [sf_i/float(n_v_sfs), sf_i/float(n_v_sfs), sf_i/float(n_v_sfs)];
-        respAbBaseline = np.asarray(curr_resps);
-        print('rAB = %s ||| v_cons %s' % (respAbBaseline, v_cons));
-        line_curr, = simsAx[d+1][1].plot(v_cons[respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
-        lines_log.append(line_curr);
+      # RVCs - NEED TO SIMULATE
+      n_v_sfs = len(v_sfs)
 
-    simsAx[d+1][1].set_xlim([1e-2, 1]);
-    #simsAx[d+1][1].set_ylim([1e-2, 1.5*maxResp]);
-    simsAx[d+1][1].set_aspect('equal', 'box')
-    simsAx[d+1][1].set_xscale('log');
-    simsAx[d+1][1].set_yscale('log');
-    simsAx[d+1][1].set_xlabel('contrast');
+      lines_log = [];
+      for sf_i in range(n_v_sfs):
+          sf_curr = v_sfs[sf_i];
 
-    simsAx[d+1][1].set_ylabel('resp above baseline (sps)');
-    simsAx[d+1][1].set_title('D%d: sf:all - log resp' % (d));
-    simsAx[d+1][1].legend(lines_log, [str(i) for i in np.round(v_sfs, 2)], loc='upper left');
+          curr_resps = [];
+          for con_i in v_cons:
+            print('Testing RVC: disp %d, con %.2f, sf %.2f' % (d+1, con_i, sf_curr));
+            con_iResp, _, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, d+1, con_i, sf_curr, normTypeArr = normTypeArr);
+            curr_resps.append(con_iResp[0]); # unpack the array returned by SFMsimulate
 
-    for ii in range(2):
-    
-      simsAx[d+1][ii].set_xscale('log');
-      simsAx[d+1][ii].set_yscale('log');
+          col = [sf_i/float(n_v_sfs), sf_i/float(n_v_sfs), sf_i/float(n_v_sfs)];
+          respAbBaseline = np.asarray(curr_resps);
+          print('rAB = %s ||| v_cons %s' % (respAbBaseline, v_cons));
+          line_curr, = simsAx[d+1][1].plot(v_cons[respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
+          lines_log.append(line_curr);
 
-      # Set ticks out, remove top/right axis, put ticks only on bottom/left
-      simsAx[d+1][ii].tick_params(labelsize=15, width=2, length=16, direction='out');
-      simsAx[d+1][ii].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
-      sns.despine(ax=simsAx[d+1][ii], offset=10, trim=False); 
+      simsAx[d+1][1].set_xlim([1e-2, 1]);
+      #simsAx[d+1][1].set_ylim([1e-2, 1.5*maxResp]);
+      simsAx[d+1][1].set_aspect('equal', 'box')
+      simsAx[d+1][1].set_xscale('log');
+      simsAx[d+1][1].set_yscale('log');
+      simsAx[d+1][1].set_xlabel('contrast');
 
-# fSims must be saved separately...
-saveName = "cell_%d_simulate.pdf" % (which_cell)
-pdfSv = pltSave.PdfPages(str(save_loc + 'simulate/' + saveName));
-for ff in fSims:
-    pdfSv.savefig(ff)
-    plt.close(ff)
-pdfSv.close();
+      simsAx[d+1][1].set_ylabel('resp above baseline (sps)');
+      simsAx[d+1][1].set_title('D%d: sf:all - log resp' % (d));
+      simsAx[d+1][1].legend(lines_log, [str(i) for i in np.round(v_sfs, 2)], loc='upper left');
+
+      for ii in range(2):
+
+        simsAx[d+1][ii].set_xscale('log');
+        simsAx[d+1][ii].set_yscale('log');
+
+        # Set ticks out, remove top/right axis, put ticks only on bottom/left
+        simsAx[d+1][ii].tick_params(labelsize=15, width=2, length=16, direction='out');
+        simsAx[d+1][ii].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+        sns.despine(ax=simsAx[d+1][ii], offset=10, trim=False); 
+
+  # fSims must be saved separately...
+  saveName = "cell_%d_simulate.pdf" % (which_cell)
+  pdfSv = pltSave.PdfPages(str(save_loc + 'simulate/' + saveName));
+  for ff in fSims:
+      pdfSv.savefig(ff)
+      plt.close(ff)
+  pdfSv.close();

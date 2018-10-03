@@ -127,7 +127,6 @@ def rvc_adjusted_fit(cell_num, data_loc = dataPath, rvcName=rvcName, to_save=1, 
   
   # use the original measure of varaibility if/when using weighted loss function in hf.rvc_fit
   allAmpStd = [[x[1] for x in sf] for sf in allAmp]; # std is in the first element; do that for each [mean, std] pair in each list (split by sf)
-  pdb.set_trace();
   adjMeans = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
   consRepeat = [valCons] * len(adjMeans);
   
@@ -231,7 +230,7 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, fit_type=3, disp=
   data = cellStruct['sfm']['exp']['trial'];
   rvcNameFinal = hf.fit_name(rvcName, dir);
   rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
-  adjResps = rvcFits[disp][cell_num-1]['adjMeans'];
+  adjResps = rvcFits[cell_num-1][disp]['adjMeans'];
   if disp == 1:
     adjResps = [np.sum(x, 1) if x else [] for x in adjResps];
   print('Doing the work, now');
