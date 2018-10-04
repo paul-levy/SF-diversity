@@ -525,9 +525,11 @@ def setNormTypeArr(params, normTypeArr = []):
           gs_std = numpy.power(10, random_in_range([-2, 2])[0]); # i.e. 1e-2, 1e2
       normTypeArr = [norm_type, gs_mean, gs_std]; # save in case we drew mean/std randomly
     
-    elif norm_type == 2:
+    elif norm_type == 1:
       if len(params) == asym_len:
         inhAsym = params[8];
+      else:
+        inhAsym = 0;
       if len(normTypeArr) > 1: # then we've passed in inhAsym to override existing one, if there is one
         inhAsym = normTypeArr[1];
       normTypeArr = [norm_type, inhAsym]; # if neither "if" above is true, we've already set inhAsym to 0

@@ -774,13 +774,14 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
 
     x = m.run(applyConstraints(fitType, *param_list));
 
-    if holdOutCond is not None:
+    if holdOutCondition is not None:
       holdoutNLL, _, _ = nllEval(params=x, structureSFM=S, normTypeArr=[fitType], lossType=lossType, trialSubset=holdOutTr);
+    else:
+      holdoutNLL = [];
 
     print('Final parameters are ' + str(x));
     
     return NLL, x, holdoutNLL;
-
 
 if __name__ == '__main__':
 
@@ -819,10 +820,10 @@ if __name__ == '__main__':
     holdoutNLLs = numpy.nan * numpy.empty((nDisps, nCons, nSfs));
     allParams = numpy.array(numpy.nan * numpy.empty((nDisps, nCons, nSfs)), dtype='O');
 
-    save_name = 'holdout_%d_%s%s' % (cellNum, fL_suffix1, fL_suffix2);
+    save_name = 'holdQuick_%d_%s%s' % (cellNum, fL_suffix1, fL_suffix2);
 
-    loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster    
-    #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'
+    save_loc = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster    
+    #save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'
 
     holdoutRes = dict();
    
