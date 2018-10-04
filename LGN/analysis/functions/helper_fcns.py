@@ -1075,11 +1075,11 @@ def nbinpdf_log(x, r, p):
     
     return numpy.real(noGamma + withGamma);
 
-def getSuppressiveSFtuning(): # written when still new to python. Probably to matlab-y...
+def getSuppressiveSFtuning(sfs=numpy.logspace(-2, 2, 1000)): # written when still new to python. Probably to matlab-y...
     # Not updated for sfMixAlt - 1/31/18
     # normPool details are fixed, ya?
     # plot model details - exc/suppressive components
-    omega = numpy.logspace(-2, 2, 1000);
+    omega = sfs;
 
     # Compute suppressive SF tuning
     # The exponents of the filters used to approximately tile the spatial frequency domain
