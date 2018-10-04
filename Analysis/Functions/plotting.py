@@ -45,8 +45,9 @@ import pdb
 cellNum = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
 fitType = int(sys.argv[3]);
+log_y = int(sys.argv[4]);
 normTypeArr= [];
-argInd = 3; # we've already taken 3 arguments off (function call, which_cell, loss_type); we'll get fitType again in the loop below
+argInd = 5; # we've already taken 5 arguments off (function call, which_cell, loss_type, fitType, log_y); we'll get fitType again in the loop below
 nArgsIn = len(sys.argv) - argInd; 
 while nArgsIn > 0:
   normTypeArr.append(float(sys.argv[argInd]));
@@ -103,6 +104,7 @@ descrModFit = descrModFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 
 ignore, modResp, normTypeArr = mod_resp.SFMGiveBof(modFit, expData, normTypeArr);
 norm_type = normTypeArr[0];
+print('norm type - %d' % norm_type);
 if norm_type == 2:
   gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 2
   gs_std = normTypeArr[2]; # guaranteed to exist ...
@@ -168,6 +170,8 @@ for con in reversed(range(nCon)): # contrast
         sponRate = all_plots[con, fam].axhline(expData['sfm']['exp']['sponRateMean'], color='b', linestyle='dashed');
         sponRateMod = all_plots[con, fam].axhline(modSponRate, color='r', linestyle='dashed');
         all_plots[con,fam].set_xscale('log');
+        if log_y:
+          all_plots[con,fam].set_yscale('log');
         
         # pretty
         all_plots[con,fam].tick_params(labelsize=15, width=1, length=8, direction='out');
@@ -586,7 +590,11 @@ pdfSv.close();
 # and now save it
 #allFigs = [f, fDetails];
 allFigs = [f, fDetails, fNorm];
-saveName = "cell_%d.pdf" % cellNum
+if log_y:
+  log_str = '_logy';
+else:
+  log_str = '';
+saveName = "cell_%d%s.pdf" % (cellNum, log_str);
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(allFigs)): ## will open an empty extra figure :(
     pdf.savefig(allFigs[fig])

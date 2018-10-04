@@ -59,15 +59,16 @@ def phase_advance_fit(cell_num, data_loc = dataPath, phAdvName=phAdvName, to_sav
 
   dataList = hf.np_smart_load(data_loc + 'dataList.npy');
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
+  data = cellStruct['sfm']['exp']['trial'];
   phAdvName = hf.fit_name(phAdvName, dir);
 
   # first, get the set of stimulus values:
-  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(cellStruct);
+  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data);
   allCons = stimVals[1];
   allSfs = stimVals[2];
 
   # for all con/sf values for this dispersion, compute the mean amplitude/phase per condition
-  allAmp, allPhi, allTf, _, _ = hf.get_all_fft(cellStruct, disp, dir=dir); 
+  allAmp, allPhi, allTf, _, _ = hf.get_all_fft(data, disp, dir=dir); 
      
   # now, compute the phase advance
   conInds = valConByDisp[disp];
@@ -104,10 +105,11 @@ def rvc_adjusted_fit(cell_num, data_loc = dataPath, rvcName=rvcName, to_save=1, 
   '''
   dataList = hf.np_smart_load(data_loc + 'dataList.npy');
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
+  data = cellStruct['sfm']['exp']['trial'];
   rvcNameFinal = hf.fit_name(rvcName, dir);
 
   # first, get the set of stimulus values:
-  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(cellStruct);
+  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data);
   allCons = stimVals[1];
   allSfs = stimVals[2];
   valCons = allCons[valConByDisp[disp]];
@@ -118,14 +120,13 @@ def rvc_adjusted_fit(cell_num, data_loc = dataPath, rvcName=rvcName, to_save=1, 
   # for the mixtrue stimuli - instead, we use the fits made on single gratings to project the
   # individual-component-in-mixture responses
   phAdv_model, all_opts = phase_advance_fit(cell_num, dir=dir, to_save = 0); # don't save
-  allAmp, allPhi, _, allCompCon, allCompSf = hf.get_all_fft(cellStruct, disp, dir=dir);
+  allAmp, allPhi, _, allCompCon, allCompSf = hf.get_all_fft(data, disp, dir=dir);
   # get just the mean amp/phi and put into convenient lists
   allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)
   allPhiMeans = [[x[0] for x in sf] for sf in allPhi]; # mean is in the first element; do that for each [mean, var] pair in each list (split by sf)
   
   # use the original measure of varaibility if/when using weighted loss function in hf.rvc_fit
   allAmpStd = [[x[1] for x in sf] for sf in allAmp]; # std is in the first element; do that for each [mean, std] pair in each list (split by sf)
-
   adjMeans = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
   consRepeat = [valCons] * len(adjMeans);
   
@@ -226,15 +227,16 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, fit_type=3, disp=
       descrFits = dict();
 
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
+  data = cellStruct['sfm']['exp']['trial'];
   rvcNameFinal = hf.fit_name(rvcName, dir);
   rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
-  adjResps = rvcFits[disp][cell_num-1]['adjMeans'];
+  adjResps = rvcFits[cell_num-1][disp]['adjMeans'];
   if disp == 1:
     adjResps = [np.sum(x, 1) if x else [] for x in adjResps];
   print('Doing the work, now');
 
   # first, get the set of stimulus values:
-  resps, stimVals, valConByDisp, _, _ = hf.tabulate_responses(cellStruct);
+  resps, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data);
   all_disps = stimVals[0];
   all_cons = stimVals[1];
   all_sfs = stimVals[2];
@@ -268,7 +270,7 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, fit_type=3, disp=
       if con not in valConByDisp[d]:
         continue;
 
-      valSfInds = hf.get_valid_sfs(cellStruct, d, con);
+      valSfInds = hf.get_valid_sfs(data, d, con);
       valSfVals = all_sfs[valSfInds];
 
       print('.');

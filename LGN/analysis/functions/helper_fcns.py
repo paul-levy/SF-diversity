@@ -578,7 +578,7 @@ def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65):
   '''
   np = numpy;
   # the model
-  psf_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha) 
+  psf_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha);
   # gather the values
   #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
   validInds = np.where(descrFit['varExpl'][disp, :] > varThresh)[0];
