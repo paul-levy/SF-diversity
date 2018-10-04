@@ -41,7 +41,7 @@ expName = 'dataList.npy'
 phAdvName = 'phaseAdvanceFits';
 rvcName = 'rvcFits';
 
-def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1, cycle_fold=2, n_bins_fold=8, dp=dataPath, expName=expName):
+def phase_by_cond(which_cell, data, disp, con, sf, sv_loc=save_loc, dir=-1, cycle_fold=2, n_bins_fold=8, dp=dataPath, expName=expName):
   ''' Given a cell and the disp/con/sf indices, plot the spike raster for each trial, a folded PSTH,
       and finally the response phase - first relative to trial onset, and finally relative to the stimulus phase 
       
@@ -52,9 +52,7 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
   dataList = hf.np_smart_load(str(dp + expName));
   save_base = sv_loc + 'phasePlots/';
 
-  data = cellStruct['sfm']['exp']['trial'];
- 
-  val_trials, allDisps, allCons, allSfs = hf.get_valid_trials(cellStruct, disp, con, sf);
+  val_trials, allDisps, allCons, allSfs = hf.get_valid_trials(data, disp, con, sf);
 
   if not np.any(val_trials[0]): # val_trials[0] will be the array of valid trial indices --> if it's empty, leave!
     warnings.warn('this condition is not valid');
@@ -142,7 +140,7 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
     switch_inner_outer = lambda arr: [[x[i] for x in arr] for i in range(len(arr[0]))];
   
     ### first, gather the isolated component responses from the mixture
-    val_trials, allDisp, allCons, allSfs = hf.get_valid_trials(cellStruct, disp, con, sf)
+    val_trials, allDisp, allCons, allSfs = hf.get_valid_trials(data, disp, con, sf)
     # outer-most list (for ph_rel_stim, stim_phase, resp_phase) is trial/repetition, inner lists are by component
     ph_rel_stim, stim_phase, resp_phase, all_tf = hf.get_true_phase(data, val_trials, dir=dir);
     # f1all is nComp lists, each with nReps/nTrials values
@@ -171,7 +169,7 @@ def phase_by_cond(which_cell, cellStruct, disp, con, sf, sv_loc=save_loc, dir=-1
         # phases/amplitudes and align relative to the stimulus phase
         isolConInd = np.where(allCons == conByComp[i])[0][0]; # unwrap fully (will be only one value...)
         isolSfInd = np.where(allSfs == sfByComp[i])[0][0];
-        val_trials_isol, _, _, _ = hf.get_valid_trials(cellStruct, disp=0, con=isolConInd, sf=isolSfInd)
+        val_trials_isol, _, _, _ = hf.get_valid_trials(data, disp=0, con=isolConInd, sf=isolSfInd)
 
         ph_rel_stim_isol, stim_phase_isol, resp_phase_isol, all_tf_isol = hf.get_true_phase(data, val_trials_isol, dir=dir);
         psth_val, _ = hf.make_psth(data['spikeTimes'][val_trials_isol])
@@ -224,7 +222,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
 
   # gather/compute everything we need
   data = cellStruct['sfm']['exp']['trial'];
-  _, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(cellStruct);
+  _, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(data);
   
   valDisp = validByStimVal[0];
   valCon = validByStimVal[1];
@@ -362,9 +360,9 @@ def batch_phase_by_cond(cell_num, disp, cons=[], sfs=[], dir=-1, dp=dataPath, ex
   fileName = dataList['unitName'][cell_num-1];
   
   cellStruct = hf.np_smart_load(str(dp + fileName + '_sfm.npy'));
-
+  data = cellStruct['sfm']['exp']['trial'];
   # prepare the valid stim parameters by condition in case needed
-  resp, stimVals, val_con_by_disp, validByStimVal, mdRsp = hf.tabulate_responses(cellStruct);
+  resp, stimVals, val_con_by_disp, validByStimVal, mdRsp = hf.tabulate_responses(data);
 
   # gather the sf indices in case we need - this is a dictionary whose keys are the valid sf indices
   valSf = validByStimVal[2];
@@ -377,7 +375,7 @@ def batch_phase_by_cond(cell_num, disp, cons=[], sfs=[], dir=-1, dp=dataPath, ex
   for c in cons:
     for s in sfs:
       print('analyzing cell %d, dispersion %d, contrast %d, sf %d\n' % (cell_num, disp, c, s));
-      phase_by_cond(cell_num, cellStruct, disp, c, s, dir=dir);  
+      phase_by_cond(cell_num, data, disp, c, s, dir=dir);  
 
 if __name__ == '__main__':
 

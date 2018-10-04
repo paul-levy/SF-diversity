@@ -21,6 +21,7 @@ import pdb
 # angle_xy - compute the angle of a vector given x, y coordinate
 # fit_name - return the fit name iwth the proper direction flag (i.e. pos or neg)
 # flatten - unpacks a list of lists into one list...
+# sum_comps - sum the responses across components as determined in analyses for mixtures
 
 ### fourier
 
@@ -54,7 +55,9 @@ import pdb
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
 # blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
 # tabulate_responses - Organizes measured and model responses for sfMixAlt experiment
+# organize_adj_responses - Organize the phase-adjusted responses into the format of tabulate_responses
 # get_valid_trials - get the list of valid trials given a disp/con/sf combination - and return the list of all disps/cons/sfs
+# get_valid_sfs - return indices of valid sfs for a given disp/con
 # random_in_range - random real-valued number between A and B
 # nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
 # getSuppressiveSFtuning - returns the normalization pool response
@@ -126,6 +129,14 @@ def fit_name(base, dir):
 def flatten(l):
   flatten = lambda l: [item for sublist in l for item in sublist];
   return flatten(l);
+
+def sum_comps(l, stdFlag = 0):
+  # assumes list - by sf - with each sf-specific list organized by contrast
+  np = numpy;
+  if stdFlag == 0:
+    return [np.sum(x, 1) if x else [] for x in l];
+  else:
+    return [np.sqrt(np.sum(np.square(x), 1)) if x else [] for x in l];
 
 ### Basic Fourier analyses
 
@@ -305,13 +316,12 @@ def polar_vec_mean(amps, phases):
 
    return all_r, all_phi, all_r_std, all_phi_var;
 
-def get_all_fft(cellStruct, disp, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, stimDur=1):
+def get_all_fft(data, disp, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, stimDur=1):
   ''' for a given cell and condition or set of conditions, compute the mean amplitude and phase
       also return the temporal frequencies which correspond to each condition
   '''
 
-  resp, stimVals, val_con_by_disp, validByStimVal, mdRsp = tabulate_responses(cellStruct);
-  data = cellStruct['sfm']['exp']['trial'];
+  resp, stimVals, val_con_by_disp, validByStimVal, mdRsp = tabulate_responses(data);
 
   # gather the sf indices in case we need - this is a dictionary whose keys are the valid sf indices
   valSf = validByStimVal[2];
@@ -330,7 +340,7 @@ def get_all_fft(cellStruct, disp, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, s
     curr_r = []; curr_ph = []; curr_tf = [];
     curr_conComp = []; curr_sfComp = [];
     for c in cons:
-      val_trials, allDisps, allCons, allSfs = get_valid_trials(cellStruct, disp, c, s);
+      val_trials, allDisps, allCons, allSfs = get_valid_trials(data, disp, c, s);
 
       if not numpy.any(val_trials[0]): # val_trials[0] will be the array of valid trial indices --> if it's empty, leave!
         warnings.warn('this condition is not valid');
@@ -670,8 +680,7 @@ def flexible_Gauss(params, stim_sf, minThresh=0.1):
                 
     return [max(minThresh, respFloor + respRelFloor*x) for x in shape];
 
-def blankResp(cellStruct):
-    tr = cellStruct['sfm']['exp']['trial'];
+def blankResp(tr):
     blank_tr = tr['spikeCount'][numpy.isnan(tr['con'][0])];
     mu = numpy.mean(blank_tr);
     sig = numpy.std(blank_tr);
@@ -696,6 +705,22 @@ def get_condition(data, n_comps, con, sf):
     f1 = data['power_f1'][val_trials];
 
     return f0, f1, val_trials;
+
+def get_conditionAdj(data, n_comps, con, sf, adjByTrial):
+  ''' Returns the trial responses (f0 and f1) and correspondign trials for a given 
+      dispersion level (note: # of components), contrast, and spatial frequency
+  '''
+  np = numpy;
+  conDig = 3; # default...
+
+  val_disp = data['num_comps'] == n_comps;
+  val_con = np.round(data['total_con'], conDig) == con;
+  val_sf = data['cent_sf'] == sf;
+
+  val_trials = np.where(val_disp & val_con & val_sf)[0]; # get as int array of indices rather than boolean array
+  resps = adjByTrial[val_trials];
+
+  return resps, val_trials;
     
 def get_isolated_response(data, trials):
    ''' Given a set of trials (assumed to be all from one unique disp-con-sf set), collect the responses to the components of the 
@@ -735,7 +760,39 @@ def get_isolated_response(data, trials):
 
    return f0summary, f1summary, f0all, f1all, cons, sfs;
 
-def tabulate_responses(cellStruct, modResp = []):
+def get_isolated_responseAdj(data, trials, adjByTrial):
+   ''' Given a set of trials (assumed to be all from one unique disp-con-sf set), collect the responses to the components of the 
+       stimulus when presented in isolation - returns the mean/std and individual trial responses
+       Assumed to be for mixture stimuli
+   '''
+   np = numpy; conDig = 3;
+   n_comps = np.unique(data['num_comps'][trials]);
+   if len(n_comps) > 1:
+     warnings.warn('must have only one level of dispersion for the requested trials');
+     return [], [], [], [];
+   n_comps = n_comps[0]; # get just the value so it's an integer rather than array
+
+   f1all = np.array(np.nan * np.zeros((n_comps, )), dtype='O');
+   f1summary = np.nan * np.zeros((n_comps, 2));
+
+   cons = []; sfs = [];
+   for i in range(n_comps):
+     # now go through for each component and get the response to that stimulus component when presented alone
+     con = np.round(np.unique(data['con'][i][trials]), conDig); cons.append(con);
+     sf = np.unique(data['sf'][i][trials]); sfs.append(sf);
+
+     if len(con)>1 or len(sf)>1:
+       warnings.warn('the trials requested must have only one sf/con for a given stimulus component');
+       return [], [], [], [];
+     # always getting for a single component (hence "1")
+     curr_resps, _ = get_conditionAdj(data, 1, con, sf, adjByTrial);
+
+     f1all[i] = curr_resps;
+     f1summary[i, :] = [np.nanmean(f1all[i]), np.nanstd(f1all[i])];
+
+   return f1summary, f1all, cons, sfs;
+
+def tabulate_responses(data, modResp = []):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
         (ii) all_disps, all_cons, all_sfs - i.e. the stimulus conditions of the experiment
@@ -746,8 +803,6 @@ def tabulate_responses(cellStruct, modResp = []):
     np = numpy;
     conDig = 3; # round contrast to the thousandth
     
-    data = cellStruct['sfm']['exp']['trial'];
-
     all_cons = np.unique(np.round(data['total_con'], conDig));
     all_cons = all_cons[~np.isnan(all_cons)];
 
@@ -844,12 +899,62 @@ def tabulate_responses(cellStruct, modResp = []):
                     
     return [respMean, respStd, predMean, predStd, f1Mean, f1Std, predMeanF1, predStdF1], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
 
-def get_valid_trials(cellStruct, disp, con, sf):
-  ''' Given a cellStruct and the disp/con/sf indices (i.e. integers into the list of all disps/cons/sfs
+def organize_adj_responses(data, rvcFits):
+  ''' Given the rvcFits, reorganize the responses into the format of tabulate_responses
+      i.e. response in one array by disp X sf X con
+      returns adjResps (as in tabulate_responses), adjByTrial (in trial order), 
+        adjByComp (as in tabulate_responses, but each component separately), and 
+        adjPred (predictions for mixtures based on adjusted single grating responses)
+      NOTE: As of 9.30.18, just puts same response value for each repeat of a condition
+  '''
+  _, conds, val_con_by_disp, byTrial, _ = tabulate_responses(data);
+  allDisps = conds[0];
+  allCons = conds[1];
+  allSfs = conds[2];  
+
+  nDisps = len(allDisps);
+  nCons = len(allCons);
+  nSfs = len(allSfs);
+  
+  nTr = len(byTrial[0][0]); # [0][0] for dipsersion-single gratings, but doesn't matter!
+
+  adjResps = numpy.nan * numpy.empty((nDisps, nSfs, nCons));
+  adjByTrial = numpy.nan * numpy.empty((nTr, ));
+  adjByComp = numpy.array(numpy.nan * numpy.empty((nDisps, nSfs, nCons)), dtype='O');
+  adjPred = numpy.nan * numpy.empty((nDisps, nSfs, nCons));
+
+  for d in range(nDisps):
+    conInds = val_con_by_disp[d];
+    sfInds = get_valid_sfs(data, d, conInds[0]); # it doesn't matter which contrast...
+    for s in range(len(sfInds)):
+      curr_resps = rvcFits[d]['adjMeans'][sfInds[s]];
+      adjByComp[d, sfInds[s], conInds] = curr_resps;
+      if d == 0:
+        adjResps[d, sfInds[s], conInds] = curr_resps;
+      elif d == 1: # sum over the components
+        summed_resps = sum_comps([curr_resps]);
+        adjResps[d, sfInds[s], conInds] = numpy.reshape(summed_resps, (len(conInds), ));
+
+      for c in range(len(conInds)):
+        val_trials, _, _, _ = get_valid_trials(data, d, conInds[c], sfInds[s]);
+
+        # now, save response by trial
+        curr_resp = numpy.sum(curr_resps[c]);
+        adjByTrial[val_trials[0]] = len(val_trials[0]) * [curr_resp];
+
+        # and make prediction! (adjByTrial, even if incomplete, will have correct responses for these trials!
+        isolResp, _, _, _ = get_isolated_responseAdj(data, val_trials, adjByTrial);
+        # isolResp is organized as [mean, std] for each component - get the meanResp for each comp and sum
+        adjPred[d, sfInds[s], conInds[c]] = numpy.sum(x[0] for x in isolResp);
+    
+  return adjResps, adjByTrial, adjByComp, adjPred;
+
+def get_valid_trials(data, disp, con, sf):
+  ''' Given a data and the disp/con/sf indices (i.e. integers into the list of all disps/cons/sfs
       Determine which trials are valid (i.e. have those stimulus criteria)
       RETURN list of valid trials, lists for all dispersion values, all contrast values, all sf values
   '''
-  _, stimVals, _, validByStimVal, _ = tabulate_responses(cellStruct);
+  _, stimVals, _, validByStimVal, _ = tabulate_responses(data);
 
   # gather the conditions we need so that we can index properly
   valDisp = validByStimVal[0];
@@ -864,10 +969,10 @@ def get_valid_trials(cellStruct, disp, con, sf):
 
   return val_trials, allDisps, allCons, allSfs;
 
-def get_valid_sfs(cellStruct, disp, con):
-  ''' 
+def get_valid_sfs(data, disp, con):
+  ''' Self explanatory, innit? Returns the indices (into allSfs) of valid sfs for the given condition
   '''
-  _, stimVals, _, validByStimVal, _ = tabulate_responses(cellStruct);
+  _, stimVals, _, validByStimVal, _ = tabulate_responses(data);
 
   # gather the conditions we need so that we can index properly
   valDisp = validByStimVal[0];
@@ -970,11 +1075,11 @@ def nbinpdf_log(x, r, p):
     
     return numpy.real(noGamma + withGamma);
 
-def getSuppressiveSFtuning(): # written when still new to python. Probably to matlab-y...
+def getSuppressiveSFtuning(sfs=numpy.logspace(-2, 2, 1000)): # written when still new to python. Probably to matlab-y...
     # Not updated for sfMixAlt - 1/31/18
     # normPool details are fixed, ya?
     # plot model details - exc/suppressive components
-    omega = numpy.logspace(-2, 2, 1000);
+    omega = sfs;
 
     # Compute suppressive SF tuning
     # The exponents of the filters used to approximately tile the spatial frequency domain

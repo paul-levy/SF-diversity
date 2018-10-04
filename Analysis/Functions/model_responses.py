@@ -1,6 +1,6 @@
 import math, cmath, numpy, os
 from helper_fcns import makeStimulus, random_in_range, genNormWeights, setSigmaFilter, evalSigmaFilter, setNormTypeArr
-from scipy.stats import norm, mode, lognorm, nbinom
+from scipy.stats import norm, mode, lognorm, nbinom, poisson
 from numpy.matlib import repmat
 import time
 
@@ -550,8 +550,10 @@ def GetNormResp(iU, loadPath, stimParams = []):
 
     return M;
 
-def SFMGiveBof(params, structureSFM, normTypeArr = []):
+def SFMGiveBof(params, structureSFM, normTypeArr = [], lossType=1, trialSubset=None, maskOri=True):
     # Computes the negative log likelihood for the LN-LN model
+    #   Optional argument: trialSubset - use only these trials and evalulate the model on that only
+    #   maskOri - in the optimization, we don't include the orientation tuning curve - skip that in the evaluation of loss, too
     # Returns NLL ###, respModel, E
 
     # 00 = preferred spatial frequency   (cycles per degree)
@@ -667,24 +669,49 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
         ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
         meanRate      = ratio.mean(0);
         respModel     = noiseLate + scale*meanRate; # respModel[iR]
+        rateModel     = T['exp']['trial']['duration'] * respModel;
+        # and get the spike count
+        spikeCount = T['exp']['trial']['spikeCount'];
 
-        # Get predicted spike count distributions
-        mu  = numpy.maximum(.01, T['exp']['trial']['duration']*respModel); # The predicted mean spike count; respModel[iR]
-        var = mu + (varGain*pow(mu,2));                        # The corresponding variance of the spike count
-        r   = pow(mu,2)/(var - mu);                           # The parameters r and p of the negative binomial distribution
-        p   = r/(r + mu);
+        # now get the "right" subset of the data for evaluating loss (e.x. by default, orientation tuning trials are not included)
+        if maskOri:
+          # start with all trials...
+          mask = numpy.ones_like(spikeCount, dtype=bool); # i.e. true
+          # and get rid of orientation tuning curve trials
+          oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
 
-        # Evaluate the model
-        lsq = numpy.square(numpy.sqrt(respModel) - numpy.sqrt(T['exp']['trial']['spikeCount']));
-        NLL = numpy.mean(lsq); # was 1*lsq
-        #llh = nbinom.pmf(T['exp']['trial']['spikeCount'], r, p); # Likelihood for each pass under doubly stochastic model
-        #NLLtempSFM = numpy.mean(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]
+          oriInds = numpy.empty((0,));
+          for iB in oriBlockIDs:
+              indCond = numpy.where(T['exp']['trial']['blockID'] == iB);
+              if len(indCond[0]) > 0:
+                  oriInds = numpy.append(oriInds, indCond);
+          mask[oriInds.astype(numpy.int64)] = False;
+        else: # just go with all trials
+          # start with all trials...
+          mask = numpy.ones_like(spikeCount, dtype=bool); # i.e. true
+        # BUT, if we pass in trialSubset, then get only those trials (i.e. overwrite the above mask)
+        if trialSubset is not None: # i.e. if we passed in some trials to specifically include, then include ONLY those (i.e. skip the rest)
+          # start by including NO trials
+          mask = numpy.zeros_like(spikeCount, dtype=bool); # i.e. true
+          mask[trialSubset.astype(numpy.int64)] = True;
 
-    # Combine data and prior
-    #NLL = NLLtempSFM + NLLExp; # sum over NLLtempSFM if you allow it to be d>1
+        if lossType == 1:
+          # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
+          lsq = numpy.square(numpy.add(numpy.sqrt(rateModel[mask]), -numpy.sqrt(spikeCount[mask])));
+          NLL = numpy.mean(lsq);
+        elif lossType == 2:
+          poiss_llh = numpy.log(poisson.pmf(spikeCount[mask], rateModel[mask]));
+          NLL = numpy.mean(-poiss_llh);
+        elif lossType == 3:
+          # Get predicted spike count distributions
+          mu  = numpy.maximum(.01, rateModel[mask]); # The predicted mean spike count; respModel[iR]
+          var = mu + (varGain*pow(mu,2));                        # The corresponding variance of the spike count
+          r   = pow(mu,2)/(var - mu);                           # The parameters r and p of the negative binomial distribution
+          p   = r/(r + mu);
+          llh = nbinom.pmf(spikeCount[mask], r, p); # Likelihood for each pass under doubly stochastic model
+          NLL = numpy.mean(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]
 
     return NLL, respModel, normTypeArr;
-    #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};
 
 def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, normTypeArr = []):
     # Currently, will get slightly different stimuli for excitatory and inhibitory/normalization pools
