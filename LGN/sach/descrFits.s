@@ -14,11 +14,11 @@
 module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 
-# cellNum, numRepititions, baseline sub yes (1) or no (0), loss_type
+# cellNum, numRepititions [default =4], baseline sub yes (1) or no [DEFAULT] (0), loss_type
 # loss_type: 1 - poiss
 #            2 - sqrt
-#            3 - sach (see descr_fit.py for details)
-python descr_fit.py $SLURM_ARRAY_TASK_ID 4 1 2
+#            3 - sach [DEFAULT] (see descr_fit.py for details)
+python descr_fit.py $SLURM_ARRAY_TASK_ID 4
   
 # leave a blank line at the end
 

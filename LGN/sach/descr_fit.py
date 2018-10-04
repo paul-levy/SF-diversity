@@ -16,7 +16,7 @@ def invalid(params, bounds):
   return False;
 
 
-def descr_loss(params, data, contrast, baseline = [], loss_type = 1):
+def descr_loss(params, data, contrast, baseline = None, loss_type = 3):
     '''Given the model params (i.e. flexible gaussian params), the data, and the desired contrast
     (where contrast will be given as an index into the list of unique contrasts), return the loss
     loss_type: 1 - poisson
@@ -25,9 +25,9 @@ def descr_loss(params, data, contrast, baseline = [], loss_type = 1):
                    k := 0.01*max(obs); sigma := measured variance of the response
     '''
     respsSummary, stims, allResps = hf.tabulateResponses(data);
-
-    f0 = allResps[0];
-    obs_counts = f0[contrast];
+    # Need to fit on f1
+    f1 = allResps[1];
+    obs_counts = f1[contrast];
 
     NLL = 0;
     all_sfs = np.unique(data['sf']);
@@ -35,10 +35,10 @@ def descr_loss(params, data, contrast, baseline = [], loss_type = 1):
       if all_sfs[i] > 0: # sf can be 0; ignore these...
         
         obs_spikes = obs_counts[i][~np.isnan(obs_counts[i])]; # only get the non-NaN values;
-        if baseline:
+        if baseline is not None:
           obs_spikes = np.maximum(0, obs_spikes - baseline); # cannot have <0 spikes!
 
-        pred_spikes, _ = hf.DiffOfGauss(*params, stim_sf=all_sfs[i]*np.ones_like(obs_spikes));
+        pred_spikes, _ = hf.DoGsach(*params, stim_sf=all_sfs[i]*np.ones_like(obs_spikes));
   
         if loss_type == 1:
           # poisson model of spiking
@@ -54,11 +54,11 @@ def descr_loss(params, data, contrast, baseline = [], loss_type = 1):
           k = 0.01*np.max(obs_spikes);
           sigma = np.std(obs_spikes);
           sq_err = np.square(obs_spikes-pred_spikes);
-          NLL = NLL + (sq_err/(k+np.square(sigma)));
+          NLL = NLL + np.sum(sq_err/(k+np.square(sigma)));
     
     return NLL;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0, fit_type = 1):
+def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0, fit_type = 3):
 
     nParam = 4;
     
@@ -66,7 +66,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0, fit_type 
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits';
+    fLname = 'descrFits_181004';
     if baseline_sub:
       fLname = str(fLname + '_baseSub');
     if fit_type == 1:
@@ -89,10 +89,10 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0, fit_type 
     if baseline_sub:
       base_mean, _ = hf.blankResp(data);
     else:
-      base_mean = [];
-    [f0, f1] = to_unpack[0];
+      base_mean = None;
+    [_, f1] = to_unpack[0];
     [all_cons, all_sfs] = to_unpack[1];
-    [f0arr, f1arr] = to_unpack[2];
+    [_, f1arr] = to_unpack[2];
     
     nCons = len(all_cons);
 
@@ -102,6 +102,13 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0, fit_type 
     else: # set values to NaN...
         bestNLL = np.ones((nCons)) * np.nan;
         currParams = np.ones((nCons, nParam)) * np.nan;
+
+    # set bounds
+    bound_gainCent = (1e-3, None);
+    bound_gainSurr = (1e-3, None);
+    bound_radiusCent = (1e-3, None);
+    bound_radiusSurr = (1e-3, None);
+    allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
     
     for con in range(nCons):    
 
@@ -110,17 +117,17 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0, fit_type 
 
         print('.');
 
-        maxResp = np.max(f0['mean'][con]);
+        maxResp = np.max(f1['mean'][con]);
         
         for n_try in range(n_repeats):
 
           # pick initial params
-          init_gain = hf.random_in_range((0.5*maxResp, 0.9*maxResp))[0];
-          init_charFreq = hf.random_in_range((1, 5))[0];
-          init_gainSurr = hf.random_in_range((0.25, 0.75))[0];
-          init_charFreqSurr = hf.random_in_range((0.25, 0.5))[0];
+          init_gainCent = hf.random_in_range((maxResp, 5*maxResp))[0];
+          init_radiusCent = hf.random_in_range((0.05, 2))[0];
+          init_gainSurr = init_gainCent * hf.random_in_range((0.1, 0.8))[0];
+          init_radiusSurr = hf.random_in_range((0.5, 4))[0];
 
-          init_params = [init_gain, init_charFreq, init_gainSurr, init_charFreqSurr];
+          init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
 
           # choose optimization method
           if np.mod(n_try, 2) == 0:
@@ -129,7 +136,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, baseline_sub = 0, fit_type 
               methodStr = 'TNC';
 
           obj = lambda params: descr_loss(params, data, con, base_mean);
-          wax = opt.minimize(obj, init_params, method=methodStr); # unbounded...
+          wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds); # unbounded...
 
           # compare
           NLL = wax['fun'];
@@ -192,12 +199,12 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
         else:
             range_baseline = (0.5 * base_rate, 1.5 * base_rate);
 
-        valid_sf_inds = ~np.isnan(f0['mean'][con, :]);
+        valid_sf_inds = ~np.isnan(f1['mean'][con, :]);
         valid_sfs = all_sfs[valid_sf_inds];
-        max_resp = np.amax(f0['mean'][con, valid_sf_inds]);
+        max_resp = np.amax(f1['mean'][con, valid_sf_inds]);
         range_amp = (0.5 * max_resp, 1.5);
 
-        max_sf_index = np.argmax(f0['mean'][con, valid_sf_inds]); # what sf index gives peak response?
+        max_sf_index = np.argmax(f1['mean'][con, valid_sf_inds]); # what sf index gives peak response?
         mu_init = valid_sf_inds[max_sf_index];
 
         if max_sf_index == 0: # i.e. smallest SF center gives max response...
@@ -265,7 +272,7 @@ def fit_descr(cell_num, data_loc, n_repeats = 4):
                 
 if __name__ == '__main__':
 
-    data_loc = '/home/pl1465/SF_diversity/LGN/sach-data/';
+    data_loc = '/home/pl1465/SF_diversity/LGN/sach/structures/';
     #data_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
 
     if len(sys.argv) < 2:

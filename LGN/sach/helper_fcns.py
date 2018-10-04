@@ -65,22 +65,19 @@ def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
 
   return dog(stim_sf), dog_norm(stim_sf);
 
-def DoGsach(gain_c, f_c, gain_s, f_s, stim_sf):
-  ''' Difference of gaussians 
+def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
+  ''' Difference of gaussians as described in Sach's thesis
   gain_c    - gain of the center mechanism
-  f_c       - characteristic frequency of the center, i.e. freq at which response is 1/e of maximum
+  r_c       - radius of the center
   gain_s    - gain of surround mechanism
-  f_s       - characteristic freq. of surround
+  r_s       - radius of surround
   '''
-
-  dog = lambda f: np.maximum(0, gain*np.exp(-np.square(f/f_c)) - gain_s*np.exp(-np.square(f/(f_s))));
+  dog = lambda f: np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(f*np.pi*r_s)));
 
   norm = np.max(dog(stim_sf));
-
   dog_norm = lambda f: dog(f) / norm;
 
   return dog(stim_sf), dog_norm(stim_sf);
-
 
 def deriv_gauss(params, stimSf = np.logspace(np.log10(0.1), np.log10(10), 101)):
 
@@ -188,10 +185,11 @@ def tabulateResponses(data):
     for sf in range(len(all_sfs)):
       val_sf = np.where(data['sf'][val_con] == all_sfs[sf]);
 
-      f0mean[con, sf] = data['f0'][val_con][val_sf];
-      f0sem[con, sf] = data['f0sem'][val_con][val_sf];
-      f1mean[con, sf] = data['f1'][val_con][val_sf];
-      f1sem[con, sf] = data['f1sem'][val_con][val_sf];
+      # take mean, since some conditions have repeats - just average them
+      f0mean[con, sf] = np.mean(data['f0'][val_con][val_sf]);
+      f0sem[con, sf] = np.mean(data['f0sem'][val_con][val_sf]);
+      f1mean[con, sf] = np.mean(data['f1'][val_con][val_sf]);
+      f1sem[con, sf] = np.mean(data['f1sem'][val_con][val_sf]);
 
       f0arr[con][sf] = data['f0arr'][val_con][val_sf];
       f1arr[con][sf] = data['f1arr'][val_con][val_sf];
