@@ -7,9 +7,12 @@ import pdb
 # np_smart_load - loading that will account for parallelization issues - keep trying to load
 # bw_lin_to_log 
 # bw_log_to_lin
+
 # DiffOfGauss - difference of gaussian models - formulation discussed with Tony
 # DoGsach - difference of gaussian models - formulation discussed in Sach Sokol's NYU thesis
 # var_explained
+# charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
+
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
@@ -17,6 +20,9 @@ import pdb
 # blankResp - return mean/std of blank responses (i.e. baseline firing rate) for Sach's experiment
 # tabulateResponses - Organizes measured and model responses for Sach's experiment
 # random_in_range - random real number between a and b
+
+#
+#
 
 def np_smart_load(file_path, encoding_str='latin1'):
 
@@ -86,28 +92,31 @@ def var_explained(data, modParams, contrast, DoGmodel=1):
   var_expl = lambda m, r, rr: 100 * (1 - resp_dist(m, r)/resp_dist(r, rr));
 
   respsSummary, stims, allResps = tabulateResponses(data); # Need to fit on f1 
-  f1 = allResps[1]; 
-  obs_counts = f1[contrast];
+  f1 = respsSummary[1];
+  obs_mean = f1['mean'][contrast, :];
 
   NLL = 0;
-  all_sfs = np.unique(data['sf']);
+  all_sfs = stims[1];
 
-  obs_spikes = np.asarray([]);
-  pred_spikes = np.asarray([]);
-  for i in range(len(all_sfs)):
-    if all_sfs[i] > 0: # sf can be 0; ignore these...
-      obs_curr = obs_counts[i][~np.isnan(obs_counts[i])]; # only get the non-NaN values;
-      obs_spikes = np.concatenate((obs_spikes, obs_curr));
+  if DoGmodel == 1:
+    pred_mean, _ = DoGsach(*modParams, stim_sf=all_sfs);
+  if DoGmodel == 2:
+    pred_mean, _ = DiffOfGauss(*modParams, stim_sf=all_sfs);
 
-      if DoGmodel == 1:
-        pred_curr, _ = DoGsach(*modParams, stim_sf=all_sfs[i]*np.ones_like(obs_curr));
-      if DoGmodel == 2:
-        pred_curr, _ = DiffOfGauss(*modParams, stim_sf=all_sfs[i]*np.ones_like(obs_curr));
-      pred_spikes = np.concatenate((pred_spikes, pred_curr));
-
-  obs_mean = np.mean(obs_spikes) * np.ones_like(obs_spikes);
+  obs_grand_mean = np.mean(obs_mean) * np.ones_like(obs_mean); # make sure it's the same shape as obs_mean
     
-  return var_expl(pred_spikes, obs_spikes, obs_mean);
+  return var_expl(pred_mean, obs_mean, obs_grand_mean);
+
+def charFreq(prms, DoGmodel=1):
+  if DoGmodel == 1:
+      r_c = prms[1];
+      f_c = 1/(np.pi*r_c)
+  elif DoGmodel == 2:
+      f_c = prms[1];
+
+  return f_c;
+
+#####
 
 def deriv_gauss(params, stimSf = np.logspace(np.log10(0.1), np.log10(10), 101)):
 

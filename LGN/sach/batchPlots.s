@@ -15,12 +15,14 @@ module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 module load seaborn/0.7.1
 
-# second param is baseline_sub - for separate SF plots by contrast, subtract baseline from resp?
-# third param is fit_type:
+# second param is loss type (sf tuning):
 	# 1 - poisson
 	# 2 - square root
 	# 3 - sach's loss function (See descr_fit.py)
-python plotting.py $SLURM_ARRAY_TASK_ID 1 2
+# third param is DoG model (sf tuning):
+	# 1 - sach's
+	# 2 - tony's 
+python plotting.py $SLURM_ARRAY_TASK_ID 3 1
  
 # leave a blank line at the end
 
