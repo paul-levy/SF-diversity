@@ -9,6 +9,7 @@ import pdb
 # bw_log_to_lin
 # DiffOfGauss - difference of gaussian models - formulation discussed with Tony
 # DoGsach - difference of gaussian models - formulation discussed in Sach Sokol's NYU thesis
+# var_explained
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
@@ -56,8 +57,7 @@ def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
   gain_s    - relative gain of surround (e.g. gain_s of 0.5 says peak surround response is half of peak center response
   j_s       - relative characteristic freq. of surround (i.e. char_surround = f_c * j_s)
   '''
-
-  dog = lambda f: np.maximum(0, gain*(np.exp(-np.square(f/f_c)) - gain_s * np.exp(-np.square(f/(f_c*j_s)))));
+  dog = lambda f: gain*(np.exp(-np.square(f/f_c)) - gain_s * np.exp(-np.square(f/(f_c*j_s))));
 
   norm = np.max(dog(stim_sf));
 
@@ -72,12 +72,42 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
   gain_s    - gain of surround mechanism
   r_s       - radius of surround
   '''
-  dog = lambda f: np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(f*np.pi*r_s)));
+  dog = lambda f: gain_c*np.pi*np.square(r_c)*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(f*np.pi*r_s));
 
   norm = np.max(dog(stim_sf));
   dog_norm = lambda f: dog(f) / norm;
 
   return dog(stim_sf), dog_norm(stim_sf);
+
+def var_explained(data, modParams, contrast, DoGmodel=1):
+  ''' given a set of responses and model parameters, compute the variance explained by the model (DoGsach)
+  '''
+  resp_dist = lambda x, y: np.sum(np.square(x-y))/np.maximum(len(x), len(y))
+  var_expl = lambda m, r, rr: 100 * (1 - resp_dist(m, r)/resp_dist(r, rr));
+
+  respsSummary, stims, allResps = tabulateResponses(data); # Need to fit on f1 
+  f1 = allResps[1]; 
+  obs_counts = f1[contrast];
+
+  NLL = 0;
+  all_sfs = np.unique(data['sf']);
+
+  obs_spikes = np.asarray([]);
+  pred_spikes = np.asarray([]);
+  for i in range(len(all_sfs)):
+    if all_sfs[i] > 0: # sf can be 0; ignore these...
+      obs_curr = obs_counts[i][~np.isnan(obs_counts[i])]; # only get the non-NaN values;
+      obs_spikes = np.concatenate((obs_spikes, obs_curr));
+
+      if DoGmodel == 1:
+        pred_curr, _ = DoGsach(*modParams, stim_sf=all_sfs[i]*np.ones_like(obs_curr));
+      if DoGmodel == 2:
+        pred_curr, _ = DiffOfGauss(*modParams, stim_sf=all_sfs[i]*np.ones_like(obs_curr));
+      pred_spikes = np.concatenate((pred_spikes, pred_curr));
+
+  obs_mean = np.mean(obs_spikes) * np.ones_like(obs_spikes);
+    
+  return var_expl(pred_spikes, obs_spikes, obs_mean);
 
 def deriv_gauss(params, stimSf = np.logspace(np.log10(0.1), np.log10(10), 101)):
 
@@ -204,3 +234,29 @@ def tabulateResponses(data):
 def random_in_range(lims, size = 1):
 
     return [random.uniform(lims[0], lims[1]) for i in range(size)]
+
+def writeDataTxt(cellNum, f1, sfs, contrast, save_loc):
+  
+  obs_mean = f1['mean'][contrast, :];
+  obs_sem = f1['sem'][contrast, :];
+   
+  write_name = 'cell%d_con%d.txt' % (cellNum, contrast);
+  file = open(str(save_loc + write_name), 'w');
+
+  for i in range(len(sfs)):
+    file.write('%.3f %.3f %.3f\n' % (sfs[i], obs_mean[i], obs_sem[i]));
+
+  file.close();
+
+def writeCellTxt(cellNum, load_path, save_loc):
+
+  dataList = np_smart_load(load_path + 'sachData.npy');
+  data = dataList[cellNum-1]['data'];
+
+  resps, conds, _ = tabulateResponses(data);
+  f1 = resps[1];
+  all_cons = conds[0];
+  all_sfs = conds[1];
+  
+  for i in range(len(all_cons)):
+    writeDataTxt(cellNum, f1, all_sfs, i, save_loc);
