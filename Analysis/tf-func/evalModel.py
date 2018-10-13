@@ -610,7 +610,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
       conInd = holdOutCondition[1];
       sfInd = holdOutCondition[2];
 
-      StimBlockIDs  = numpy.arange(((dispInd-1)*(13*2)+1)+(conInd-1), ((dispInd)*(13*2)-5)+(conInd-1), 2);
+      StimBlockIDs  = numpy.arange(((dispInd-1)*(13*2)+1)+(conInd-1), ((dispInd)*(13*2)-5)+(conInd-1)+1, 2); # +1 to include the last block ID
       currBlockID = StimBlockIDs[sfInd-1];
       holdOutTr = numpy.where(trial_inf['blockID'] == currBlockID)[0];
       mask[holdOutTr.astype(numpy.int64)] = True; # as in, don't include those trials either!
@@ -840,8 +840,9 @@ if __name__ == '__main__':
           allParams[d, c, s] = params;
           holdoutNLLs[d, c, s] = holdoutNLL;
 
-    holdoutRes['NLL'] = NLLs;
-    holdoutRes['params'] = allParams;
-    holdoutRes['holdoutNLL'] = holdoutNLLs;
+        # update and save after each disp x con combination
+        holdoutRes['NLL'] = NLLs;
+        holdoutRes['params'] = allParams;
+        holdoutRes['holdoutNLL'] = holdoutNLLs;
 
-    numpy.save(save_loc + save_name, holdoutRes);
+        numpy.save(save_loc + save_name, holdoutRes);
