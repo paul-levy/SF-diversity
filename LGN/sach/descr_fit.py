@@ -49,7 +49,7 @@ def descr_loss(params, f1, all_sfs, contrast, loss_type = 3, DoGmodel = 1):
       sq_err = np.square(obs_mean-pred_mean);
       NLL = NLL + np.sum(sq_err/(k+np.square(sigma)));
 
-    print('NLL %.2f || params %s' % (NLL, str(params)));
+    #print('NLL %.2f || params %s' % (NLL, str(params)));
     
     return NLL;
 
@@ -61,7 +61,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits_181006';
+    fLname = 'descrFits_181012';
     if loss_type == 1:
       loss_str = '_poiss';
     elif loss_type == 2:
@@ -93,12 +93,14 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
       bestNLL = descrFits[cell_num-1]['NLL'];
       currParams = descrFits[cell_num-1]['params'];
       varExpl = descrFits[cell_num-1]['varExpl'];
-      #prefSf = descrFits[cell_num-1]['prefSf'];
+      prefSf = descrFits[cell_num-1]['prefSf'];
+      charFreq = descrFits[cell_num-1]['charFreq'];
     else: # set values to NaN...
       bestNLL = np.ones((nCons)) * np.nan;
       currParams = np.ones((nCons, nParam)) * np.nan;
       varExpl = np.ones((nCons)) * np.nan;
-      #prefSf = np.ones((nCons)) * np.nan;
+      prefSf = np.ones((nCons)) * np.nan;
+      charFreq = np.ones((nCons)) * np.nan;
 
     # set bounds
     if DoGmodel == 1:
@@ -130,13 +132,13 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
             init_gainCent = hf.random_in_range((maxResp, 2*maxResp))[0];
             init_radiusCent = hf.random_in_range((0.05, 0.3))[0];
             init_gainSurr = init_gainCent * hf.random_in_range((0.2, 0.4))[0];
-            init_radiusSurr = hf.random_in_range((1, 2))[0];
+            init_radiusSurr = 3*init_radiusCent;
             init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
           elif DoGmodel == 2:
-            init_gainCent = maxResp;
-            init_freqCent = 1.5*freqAtMaxResp;
-            init_gainFracSurr = 1
-            init_freqFracSurr = .3;
+            init_gainCent = maxResp * hf.random_in_range((0.9, 1.2))[0];
+            init_freqCent = np.maximum(all_sfs[2], freqAtMaxResp * hf.random_in_range((1.2, 1.5))[0]); # don't pick all_sfs[0] -- that's zero (we're avoiding that)
+            init_gainFracSurr = hf.random_in_range((0.7, 1))[0];
+            init_freqFracSurr = hf.random_in_range((.25, .35))[0];
             init_params = [init_gainCent, init_freqCent, init_gainFracSurr, init_freqFracSurr];
 
           # choose optimization method
@@ -156,6 +158,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
               bestNLL[con] = NLL;
               currParams[con, :] = params;
               varExpl[con] = hf.var_explained(data, params, con, DoGmodel);
+              prefSf[con] = hf.dog_prefSf(params, all_sfs, DoGmodel);
+              charFreq[con] = hf.charFreq(params, DoGmodel);
 
     # update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(fLname):

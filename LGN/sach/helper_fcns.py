@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.optimize as opt
 import os
 import random
 from time import sleep
@@ -10,7 +11,9 @@ import pdb
 
 # DiffOfGauss - difference of gaussian models - formulation discussed with Tony
 # DoGsach - difference of gaussian models - formulation discussed in Sach Sokol's NYU thesis
-# var_explained
+# var_explained - compute the variance explained given data/model fit
+# dog_prefSf - compute the prefSF given a DoG model/fit
+# dog_prefSfMod - smooth prefSf vs. contrast with a functional form/fit
 # charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
 
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
@@ -21,8 +24,8 @@ import pdb
 # tabulateResponses - Organizes measured and model responses for Sach's experiment
 # random_in_range - random real number between a and b
 
-#
-#
+# writeDataTxt - write [sf mean sem] for a given cell/contrast
+# writeCellTxt - call writeDataTxt for all contrasts for a cell
 
 def np_smart_load(file_path, encoding_str='latin1'):
 
@@ -32,9 +35,11 @@ def np_smart_load(file_path, encoding_str='latin1'):
    while(True):
      try:
          loaded = np.load(file_path, encoding=encoding_str).item();
+         print('loaded');
          break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-         sleep(10); # i.e. wait for 10 seconds
+         sleep(60); # i.e. wait for N seconds
+         print('sleep');
 
    return loaded;
 
@@ -63,13 +68,16 @@ def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
   gain_s    - relative gain of surround (e.g. gain_s of 0.5 says peak surround response is half of peak center response
   j_s       - relative characteristic freq. of surround (i.e. char_surround = f_c * j_s)
   '''
-  dog = lambda f: gain*(np.exp(-np.square(f/f_c)) - gain_s * np.exp(-np.square(f/(f_c*j_s))));
+  dog = lambda f: np.maximum(0, gain*(np.exp(-np.square(f/f_c)) - gain_s * np.exp(-np.square(f/(f_c*j_s)))));
 
   norm = np.max(dog(stim_sf));
+  if norm < 1e-5: # don't divide by zero, or anything close!
+    dog_norm = [];
+  else:
+    dog_norm = lambda f: dog(f) / norm;
+    dog_norm = dog_norm(stim_sf);
 
-  dog_norm = lambda f: dog(f) / norm;
-
-  return dog(stim_sf), dog_norm(stim_sf);
+  return dog(stim_sf), dog_norm;
 
 def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
   ''' Difference of gaussians as described in Sach's thesis
@@ -78,12 +86,16 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
   gain_s    - gain of surround mechanism
   r_s       - radius of surround
   '''
-  dog = lambda f: gain_c*np.pi*np.square(r_c)*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(f*np.pi*r_s));
+  dog = lambda f: np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(f*np.pi*r_s)));
 
   norm = np.max(dog(stim_sf));
-  dog_norm = lambda f: dog(f) / norm;
+  if norm < 1e-5: # don't divide by zero, or anything close!
+    dog_norm = [];
+  else:
+    dog_norm = lambda f: dog(f) / norm;
+    dog_norm = dog_norm(stim_sf);
 
-  return dog(stim_sf), dog_norm(stim_sf);
+  return dog(stim_sf), dog_norm;
 
 def var_explained(data, modParams, contrast, DoGmodel=1):
   ''' given a set of responses and model parameters, compute the variance explained by the model (DoGsach)
@@ -106,6 +118,48 @@ def var_explained(data, modParams, contrast, DoGmodel=1):
   obs_grand_mean = np.mean(obs_mean) * np.ones_like(obs_mean); # make sure it's the same shape as obs_mean
     
   return var_expl(pred_mean, obs_mean, obs_grand_mean);
+
+def dog_prefSf(modParams, all_sfs, dog_model=1):
+  ''' Compute the preferred SF given a set of DoG parameters
+  '''
+  sf_bound = (np.min(all_sfs), np.max(all_sfs));
+  if dog_model == 1:
+    obj = lambda sf: -DoGsach(*modParams, stim_sf=sf)[0];
+  elif dog_model == 2:
+    obj = lambda sf: -DiffOfGauss(*modParams, stim_sf=sf)[0];
+  init_sf = np.median(all_sfs);
+  optz = opt.minimize(obj, init_sf, bounds=(sf_bound, ))
+  return optz['x'];
+
+def dog_prefSfMod(descrFit, allCons, varThresh=65):
+  ''' Given a descrFit dict for a cell, compute a fit for the prefSf as a function of contrast
+      Return ratio of prefSf at highest:lowest contrast, lambda of model, params
+  '''
+  # the model
+  psf_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha);
+  # gather the values
+  #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
+  validInds = np.where(descrFit['varExpl'][:] > varThresh)[0];
+  if len(validInds) == 0: # i.e. no good fits...
+    return np.nan, [], [];
+  prefSfs = descrFit['prefSf'][disp, validInds];
+  conVals = allCons[validInds];
+  weights = descrFit['varExpl'][disp, validInds];
+  # set up the optimization
+  obj = lambda params: np.sum(np.multiply(weights,
+        np.square(psf_model(params[0], params[1], params[2], conVals) - prefSfs)))
+  init_offset = prefSfs[0];
+  conRange = conVals[-1] - conVals[0];
+  init_slope = (prefSfs[-1] - prefSfs[0]) / conRange;
+  init_alpha = 0.4; # most tend to be saturation (i.e. contrast exp < 1)
+  # run
+  optz = opt.minimize(obj, [init_offset, init_slope, init_alpha], bounds=((0, None), (None, None), (0.25, 4)));
+  opt_params = optz['x'];
+  # ratio:
+  extrema = psf_model(*opt_params, con=(conVals[0], conVals[-1]))
+  pSfRatio = extrema[-1] / extrema[0]
+
+  return pSfRatio, psf_model, opt_params;
 
 def charFreq(prms, DoGmodel=1):
   if DoGmodel == 1:

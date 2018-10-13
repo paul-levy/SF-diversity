@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=0:30:00
+#SBATCH --time=6:30:00
 #SBATCH --mem=1500MB
 
 #SBATCH --job-name=descrFitsSach
@@ -19,7 +19,6 @@ source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 #            2 - sqrt
 #            3 - sach [DEFAULT] (see descr_fit.py for details)
 # DoG model: 1 - sach; 2 - Tony fomulation
-python descr_fit.py $SLURM_ARRAY_TASK_ID 10 3 2
+python descr_fit.py $SLURM_ARRAY_TASK_ID 1000 3 1
   
 # leave a blank line at the end
-
