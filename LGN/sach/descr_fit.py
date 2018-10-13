@@ -22,6 +22,7 @@ def descr_loss(params, f1, all_sfs, contrast, loss_type = 3, DoGmodel = 1):
                2 - sqrt
                3 - Sach sum{[(exp-obs)^2]/[k+sigma^2]} where
                    k := 0.01*max(obs); sigma := measured variance of the response
+               4 - variance explained!
     '''
     obs_mean = f1['mean'][contrast, :];
     obs_sem = f1['sem'][contrast, :];
@@ -45,10 +46,15 @@ def descr_loss(params, f1, all_sfs, contrast, loss_type = 3, DoGmodel = 1):
       NLL = NLL + loss;
     elif loss_type == 3:
       k = 0.01*np.max(obs_mean);
+      #sigma = np.ones_like(obs_mean);
       sigma = obs_sem;
       sq_err = np.square(obs_mean-pred_mean);
       NLL = NLL + np.sum(sq_err/(k+np.square(sigma)));
-
+    elif loss_type == 4:
+      resp_dist = lambda x, y: np.sum(np.square(x-y))/np.maximum(len(x), len(y))
+      var_expl = lambda m, r, rr: 100 * (1 - resp_dist(m, r)/resp_dist(r, rr));
+      # rr is the mean of all observed mean responses (and is last argument in below line)
+      NLL = NLL - var_expl(pred_mean, obs_mean, np.mean(obs_mean) * np.ones_like(obs_mean));
     #print('NLL %.2f || params %s' % (NLL, str(params)));
     
     return NLL;
@@ -61,13 +67,15 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits_181012';
+    fLname = 'descrFits_d181012';
     if loss_type == 1:
       loss_str = '_poiss';
     elif loss_type == 2:
       loss_str = '_sqrt';
     elif loss_type == 3:
       loss_str = '_sach';
+    elif loss_type == 4:
+      loss_str = '_varExpl';
     if DoGmodel == 1:
       mod_str = '_sach';
     elif DoGmodel == 2:
@@ -129,10 +137,10 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
         for n_try in range(n_repeats):
           # pick initial params
           if DoGmodel == 1:
-            init_gainCent = hf.random_in_range((maxResp, 2*maxResp))[0];
-            init_radiusCent = hf.random_in_range((0.05, 0.3))[0];
-            init_gainSurr = init_gainCent * hf.random_in_range((0.2, 0.4))[0];
-            init_radiusSurr = 3*init_radiusCent;
+            init_gainCent = hf.random_in_range((maxResp, 5*maxResp))[0];
+            init_radiusCent = hf.random_in_range((0.05, 2))[0];
+            init_gainSurr = init_gainCent * hf.random_in_range((0.1, 0.8))[0];
+            init_radiusSurr = hf.random_in_range((0.5, 4))[0];
             init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
           elif DoGmodel == 2:
             init_gainCent = maxResp * hf.random_in_range((0.9, 1.2))[0];
@@ -159,7 +167,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
               currParams[con, :] = params;
               varExpl[con] = hf.var_explained(data, params, con, DoGmodel);
               prefSf[con] = hf.dog_prefSf(params, all_sfs, DoGmodel);
-              charFreq[con] = hf.charFreq(params, DoGmodel);
+              charFreq[con] = hf.dog_charFreq(params, DoGmodel);
 
     # update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(fLname):

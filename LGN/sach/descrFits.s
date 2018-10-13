@@ -18,7 +18,8 @@ source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 # loss_type: 1 - poiss
 #            2 - sqrt
 #            3 - sach [DEFAULT] (see descr_fit.py for details)
+#            4 - variance explained
 # DoG model: 1 - sach; 2 - Tony fomulation
-python descr_fit.py $SLURM_ARRAY_TASK_ID 1000 3 1
+python descr_fit.py $SLURM_ARRAY_TASK_ID 1000 4 2
   
 # leave a blank line at the end

@@ -15,6 +15,7 @@ import pdb
 # dog_prefSf - compute the prefSF given a DoG model/fit
 # dog_prefSfMod - smooth prefSf vs. contrast with a functional form/fit
 # charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
+# charFreqMod - smooth characteristic frequency vs. contrast with a functional form/fit
 
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -161,7 +162,7 @@ def dog_prefSfMod(descrFit, allCons, varThresh=65):
 
   return pSfRatio, psf_model, opt_params;
 
-def charFreq(prms, DoGmodel=1):
+def dog_charFreq(prms, DoGmodel=1):
   if DoGmodel == 1:
       r_c = prms[1];
       f_c = 1/(np.pi*r_c)
@@ -169,6 +170,37 @@ def charFreq(prms, DoGmodel=1):
       f_c = prms[1];
 
   return f_c;
+
+def dog_charFreqMod(descrFit, allCons, varThresh=65):
+  ''' Given a descrFit dict for a cell, compute a fit for the prefSf as a function of contrast
+      Return ratio of prefSf at highest:lowest contrast, lambda of model, params
+  '''
+  # the model
+  fc_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha);
+  # gather the values
+  #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
+  validInds = np.where(descrFit['varExpl'][:] > varThresh)[0];
+  if len(validInds) == 0: # i.e. no good fits...
+    return np.nan, [], [];
+  prefSfs = descrFit['charFreq'][disp, validInds];
+  conVals = allCons[validInds];
+  weights = descrFit['varExpl'][disp, validInds];
+  # set up the optimization
+  obj = lambda params: np.sum(np.multiply(weights,
+        np.square(fc_model(params[0], params[1], params[2], conVals) - prefSfs)))
+  init_offset = charFreqs[0];
+  conRange = conVals[-1] - conVals[0];
+  init_slope = (charFreqs[-1] - charFreqs[0]) / conRange;
+  init_alpha = 0.4; # most tend to be saturation (i.e. contrast exp < 1)
+  # run
+  optz = opt.minimize(obj, [init_offset, init_slope, init_alpha], bounds=((0, None), (None, None), (0.25, 4)));
+  opt_params = optz['x'];
+  # ratio:
+  extrema = fc_model(*opt_params, con=(conVals[0], conVals[-1]))
+  fcRatio = extrema[-1] / extrema[0]
+
+  return fcRatio, fc_model, opt_params;
+
 
 #####
 

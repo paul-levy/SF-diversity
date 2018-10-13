@@ -103,7 +103,7 @@ for c in reversed(range(nCons)):
 
 ax.set_aspect('equal', 'box'); 
 ax.set_xlim((0.5*np.min(all_sfs[val_sfs]), 1.2*np.max(all_sfs[val_sfs])));
-ax.set_ylim((5e-2, 1.5*maxResp));
+#ax.set_ylim((5e-2, 1.5*maxResp));
 
 #ax.set_xscale('symlog', linthreshx=all_sfs[1]); # all_sfs[0] = 0, but all_sfs[0]>1
 ax.set_xscale('log');
@@ -152,7 +152,7 @@ for c in reversed(range(nCons)):
       sfsAx[c_plt_ind].plot(sfs_plot, helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0], clip_on=False)
     elif sf_DoG_model == 2:
       sfsAx[c_plt_ind].plot(sfs_plot, helper_fcns.DiffOfGauss(*curr_mod_params, stim_sf=sfs_plot)[0], clip_on=False)
-    f_c = helper_fcns.charFreq(curr_mod_params, sf_DoG_model);
+    f_c = helper_fcns.dog_charFreq(curr_mod_params, sf_DoG_model);
     # note we take DiffOfGaus(.)[0] since that is the unnormalized version of the DoG response
 
     sfsAx[c_plt_ind].set_xlim((min(sfs_plot), max(sfs_plot)));
@@ -166,7 +166,7 @@ for c in reversed(range(nCons)):
     sfsAx[c_plt_ind].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
     sns.despine(ax=sfsAx[c_plt_ind], offset=10, trim=False); 
 
-    sfsAx[c_plt_ind].set_ylim((0, 1.5*maxResp));
+    #sfsAx[c_plt_ind].set_ylim((0, 1.5*maxResp));
     yAxStr = 'response ';
     sfsAx[c_plt_ind].set_ylabel(str(yAxStr + '(spikes/s)'));
 
