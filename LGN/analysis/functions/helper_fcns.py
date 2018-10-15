@@ -48,6 +48,9 @@ import pdb
 # var_explained - compute the variance explained for a given model fit/set of responses
 # dog_prefSf - compute the prefSf for a given DoG model/parameter set
 # dog_prefSfMod - fit a simple model of prefSf as f'n of contrast
+# dog_charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
+# dog_charFreqMod - smooth characteristic frequency vs. contrast with a functional form/fit
+
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -542,7 +545,7 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
 
   return dog(stim_sf), dog_norm(stim_sf);
 
-def var_explained(data_resps, modParams, sfVals, dog_model = 1):
+def var_explained(data_resps, modParams, sfVals, dog_model = 2):
   ''' given a set of responses and model parameters, compute the variance explained by the model 
   '''
   np = numpy;
@@ -560,7 +563,7 @@ def var_explained(data_resps, modParams, sfVals, dog_model = 1):
 
   return var_expl(mod_resps, data_resps, data_mean);
 
-def dog_prefSf(modParams, all_sfs, dog_model=1):
+def dog_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11)):
   ''' Compute the preferred SF given a set of DoG parameters
   '''
   sf_bound = (numpy.min(all_sfs), numpy.max(all_sfs));
@@ -572,7 +575,7 @@ def dog_prefSf(modParams, all_sfs, dog_model=1):
   optz = opt.minimize(obj, init_sf, bounds=(sf_bound, ))
   return optz['x'];
 
-def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65):
+def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65, dog_model=2):
   ''' Given a descrFit dict for a cell, compute a fit for the prefSf as a function of contrast
       Return ratio of prefSf at highest:lowest contrast, lambda of model, params
   '''
@@ -584,7 +587,13 @@ def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65):
   validInds = np.where(descrFit['varExpl'][disp, :] > varThresh)[0];
   if len(validInds) == 0: # i.e. no good fits...
     return np.nan, [], [];
-  prefSfs = descrFit['prefSf'][disp, validInds];
+  if 'prefSf' in descrFit:
+    prefSfs = descrFit['prefSf'][disp, validInds];
+  else:
+    prefSfs = [];
+    for i in validInds:
+      psf_curr = dog_prefSf(descrFit['params'][disp, validInds], dog_model);
+      prefSfs.append(psf_curr);
   conVals = allCons[validInds];
   weights = descrFit['varExpl'][disp, validInds];
   # set up the optimization
@@ -602,6 +611,56 @@ def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65):
   pSfRatio = extrema[-1] / extrema[0]
 
   return pSfRatio, psf_model, opt_params;
+
+def dog_charFreq(prms, DoGmodel=1):
+  if DoGmodel == 1: # sach
+      r_c = prms[1];
+      f_c = 1/(numpy.pi*r_c)
+  elif DoGmodel == 2: # tony
+      f_c = prms[1];
+
+  return f_c;
+
+def dog_charFreqMod(descrFit, allCons, varThresh=70, DoGmodel=1, lowConCut = 0.1, disp=0):
+  ''' Given a descrFit dict for a cell, compute a fit for the charFreq as a function of contrast
+      Return ratio of charFreqat highest:lowest contrast, lambda of model, params, the value of the charFreq at the valid contrasts, the corresponding valid contrast
+      Note: valid contrast means a contrast which is greater than the lowConCut and one for which the Sf tuning fit has a variance explained gerat than varThresh
+  '''
+  np = numpy;
+  # the model
+  fc_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha);
+  # gather the values
+  #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
+  validInds = np.where((descrFit['varExpl'][disp, :] > varThresh) & (allCons > lowConCut))[0];
+  conVals = allCons[validInds];
+
+  if len(validInds) == 0: # i.e. no good fits...
+    return np.nan, None, None, None, None;
+  if 'charFreq' in descrFit:
+    charFreqs = descrFit['charFreq'][disp, validInds];
+  else:
+    charFreqs = [];
+    for i in validInds:
+      cf_curr = dog_charFreq(descrFit['params'][disp, i], DoGmodel);
+      charFreqs.append(cf_curr);
+  weights = descrFit['varExpl'][disp, validInds];
+  # set up the optimization
+  obj = lambda params: np.sum(np.multiply(weights,
+        np.square(fc_model(params[0], params[1], params[2], conVals) - charFreqs)))
+  init_offset = charFreqs[0];
+  conRange = conVals[-1] - conVals[0];
+  init_slope = (charFreqs[-1] - charFreqs[0]) / conRange;
+  init_alpha = 0.4; # most tend to be saturation (i.e. contrast exp < 1)
+  # run
+  optz = opt.minimize(obj, [init_offset, init_slope, init_alpha], bounds=((0, None), (None, None), (0.25, 4)));
+  opt_params = optz['x'];
+  # ratio:
+  extrema = fc_model(*opt_params, con=(conVals[0], conVals[-1]))
+  fcRatio = extrema[-1] / extrema[0]
+
+  return fcRatio, fc_model, opt_params, charFreqs, conVals;
+
+## 
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 

@@ -8,14 +8,15 @@ import pdb
 # np_smart_load - loading that will account for parallelization issues - keep trying to load
 # bw_lin_to_log 
 # bw_log_to_lin
+# flatten
 
 # DiffOfGauss - difference of gaussian models - formulation discussed with Tony
 # DoGsach - difference of gaussian models - formulation discussed in Sach Sokol's NYU thesis
 # var_explained - compute the variance explained given data/model fit
 # dog_prefSf - compute the prefSF given a DoG model/fit
 # dog_prefSfMod - smooth prefSf vs. contrast with a functional form/fit
-# charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
-# charFreqMod - smooth characteristic frequency vs. contrast with a functional form/fit
+# dog_charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
+# dog_charFreqMod - smooth characteristic frequency vs. contrast with a functional form/fit
 
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -61,6 +62,12 @@ def bw_log_to_lin(log_bw, pref_sf):
     lin_bw = more_half - less_half;
     
     return lin_bw, sf_range
+
+def flatten(l):
+  flatten = lambda l: [item for sublist in l for item in sublist];
+  return flatten(l);
+
+#######
 
 def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
   ''' Difference of gaussians 
@@ -171,23 +178,31 @@ def dog_charFreq(prms, DoGmodel=1):
 
   return f_c;
 
-def dog_charFreqMod(descrFit, allCons, varThresh=65):
-  ''' Given a descrFit dict for a cell, compute a fit for the prefSf as a function of contrast
-      Return ratio of prefSf at highest:lowest contrast, lambda of model, params
+def dog_charFreqMod(descrFit, allCons, varThresh=65, DoGmodel=1, lowConCut = 0.1):
+  ''' Given a descrFit dict for a cell, compute a fit for the charFreq as a function of contrast
+      Return ratio of charFreqat highest:lowest contrast, lambda of model, params, the value of the charFreq at the valid contrasts, the corresponding valid contrast
+      Note: valid contrast means a contrast which is greater than the lowConCut and one for which the Sf tuning fit has a variance explained gerat than varThresh
   '''
   # the model
   fc_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha);
   # gather the values
   #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
-  validInds = np.where(descrFit['varExpl'][:] > varThresh)[0];
-  if len(validInds) == 0: # i.e. no good fits...
-    return np.nan, [], [];
-  prefSfs = descrFit['charFreq'][disp, validInds];
+  validInds = np.where((descrFit['varExpl'][:] > varThresh) & (allCons > lowConCut))[0];
   conVals = allCons[validInds];
-  weights = descrFit['varExpl'][disp, validInds];
+
+  if len(validInds) == 0: # i.e. no good fits...
+    return np.nan, None, None, None, None;
+  if 'charFreq' in descrFit:
+    charFreqs = descrFit['charFreq'][validInds];
+  else:
+    charFreqs = [];
+    for i in validInds:
+      cf_curr = dog_charFreq(descrFit['params'][i], DoGmodel);
+      charFreqs.append(cf_curr);
+  weights = descrFit['varExpl'][validInds];
   # set up the optimization
   obj = lambda params: np.sum(np.multiply(weights,
-        np.square(fc_model(params[0], params[1], params[2], conVals) - prefSfs)))
+        np.square(fc_model(params[0], params[1], params[2], conVals) - charFreqs)))
   init_offset = charFreqs[0];
   conRange = conVals[-1] - conVals[0];
   init_slope = (charFreqs[-1] - charFreqs[0]) / conRange;
@@ -199,7 +214,7 @@ def dog_charFreqMod(descrFit, allCons, varThresh=65):
   extrema = fc_model(*opt_params, con=(conVals[0], conVals[-1]))
   fcRatio = extrema[-1] / extrema[0]
 
-  return fcRatio, fc_model, opt_params;
+  return fcRatio, fc_model, opt_params, charFreqs, conVals;
 
 
 #####
