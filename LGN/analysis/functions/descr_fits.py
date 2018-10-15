@@ -174,16 +174,22 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def DoG_loss(params, resps, sfs, loss_type = 3, dir=-1, resps_std=None, gain_reg = 0):
-  '''Given the model params (i.e. flexible gaussian params), the responses, sf values
+def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, gain_reg = 0):
+  '''Given the model params (i.e. sach or tony formulation)), the responses, sf values
   return the loss
   loss_type: 1 - poisson
              2 - sqrt
              3 - Sach sum{[(exp-obs)^2]/[k+sigma^2]} where
                  k := 0.01*max(obs); sigma := measured variance of the response
+  DoGmodel: 1 - sach
+            2 - tony
   '''
   # NOTE: See version in LGN/sach/ for how to fit trial-by-trial responses (rather than avg. resp)
-  pred_spikes, _ = hf.DoGsach(*params, stim_sf=sfs);
+  if DoGmodel == 1:
+    pred_spikes, _ = hf.DoGsach(*params, stim_sf=sfs);
+  elif DoGmodel == 2:
+    pred_spikes, _ = hf.DiffOfGauss(*params, stim_sf=sfs);
+
   loss = 0;
   if loss_type == 1:
     # poisson model of spiking
@@ -205,7 +211,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, dir=-1, resps_std=None, gain_reg
     loss = loss + np.sum((sq_err/(k+np.square(sigma)))) + gain_reg*(params[0] + params[2]); # regularize - want gains as low as possible
   return loss;
 
-def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, fit_type=3, disp=0, rvcName=rvcName, dir=-1, gain_reg=0):
+def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGmodel=1, disp=0, rvcName=rvcName, dir=-1, gain_reg=0):
 
   nParam = 4;
 
@@ -213,14 +219,20 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, fit_type=3, disp=
   dataList = hf.np_smart_load(data_loc + 'dataList.npy');
   assert dataList!=[], "data file not found!"
 
-  fLname = 'descrFits';
-  if fit_type == 1:
-    type_str = '_poiss';
-  elif fit_type == 2:
-    type_str = '_sqrt';
-  elif fit_type == 3:
-    type_str = '_sach';
-  fLname = str(data_loc + fLname + type_str + '.npy');
+  fLname = 'descrFits_181015';
+  if loss_type == 1:
+    loss_str = '_poiss';
+  elif loss_type == 2:
+    loss_str = '_sqrt';
+  elif loss_type == 3:
+    loss_str = '_sach';
+  elif loss_type == 4:
+    loss_str = '_varExpl';
+  if DoGmodel == 1:
+    mod_str = '_sach';
+  elif DoGmodel == 2:
+    mod_str = '_tony';
+  fLname = str(data_loc + fLname + loss_str + mod_str + '.npy');
   if os.path.isfile(fLname):
       descrFits = hf.np_smart_load(fLname);
   else:
@@ -244,26 +256,35 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, fit_type=3, disp=
   nDisps = len(all_disps);
   nCons = len(all_cons);
 
-  # get the std of responses
-  f1_std = resps[5];
+  # get the sem of responses (but as of 10.15.18, not using)
+  f1_sem = resps[5];
 
   if cell_num-1 in descrFits:
     bestNLL = descrFits[cell_num-1]['NLL'];
     currParams = descrFits[cell_num-1]['params'];
     varExpl = descrFits[cell_num-1]['varExpl'];
     prefSf = descrFits[cell_num-1]['prefSf'];
+    charFreq = descrFits[cell_num-1]['charFreq'];
   else: # set values to NaN...
     bestNLL = np.ones((nDisps, nCons)) * np.nan;
     currParams = np.ones((nDisps, nCons, nParam)) * np.nan;
     varExpl = np.ones((nDisps, nCons)) * np.nan;
     prefSf = np.ones((nDisps, nCons)) * np.nan;
+    charFreq = np.ones((nDisps, nCons)) * np.nan;
 
   # set bounds
-  bound_gainCent = (1e-3, None);
-  bound_gainSurr = (1e-3, None);
-  bound_radiusCent = (1e-3, None);
-  bound_radiusSurr = (1e-3, None);
-  allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
+  if DoGmodel == 1:
+    bound_gainCent = (1e-3, None);
+    bound_radiusCent= (1e-3, None);
+    bound_gainSurr = (1e-3, None);
+    bound_radiusSurr= (1e-3, None);
+    allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
+  elif DoGmodel == 2:
+    bound_gainCent = (1e-3, None);
+    bound_gainFracSurr = (1e-2, 1);
+    bound_freqCent = (1e-3, None);
+    bound_freqFracSurr = (1e-2, 1);
+    allBounds = (bound_gainCent, bound_freqCent, bound_gainFracSurr, bound_freqFracSurr);
 
   for d in range(1): # should be nDisps - just setting to 0 for now...
     for con in range(nCons):
@@ -278,26 +299,33 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, fit_type=3, disp=
       # access all sfs and get the specific contrast response
       respConInd = np.where(np.asarray(valConByDisp[d]) == con)[0];
       resps = hf.flatten([x[respConInd] for x in adjResps]);
-      resps_std = None;
-      #resps_std = hf.flatten(f1_std[d, valSfInds, con]);
+      resps_sem = None;
+      #resps_sem = hf.flatten(f1_sem[d, valSfInds, con]);
       maxResp = np.max(resps);
+      freqAtMaxResp = all_sfs[np.argmax(resps)];
 
       for n_try in range(n_repeats):
         # pick initial params
-        init_gainCent = hf.random_in_range((maxResp, 5*maxResp))[0];
-        init_radiusCent = hf.random_in_range((0.05, 2))[0];
-        init_gainSurr = init_gainCent * hf.random_in_range((0.1, 0.8))[0];
-        init_radiusSurr = hf.random_in_range((0.5, 4))[0];
+        if DoGmodel == 1:
+          init_gainCent = hf.random_in_range((maxResp, 5*maxResp))[0];
+          init_radiusCent = hf.random_in_range((0.05, 2))[0];
+          init_gainSurr = init_gainCent * hf.random_in_range((0.1, 0.8))[0];
+          init_radiusSurr = hf.random_in_range((0.5, 4))[0];
+          init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
+        elif DoGmodel == 2:
+          init_gainCent = maxResp * hf.random_in_range((0.9, 1.2))[0];
+          init_freqCent = np.maximum(all_sfs[2], freqAtMaxResp * hf.random_in_range((1.2, 1.5))[0]); # don't pick all_sfs[0] -- that's zero (we're avoiding that)
+          init_gainFracSurr = hf.random_in_range((0.7, 1))[0];
+          init_freqFracSurr = hf.random_in_range((.25, .35))[0];
+          init_params = [init_gainCent, init_freqCent, init_gainFracSurr, init_freqFracSurr];
 
-        init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
- 
         # choose optimization method
         if np.mod(n_try, 2) == 0:
             methodStr = 'L-BFGS-B';
         else:
             methodStr = 'TNC';
 
-        obj = lambda params: DoG_loss(params, resps, valSfVals, resps_std=resps_std, loss_type=fit_type, dir=dir, gain_reg=gain_reg);
+        obj = lambda params: DoG_loss(params, resps, valSfVals, resps_std=resps_sem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg);
         wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
 
         # compare
@@ -308,7 +336,8 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, fit_type=3, disp=
           bestNLL[d, con] = NLL;
           currParams[d, con, :] = params;
           varExpl[d, con] = hf.var_explained(resps, params, valSfVals);
-          prefSf[d, con] = hf.dog_prefSf(params, valSfVals);
+          prefSf[d, con] = hf.dog_prefSf(params, DoGmodel, valSfVals);
+          charFreq[d, con] = hf.dog_charFreq(params, DoGmodel);
 
     # update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(fLname):
@@ -320,6 +349,7 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, fit_type=3, disp=
     descrFits[cell_num-1]['params'] = currParams;
     descrFits[cell_num-1]['varExpl'] = varExpl;
     descrFits[cell_num-1]['prefSf'] = prefSf;
+    descrFits[cell_num-1]['charFreq'] = charFreq;
     descrFits[cell_num-1]['gainRegFactor'] = gain_reg;
 
     np.save(fLname, descrFits);
@@ -338,12 +368,13 @@ if __name__ == '__main__':
     ph_fits = int(sys.argv[3]);
     rvc_fits = int(sys.argv[4]);
     descr_fits = int(sys.argv[5]);
-    if len(sys.argv) > 6:
-      dir = float(sys.argv[6]);
+    dog_model = int(sys.argv[6]);
+    if len(sys.argv) > 7:
+      dir = float(sys.argv[7]);
     else:
       dir = None;
-    if len(sys.argv) > 7:
-      gainReg = float(sys.argv[7]);
+    if len(sys.argv) > 8:
+      gainReg = float(sys.argv[8]);
     else:
       gainReg = 0;
     print('Running cell %d' % cell_num);
@@ -355,11 +386,11 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, disp=disp);
       if descr_fits == 1:
-        fit_descr_DoG(cell_num, gain_reg=gainReg, disp=disp);
+        fit_descr_DoG(cell_num, gain_reg=gainReg, disp=disp, DoGmodel=dog_model);
     else:
       if ph_fits == 1:
         phase_advance_fit(cell_num, disp=disp, dir=dir);
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, disp=disp, dir=dir);
       if descr_fits == 1:
-        fit_descr_DoG(cell_num, gain_reg=gainReg, disp=disp, dir=dir);
+        fit_descr_DoG(cell_num, gain_reg=gainReg, disp=disp, dir=dir, DoGmodel=dog_model);
