@@ -8,6 +8,7 @@ import pdb
 # np_smart_load - loading that will account for parallelization issues - keep trying to load
 # bw_lin_to_log 
 # bw_log_to_lin
+# load_modParams - load the 4 parameters from the Tony fits...
 
 # DiffOfGauss - difference of gaussian models - formulation discussed with Tony
 # DoGsach - difference of gaussian models - formulation discussed in Sach Sokol's NYU thesis
@@ -62,6 +63,20 @@ def bw_log_to_lin(log_bw, pref_sf):
     
     return lin_bw, sf_range
 
+def load_modParams(which_cell, contrast, loadPath='/home/pl1465/SF_diversity/LGN/sach/structures/tonyFits/'):
+   
+  nParams = 4;
+
+  loadName = 'cell%d_con%d.txt+.fit' % (which_cell, contrast);
+  fits = open(str(loadPath + loadName), 'r');
+  allLines = fits.readlines();
+  firstLine = allLines[0].split();
+  fL = [float(x) for x in firstLine]
+
+  return fL[0:nParams]; 
+
+#######
+
 def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
   ''' Difference of gaussians 
   gain      - overall gain term
@@ -97,6 +112,15 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
     dog_norm = dog_norm(stim_sf);
 
   return dog(stim_sf), dog_norm;
+
+def var_expl_direct(obs_mean, pred_mean):
+  # Just compute variance explained given the data and model responses (assumed same SF for each)
+  resp_dist = lambda x, y: np.sum(np.square(x-y))/np.maximum(len(x), len(y))
+  var_expl = lambda m, r, rr: 100 * (1 - resp_dist(m, r)/resp_dist(r, rr));
+
+  obs_grand_mean = np.mean(obs_mean) * np.ones_like(obs_mean); # make sure it's the same shape as obs_mean
+    
+  return var_expl(pred_mean, obs_mean, obs_grand_mean);
 
 def var_explained(data, modParams, contrast, DoGmodel=1):
   ''' given a set of responses and model parameters, compute the variance explained by the model (DoGsach)
