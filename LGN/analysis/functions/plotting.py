@@ -43,20 +43,18 @@ which_cell = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
 fitType = int(sys.argv[3]);
 crf_fit_type = int(sys.argv[4]);
-descr_fit_type = int(sys.argv[5]); # sf tuning curve fits (Diff. of Gaussians)
-norm_sim_on = int(sys.argv[6]);
-phase_dir = int(sys.argv[7]);
+sf_loss_type = int(sys.argv[5]); # sf tuning curve fits (Diff. of Gaussians) - what loss function
+sf_DoG_model = int(sys.argv[6]); # sf tuning curve fits (Diff. of Gaussians) - what DoG parameterization
+norm_sim_on = int(sys.argv[7]);
+phase_dir = int(sys.argv[8]);
 normTypeArr = [fitType]; # i.e., the first parameter of the normTypeArr is what type of normalization, which is specified in fitType
-argInd = 8; # we've already taken N arguments off (function call, which_cell, loss_type, fit_type, crf_fit_type, descr_fit_type, norm_sim_on, phase_dir) 
+argInd = 9; # we've already taken N arguments off (function call, which_cell, loss_type, fit_type, crf_fit_type, sf_loss_type, sf_DoG_model, norm_sim_on, phase_dir) 
 nArgsIn = len(sys.argv) - argInd; 
 while nArgsIn > 0:
   normTypeArr.append(float(sys.argv[argInd]));
   nArgsIn = nArgsIn - 1;
   argInd = argInd + 1;
 
-# at CNS
-# dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
-# savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 # personal mac
 #dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
 #save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
@@ -68,6 +66,7 @@ expName = 'dataList.npy'
 fitBase = 'fitList_180930';
 rvcBase = 'rvcFits';
 phAdvBase = 'phaseAdvanceFits';
+descrBase = 'descrFits_181015';
 
 # first the fit type
 if fitType == 0:
@@ -98,12 +97,19 @@ elif crf_fit_type == 3:
 elif crf_fit_type == 4:
   crf_type_str = '-poissMod';
 
-if descr_fit_type == 1:
-  descr_type_str = '_poiss';
-elif descr_fit_type == 2:
-  descr_type_str = '_sqrt';
-elif descr_fit_type == 3:
-  descr_type_str = '_sach';
+if sf_loss_type == 1:
+  descr_loss_str = '_poiss';
+elif sf_loss_type == 2:
+  descr_loss_str = '_sqrt';
+elif sf_loss_type == 3:
+  descr_loss_str = '_sach';
+elif sf_loss_type == 4:
+  descr_loss_str = '_varExpl';
+if sf_DoG_model == 1:
+  descr_mod_str = '_sach';
+elif sf_DoG_model == 2:
+  descr_mod_str = '_tony';
+fLname = str(descrBase + descr_loss_str + descr_mod_str + '.npy');
 
 if crf_fit_type == 0:
   crfFitName = [];
@@ -128,10 +134,10 @@ rvcFits = helper_fcns.np_smart_load(rvcName);
 phAdvName = str(dataPath + helper_fcns.fit_name(phAdvBase, phase_dir));
 phAdvFits = helper_fcns.np_smart_load(phAdvName);
 
-if descr_fit_type == 0:
+if sf_loss_type == 0 or sf_DoG_model == 0:
   descrFits = None;
 else:
-  descrFitName = str('descrFits' + descr_type_str + '.npy');
+  descrFitName = str(fLname);
   descrFits = helper_fcns.np_smart_load(str(dataPath + descrFitName));
   dfVarExpl = descrFits[which_cell-1]['varExpl']; # get the variance explained for this cell
   descrFits = descrFits[which_cell-1]['params']; # just get this cell
@@ -197,7 +203,7 @@ for d in range(nDisps):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(25, n_v_cons*8), sharey=True);
+    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(25, n_v_cons*8), sharey=False);
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
 
@@ -230,12 +236,15 @@ for d in range(nDisps):
       # plot descriptive model fit
       if descrFits is not None and d == 0: # i.e. descrFits isn't empty, then plot it; descrFits only for single gratings as of 09.24.18
         curr_mod_params = descrFits[d, v_cons[c], :];
-        curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+        if sf_DoG_model == 1:
+          curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+        elif sf_DoG_model == 2:
+          curr_mod_resp = helper_fcns.DiffOfGauss(*curr_mod_params, stim_sf=sfs_plot)[0];
         sfs_plot = np.logspace(np.log10(np.min(all_sfs[v_sfs])), np.log10(np.max(all_sfs[v_sfs])), 100);
         descrPlt = dispAx[d][c_plt_ind, 0].plot(sfs_plot, curr_mod_resp, color='k', clip_on=False)
         leftLines.append(descrPlt[0]); leftStr.append('DoG');
         # now plot characteristic frequency!  
-        char_freq = np.divide(1, np.pi*curr_mod_params[1]); # 1/(pi*center radius)
+        char_freq = helper_fcns.dog_charFreq(curr_mod_params, sf_DoG_model);
         freqPlt = dispAx[d][c_plt_ind, 0].plot(char_freq, 1, 'v', color='k');
         leftLines.append(freqPlt[0]); leftStr.append(r'$f_c$');
 
@@ -262,10 +271,17 @@ for d in range(nDisps):
         # plot descriptive model fit -- and inferred characteristic frequency
         if descrFits is not None: # i.e. descrFits isn't empty, then plot it
           curr_mod_params = descrFits[d, v_cons[c], :];
-          curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+          if sf_DoG_model == 1:
+            curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+          elif sf_DoG_model == 2:
+            curr_mod_resp = helper_fcns.DiffOfGauss(*curr_mod_params, stim_sf=sfs_plot)[0];
           sfs_plot = np.logspace(np.log10(np.min(all_sfs[v_sfs])), np.log10(np.max(all_sfs[v_sfs])), 100);
           descrPlt = dispAx[d][c_plt_ind, 1].plot(sfs_plot, curr_mod_resp, clip_on=False)
           rightLines.append(descrPlt[0]); rightStr.append('DoG');
+          # now plot characteristic frequency!  
+          char_freq = helper_fcns.dog_charFreq(curr_mod_params, sf_DoG_model);
+          freqPlt = dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k');
+          rightLines.append(freqPlt[0]); rightStr.append(r'$f_c$');
 
         # plot model fits
         if modParamsCurr: # i.e. modParamsCurr isn't [] 
@@ -435,7 +451,10 @@ for d in range(nDisps):
         # plot descriptive model fit
         if descrFits is not None:
           curr_mod_params = descrFits[d, v_cons[c], :];
-          curr_mod_resps = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+          if sf_DoG_model == 1:
+            curr_mod_resps = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+          elif sf_DoG_model == 2:
+            curr_mod_resps = helper_fcns.DiffOfGauss(*curr_mod_params, stim_sf=sfs_plot)[0];
           sfMixAx[c_plt_ind, d].plot(sfs_plot, curr_mod_resps, clip_on=False)
 
 	# plot model fits

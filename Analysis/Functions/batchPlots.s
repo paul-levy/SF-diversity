@@ -30,7 +30,7 @@ module load seaborn/0.7.1
 #   if not given, then they will be chosen from the optimization (if done) or randomly from a distrubition
 # if third param is 3:
 #   4/5/6 [optional] params are std of left/right halves, and offset (i.e. bottom/lowest c50), and peak of c50 curve
-python plotting.py $SLURM_ARRAY_TASK_ID 3 2 1
+python plotting.py $SLURM_ARRAY_TASK_ID 3 2 0
  
 # leave a blank line at the end
 
