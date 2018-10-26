@@ -631,19 +631,23 @@ def dog_charFreqMod(descrFit, allCons, varThresh=70, DoGmodel=1, lowConCut = 0.1
   fc_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha);
   # gather the values
   #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
-  validInds = np.where((descrFit['varExpl'][disp, :] > varThresh) & (allCons > lowConCut))[0];
+  if disp == 0:
+    inds = np.asarray([0, 1, 2, 3, 4, 5, 7, 9, 11]);
+  elif disp == 1:
+    inds = np.asarray([6, 8, 10]);
+  validInds = np.where((descrFit['varExpl'][disp, inds] > varThresh) & (allCons > lowConCut))[0];
   conVals = allCons[validInds];
 
   if len(validInds) == 0: # i.e. no good fits...
     return np.nan, None, None, None, None;
   if 'charFreq' in descrFit:
-    charFreqs = descrFit['charFreq'][disp, validInds];
+    charFreqs = descrFit['charFreq'][disp, inds[validInds]];
   else:
     charFreqs = [];
     for i in validInds:
       cf_curr = dog_charFreq(descrFit['params'][disp, i], DoGmodel);
       charFreqs.append(cf_curr);
-  weights = descrFit['varExpl'][disp, validInds];
+  weights = descrFit['varExpl'][disp, inds[validInds]];
   # set up the optimization
   obj = lambda params: np.sum(np.multiply(weights,
         np.square(fc_model(params[0], params[1], params[2], conVals) - charFreqs)))
