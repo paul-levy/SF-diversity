@@ -1,5 +1,5 @@
 import math, numpy, random
-from scipy.stats import norm, mode, poisson, nbinom
+from scipy.stats import norm, mode, poisson, nbinom, sem
 from scipy.stats.mstats import gmean as geomean
 from numpy.matlib import repmat
 import scipy.optimize as opt
@@ -818,8 +818,8 @@ def get_isolated_response(data, trials):
      f0all[i] = f0curr;
      f1all[i] = f1curr;
 
-     f0summary[i, :] = [np.nanmean(f0all[i]), np.nanstd(f0all[i])]; # nanmean/std in case fewer presentations of individual component than mixture
-     f1summary[i, :] = [np.nanmean(f1all[i]), np.nanstd(f1all[i])];
+     f0summary[i, :] = [np.nanmean(f0all[i]), sem(f0all[i])]; # nanmean/std in case fewer presentations of individual component than mixture
+     f1summary[i, :] = [np.nanmean(f1all[i]), sem(f1all[i])];
 
    return f0summary, f1summary, f0all, f1all, cons, sfs;
 
@@ -851,13 +851,13 @@ def get_isolated_responseAdj(data, trials, adjByTrial):
      curr_resps, _ = get_conditionAdj(data, 1, con, sf, adjByTrial);
 
      f1all[i] = curr_resps;
-     f1summary[i, :] = [np.nanmean(f1all[i]), np.nanstd(f1all[i])];
+     f1summary[i, :] = [np.nanmean(f1all[i]), sem(f1all[i])];
 
    return f1summary, f1all, cons, sfs;
 
 def tabulate_responses(data, modResp = []):
     ''' Given cell structure (and opt model responses), returns the following:
-        (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
+        (i) respMean, respSEM, predMean, predStd, organized by condition; pred is linear prediction
         (ii) all_disps, all_cons, all_sfs - i.e. the stimulus conditions of the experiment
         (iii) the valid contrasts for each dispersion level
         (iv) valid_disp, valid_con, valid_sf - which conditions are valid for this particular cell
@@ -880,11 +880,11 @@ def tabulate_responses(data, modResp = []):
     nDisps = len(all_disps);
     
     respMean = np.nan * np.empty((nDisps, nSfs, nCons));
-    respStd = np.nan * np.empty((nDisps, nSfs, nCons));
+    respSEM = np.nan * np.empty((nDisps, nSfs, nCons));
     predMean = np.nan * np.empty((nDisps, nSfs, nCons));
     predStd = np.nan * np.empty((nDisps, nSfs, nCons));
-    f1Mean = np.array(np.nan * np.empty((nDisps, nSfs, nCons)), dtype='O'); # create f1Mean/Std so that each entry can accomodate an array, rather than just one value
-    f1Std = np.array(np.nan * np.empty((nDisps, nSfs, nCons)), dtype='O');
+    f1Mean = np.array(np.nan * np.empty((nDisps, nSfs, nCons)), dtype='O'); # create f1Mean/SEM so that each entry can accomodate an array, rather than just one value
+    f1SEM = np.array(np.nan * np.empty((nDisps, nSfs, nCons)), dtype='O');
     predMeanF1 = np.nan * np.empty((nDisps, nSfs, nCons));
     predStdF1 = np.nan * np.empty((nDisps, nSfs, nCons));
 
@@ -920,9 +920,12 @@ def tabulate_responses(data, modResp = []):
                     continue;
 
                 respMean[d, sf, con] = np.mean(data['spikeCount'][valid_tr]);
-                respStd[d, sf, con] = np.std((data['spikeCount'][valid_tr]));
+                respSEM[d, sf, con] = sem((data['spikeCount'][valid_tr]));
                 f1Mean[d, sf, con] = np.mean(data['power_f1'][valid_tr]); # default axis takes avg within components (and across trials)
-                f1Std[d, sf, con] = np.std(data['power_f1'][valid_tr]); # that is the axis we want!
+                if d > 0:
+                  f1SEM[d, sf, con] = np.asarray([sem([x[i] for x in data['power_f1'][valid_tr]]) for i in range(all_disps[d])]); # need to be careful, since sem cannot handle numpy array well
+                else:
+                  f1SEM[d, sf, con] = sem(data['power_f1'][valid_tr]);
                 curr_pred = 0;
                 curr_var = 0; # variance (std^2) adds
                 curr_pred_f1 = 0;
@@ -960,7 +963,7 @@ def tabulate_responses(data, modResp = []):
                 if ~np.isnan(np.nanmean(respMean[d, :, con])):
                     val_con_by_disp[d].append(con);
                     
-    return [respMean, respStd, predMean, predStd, f1Mean, f1Std, predMeanF1, predStdF1], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
+    return [respMean, respSEM, predMean, predStd, f1Mean, f1SEM, predMeanF1, predStdF1], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
 
 def organize_adj_responses(data, rvcFits):
   ''' Given the rvcFits, reorganize the responses into the format of tabulate_responses

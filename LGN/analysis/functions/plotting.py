@@ -43,20 +43,18 @@ which_cell = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
 fitType = int(sys.argv[3]);
 crf_fit_type = int(sys.argv[4]);
-descr_fit_type = int(sys.argv[5]); # sf tuning curve fits (Diff. of Gaussians)
-norm_sim_on = int(sys.argv[6]);
-phase_dir = int(sys.argv[7]);
+sf_loss_type = int(sys.argv[5]); # sf tuning curve fits (Diff. of Gaussians) - what loss function
+sf_DoG_model = int(sys.argv[6]); # sf tuning curve fits (Diff. of Gaussians) - what DoG parameterization
+norm_sim_on = int(sys.argv[7]);
+phase_dir = int(sys.argv[8]);
 normTypeArr = [fitType]; # i.e., the first parameter of the normTypeArr is what type of normalization, which is specified in fitType
-argInd = 8; # we've already taken N arguments off (function call, which_cell, loss_type, fit_type, crf_fit_type, descr_fit_type, norm_sim_on, phase_dir) 
+argInd = 9; # we've already taken N arguments off (function call, which_cell, loss_type, fit_type, crf_fit_type, sf_loss_type, sf_DoG_model, norm_sim_on, phase_dir) 
 nArgsIn = len(sys.argv) - argInd; 
 while nArgsIn > 0:
   normTypeArr.append(float(sys.argv[argInd]));
   nArgsIn = nArgsIn - 1;
   argInd = argInd + 1;
 
-# at CNS
-# dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
-# savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 # personal mac
 #dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
 #save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/figures/';
@@ -68,6 +66,7 @@ expName = 'dataList.npy'
 fitBase = 'fitList_180930';
 rvcBase = 'rvcFits';
 phAdvBase = 'phaseAdvanceFits';
+descrBase = 'descrFits_181015';
 
 # first the fit type
 if fitType == 0:
@@ -98,12 +97,19 @@ elif crf_fit_type == 3:
 elif crf_fit_type == 4:
   crf_type_str = '-poissMod';
 
-if descr_fit_type == 1:
-  descr_type_str = '_poiss';
-elif descr_fit_type == 2:
-  descr_type_str = '_sqrt';
-elif descr_fit_type == 3:
-  descr_type_str = '_sach';
+if sf_loss_type == 1:
+  descr_loss_str = '_poiss';
+elif sf_loss_type == 2:
+  descr_loss_str = '_sqrt';
+elif sf_loss_type == 3:
+  descr_loss_str = '_sach';
+elif sf_loss_type == 4:
+  descr_loss_str = '_varExpl';
+if sf_DoG_model == 1:
+  descr_mod_str = '_sach';
+elif sf_DoG_model == 2:
+  descr_mod_str = '_tony';
+fLname = str(descrBase + descr_loss_str + descr_mod_str + '.npy');
 
 if crf_fit_type == 0:
   crfFitName = [];
@@ -128,11 +134,12 @@ rvcFits = helper_fcns.np_smart_load(rvcName);
 phAdvName = str(dataPath + helper_fcns.fit_name(phAdvBase, phase_dir));
 phAdvFits = helper_fcns.np_smart_load(phAdvName);
 
-if descr_fit_type == 0:
+if sf_loss_type == 0 or sf_DoG_model == 0:
   descrFits = None;
 else:
-  descrFitName = str('descrFits' + descr_type_str + '.npy');
+  descrFitName = str(fLname);
   descrFits = helper_fcns.np_smart_load(str(dataPath + descrFitName));
+  dfVarExpl = descrFits[which_cell-1]['varExpl']; # get the variance explained for this cell
   descrFits = descrFits[which_cell-1]['params']; # just get this cell
 
 if lossType == 0:
@@ -173,8 +180,8 @@ nDisps = len(all_disps);
 f1Mean, f1MeanByTrial, f1MeanAll, f1Pred = helper_fcns.organize_adj_responses(data, rvcFits[which_cell-1]);
 
 # std predictions are based on unprojected responses, since these have variance (proj are all same for cond)
-f1StdAll = resp[5];
-f1Std = np.reshape([np.sqrt(np.sum(np.square(x))) for x in f1StdAll.flatten()], f1StdAll.shape);
+f1semAll = resp[5];
+f1sem = np.reshape([np.sqrt(np.sum(np.square(x))) for x in f1semAll.flatten()], f1semAll.shape);
 # why the above computation? variance adds, so we square the std to get variance of sum, sum, and take sqrt again to put back to std
 predF1std = resp[7];
 
@@ -218,7 +225,7 @@ for d in range(nDisps):
 
       # plot data
       respPlt = dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], f1resps[v_sfs, v_cons[c]], 
-                                  f1Std[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+                                  f1sem[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
       leftLines.append(respPlt); leftStr.append('response');
       if d>0: # also plot predicted response if d>0
         dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], f1Pred[d, v_sfs, v_cons[c]], 'b-', alpha=0.7, clip_on=False);
@@ -229,12 +236,15 @@ for d in range(nDisps):
       # plot descriptive model fit
       if descrFits is not None and d == 0: # i.e. descrFits isn't empty, then plot it; descrFits only for single gratings as of 09.24.18
         curr_mod_params = descrFits[d, v_cons[c], :];
-        curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+        if sf_DoG_model == 1:
+          curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+        elif sf_DoG_model == 2:
+          curr_mod_resp = helper_fcns.DiffOfGauss(*curr_mod_params, stim_sf=sfs_plot)[0];
         sfs_plot = np.logspace(np.log10(np.min(all_sfs[v_sfs])), np.log10(np.max(all_sfs[v_sfs])), 100);
         descrPlt = dispAx[d][c_plt_ind, 0].plot(sfs_plot, curr_mod_resp, color='k', clip_on=False)
         leftLines.append(descrPlt[0]); leftStr.append('DoG');
         # now plot characteristic frequency!  
-        char_freq = np.divide(1, 2*np.pi*curr_mod_params[1]); # 1/(2*pi*center radius)
+        char_freq = helper_fcns.dog_charFreq(curr_mod_params, sf_DoG_model);
         freqPlt = dispAx[d][c_plt_ind, 0].plot(char_freq, 1, 'v', color='k');
         leftLines.append(freqPlt[0]); leftStr.append(r'$f_c$');
 
@@ -255,16 +265,23 @@ for d in range(nDisps):
       if d == 0:
         # plot everything again on log-log coordinates...
         respPlt = dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs], f1resps[v_sfs, v_cons[c]], 
-                                    f1Std[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+                                    f1sem[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
         rightLines.append(respPlt); rightStr.append('response');
 
         # plot descriptive model fit -- and inferred characteristic frequency
         if descrFits is not None: # i.e. descrFits isn't empty, then plot it
           curr_mod_params = descrFits[d, v_cons[c], :];
-          curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+          if sf_DoG_model == 1:
+            curr_mod_resp = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+          elif sf_DoG_model == 2:
+            curr_mod_resp = helper_fcns.DiffOfGauss(*curr_mod_params, stim_sf=sfs_plot)[0];
           sfs_plot = np.logspace(np.log10(np.min(all_sfs[v_sfs])), np.log10(np.max(all_sfs[v_sfs])), 100);
           descrPlt = dispAx[d][c_plt_ind, 1].plot(sfs_plot, curr_mod_resp, clip_on=False)
           rightLines.append(descrPlt[0]); rightStr.append('DoG');
+          # now plot characteristic frequency!  
+          char_freq = helper_fcns.dog_charFreq(curr_mod_params, sf_DoG_model);
+          freqPlt = dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k');
+          rightLines.append(freqPlt[0]); rightStr.append(r'$f_c$');
 
         # plot model fits
         if modParamsCurr: # i.e. modParamsCurr isn't [] 
@@ -274,7 +291,7 @@ for d in range(nDisps):
           rightLines.append(modPlt); rightStr.append('model resp');
 
         dispAx[d][c_plt_ind, 1].legend(rightLines, rightStr, loc=0);
-        dispAx[d][c_plt_ind, 1].set_title('log-log');
+        dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % dfVarExpl[d, v_cons[c]]);
         dispAx[d][c_plt_ind, 1].set_xscale('log');
         dispAx[d][c_plt_ind, 1].set_yscale('log'); # double log
 
@@ -284,7 +301,7 @@ for d in range(nDisps):
           comps = [];
 
           curr_f1 = f1MeanAll[d, v_sfs_inds[j], v_cons[c]]; # get the component responses only at the relevant conditions
-          curr_f1_std = f1StdAll[d, v_sfs_inds[j], v_cons[c]];
+          curr_f1_std = f1semAll[d, v_sfs_inds[j], v_cons[c]];
           # now get the individual responses
           n_comps = all_disps[d];
 
@@ -308,7 +325,7 @@ for d in range(nDisps):
           dispAx[d][c_plt_ind, 1].set_xticks(xticks);
           dispAx[d][c_plt_ind, 1].set_xticklabels(xticklabels);
           dispAx[d][c_plt_ind, 1].legend(comps, comp_str, loc=0);
-          dispAx[d][c_plt_ind, 1].set_ylim((0, 1.5*maxPlotComp));
+          #dispAx[d][c_plt_ind, 1].set_ylim((0, 1.5*maxPlotComp));
           dispAx[d][c_plt_ind, 1].set_title('Component responses');
 
       for i in range(2):
@@ -319,11 +336,11 @@ for d in range(nDisps):
 
       dispAx[d][c_plt_ind, 0].set_xlim((min(all_sfs), max(all_sfs)));
       dispAx[d][c_plt_ind, 0].set_xscale('log');
-      dispAx[d][c_plt_ind, 0].set_xlabel('sf (c/deg)'); 
+      dispAx[d][c_plt_ind, 0].set_xlabel('spatial frequency (c/deg)'); 
       dispAx[d][c_plt_ind, 0].set_title('Resp: D%d, contrast: %.3f' % (d, all_cons[v_cons[c]]));
       #dispAx[d][c_plt_ind, 0].set_ylim((0, 1.5*maxPlot));
-      dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
-      dispAx[d][c_plt_ind, 1].set_ylabel('resp (sps)');
+      dispAx[d][c_plt_ind, 0].set_ylabel('response (spikes/s)');
+      dispAx[d][c_plt_ind, 1].set_ylabel('response (spikes/s)');
 
 saveName = "/cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
@@ -382,14 +399,14 @@ for d in range(nDisps):
 
       dispAx[d][i].set_xscale('log');
       dispAx[d][i].set_yscale('log');
-      dispAx[d][i].set_xlabel('sf (c/deg)'); 
+      dispAx[d][i].set_xlabel('spatial frequency (c/deg)'); 
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
       dispAx[d][i].tick_params(labelsize=15, width=2, length=16, direction='out');
       dispAx[d][i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
       sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
 
-      dispAx[d][i].set_ylabel('resp above baseline (sps)');
+      dispAx[d][i].set_ylabel('resp (sps)');
       dispAx[d][i].set_title('D%d - sf tuning' % (d));
       con_strs = [str(i) for i in reversed(all_cons[v_cons])];
       dispAx[d][i].legend(linesf1, con_strs, loc=0);
@@ -429,12 +446,15 @@ for d in range(nDisps):
         
         # plot data
         sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], f1Mean[d, v_sfs, v_cons[c]], 
-                                       f1Std[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+                                       f1sem[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
 
         # plot descriptive model fit
         if descrFits is not None:
           curr_mod_params = descrFits[d, v_cons[c], :];
-          curr_mod_resps = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+          if sf_DoG_model == 1:
+            curr_mod_resps = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
+          elif sf_DoG_model == 2:
+            curr_mod_resps = helper_fcns.DiffOfGauss(*curr_mod_params, stim_sf=sfs_plot)[0];
           sfMixAx[c_plt_ind, d].plot(sfs_plot, curr_mod_resps, clip_on=False)
 
 	# plot model fits
@@ -446,8 +466,8 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].set_xlim((np.min(all_sfs), np.max(all_sfs)));
         sfMixAx[c_plt_ind, d].set_ylim((0, 1.5*maxResp));
         sfMixAx[c_plt_ind, d].set_xscale('log');
-        sfMixAx[c_plt_ind, d].set_xlabel('sf (c/deg)');
-        sfMixAx[c_plt_ind, d].set_ylabel('resp (sps)');
+        sfMixAx[c_plt_ind, d].set_xlabel('spatial frequency (c/deg)');
+        sfMixAx[c_plt_ind, d].set_ylabel('response (spikes/s)');
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         sfMixAx[c_plt_ind, d].tick_params(labelsize=15, width=1, length=8, direction='out');
@@ -535,7 +555,7 @@ if modParamsCurr:
   plt.semilogx(omega, sfNorm, 'r-', linewidth=1);
   plt.xlim([omega[0], omega[-1]]);
   plt.ylim([-1.5, 1]);
-  plt.xlabel('SF (cpd)', fontsize=20);
+  plt.xlabel('spatial frequency (c/deg)', fontsize=20);
   plt.ylabel('Normalized response (a.u.)', fontsize=20);
   # Remove top/right axis, put ticks only on bottom/left
   sns.despine(ax=plt.subplot2grid(detailSize, (2, 1)), offset=10, trim=False);
@@ -567,7 +587,7 @@ if modParamsCurr:
     curr_ax = plt.subplot2grid(detailSize, (2, 4));
     plt.semilogx(stimSf, c50_filt);
     plt.title('(mu, stdL/R, offset) = (%.2f, %.2f|%.2f, %.2f)' % (sfPref, stdLeft, stdRight, offset_filt));
-    plt.xlabel('sf (cpd)');
+    plt.xlabel('spatial frequency (c/deg)');
     plt.ylabel('c50 (con %)')
 
   # print, in text, model parameters:
@@ -583,9 +603,9 @@ if modParamsCurr:
   # poisson test - mean/var for each condition (i.e. sfXdispXcon)
   curr_ax = plt.subplot2grid(detailSize, (0, 0), colspan=2, rowspan=2); # set the current subplot location/size[default is 1x1]
   val_conds = ~np.isnan(f1Mean);
-  gt0 = np.logical_and(f1Mean[val_conds]>0, f1Std[val_conds]>0);
+  gt0 = np.logical_and(f1Mean[val_conds]>0, f1sem[val_conds]>0);
   plt.loglog([0.01, 1000], [0.01, 1000], 'k--');
-  plt.loglog(f1Mean[val_conds][gt0], np.square(f1Std[val_conds][gt0]), 'o');
+  plt.loglog(f1Mean[val_conds][gt0], np.square(f1sem[val_conds][gt0]), 'o');
   # skeleton for plotting modulated poisson prediction
   if lossType == 4: # i.e. modPoiss
     mean_vals = np.logspace(-1, 2, 50);
@@ -743,7 +763,7 @@ for d in range(nDisps):
 
         # NR fit plots
         if crfFitName:
-          stdPts = np.hstack((0, np.reshape([f1Std[d, sf_ind, v_cons]], (n_cons, ))));
+          stdPts = np.hstack((0, np.reshape([f1sem[d, sf_ind, v_cons]], (n_cons, ))));
           expPts = crfAx[d+1][row_ind, col_ind].errorbar(np.hstack((0, all_cons[v_cons])), resps_w_blank, stdPts, fmt='o', clip_on=False);
 
           sepPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
@@ -762,7 +782,7 @@ for d in range(nDisps):
 
         crfAx[plt_x][plt_y].set_xscale('symlog', linthreshx=0.01); # symlog will allow us to go down to 0 
         crfAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
-        crfAx[plt_x][plt_y].set_ylabel('resp (sps)', fontsize='medium');
+        crfAx[plt_x][plt_y].set_ylabel('response (spikes/s)', fontsize='medium');
         crfAx[plt_x][plt_y].set_title('D%d: sf: %.3f cpd' % (d+1, all_sfs[sf_ind]), fontsize='large');
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
@@ -792,11 +812,11 @@ for d in range(nDisps):
 
       crfAx[0][d, 0].set_title('D%d - all RVC' % (d), fontsize='large');
       crfAx[0][d, 0].set_xlabel('contrast', fontsize='large');
-      crfAx[0][d, 0].set_ylabel('resp (sps)', fontsize='large');
+      crfAx[0][d, 0].set_ylabel('response (spikes/s)', fontsize='large');
       crfAx[0][d, 0].legend(rvc_plots, [str(i) for i in np.round(all_sfs[v_sfs[0]], 2)], loc='upper left');
 
       crfAx[0][d, 1].set_title('D%d - C50 (fixed vs free)' % (d), fontsize='large');
-      crfAx[0][d, 1].set_xlabel('sf (cpd)', fontsize='large');
+      crfAx[0][d, 1].set_xlabel('spatial frequency (c/deg)', fontsize='large');
       crfAx[0][d, 1].set_ylabel('c50', fontsize='large');
       crfAx[0][d, 1].legend((sepC50s[0], allC50s[0], invSF[0]), ('c50 free', 'c50 fixed', 'rescaled SF tuning'), fontsize='large', loc='center left');
     
@@ -870,7 +890,7 @@ for d in range(nDisps):
 
         rvcAx[plt_x][plt_y].set_xscale('symlog', linthreshx=0.01); # symlog will allow us to go down to 0 
         rvcAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
-        rvcAx[plt_x][plt_y].set_ylabel('resp (sps)', fontsize='medium');
+        rvcAx[plt_x][plt_y].set_ylabel('response (spikes/s)', fontsize='medium');
         rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
         
         plotList = ();
@@ -1009,7 +1029,7 @@ if norm_sim_on and modParamsCurr:
   nm = simsAx[0].semilogx(omega, -sfNorm, 'r-', linewidth=2.5);
   simsAx[0].set_xlim([omega[0], omega[-1]]);
   simsAx[0].set_ylim([-0.1, 1.1]);
-  simsAx[0].set_xlabel('SF (cpd)', fontsize=12);
+  simsAx[0].set_xlabel('spatial frequency (c/deg)', fontsize=12);
   simsAx[0].set_ylabel('Normalized response (a.u.)', fontsize=12);
   simsAx[0].set_title('CELL %d' % (which_cell), fontsize=20);
   simsAx[0].legend([ex[0], nm[0]], ('excitatory %.2f' % (modParamsCurr[0]), 'normalization %.2f' % (np.exp(modParamsCurr[-2]))));
@@ -1045,9 +1065,9 @@ if norm_sim_on and modParamsCurr:
       simsAx[d+1][0].set_aspect('equal', 'box'); 
       simsAx[d+1][0].set_xlim((0.5*min(v_sfs), 1.2*max(v_sfs)));
       #simsAx[d+1][0].set_ylim((5e-2, 1.5*maxResp));
-      simsAx[d+1][0].set_xlabel('sf (c/deg)'); 
+      simsAx[d+1][0].set_xlabel('spatial frequency (c/deg)'); 
 
-      simsAx[d+1][0].set_ylabel('resp above baseline (sps)');
+      simsAx[d+1][0].set_ylabel('response (spikes/s)');
       simsAx[d+1][0].set_title('D%d - sf tuning' % (d));
       simsAx[d+1][0].legend(lines, [str(i) for i in reversed(v_cons)], loc=0);
 
@@ -1077,7 +1097,7 @@ if norm_sim_on and modParamsCurr:
       simsAx[d+1][1].set_yscale('log');
       simsAx[d+1][1].set_xlabel('contrast');
 
-      simsAx[d+1][1].set_ylabel('resp above baseline (sps)');
+      simsAx[d+1][1].set_ylabel('response (spikes/s)');
       simsAx[d+1][1].set_title('D%d: sf:all - log resp' % (d));
       simsAx[d+1][1].legend(lines_log, [str(i) for i in np.round(v_sfs, 2)], loc='upper left');
 

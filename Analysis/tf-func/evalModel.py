@@ -827,8 +827,8 @@ if __name__ == '__main__':
 
     holdoutRes = dict();
    
-    for d in range(nDisps):
-      for c in range(nCons):
+    for d in range(1): # only care about single gratings for now
+      for c in reversed(range(nCons)):
         for s in range(nSfs):
 
           holdOutCondition = [d+1, c+1, s+1];

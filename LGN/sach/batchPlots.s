@@ -22,7 +22,8 @@ module load seaborn/0.7.1
 # third param is DoG model (sf tuning):
 	# 1 - sach's
 	# 2 - tony's 
-python plotting.py $SLURM_ARRAY_TASK_ID 3 1
+# 4th param is load from file (1; Tony's fits) or use params from my fits (0)
+python plotting.py $SLURM_ARRAY_TASK_ID 3 2 0
  
 # leave a blank line at the end
 

@@ -19,17 +19,29 @@ import sys
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/Analysis/Functions/paul_plt_cluster.mplstyle');
 from matplotlib import rcParams
-rcParams['font.size'] = 20;
+rcParams['font.size'] = 35;
 rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
 rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['lines.linewidth'] = 3;
-rcParams['axes.linewidth'] = 3;
-rcParams['lines.markersize'] = 3
+rcParams['lines.linewidth'] = 5;
+rcParams['axes.linewidth'] = 4;
+rcParams['lines.markersize'] = 12;
+
+rcParams['xtick.major.size'] = 25
+rcParams['xtick.minor.size'] = 12
+rcParams['ytick.major.size'] = 25
+rcParams['ytick.minor.size'] = 12
+
+rcParams['xtick.major.width'] = 5
+rcParams['xtick.minor.width'] = 2
+rcParams['ytick.major.width'] = 5
+rcParams['ytick.minor.width'] = 2
+
 rcParams['font.style'] = 'oblique';
 
-which_cell = int(sys.argv[1]);
+which_cell   = int(sys.argv[1]);
 sf_loss_type = int(sys.argv[2]);
 sf_DoG_model = int(sys.argv[3]);
+fromFile     = int(sys.argv[4]); 
 
 # personal mac
 #dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
@@ -45,13 +57,15 @@ cellStruct = allData[which_cell-1];
 
 # #### Load descriptive model fits, [RVC Naka-Rushton fits], [comp. model fits]
 
-fLname = 'descrFits_181006';
+fLname = 'descrFits_b181012';
 if sf_loss_type == 1:
   loss_str = '_poiss';
 elif sf_loss_type == 2:
   loss_str = '_sqrt';
 elif sf_loss_type == 3:
   loss_str = '_sach';
+elif sf_loss_type == 4:
+  loss_str = '_varExpl';
 if sf_DoG_model == 1:
   mod_str = '_sach';
 elif sf_DoG_model == 2:
@@ -130,7 +144,7 @@ pdfSv.close()
 # #### SF tuning - split by contrast, data and model
 #########
 
-fSfs, sfsAx = plt.subplots(nCons, 1, figsize=(20, 10*nCons), sharey=False);
+fSfs, sfsAx = plt.subplots(nCons, 1, figsize=(20, 8*nCons), sharey=True);
 
 val_sfs = np.where(all_sfs>0); # do not plot the zero sf condition
 sfs_plot = np.logspace(np.log10(np.min(all_sfs[val_sfs])), np.log10(np.max(all_sfs[val_sfs])), 51);
@@ -141,25 +155,39 @@ for c in reversed(range(nCons)):
     curr_resps = f1['mean'][c, val_sfs][0]; # additional layer of array to unwrap
     curr_sem = f1['sem'][c, val_sfs][0];
     v_sfs = ~np.isnan(curr_resps);
+    data_sfs = all_sfs[val_sfs][v_sfs]
 
     # plot data
-    sfsAx[c_plt_ind].errorbar(all_sfs[val_sfs][v_sfs], curr_resps[v_sfs], 
+    sfsAx[c_plt_ind].errorbar(data_sfs, curr_resps[v_sfs], 
                                   curr_sem[v_sfs], fmt='o', clip_on=False);
 
     # plot descriptive model fit and inferred characteristic frequency
-    curr_mod_params = descrFits['params'][c]; 
+    if fromFile:
+      curr_mod_params = helper_fcns.load_modParams(which_cell, c);
+    else:
+      curr_mod_params = descrFits['params'][c]; 
     if sf_DoG_model == 1:
-      sfsAx[c_plt_ind].plot(sfs_plot, helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0], clip_on=False)
+      mod_resps = helper_fcns.DoGsach(*curr_mod_params, stim_sf=data_sfs)[0];
+      mod_resps_plt = helper_fcns.DoGsach(*curr_mod_params, stim_sf=sfs_plot)[0];
     elif sf_DoG_model == 2:
-      sfsAx[c_plt_ind].plot(sfs_plot, helper_fcns.DiffOfGauss(*curr_mod_params, stim_sf=sfs_plot)[0], clip_on=False)
+      mod_resps = helper_fcns.DiffOfGauss(*curr_mod_params, stim_sf=data_sfs)[0];
+      mod_resps_plt = helper_fcns.DiffOfGauss(*curr_mod_params, stim_sf=sfs_plot)[0];
+    sfsAx[c_plt_ind].plot(sfs_plot, mod_resps_plt, clip_on=False)
+    # now plot characteristic frequency!
     f_c = helper_fcns.dog_charFreq(curr_mod_params, sf_DoG_model);
+    sfsAx[c_plt_ind].plot(f_c, 1, 'v', color='k');
+
     # note we take DiffOfGaus(.)[0] since that is the unnormalized version of the DoG response
 
     sfsAx[c_plt_ind].set_xlim((min(sfs_plot), max(sfs_plot)));
 
     sfsAx[c_plt_ind].set_xscale('log');
     sfsAx[c_plt_ind].set_xlabel('spatial frequency (c/deg)'); 
-    sfsAx[c_plt_ind].set_title('SF tuning: contrast: %.3f%%, %.1f%% varExpl' % (all_cons[c], descrFits['varExpl'][c]));
+    if fromFile:
+      varExpl = helper_fcns.var_expl_direct(curr_resps[v_sfs], mod_resps);
+    else:
+      varExpl = descrFits['varExpl'][c];
+    sfsAx[c_plt_ind].set_title('SF tuning: contrast: %.3f%%, %.1f%% varExpl' % (all_cons[c], varExpl));
 
     # Set ticks out, remove top/right axis, put ticks only on bottom/left
     sfsAx[c_plt_ind].tick_params(labelsize=15, width=1, length=8, direction='out');
@@ -176,7 +204,6 @@ pdfSv = pltSave.PdfPages(full_save + saveName);
 pdfSv.savefig(fSfs)
 plt.close(fSfs)
 pdfSv.close()
-
 
 #########
 # #### Plot response versus contrast curves (RVC)

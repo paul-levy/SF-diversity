@@ -15,22 +15,23 @@ module purge
 source /home/pl1465/SF_diversity/Analysis/tf2.7/python2.7.12/bin/activate
 module load seaborn/0.7.1
 
-# second param is fit_type:
-	# 1 - least squares
+# second param is loss_type:
+	# 1 - square root
+	# 2 - poisson
+	# 3 - modulated poission
+# third param is fit_type:
+	# 1 - flat normalization
+	# 2 - gaussian weighting of normalization responses
+	# 3 - c50 controlled by gaussian
+# fourth param is crf_fit_type: (i.e. what loss function for naka-rushton fits)
+        # 1 - lsq
 	# 2 - square root
 	# 3 - poisson
 	# 4 - modulated poission
-# third param is crf_fit_type: (i.e. what loss function for naka-rushton fits)
-        # same as above
-# fourth param is descr_fit_type: (i.e. what loss function for descriptive gaussian fits)
-        # same as above
-# fifth param is 0 (no norm sims) or 1 (do normalization simulations)
-# sixth param is 1 (gaussian) or 0 (helper_functions asymmetry) calculation for normalization
-# if sixth param is 1:
-#   7/8 [optional] params are (in log coordinates) mean and std of gaussian
-# if sixth param is 2:
-#   7/8/9 [optional] params are std of left/right halves, and offset (i.e. bottom/lowest c50)
-python plotting.py $SLURM_ARRAY_TASK_ID 3 1 1 0 0
+# fifth  param is descr_fit_type: (i.e. what loss function for descriptive gaussian fits)
+        # same as above, no mod_poiss
+# sixth param is 0 (no norm sims) or 1 (do normalization simulations)
+python plotting.py $SLURM_ARRAY_TASK_ID 3 2 3 3 0
  
 # leave a blank line at the end
 

@@ -46,7 +46,7 @@ cellNum = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
 fitType = int(sys.argv[3]);
 log_y = int(sys.argv[4]);
-normTypeArr= [];
+normTypeArr = [fitType]; # normTypeArr should start with the fitType 
 argInd = 5; # we've already taken 5 arguments off (function call, which_cell, loss_type, fitType, log_y); we'll get fitType again in the loop below
 nArgsIn = len(sys.argv) - argInd; 
 while nArgsIn > 0:
@@ -177,18 +177,19 @@ for con in reversed(range(nCon)): # contrast
         all_plots[con,fam].tick_params(labelsize=15, width=1, length=8, direction='out');
         all_plots[con,fam].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
         if con == 1:
-            all_plots[con, fam].set_xlabel('sf center (cpd)', fontsize=20);
+            all_plots[con, fam].set_xlabel('spatial frequency (c/deg)', fontsize=20);
         if fam == 0:
-            all_plots[con, fam].set_ylabel('Response (ips)', fontsize=20);
+            all_plots[con, fam].set_ylabel('response (spikes/s)', fontsize=20);
        
-        all_plots[con,fam].text(0.5,1.05, 'mod: {:.2f} cpd | {:.2f} oct'.format(pSfMod[fam, con], bwMod[fam, con]), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[con,fam].transAxes); 
+        #all_plots[con,fam].text(0.5,1.05, 'mod: {:.2f} cpd | {:.2f} oct'.format(pSfMod[fam, con], bwMod[fam, con]), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[con,fam].transAxes); 
         all_plots[con,fam].text(0.5,1.10, 'exp: {:.2f} cpd | {:.2f} oct'.format(pSfExp[fam, con], bwExp[fam, con]), fontsize=12, horizontalalignment='center', verticalalignment='top', transform=all_plots[con,fam].transAxes); 
 
-        # Remove top/right axis, put ticks only on bottom/left
+        # Remove top/right axis, put ticks only on bottom/left, despine
         all_plots[con, fam].spines['right'].set_visible(False);
         all_plots[con, fam].spines['top'].set_visible(False);
         all_plots[con, fam].xaxis.set_ticks_position('bottom');
         all_plots[con, fam].yaxis.set_ticks_position('left');
+        sns.despine(ax=all_plots[con, fam], offset = 10);
 
             
 f.legend((expPoints[0], modRange, modAvgPlt[0], sponRate, sponRateMod), ('data +- 1 s.e.m.', 'model range', 'model average', 'exp spont f.r.', 'mod spont f.r.'), fontsize = 15, loc='upper right');
@@ -297,7 +298,7 @@ plt.semilogx(omega, sfExc, 'k-')
 plt.semilogx(omega, sfNorm, 'r-', linewidth=1);
 plt.xlim([omega[0], omega[-1]]);
 plt.ylim([-0.1, 1.1]);
-plt.xlabel('SF (cpd)', fontsize=12);
+plt.xlabel('spatial frequency (c/deg)', fontsize=12);
 plt.ylabel('Normalized response (a.u.)', fontsize=12);
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset=5);
@@ -329,7 +330,7 @@ if norm_type == 3: # plot the c50 filter (i.e. effective c50 as function of SF)
   curr_ax = plt.subplot2grid(detailSize, (2, 4));
   plt.semilogx(stimSf, c50_filt);
   plt.title('(mu, stdL/R, offset) = (%.2f, %.2f|%.2f, %.2f)' % (filtPeak, stdLeft, stdRight, offset_filt));
-  plt.xlabel('sf (cpd)');
+  plt.xlabel('spatial frequency (c/deg)');
   plt.ylabel('c50 (con %)')
     
 # actually last - CRF at different dispersion levels
@@ -417,7 +418,7 @@ for disp in range(nFam):
       conDisp_plots[conLvl, disp].tick_params(labelsize=15, width=1, length=8, direction='out');
       conDisp_plots[conLvl, disp].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
       if conLvl == 0:
-          conDisp_plots[conLvl, disp].set_xlabel('sf center (cpd)', fontsize=20);
+          conDisp_plots[conLvl, disp].set_xlabel('spatial frequency (c/deg)', fontsize=20);
       if disp == 0:
           conDisp_plots[conLvl, disp].set_ylabel('Response (ips)', fontsize=20);
       # remove axis from top and right, set ticks to be only bottom and left
@@ -496,7 +497,7 @@ ex = simsAx[0].semilogx(omega, sfExc, 'k-')
 nm = simsAx[0].semilogx(omega, -sfNorm, 'r-', linewidth=2.5);
 simsAx[0].set_xlim([omega[0], omega[-1]]);
 simsAx[0].set_ylim([-0.1, 1.1]);
-simsAx[0].set_xlabel('SF (cpd)', fontsize=12);
+simsAx[0].set_xlabel('spatial frequency (c/deg)', fontsize=12);
 simsAx[0].set_ylabel('Normalized response (a.u.)', fontsize=12);
 simsAx[0].set_title('CELL %d' % (cellNum), fontsize=20);
 simsAx[0].legend([ex[0], nm[0]], ('excitatory %.2f' % (modFit[0]), 'normalization %.2f' % (np.exp(modFit[-2]))));
@@ -531,7 +532,7 @@ for d in range(nFam):
     simsAx[d+1][0].set_aspect('equal', 'box'); 
     simsAx[d+1][0].set_xlim((0.5*min(v_sfs), 1.2*max(v_sfs)));
     #simsAx[d+1][0].set_ylim((5e-2, 1.5*maxResp));
-    simsAx[d+1][0].set_xlabel('sf (c/deg)'); 
+    simsAx[d+1][0].set_xlabel('spatial frequency (c/deg)'); 
 
     simsAx[d+1][0].set_ylabel('resp above baseline (sps)');
     simsAx[d+1][0].set_title('D%d - sf tuning' % (d));

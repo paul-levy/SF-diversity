@@ -1,6 +1,5 @@
 Analysis/Structures/Structures-extra
 Analysis/Structures/m*
-Analysis/Structures/*hold*
 Analysis/Figures/*
 altExp/analysis/figures/**
 altExp/analysis/structures/m*
@@ -20,3 +19,4 @@ LGN/sach/figures/
 **/*.out
 **/*.err
 **/tf2.7/
+

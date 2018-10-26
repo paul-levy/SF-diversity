@@ -54,7 +54,7 @@ dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_180713';
+fitBase = 'fitList_180717';
 
 # first the fit type
 if fitType == 1:
@@ -65,23 +65,24 @@ elif fitType == 3:
   fitSuf = '_c50';
 # then the loss type
 if lossType == 1:
-  lossSuf = '_lsq.npy';
-elif lossType == 2:
   lossSuf = '_sqrt.npy';
-elif lossType == 3:
+  loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
+elif lossType == 2:
   lossSuf = '_poiss.npy';
-elif lossType == 4:
+  loss = lambda resp, pred: poisson.logpmf(resp, pred);
+elif lossType == 3:
   lossSuf = '_modPoiss.npy';
+  loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p));
 
 fitListName = str(fitBase + fitSuf + lossSuf);
 
 if crf_fit_type == 1:
   crf_type_str = '-lsq';
-if fit_type == 2:
+if crf_fit_type == 2:
   crf_type_str = '-sqrt';
-if fit_type == 3:
+if crf_fit_type == 3:
   crf_type_str = '-poiss';
-if fit_type == 4:
+if crf_fit_type == 4:
   crf_type_str = '-poissMod';
 
 if descr_fit_type == 1:
@@ -445,7 +446,7 @@ plt.text(0.5, 0.5, 'prefSf: {:.3f}'.format(modParamsCurr[0]), fontsize=12, horiz
 plt.text(0.5, 0.4, 'derivative order: {:.3f}'.format(modParamsCurr[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.text(0.5, 0.3, 'response scalar: {:.3f}'.format(modParamsCurr[4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.text(0.5, 0.2, 'sigma: {:.3f} | {:.3f}'.format(np.power(10, modParamsCurr[2]), modParamsCurr[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-if fit_type == 4:
+if lossType == 3: # modpoiss
   varGain = modParamsCurr[7];
   plt.text(0.5, 0.1, 'varGain: {:.3f}'.format(varGain), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
@@ -456,7 +457,7 @@ gt0 = np.logical_and(respMean[val_conds]>0, respStd[val_conds]>0);
 plt.loglog([0.01, 1000], [0.01, 1000], 'k--');
 plt.loglog(respMean[val_conds][gt0], np.square(respStd[val_conds][gt0]), 'o');
 # skeleton for plotting modulated poisson prediction
-if fit_type == 4: # i.e. modPoiss
+if lossType == 3: # i.e. modPoiss
   mean_vals = np.logspace(-1, 2, 50);
   plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals));
 plt.xlabel('Mean (sps)');
@@ -580,12 +581,12 @@ for d in range(nDisps):
         sep_pred = helper_fcns.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_sep[0:4]);
         all_pred = helper_fcns.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_all[0:4]);
 
-        if fit_type == 4:
+        if lossType == 3:
           r_sep, p_sep = helper_fcns.mod_poiss(sep_pred, curr_fit_sep[4]);
           r_all, p_all = helper_fcns.mod_poiss(all_pred, curr_fit_all[4]);
           sep_loss = -np.sum(loss(np.round(resps_w_blank), r_sep, p_sep));
           all_loss = -np.sum(loss(np.round(resps_w_blank), r_all, p_all));
-        elif fit_type == 3:	
+        elif lossType == 2:	
           sep_loss = -np.sum(loss(np.round(resps_w_blank), sep_pred));
           all_loss = -np.sum(loss(np.round(resps_w_blank), all_pred));
         else: # i.e. fit_type == 1 || == 2
