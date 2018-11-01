@@ -31,6 +31,7 @@ import pdb
 ### phase/more psth
 
 # project_resp - project the measured response onto the true/predicted phase and determine the "true" response amplitude
+# project_resp_cond - project the individual responses for a given condition
 # first_ph0 - for a given stimulus start phase, compute how much of a cycle (and how much time) before the stimulus gets to the start of a cycle (i.e. ph=0)
 # fold_psth - fold a psth for a given number of cycles (given spike times)
 # get_true_phase - compute the response phase relative to the stimulus phase given a response phase (rel. to trial time window) and a stimulus phase (rel. to trial start)
@@ -120,13 +121,18 @@ def angle_xy(x_coord, y_coord):
    theta = [smart_angle(x_coord[i], y_coord[i], th[i]) for i in range(len(th))];
    return theta;
 
-def fit_name(base, dir):
+def fit_name(base, dir , byTrial=0):
   ''' Given the base name for a file, append the flag for the phase direction
   '''
+  if byTrial == 1:
+    byTr = '_byTr'
+  elif byTrial == 0:
+    byTr = '';
+
   if dir == 1:
-    base = base + '_pos.npy';
+    base = base + byTr + '_pos.npy';
   if dir == -1:
-    base = base + '_neg.npy';
+    base = base + byTr + '_neg.npy';
   return base;
 
 def flatten(l):
@@ -181,13 +187,15 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
       eq: adjResp = measuredResp * cos(expPhi - measuredPhi)
       vectorized: expects/returns lists of amplitudes/phis
   '''
+  np = numpy;
+
   all_proj = [];
   for i in range(len(amp)):
     if disp == 0:
       if amp[i] == []: # this shouldn't ever happen for single gratings, but just in case...
         continue;
       phi_true = phAdv_model(phAdv_params[i][0], phAdv_params[i][1], amp[i]);
-      proj = numpy.multiply(amp[i], numpy.cos(numpy.deg2rad(phi_resp[i])-numpy.deg2rad(phi_true)));
+      proj = np.multiply(amp[i], np.cos(np.deg2rad(phi_resp[i])-np.deg2rad(phi_true)));
       all_proj.append(proj);
     elif disp == 1: # then we'll need to use the allCompSf to get the right phase advance fit for each component
       if amp[i] == []: # 
@@ -195,7 +203,6 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
         continue;
       # now, for each valid amplitude, there are responses for each component for each total stim contrast
       all_proj.append([]);
-      #pdb.set_trace();
       for con_ind in range(len(amp[i])):
         curr_proj_con = [];
         for comp_ind in range(len(amp[i][con_ind])):
@@ -203,15 +210,44 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
           curr_phi = phi_resp[i][con_ind][comp_ind];
           # now, for that component, find out the SF and get the right phase advance fit
           # note: where is array, so unpack one level to get  
-          sf_ind = numpy.where(allSfs == allCompSf[i][con_ind][comp_ind])[0][0];
-          
+          sf_ind = np.where(allSfs == allCompSf[i][con_ind][comp_ind])[0][0];
           phi_true = phAdv_model(phAdv_params[sf_ind][0], phAdv_params[sf_ind][1], curr_amp);
+          if isinstance(phi_true, np.ndarray): # i.e. array
+            if isinstance(phi_true[0], np.ndarray): # i.e. nested array
+            # flatten into array of numbers rather than array of arrays (of one number) 
+              phi_true = flatten(phi_true);
           # finally, project the response as usual
-          proj = numpy.multiply(curr_amp, numpy.cos(numpy.deg2rad(curr_phi)-numpy.deg2rad(phi_true)));
+          proj = np.multiply(curr_amp, np.cos(np.deg2rad(curr_phi)-np.deg2rad(phi_true)));
           curr_proj_con.append(proj);
         all_proj[i].append(curr_proj_con);
   
   return all_proj;
+
+def project_resp_cond(data, disp, con, sf, phAdv_model, phAdv_params, dir=-1):
+  ''' Input: data structure, disp/con/sf (as indices, relative to the list of con/sf for that dispersion)
+      Using our model fit of (expected) response phase as a function of response amplitude, we can
+      determine the difference in angle between the expected and measured phase and then project the
+      measured response vector (i.e. amp/phase in polar coordinates) onto the expected phase line
+      eq: adjResp = measuredResp * cos(expPhi - measuredPhi)
+  '''
+  val_trials, allDisps, allCons, allSfs = get_valid_trials(data, disp, con, sf);
+
+  if not numpy.any(val_trials[0]): # val_trials[0] will be the array of valid trial indices --> if it's empty, leave!
+    warnings.warn('this condition is not valid');
+    return [];
+
+  allAmp, allPhi, _, allCompCon, allCompSf = get_all_fft(data, disp, dir=dir, all_trials=1);
+  ampByTrial = allAmp[sf][con][2];
+  phiByTrial = allPhi[sf][con][2];
+
+  adjAmpAll = project_resp([ampByTrial], [phiByTrial], phAdv_model, [phAdv_params[sf]], disp, allCompSf, allSfs)[0];
+  adjAmpMean = numpy.mean(adjAmpAll);
+  adjAmpSem = sem(adjMeans);
+
+  allPhiMean = numpy.mean(allPhi);
+  allPhiSem = sem(allPhi);
+
+  return [adjAmpAll, adjAmpMean, adjAmpSem], [allPhi, allPhiMean, allPhiSem];
   
 def first_ph0(start_phase, stim_tf, dir=-1):
     ''' returns fraction of cycle until ph=0 and time until ph=0 
@@ -319,9 +355,10 @@ def polar_vec_mean(amps, phases):
 
    return all_r, all_phi, all_r_std, all_phi_var;
 
-def get_all_fft(data, disp, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, stimDur=1):
+def get_all_fft(data, disp, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, stimDur=1, all_trials=0):
   ''' for a given cell and condition or set of conditions, compute the mean amplitude and phase
       also return the temporal frequencies which correspond to each condition
+      if all_trials=1, then return the individual trial responses (i.e. not just avg over all repeats for a condition)
   '''
 
   resp, stimVals, val_con_by_disp, validByStimVal, mdRsp = tabulate_responses(data);
@@ -357,19 +394,29 @@ def get_all_fft(data, disp, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, stimDur
         _, rel_amp, full_fourier = spike_fft(psth_val, curr_tf)
         # compute mean, gather
         avg_r, avg_ph, std_r, std_ph = polar_vec_mean([rel_amp], [ph_rel_stim]);
-        curr_r.append([avg_r[0], std_r[0]]); # we can just grab 0 element, since we're going one value at a time, but it's packed in array
-        curr_ph.append([avg_ph[0], std_ph[0]]); # same as above
+        if all_trials == 1:
+          curr_r.append([avg_r[0], std_r[0], rel_amp, sem(rel_amp)]); # we can just grab 0 element, since we're going one value at a time, but it's packed in array
+          curr_ph.append([avg_ph[0], std_ph[0], ph_rel_stim, sem(ph_rel_stim)]); # same as above
+        elif all_trials == 0:
+          curr_r.append([avg_r[0], std_r[0]]); # we can just grab 0 element, since we're going one value at a time, but it's packed in array 
+          curr_ph.append([avg_ph[0], std_ph[0]]); # same as above
         curr_tf.append(curr_tf);
       elif disp == 1: # for mixtures
         switch_inner_outer = lambda arr: [[x[i] for x in arr] for i in range(len(arr[0]))]
         _, _, _, rel_amp, conByComp, sfByComp = get_isolated_response(data, val_trials);
+        rel_amp_sem = [sem(x) for x in rel_amp];
         # need to switch ph_rel_stim (and resp_phase) to be lists of phases by component (rather than list of phases by trial)
         ph_rel_stim = switch_inner_outer(ph_rel_stim);
+        ph_rel_stim_sem = [sem(x) for x in ph_rel_stim];
 
         # compute vector mean, gather/organize
         avg_r, avg_ph, std_r, std_ph = polar_vec_mean(rel_amp, ph_rel_stim);
-        curr_r.append([avg_r, std_r]);
-        curr_ph.append([avg_ph, std_ph]);
+        if all_trials == 1:
+          curr_r.append([avg_r, std_r, rel_amp, rel_amp_sem]);
+          curr_ph.append([avg_ph, std_ph, ph_rel_stim, ph_rel_stim_sem]);
+        elif all_trials == 0:
+          curr_r.append([avg_r, std_r]);
+          curr_ph.append([avg_ph, std_ph]);
         curr_tf.append(curr_tf);
         curr_conComp.append(conByComp);
         curr_sfComp.append(sfByComp);
@@ -476,7 +523,7 @@ def phase_advance(amps, phis, cons, tfs):
    abs_angle_diff = lambda deg1, deg2: np.arccos(np.cos(np.deg2rad(deg1) - np.deg2rad(deg2)));
 
    for i in range(len(amps)):
-     print('#######%d#######\n' % i);
+     print('\n#######%d#######\n' % i);
      curr_amps = amps[i]; # amp for each of the different contrast conditions
      curr_ampMean = get_mean(curr_amps);
      curr_phis = phis[i]; # phase for ...
@@ -770,8 +817,9 @@ def get_condition(data, n_comps, con, sf):
     return f0, f1, val_trials;
 
 def get_conditionAdj(data, n_comps, con, sf, adjByTrial):
-  ''' Returns the trial responses (f0 and f1) and correspondign trials for a given 
+  ''' Returns the trial responses (f0 and f1) and corresponding trials for a given 
       dispersion level (note: # of components), contrast, and spatial frequency
+      Note: Access trial responses from a vector of adjusted (i.e. "projected") responses
   '''
   np = numpy;
   conDig = 3; # default...

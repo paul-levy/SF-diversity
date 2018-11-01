@@ -99,7 +99,7 @@ def phase_advance_fit(cell_num, data_loc = dataPath, phAdvName=phAdvName, to_sav
 
   return phAdv_model, all_opts;
 
-def rvc_adjusted_fit(cell_num, data_loc = dataPath, rvcName=rvcName, to_save=1, disp=0, dir=-1):
+def rvc_adjusted_fit(cell_num, data_loc=dataPath, rvcName=rvcName, to_save=1, disp=0, dir=-1):
   ''' Piggy-backing off of phase_advance_fit above, get prepare to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
   '''
@@ -120,22 +120,26 @@ def rvc_adjusted_fit(cell_num, data_loc = dataPath, rvcName=rvcName, to_save=1, 
   # for the mixtrue stimuli - instead, we use the fits made on single gratings to project the
   # individual-component-in-mixture responses
   phAdv_model, all_opts = phase_advance_fit(cell_num, dir=dir, to_save = 0); # don't save
-  allAmp, allPhi, _, allCompCon, allCompSf = hf.get_all_fft(data, disp, dir=dir);
+  allAmp, allPhi, _, allCompCon, allCompSf = hf.get_all_fft(data, disp, dir=dir, all_trials=1);
   # get just the mean amp/phi and put into convenient lists
   allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)
+  allAmpTrials = [[x[2] for x in sf] for sf in allAmp]; # trial-by-trial is third element 
+  allAmpTrSem = [[x[3] for x in sf] for sf in allAmp]; # s.e.m. is fourth element
+
   allPhiMeans = [[x[0] for x in sf] for sf in allPhi]; # mean is in the first element; do that for each [mean, var] pair in each list (split by sf)
-  
-  # use the original measure of varaibility if/when using weighted loss function in hf.rvc_fit
-  allAmpStd = [[x[1] for x in sf] for sf in allAmp]; # std is in the first element; do that for each [mean, std] pair in each list (split by sf)
+  allPhiTrials = [[x[2] for x in sf] for sf in allPhi]; # trial-by-trial is third element 
+
   adjMeans = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
+  adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs);
   consRepeat = [valCons] * len(adjMeans);
   
   if disp == 1: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)
     adjSumResp  = [np.sum(x, 1) if x else [] for x in adjMeans];
-    allSumStd = [np.sqrt(np.sum(np.square(x), 1)) if x else [] for x in allAmpStd];
-    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, allSumStd);
+    allSumTrSem = [np.sqrt(np.sum(np.square(x), 1)) if x else [] for x in allAmpTrSem];
+    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, allSumTrSem);
   elif disp == 0:
-    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, allAmpStd);
+    print('..');
+    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, allAmpTrSem);
 
   if os.path.isfile(data_loc + rvcNameFinal):
       rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
