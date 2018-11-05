@@ -23,9 +23,14 @@ module load seaborn/0.7.1
 # 6th arg - which DoG model (1 - sach; 2 - tony)
 # 7th arg - optional - direction
 # 8th arg - optional - regularize the gains in the DoG fits (<0.1 works well...)
-python descr_fits.py $SLURM_ARRAY_TASK_ID 0 0 0 1 2 1 0
-#python descr_fits.py $SLURM_ARRAY_TASK_ID 0 1 1 0 2 1 0
-#python descr_fits.py $SLURM_ARRAY_TASK_ID 1 0 1 0 2 1 0
+
+# to fit phase advance/RVC
+python descr_fits.py $SLURM_ARRAY_TASK_ID 0 1 1 0 2 1 0
+python descr_fits.py $SLURM_ARRAY_TASK_ID 1 0 1 0 2 1 0
  
+# to fit DoG curves
+python descr_fits.py $SLURM_ARRAY_TASK_ID 0 0 0 1 2 1 0
+python descr_fits.py $SLURM_ARRAY_TASK_ID 1 0 0 1 2 1 0
+
 # leave a blank line at the end
 

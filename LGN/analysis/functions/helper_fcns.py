@@ -21,6 +21,7 @@ import pdb
 # angle_xy - compute the angle of a vector given x, y coordinate
 # fit_name - return the fit name iwth the proper direction flag (i.e. pos or neg)
 # flatten - unpacks a list of lists into one list...
+# switch_inner_outer - turn an NxM to an MxN, sort of
 # sum_comps - sum the responses across components as determined in analyses for mixtures
 
 ### fourier
@@ -58,12 +59,23 @@ import pdb
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
 # blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
+
+# getCondition - returns trial-by-trial responses for specific disp/con/sf condition
+# getConditionAdj - getCondition, but for adjusted/projected responses
+# get_isolated_response - returns mean/std/trial-by-trial (f0 and f1), contrast/sf by component
+# get_isolated_responseAdj - as get_isolated_response, but for adjusted/projected responses
+
 # tabulate_responses - Organizes measured and model responses for sfMixAlt experiment
 # organize_adj_responses - Organize the phase-adjusted responses into the format of tabulate_responses
 # get_valid_trials - get the list of valid trials given a disp/con/sf combination - and return the list of all disps/cons/sfs
 # get_valid_sfs - return indices of valid sfs for a given disp/con
+
+# mod_poiss - evaluate the modulated poisson model
+# naka_rushton - evaluate the naka-rushton model
+# fit_CRF - fit a CRF/RVC using naka-rushton model
 # random_in_range - random real-valued number between A and B
 # nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
+
 # getSuppressiveSFtuning - returns the normalization pool response
 # makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
 # genNormWeights - used to generate the weighting matrix for weighting normalization pool responses
@@ -139,6 +151,10 @@ def flatten(l):
   flatten = lambda l: [item for sublist in l for item in sublist];
   return flatten(l);
 
+def switch_inner_outer(x):
+  switch_inner_outer = lambda arr: [[x[i] for x in arr] for i in range(len(arr[0]))];
+  return switch_inner_outer(x);
+
 def sum_comps(l, stdFlag = 0):
   # assumes list - by sf - with each sf-specific list organized by contrast
   np = numpy;
@@ -190,6 +206,7 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
   np = numpy;
 
   all_proj = [];
+
   for i in range(len(amp)):
     if disp == 0:
       if amp[i] == []: # this shouldn't ever happen for single gratings, but just in case...
@@ -224,7 +241,8 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
   return all_proj;
 
 def project_resp_cond(data, disp, con, sf, phAdv_model, phAdv_params, dir=-1):
-  ''' Input: data structure, disp/con/sf (as indices, relative to the list of con/sf for that dispersion)
+  ''' NOTE: Not currently used, incomplete... 11.01.18
+      Input: data structure, disp/con/sf (as indices, relative to the list of con/sf for that dispersion)
       Using our model fit of (expected) response phase as a function of response amplitude, we can
       determine the difference in angle between the expected and measured phase and then project the
       measured response vector (i.e. amp/phase in polar coordinates) onto the expected phase line
@@ -302,7 +320,7 @@ def get_true_phase(data, val_trials, dir=-1, psth_binWidth=1e-3, stimDur=1):
 
     # perform the fourier analysis we need
     psth_val, _ = make_psth(data['spikeTimes'][val_trials], psth_binWidth, stimDur)
-    _, rel_amp, full_fourier = spike_fft(psth_val, all_tf)
+    _, _, full_fourier = spike_fft(psth_val, all_tf)
     # and finally get the stimulus-relative phase of each response
     resp_phase = [np.angle(full_fourier[x][all_tf[x]], True) for x in range(len(full_fourier))];
 
@@ -361,7 +379,7 @@ def get_all_fft(data, disp, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, stimDur
       if all_trials=1, then return the individual trial responses (i.e. not just avg over all repeats for a condition)
   '''
 
-  resp, stimVals, val_con_by_disp, validByStimVal, mdRsp = tabulate_responses(data);
+  _, _, val_con_by_disp, validByStimVal, _ = tabulate_responses(data);
 
   # gather the sf indices in case we need - this is a dictionary whose keys are the valid sf indices
   valSf = validByStimVal[2];
@@ -388,10 +406,10 @@ def get_all_fft(data, disp, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, stimDur
 
       # get the phase relative to the stimulus
       ph_rel_stim, stim_ph, resp_ph, curr_tf = get_true_phase(data, val_trials, dir, psth_binWidth, stimDur);
+      # compute the fourier amplitudes
+      psth_val, _ = make_psth(data['spikeTimes'][val_trials]);
+      _, rel_amp, full_fourier = spike_fft(psth_val, curr_tf)
       if disp == 0:
-        # compute the fourier amplitudes
-        psth_val, _ = make_psth(data['spikeTimes'][val_trials]);
-        _, rel_amp, full_fourier = spike_fft(psth_val, curr_tf)
         # compute mean, gather
         avg_r, avg_ph, std_r, std_ph = polar_vec_mean([rel_amp], [ph_rel_stim]);
         if all_trials == 1:
@@ -402,9 +420,11 @@ def get_all_fft(data, disp, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, stimDur
           curr_ph.append([avg_ph[0], std_ph[0]]); # same as above
         curr_tf.append(curr_tf);
       elif disp == 1: # for mixtures
-        switch_inner_outer = lambda arr: [[x[i] for x in arr] for i in range(len(arr[0]))]
-        _, _, _, rel_amp, conByComp, sfByComp = get_isolated_response(data, val_trials);
+        # need to switch rel_amp to be lists of amplitudes by component (rather than list of amplitudes by trial)
+        rel_amp = switch_inner_outer(rel_amp);
         rel_amp_sem = [sem(x) for x in rel_amp];
+        # call get_isolated_response just to get contrast/sf per component
+        _, _, _, _, conByComp, sfByComp = get_isolated_response(data, val_trials);
         # need to switch ph_rel_stim (and resp_phase) to be lists of phases by component (rather than list of phases by trial)
         ph_rel_stim = switch_inner_outer(ph_rel_stim);
         ph_rel_stim_sem = [sem(x) for x in ph_rel_stim];
@@ -797,8 +817,10 @@ def blankResp(tr):
     
     return mu, sig, blank_tr;
 
+## 
+
 def get_condition(data, n_comps, con, sf):
-    ''' Returns the trial responses (f0 and f1) and correspondign trials for a given 
+    ''' Returns the trial responses (f0 and f1) and corresponding trials for a given 
         dispersion level (note: # of components), contrast, and spatial frequency
     '''
     np = numpy;
@@ -835,7 +857,7 @@ def get_conditionAdj(data, n_comps, con, sf, adjByTrial):
     
 def get_isolated_response(data, trials):
    ''' Given a set of trials (assumed to be all from one unique disp-con-sf set), collect the responses to the components of the 
-       stimulus when presented in isolation - returns the mean/std and individual trial responses
+       stimulus when presented in isolation - returns the mean/sem and individual trial responses
        Assumed to be for mixture stimuli
    '''
    np = numpy; conDig = 3;
@@ -902,6 +924,8 @@ def get_isolated_responseAdj(data, trials, adjByTrial):
      f1summary[i, :] = [np.nanmean(f1all[i]), sem(f1all[i])];
 
    return f1summary, f1all, cons, sfs;
+
+## 
 
 def tabulate_responses(data, modResp = []):
     ''' Given cell structure (and opt model responses), returns the following:
@@ -1043,6 +1067,7 @@ def organize_adj_responses(data, rvcFits):
     for s in range(len(sfInds)):
       curr_resps = rvcFits[d]['adjMeans'][sfInds[s]];
       adjByComp[d, sfInds[s], conInds] = curr_resps;
+      curr_resps_byTr = rvcFits[d]['adjByTr'][sfInds[s]];
       if d == 0:
         adjResps[d, sfInds[s], conInds] = curr_resps;
       elif d == 1: # sum over the components
@@ -1053,10 +1078,13 @@ def organize_adj_responses(data, rvcFits):
         val_trials, _, _, _ = get_valid_trials(data, d, conInds[c], sfInds[s]);
 
         # now, save response by trial
-        curr_resp = numpy.sum(curr_resps[c]);
-        adjByTrial[val_trials[0]] = len(val_trials[0]) * [curr_resp];
+        if d == 0:
+          curr_resp = flatten(curr_resps_byTr[c]);
+        elif d == 1:
+          curr_resp = sum_comps([switch_inner_outer(curr_resps_byTr[c])])[0];
+        adjByTrial[val_trials[0]] = curr_resp;
 
-        # and make prediction! (adjByTrial, even if incomplete, will have correct responses for these trials!
+        # and make prediction! (adjByTrial, even if incomplete, will have correct responses for these trials)
         isolResp, _, _, _ = get_isolated_responseAdj(data, val_trials, adjByTrial);
         # isolResp is organized as [mean, std] for each component - get the meanResp for each comp and sum
         adjPred[d, sfInds[s], conInds[c]] = numpy.sum(x[0] for x in isolResp);
@@ -1123,11 +1151,11 @@ def naka_rushton(con, params):
     return base + gain*np.divide(np.power(con, expon), np.power(con, expon) + np.power(c50, expon));
 
 def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain, fit_type):
-	# fit_type (i.e. which loss function):
-		# 1 - least squares
-		# 2 - square root
-		# 3 - poisson
-		# 4 - modulated poisson
+    # fit_type (i.e. which loss function):
+        # 1 - least squares
+        # 2 - square root
+        # 3 - poisson
+        # 4 - modulated poisson
     np = numpy;
 
     n_sfs = len(resps);
@@ -1188,6 +1216,8 @@ def nbinpdf_log(x, r, p):
     withGamma = lgamma(x + r) - lgamma(x + 1) - lgamma(r);
     
     return numpy.real(noGamma + withGamma);
+
+## 
 
 def getSuppressiveSFtuning(sfs=numpy.logspace(-2, 2, 1000)): # written when still new to python. Probably to matlab-y...
     # Not updated for sfMixAlt - 1/31/18

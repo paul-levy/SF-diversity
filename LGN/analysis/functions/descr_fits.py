@@ -4,6 +4,7 @@ import helper_fcns as hf
 import scipy.optimize as opt
 import os
 from time import sleep
+from scipy.stats import sem
 import warnings
 import pdb
 
@@ -17,6 +18,7 @@ save_loc = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
 expName = 'dataList.npy'
 phAdvName = 'phaseAdvanceFits'
 rvcName = 'rvcFits'
+dogName =  'descrFits_181102';
 
 ### 1: Recreate Movshon, Kiorpes, Hawken, Cavanaugh '05 figure 6 analyses
 ''' These plots show response versus contrast data (with model fit) AND
@@ -124,22 +126,23 @@ def rvc_adjusted_fit(cell_num, data_loc=dataPath, rvcName=rvcName, to_save=1, di
   # get just the mean amp/phi and put into convenient lists
   allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)
   allAmpTrials = [[x[2] for x in sf] for sf in allAmp]; # trial-by-trial is third element 
-  allAmpTrSem = [[x[3] for x in sf] for sf in allAmp]; # s.e.m. is fourth element
 
   allPhiMeans = [[x[0] for x in sf] for sf in allPhi]; # mean is in the first element; do that for each [mean, var] pair in each list (split by sf)
   allPhiTrials = [[x[2] for x in sf] for sf in allPhi]; # trial-by-trial is third element 
 
-  adjMeans = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
+  adjMeans   = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
   adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs);
   consRepeat = [valCons] * len(adjMeans);
   
   if disp == 1: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)
     adjSumResp  = [np.sum(x, 1) if x else [] for x in adjMeans];
-    allSumTrSem = [np.sqrt(np.sum(np.square(x), 1)) if x else [] for x in allAmpTrSem];
-    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, allSumTrSem);
+    adjSemTr    = [[sem(np.sum(hf.switch_inner_outer(x), 1)) for x in y] for y in adjByTrial]
+    adjSemCompTr  = [[sem(hf.switch_inner_outer(x)) for x in y] for y in adjByTrial];
+    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, adjSemTr);
   elif disp == 0:
-    print('..');
-    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, allAmpTrSem);
+    adjSemTr   = [[sem(x) for x in y] for y in adjByTrial];
+    adjSemCompTr = adjSemTr; # for single gratings, there is only one component!
+    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr);
 
   if os.path.isfile(data_loc + rvcNameFinal):
       rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
@@ -161,7 +164,9 @@ def rvc_adjusted_fit(cell_num, data_loc=dataPath, rvcName=rvcName, to_save=1, di
   rvcFits[cell_num-1][disp]['params'] = all_opts;
   rvcFits[cell_num-1][disp]['conGain'] = all_conGains;
   rvcFits[cell_num-1][disp]['adjMeans'] = adjMeans;
-  rvcFits[cell_num-1][disp]['stds'] = allAmpStd;
+  rvcFits[cell_num-1][disp]['adjByTr'] = adjByTrial
+  rvcFits[cell_num-1][disp]['adjSem'] = adjSemTr;
+  rvcFits[cell_num-1][disp]['adjSemComp'] = adjSemCompTr;
 
   if to_save:
     np.save(data_loc + rvcNameFinal, rvcFits);
@@ -215,7 +220,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
     loss = loss + np.sum((sq_err/(k+np.square(sigma)))) + gain_reg*(params[0] + params[2]); # regularize - want gains as low as possible
   return loss;
 
-def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGmodel=1, disp=0, rvcName=rvcName, dir=-1, gain_reg=0):
+def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGmodel=1, disp=0, rvcName=rvcName, dir=-1, gain_reg=0, fLname = dogName):
 
   nParam = 4;
 
@@ -223,7 +228,6 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGm
   dataList = hf.np_smart_load(data_loc + 'dataList.npy');
   assert dataList!=[], "data file not found!"
 
-  fLname = 'descrFits_181015';
   if loss_type == 1:
     loss_str = '_poiss';
   elif loss_type == 2:
@@ -247,8 +251,16 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGm
   rvcNameFinal = hf.fit_name(rvcName, dir);
   rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
   adjResps = rvcFits[cell_num-1][disp]['adjMeans'];
+  adjSem = rvcFits[cell_num-1][disp]['adjSem'];
+  if 'adjByTr' in rvcFits[cell_num-1][disp]:
+    adjByTr = rvcFits[cell_num-1][disp]['adjByTr'];
   if disp == 1:
     adjResps = [np.sum(x, 1) if x else [] for x in adjResps];
+    if adjByTr:
+      adjByTr = [np.sum(x, 1) if x else [] for x in adjByTr];
+  adjResps = np.array(adjResps); # indexing multiple SFs will work only if we convert to numpy array first
+  adjSem = np.array([np.array(x) for x in adjSem]); # make each inner list an array, and the whole thing an array
+  
   print('Doing the work, now');
 
   # first, get the set of stimulus values:
@@ -259,9 +271,6 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGm
 
   nDisps = len(all_disps);
   nCons = len(all_cons);
-
-  # get the sem of responses (but as of 10.15.18, not using)
-  f1_sem = resps[5];
 
   if cell_num-1 in descrFits:
     bestNLL = descrFits[cell_num-1]['NLL'];
@@ -290,21 +299,23 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGm
     bound_freqFracSurr = (1e-2, 1);
     allBounds = (bound_gainCent, bound_freqCent, bound_gainFracSurr, bound_freqFracSurr);
 
-  for d in range(1): # should be nDisps - just setting to 0 for now...
+  for d in range(1): # should be nDisps - just setting to 1 for now (i.e. fitting single gratings and mixtures separately)
     for con in range(nCons):
-      if con not in valConByDisp[d]:
+      if con not in valConByDisp[disp]:
         continue;
 
-      valSfInds = hf.get_valid_sfs(data, d, con);
+      valSfInds = hf.get_valid_sfs(data, disp, con);
       valSfVals = all_sfs[valSfInds];
 
       print('.');
       # adjResponses (f1) in the rvcFits are separate by sf, values within contrast - so to get all responses for a given SF, 
       # access all sfs and get the specific contrast response
-      respConInd = np.where(np.asarray(valConByDisp[d]) == con)[0];
-      resps = hf.flatten([x[respConInd] for x in adjResps]);
-      resps_sem = None;
-      #resps_sem = hf.flatten(f1_sem[d, valSfInds, con]);
+      respConInd = np.where(np.asarray(valConByDisp[disp]) == con)[0];
+      resps = hf.flatten([x[respConInd] for x in adjResps[valSfInds]]);
+      resps_sem = [x[respConInd] for x in adjSem[valSfInds]];
+      if isinstance(resps_sem[0], np.ndarray): # i.e. if it's still array of arrays...
+        resps_sem = hf.flatten(resps_sem);
+      #resps_sem = None;
       maxResp = np.max(resps);
       freqAtMaxResp = all_sfs[np.argmax(resps)];
 
@@ -336,12 +347,12 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGm
         NLL = wax['fun'];
         params = wax['x'];
 
-        if np.isnan(bestNLL[d, con]) or NLL < bestNLL[d, con]:
-          bestNLL[d, con] = NLL;
-          currParams[d, con, :] = params;
-          varExpl[d, con] = hf.var_explained(resps, params, valSfVals);
-          prefSf[d, con] = hf.dog_prefSf(params, DoGmodel, valSfVals);
-          charFreq[d, con] = hf.dog_charFreq(params, DoGmodel);
+        if np.isnan(bestNLL[disp, con]) or NLL < bestNLL[disp, con]:
+          bestNLL[disp, con] = NLL;
+          currParams[disp, con, :] = params;
+          varExpl[disp, con] = hf.var_explained(resps, params, valSfVals);
+          prefSf[disp, con] = hf.dog_prefSf(params, DoGmodel, valSfVals);
+          charFreq[disp, con] = hf.dog_charFreq(params, DoGmodel);
 
     # update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(fLname):
