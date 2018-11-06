@@ -11,19 +11,20 @@ import pdb
 # Functions:
 # bw_lin_to_log
 # bw_log_to_lin
-# deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
-# compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
-# fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
-# flexible_Gauss - Descriptive function used to describe/fit SF tuning
+# deriv_gauss       - evaluate a derivative of a gaussian, specifying the derivative order and peak
+# compute_SF_BW     - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
+# fix_params        - Intended for parameters of flexible Gaussian, makes all parameters non-negative
+# flexible_Gauss    - Descriptive function used to describe/fit SF tuning
+# get_center_con    - given a family and contrast index, returns the contrast level
 # tabulateResponses - Organizes measured and model responses for sfMixAlt experiment
-# random_in_range - random real-valued number between A and B
-# nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
+# random_in_range    - random real-valued number between A and B
+# nbinpdf_log        - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
 # getSuppressiveSFtuning - returns the normalization pool response
-# makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
-# genNormWeights - used to generate the weighting matrix for weighting normalization pool responses
-# setSigmaFilter - create the filter we use for determining c50 with SF
-# evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
-# setNormTypeArr - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters
+# makeStimulus       - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
+# genNormWeights     - used to generate the weighting matrix for weighting normalization pool responses
+# setSigmaFilter     - create the filter we use for determining c50 with SF
+# evalSigmaFilter    - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
+# setNormTypeArr     - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters
 
 def bw_lin_to_log( lin_low, lin_high ):
     # Given the low/high sf in cpd, returns number of octaves separating the

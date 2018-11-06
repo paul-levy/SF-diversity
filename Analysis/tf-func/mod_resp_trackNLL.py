@@ -28,27 +28,6 @@ def np_smart_load(file_path, encoding_str='latin1'):
 
    return loaded;
 
-def ph_test(S, p):
-    
-    nStimComp = 9;
-
-    z = S['sfm']['exp']['trial'];
-    
-    stimOr = numpy.empty((nGratings,));
-    stimTf = numpy.empty((nGratings,));
-    stimCo = numpy.empty((nGratings,));
-    stimPh = numpy.empty((nGratings,));
-    stimSf = numpy.empty((nGratings,));
-               
-    for iC in range(nStimComp):
-        stimOr[iC] = z.get('ori')[iC][p] * pi/180; # in radians
-        stimTf[iC] = z.get('tf')[iC][p];          # in cycles per second
-        stimCo[iC] = z.get('con')[iC][p];         # in Michelson contrast
-        stimPh[iC] = z.get('ph')[iC][p] * pi/180;  # in radians
-        stimSf[iC] = z.get('sf')[iC][p];          # in cycles per degree
-                
-    return StimOr, stimTf, stimCo, stimPh, stimSf;
-
 def flexible_gauss(v_sigmaLow, v_sigmaHigh, sfPref, stim_sf):
 
     nPartitions = 2;

@@ -550,7 +550,7 @@ def GetNormResp(iU, loadPath, stimParams = []):
 
     return M;
 
-def SFMGiveBof(params, structureSFM, normTypeArr = [], lossType=1, trialSubset=None, maskOri=True):
+def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True):
     # Computes the negative log likelihood for the LN-LN model
     #   Optional argument: trialSubset - use only these trials and evalulate the model on that only
     #   maskOri - in the optimization, we don't include the orientation tuning curve - skip that in the evaluation of loss, too
@@ -564,21 +564,15 @@ def SFMGiveBof(params, structureSFM, normTypeArr = [], lossType=1, trialSubset=N
     # 05 = early additive noise
     # 06 = late additive noise
     # 07 = variance of response gain    
-
-    # normTypeArr should be [1 or 2 or 3, *params]
-    # if normTypeArr[0] = 1
-    #   08 = asymmetry of normalization
-    #   normTypeArr = [0, [inhAsym]]
-    # if normTypeArr[0] = 2 (Gaussian weights)
-    #   08 = mean of Gaussian
-    #   09 = std of Gaussian
-    #   normTypeArr = [1, [mean], [std]]
-    # if normTypeArr[0] = 3 (freq-dep c50)
-    #   08 = std of left half (rel. to peak)
-    #   09 = std of right half (rel. to peak)
-    #   10 = offset (i.e. what is c50 at peak sensitivity, where c50 is lowest)
-    #   11 = peak of filter (sf in cpd)
-    #   normTypeArr = [2, [offset], [leftSigma], [rightSigma], [peak]]
+    # if fitType == 1
+    # 08 = asymmetry ("historically", bounded [-0.35, 0.35])
+    # if fitType == 2
+    # 08 = mean of normalization weights gaussian
+    # 09 = std of ...
+    # if fitType == 3
+    # 08 = offset of c50 tuning filter (filter bounded between [sigOffset, 1]
+    # 09/10 = standard deviations to the left and right of the peak of the c50 filter
+    # 11 = peak (in sf cpd) of c50 filter
 
     print('ha!');
     
@@ -604,6 +598,21 @@ def SFMGiveBof(params, structureSFM, normTypeArr = [], lossType=1, trialSubset=N
     noiseLate  = params[6];  # late additive noise
     varGain    = params[7];  # multiplicative noise
 
+    ### Normalization parameters
+    if normType == 1:
+      inhAsym = params[8];
+    elif normType == 2:
+      gs_mean = params[8];
+      gs_std  = params[9];
+    elif normType == 3:
+      # sigma calculation
+      offset_sigma = params[8];  # c50 filter will range between [v_sigOffset, 1]
+      stdLeft      = params[9];  # std of the gaussian to the left of the peak
+      stdRight     = params[10]; # '' to the right '' 
+      sfPeak       = params[11]; # where is the gaussian peak?
+    else:
+      inhAsym = 0;
+
     # Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
     priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15)); # matlab: lognpdf(respExp, 1.15, 0.3);
     NLLExp   = 0; #-numpy.log(priorExp);
@@ -614,37 +623,21 @@ def SFMGiveBof(params, structureSFM, normTypeArr = [], lossType=1, trialSubset=N
     inhWeight = [];
     nFrames = 120; # always
 
-    normTypeArr = setNormTypeArr(params, normTypeArr);
-    norm_type = int(normTypeArr[0]);
-
-    if norm_type == 3:
-      # sigma calculation
-      sfPeak = normTypeArr[4];
-      stdLeft = normTypeArr[2];
-      stdRight = normTypeArr[3];
+    if normType == 3:
       filter = setSigmaFilter(sfPeak, stdLeft, stdRight);
-
-      offset_sigma = normTypeArr[1];
       scale_sigma = -(1-offset_sigma);
-
       evalSfs = structureSFM['sfm']['exp']['trial']['sf'][0]; # the center SF of all stimuli
       sigmaFilt = evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
     else:
       sigmaFilt = numpy.square(sigma); # i.e. square the normalization constant
 
-    if norm_type == 2:
-      gs_mean = normTypeArr[1];
-      gs_std = normTypeArr[2];
+    if normType == 2:
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
-    else: # norm_type == 1 or anything else,
-      if norm_type == 1:
-        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 1
-      else:
-        inhAsym = 0; # otherwise, just set to 0
+    else: # normType == 1 or anything else,
       for iP in range(len(nInhChan)):
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                               - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
-      # assumption (made by Robbe) - only two normalization pools
+      # assumption by creation (made by Robbe) - only two normalization pools
       inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
       inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
       inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
@@ -713,7 +706,7 @@ def SFMGiveBof(params, structureSFM, normTypeArr = [], lossType=1, trialSubset=N
 
     return NLL, respModel, normTypeArr;
 
-def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, normTypeArr = []):
+def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, normType=1):
     # Currently, will get slightly different stimuli for excitatory and inhibitory/normalization pools
     # But differences are just in phase/TF, but for TF, drawn from same distribution, anyway...
     # 4/27/18: if unweighted = 1, then do the calculation/return normResp with weights applied; otherwise, just return the unweighted filter responses
@@ -726,13 +719,15 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     # 05 = early additive noise
     # 06 = late additive noise
     # 07 = variance of response gain    
-
-    # 08 = inhibitory asymmetry (i.e. tilt of gain over SF for weighting normalization pool responses)
-    # OR
-    # 08/09 = mean/std of gaussian used for weighting normalization filters
-    # OR
-    # 08 = offset in c50 filter (bounded b/t [offset, 1])
-    # 09/10 = std to the left/right of the peak of the c50 filter
+    # if fitType == 1
+    # 08 = asymmetry ("historically", bounded [-0.35, 0.35])
+    # if fitType == 2
+    # 08 = mean of normalization weights gaussian
+    # 09 = std of ...
+    # if fitType == 3
+    # 08 = offset of c50 tuning filter (filter bounded between [sigOffset, 1]
+    # 09/10 = standard deviations to the left and right of the peak of the c50 filter
+    # 11 = peak (in sf cpd) of c50 filter
 
     print('simulate!');
     
@@ -744,10 +739,6 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     dord = {'sp': params[1], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
     excChannel = {'pref': pref, 'dord': dord};
 
-    # Inhibitory channel
-    normTypeArr = setNormTypeArr(params, normTypeArr);
-    norm_type = normTypeArr[0];
-
     # Other (nonlinear) model components
     sigma    = pow(10, params[2]); # normalization constant
     # respExp  = 2; # response exponent
@@ -758,6 +749,21 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     noiseEarly = params[5];   # early additive noise
     noiseLate  = params[6];  # late additive noise
     varGain    = params[7];  # multiplicative noise
+
+    ### Normalization parameters
+    if normType == 1:
+      inhAsym = params[8];
+    elif normType == 2:
+      gs_mean = params[8];
+      gs_std  = params[9];
+    elif normType == 3:
+      # sigma calculation
+      offset_sigma = params[8];  # c50 filter will range between [v_sigOffset, 1]
+      stdLeft      = params[9];  # std of the gaussian to the left of the peak
+      stdRight     = params[10]; # '' to the right '' 
+      sfPeak       = params[11]; # where is the gaussian peak?
+    else:
+      inhAsym = 0;
     
     # Get stimulus structure ready...
     stimParams = dict();
@@ -772,30 +778,17 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     inhWeight = [];
     nFrames = 120; # always
 
-    if norm_type == 3:
-      # sigma calculation
-      filterPeak = normTypeArr[4];
-      stdLeft = normTypeArr[2];
-      stdRight = normTypeArr[3];
-      filter = setSigmaFilter(filterPeak, stdLeft, stdRight);
-
-      offset_sigma = normTypeArr[1];
+    if normType == 3:
+      filter = setSigmaFilter(sfPeak, stdLeft, stdRight);
       scale_sigma = -(1-offset_sigma);
-
       evalSfs = structureSFM['sfm']['exp']['trial']['sf'][0]; # the center SF of all stimuli
       sigmaFilt = evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
     else:
       sigmaFilt = numpy.square(sigma); # i.e. normalization constant squared
 
-    if norm_type == 2:
-      gs_mean = normTypeArr[1];
-      gs_std = normTypeArr[2];
+    if normType == 2:
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
-    else: # norm_type == 1 or anything else, we just go with 
-      if norm_type == 1:
-        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 1
-      else:
-        inhAsym = 0; # otherwise, just set to 0
+    else: # normType == 1 or anything else, we just go with 
       for iP in range(len(nInhChan)):
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                               - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
