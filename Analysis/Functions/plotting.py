@@ -46,13 +46,6 @@ cellNum = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
 fitType = int(sys.argv[3]);
 log_y = int(sys.argv[4]);
-normTypeArr = [fitType]; # normTypeArr should start with the fitType 
-argInd = 5; # we've already taken 5 arguments off (function call, which_cell, loss_type, fitType, log_y); we'll get fitType again in the loop below
-nArgsIn = len(sys.argv) - argInd; 
-while nArgsIn > 0:
-  normTypeArr.append(float(sys.argv[argInd]));
-  nArgsIn = nArgsIn - 1;
-  argInd = argInd + 1;
 
 save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
@@ -102,13 +95,11 @@ modFit = fitList[cellNum-1]['params']; #
 descrExpFit = descrExpFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 descrModFit = descrModFits[cellNum-1]['params']; # nFam x nCon x nDescrParams
 
-ignore, modResp, normTypeArr = mod_resp.SFMGiveBof(modFit, expData, normTypeArr);
-norm_type = normTypeArr[0];
-print('norm type - %d' % norm_type);
+norm_type = fitType;
+ignore, modResp = mod_resp.SFMGiveBof(modFit, expData, normType=norm_type, lossType=lossType);
 if norm_type == 2:
-  gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 2
-  gs_std = normTypeArr[2]; # guaranteed to exist ...
-#modRespAll = mod_resp.SFMGiveBof(modParamsCurr, expData, normTypeArr)[1]; # NOTE: We're taking [1] (i.e. second) output of SFMGiveBof
+  gs_mean = modFit[8]; 
+  gs_std = modFit[9];
 oriModResp, conModResp, sfmixModResp, allSfMix = organize_modResp(modResp, expData['sfm']['exp']['trial'])
 oriExpResp, conExpResp, sfmixExpResp, allSfMixExp = organize_modResp(expData['sfm']['exp']['trial']['spikeCount'], \
                                                                            expData['sfm']['exp']['trial'])
@@ -317,12 +308,12 @@ sns.despine(ax=curr_ax, offset=5);
 
 if norm_type == 3: # plot the c50 filter (i.e. effective c50 as function of SF)
   stimSf = np.logspace(-2, 2, 101);
-  filtPeak = normTypeArr[4];
-  stdLeft = normTypeArr[2];
-  stdRight = normTypeArr[3];
+  filtPeak = modFit[11];
+  stdLeft = modFit[9];
+  stdRight = modFit[10];
   
   filter = setSigmaFilter(filtPeak, stdLeft, stdRight);
-  offset_filt = normTypeArr[1];
+  offset_filt = modFit[8];
   scale_filt = -(1-offset_filt); # we always scale so that range is [offset_sf, 1]
   c50_filt = evalSigmaFilter(filter, scale_filt, offset_filt, stimSf)
  
@@ -396,14 +387,14 @@ for disp in range(nFam):
           # if modFit doesn't have inhAsym parameter, add it!
           if norm_type == 2:
             unweighted = 1;
-            _, _, _, normRespSimple, _ = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
+            _, _, _, normRespSimple, _ = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normType=norm_type);
             nTrials = normRespSimple.shape[0];
             nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
             inhWeightMat  = genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
             normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
           else: # including norm_type == 1 or 3
-            _, _, _, _, normResp = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], normTypeArr = normTypeArr);
+            _, _, _, _, normResp = mod_resp.SFMsimulate(modFit, expData, disp+1, conLevels[conLvl], sfCenters[sfCent], normType=norm_type);
             norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
 
       if norm_type == 2:
@@ -519,7 +510,7 @@ for d in range(nFam):
         curr_resps = [];
         for sf_i in v_sfs:
           print('Testing SF tuning: disp %d, con %.2f, sf %.2f' % (d+1, v_cons[c], sf_i));
-          sf_iResp, _, _, _, _ = mod_resp.SFMsimulate(modFit, expData, d+1, v_cons[c], sf_i, normTypeArr = normTypeArr);
+          sf_iResp, _, _, _, _ = mod_resp.SFMsimulate(modFit, expData, d+1, v_cons[c], sf_i, normType=norm_type);
           curr_resps.append(sf_iResp[0]); # SFMsimulate returns array - unpack it
 
         # plot data
@@ -548,7 +539,7 @@ for d in range(nFam):
         curr_resps = [];
         for con_i in v_cons:
           print('Testing RVC: disp %d, con %.2f, sf %.2f' % (d+1, con_i, sf_curr));
-          con_iResp, _, _, _, _ = mod_resp.SFMsimulate(modFit, expData, d+1, con_i, sf_curr, normTypeArr = normTypeArr);
+          con_iResp, _, _, _, _ = mod_resp.SFMsimulate(modFit, expData, d+1, con_i, sf_curr, normType=norm_type);
           curr_resps.append(con_iResp[0]); # unpack the array returned by SFMsimulate
 
         col = [sf_i/float(n_v_sfs), sf_i/float(n_v_sfs), sf_i/float(n_v_sfs)];

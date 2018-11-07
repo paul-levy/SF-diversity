@@ -1,4 +1,4 @@
-import math, numpy, random
+import math, numpy, random, os
 from scipy.stats import norm, mode, poisson, nbinom
 from scipy.stats.mstats import gmean as geomean
 from numpy.matlib import repmat
@@ -9,6 +9,7 @@ exp = math.exp
 import pdb
 
 # Functions:
+# np_smart_load     - load a .npy file safely
 # bw_lin_to_log
 # bw_log_to_lin
 # deriv_gauss       - evaluate a derivative of a gaussian, specifying the derivative order and peak
@@ -25,6 +26,20 @@ import pdb
 # setSigmaFilter     - create the filter we use for determining c50 with SF
 # evalSigmaFilter    - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
 # setNormTypeArr     - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters
+
+def np_smart_load(file_path, encoding_str='latin1'):
+
+   if not os.path.isfile(file_path):
+     return [];
+   loaded = [];
+   while(True):
+     try:
+         loaded = numpy.load(file_path, encoding=encoding_str).item();
+         break;
+     except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
+         sleep(10); # i.e. wait for 10 seconds
+
+   return loaded;
 
 def bw_lin_to_log( lin_low, lin_high ):
     # Given the low/high sf in cpd, returns number of octaves separating the

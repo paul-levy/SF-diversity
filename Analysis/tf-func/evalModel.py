@@ -9,6 +9,7 @@ import sys
 
 sys.path.insert(0, '../Functions/');
 from model_responses import SFMGiveBof as nllEval
+from helper_fcns import np_smart_load
 
 import tensorflow as tf
 
@@ -32,21 +33,6 @@ For each cell, do the following:
   Then, we can average the final loss (on the "train") dataset and the "test" condition losses and compare for each model
 
 '''
-
-def np_smart_load(file_path, encoding_str='latin1'):
-
-   if not os.path.isfile(file_path):
-     return [];
-   loaded = [];
-   while(True):
-     try:
-         loaded = numpy.load(file_path, encoding=encoding_str).item();
-         break;
-     except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-         sleep(10); # i.e. wait for 10 seconds
-
-   return loaded;
-
 def flexible_gauss(v_sigmaLow, v_sigmaHigh, sfPref, stim_sf):
 
     nPartitions = 2;
@@ -614,8 +600,6 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
       currBlockID = StimBlockIDs[sfInd-1];
       holdOutTr = numpy.where(trial_inf['blockID'] == currBlockID)[0];
       mask[holdOutTr.astype(numpy.int64)] = True; # as in, don't include those trials either!
-      holdoutMask = numpy.ones_like(mask, dtype=bool);
-      holdoutMask[holdOutTr.astype(numpy.int64)] = True; # let's get ONLY these trials
       
     fixedOr = stimOr[:,~mask];
     fixedTf = stimTf[:,~mask];
@@ -775,7 +759,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     x = m.run(applyConstraints(fitType, *param_list));
 
     if holdOutCondition is not None:
-      holdoutNLL, _, _ = nllEval(params=x, structureSFM=S, normTypeArr=[fitType], lossType=lossType, trialSubset=holdOutTr);
+      holdoutNLL, _, = nllEval(params=x, structureSFM=S, normTypeArr=[fitType], lossType=lossType, trialSubset=holdOutTr);
     else:
       holdoutNLL = [];
 

@@ -7,26 +7,15 @@ from numpy.matlib import repmat
 from time import sleep
 import sys
 
+sys.path.insert(0, '../Functions/');
+from helper_fcns import np_smart_load
+
 import tensorflow as tf
 
 import pdb
 
 fft = numpy.fft
 tf_pi = tf.constant(pi);
-
-def np_smart_load(file_path, encoding_str='latin1'):
-
-   if not os.path.isfile(file_path):
-     return [];
-   loaded = [];
-   while(True):
-     try:
-         loaded = numpy.load(file_path, encoding=encoding_str).item();
-         break;
-     except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-         sleep(10); # i.e. wait for 10 seconds
-
-   return loaded;
 
 def flexible_gauss(v_sigmaLow, v_sigmaHigh, sfPref, stim_sf):
 

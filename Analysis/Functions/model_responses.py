@@ -550,10 +550,12 @@ def GetNormResp(iU, loadPath, stimParams = []):
 
     return M;
 
-def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True):
+def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None):
     # Computes the negative log likelihood for the LN-LN model
-    #   Optional argument: trialSubset - use only these trials and evalulate the model on that only
-    #   maskOri - in the optimization, we don't include the orientation tuning curve - skip that in the evaluation of loss, too
+    #   Optional arguments: //note: true means include in mask, false means exclude
+    #   trialSubset - pass in the trials you want to evaluate (ignores all other masks)
+    #   maskOri     - in the optimization, we don't include the orientation tuning curve - skip that in the evaluation of loss, too
+    #   maskIn      - pass in a mask (overwrite maskOri and trialSubset, i.e. highest presedence) 
     # Returns NLL ###, respModel, E
 
     # 00 = preferred spatial frequency   (cycles per degree)
@@ -574,7 +576,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     # 09/10 = standard deviations to the left and right of the peak of the c50 filter
     # 11 = peak (in sf cpd) of c50 filter
 
-    print('ha!');
+    #print('ha!');
     
     T = structureSFM['sfm'];
 
@@ -666,6 +668,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         # and get the spike count
         spikeCount = T['exp']['trial']['spikeCount'];
 
+        ### Masking the data - which trials will we include
         # now get the "right" subset of the data for evaluating loss (e.x. by default, orientation tuning trials are not included)
         if maskOri:
           # start with all trials...
@@ -682,11 +685,14 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         else: # just go with all trials
           # start with all trials...
           mask = numpy.ones_like(spikeCount, dtype=bool); # i.e. true
-        # BUT, if we pass in trialSubset, then get only those trials (i.e. overwrite the above mask)
+        # BUT, if we pass in trialSubset, then use this as our mask (i.e. overwrite the above mask)
         if trialSubset is not None: # i.e. if we passed in some trials to specifically include, then include ONLY those (i.e. skip the rest)
           # start by including NO trials
           mask = numpy.zeros_like(spikeCount, dtype=bool); # i.e. true
           mask[trialSubset.astype(numpy.int64)] = True;
+
+        if maskIn is not None:
+          mask = maskIn; # overwrite the mask with the one we've passed in!
 
         if lossType == 1:
           # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
@@ -704,7 +710,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           llh = nbinom.pmf(spikeCount[mask], r, p); # Likelihood for each pass under doubly stochastic model
           NLL = numpy.mean(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]
 
-    return NLL, respModel, normTypeArr;
+    return NLL, respModel;
 
 def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, normType=1):
     # Currently, will get slightly different stimuli for excitatory and inhibitory/normalization pools
@@ -729,7 +735,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     # 09/10 = standard deviations to the left and right of the peak of the c50 filter
     # 11 = peak (in sf cpd) of c50 filter
 
-    print('simulate!');
+    #print('simulate!');
     
     T = structureSFM['sfm'];
 
