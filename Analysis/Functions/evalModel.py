@@ -263,7 +263,7 @@ if __name__ == '__main__':
 
     holdoutRes = dict();
    
-    for d in range(1): # only care about single gratings for now
+    for d in range(5): 
       for c in reversed(range(nCons)):
         for s in range(nSfs):
 
