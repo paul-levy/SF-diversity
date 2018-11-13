@@ -9,7 +9,7 @@ nCons = 2;
 nFits = 2; # 0 (flat), 1 (weighted)
 to_print = 0;
 
-def compute_diffs(lossType, dataLoc=dataLoc, to_print=0):
+def compute_diffs(lossType, dataLoc=dataLoc, baseStr='hQ', to_print=0, nCells=nCells, nDisps=nDisps, nCons=nCons):
 
   # then the loss type
   if lossType == 1:
@@ -25,8 +25,8 @@ def compute_diffs(lossType, dataLoc=dataLoc, to_print=0):
   for i in range(nCells):
 
     try:
-      flat   = np.load(dataLoc + 'hQ_%d__flat%s' % (i+1, lossSuf)).item();
-      weight = np.load(dataLoc + 'hQ_%d__wght%s' % (i+1, lossSuf)).item();
+      flat   = np.load(dataLoc + '%s_%d__flat%s' % (baseStr, i+1, lossSuf), encoding='latin1').item();
+      weight = np.load(dataLoc + '%s_%d__wght%s' % (baseStr, i+1, lossSuf), encoding='latin1').item();
 
       for d in range(nDisps):
 
