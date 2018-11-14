@@ -41,19 +41,12 @@ rcParams['font.style'] = 'oblique';
 
 which_cell = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
-fitType = int(sys.argv[3]);
+normType = int(sys.argv[3]);
 crf_fit_type = int(sys.argv[4]);
 sf_loss_type = int(sys.argv[5]); # sf tuning curve fits (Diff. of Gaussians) - what loss function
 sf_DoG_model = int(sys.argv[6]); # sf tuning curve fits (Diff. of Gaussians) - what DoG parameterization
 norm_sim_on = int(sys.argv[7]);
 phase_dir = int(sys.argv[8]);
-normTypeArr = [fitType]; # i.e., the first parameter of the normTypeArr is what type of normalization, which is specified in fitType
-argInd = 9; # we've already taken N arguments off (function call, which_cell, loss_type, fit_type, crf_fit_type, sf_loss_type, sf_DoG_model, norm_sim_on, phase_dir) 
-nArgsIn = len(sys.argv) - argInd; 
-while nArgsIn > 0:
-  normTypeArr.append(float(sys.argv[argInd]));
-  nArgsIn = nArgsIn - 1;
-  argInd = argInd + 1;
 
 # personal mac
 #dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
@@ -68,12 +61,12 @@ rvcBase = 'rvcFits';
 phAdvBase = 'phaseAdvanceFits';
 descrBase = 'descrFits_181015';
 
-# first the fit type
-if fitType == 0:
+# first the fit (or normalization) type
+if normType == 1:
   fitSuf = '_flat';
-elif fitType == 1:
+elif normType == 2:
   fitSuf = '_wght';
-elif fitType == 2:
+elif normType == 3:
   fitSuf = '_c50';
 # then the loss type
 if lossType == 1:
@@ -85,7 +78,7 @@ elif lossType == 3:
 elif lossType == 4:
   lossSuf = '_modPoiss.npy';
 
-if fitType != 0 and lossType != 0:
+if normType != 0 and lossType != 0:
   fitListName = str(fitBase + fitSuf + lossSuf);
 
 if crf_fit_type == 1:
@@ -155,12 +148,10 @@ data = cellStruct['sfm']['exp']['trial'];
 
 if modParamsCurr: # i.e. modParamsCurr isn't []
   modBlankMean = modParamsCurr[6]; # late additive noise is the baseline of the model
-  ignore, modRespAll, normTypeArr = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr);
-  norm_type = normTypeArr[0];
-  print('norm type %d' % (norm_type));
-  if norm_type == 1:
-    gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 1
-    gs_std = normTypeArr[2]; # guaranteed to exist ...
+  ignore, modRespAll = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normType=normType);
+  print('norm type %d' % (normType));
+  if normType == 2: # gaussian
+    gs_mean, gs_std = helper_fcns.getNormParams(modParamsCurr, normType);
   resp, stimVals, val_con_by_disp, validByStimVal, modResp = helper_fcns.tabulate_responses(data, modRespAll);
 else:
   modResp = None;
@@ -524,7 +515,7 @@ if modParamsCurr:
 
   # Compute weights for suppressive signals
   nInhChan = cellStruct['sfm']['mod']['normalization']['pref']['sf'];
-  if norm_type == 1:
+  if normType == 2: # gaussian
     nTrials =  inhSfTuning.shape[0];
     inhWeight = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
     inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
@@ -572,17 +563,12 @@ if modParamsCurr:
   # Remove top/right axis, put ticks only on bottom/left
   sns.despine(ax=curr_ax, offset=5, trim=False);
 
-  if norm_type == 2: # plot the c50 filter (i.e. effective c50 as function of SF)
+  if normType == 3: # plot the c50 filter (i.e. effective c50 as function of SF)
     stimSf = np.logspace(-2, 2, 101);
-    filtPeak = normTypeArr[4];
-    stdLeft = normTypeArr[2];
-    stdRight = normTypeArr[3];
-
+    offset_filt, stdLeft, stdRight, filtPeak = helper_fcns.getNormParams(modParamsCurr, normType);
     filter = setSigmaFilter(filtPeak, stdLeft, stdRight);
-    offset_filt = normTypeArr[1];
     scale_filt = -(1-offset_filt); # we always scale so that range is [offset_sf, 1]
     c50_filt = helper_fcns.evalSigmaFilter(filter, scale_filt, offset_filt, stimSf)
-
     # now plot
     curr_ax = plt.subplot2grid(detailSize, (2, 4));
     plt.semilogx(stimSf, c50_filt);
@@ -637,22 +623,22 @@ if norm_sim_on and modParamsCurr:
           print('simulating normResp for family ' + str(disp+1) + ' and contrast ' + str(conLevels[conLvl]));
           for sfCent in range(len(sfCenters)):
               # if modParamsCurr doesn't have inhAsym parameter, add it!
-              if norm_type == 1: # gaussian weighting...
+              if normType == 2: # gaussian weighting...
                 unweighted = 1;
-                _, _, _, normRespSimple, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
+                _, _, _, normRespSimple, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normType = normType);
                 nTrials = normRespSimple.shape[0];
                 nInhChan = cellStruct['sfm']['mod']['normalization']['pref']['sf'];
                 inhWeightMat  = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
                 normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
                 norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
-              else: # norm_type == 0 or 2:
-                _, _, _, _, normResp = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], normTypeArr = normTypeArr);
+              else: # normType == 1 or 3:
+                _, _, _, _, normResp = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], normType = normType);
                 norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
 
-          if norm_type == 1:
+          if normType == 2:
             maxResp = np.max(norm_sim[disp, conLvl, :]);
             conDisp_plots[conLvl, disp].text(0.5, 0.0, 'contrast: {:.2f}, dispersion level: {:.0f}, mu|std: {:.2f}|{:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8], modParamsCurr[9]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
-          else: # norm_type == 0 or 2:
+          else: # normType == 0 or 2:
             conDisp_plots[conLvl, disp].text(0.5, 1.1, 'contrast: {:.2f}, dispersion level: {:.0f}, asym: {:.2f}'.format(conLevels[conLvl], disp+1, modParamsCurr[8]), fontsize=12, horizontalalignment='center', verticalalignment='center'); 
 
           conDisp_plots[conLvl, disp].semilogx(sfCenters, norm_sim[disp, conLvl, :], 'b', clip_on=False);
@@ -1051,7 +1037,7 @@ if norm_sim_on and modParamsCurr:
           curr_resps = [];
           for sf_i in v_sfs:
             print('Testing SF tuning: disp %d, con %.2f, sf %.2f' % (d+1, v_cons[c], sf_i));
-            sf_iResp, _, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, d+1, v_cons[c], sf_i, normTypeArr = normTypeArr);
+            sf_iResp, _, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, d+1, v_cons[c], sf_i, normType=normType);
             curr_resps.append(sf_iResp[0]); # SFMsimulate returns array - unpack it
 
           # plot data
@@ -1081,7 +1067,7 @@ if norm_sim_on and modParamsCurr:
           curr_resps = [];
           for con_i in v_cons:
             print('Testing RVC: disp %d, con %.2f, sf %.2f' % (d+1, con_i, sf_curr));
-            con_iResp, _, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, d+1, con_i, sf_curr, normTypeArr = normTypeArr);
+            con_iResp, _, _, _, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, d+1, con_i, sf_curr, normType=normType);
             curr_resps.append(con_iResp[0]); # unpack the array returned by SFMsimulate
 
           col = [sf_i/float(n_v_sfs), sf_i/float(n_v_sfs), sf_i/float(n_v_sfs)];

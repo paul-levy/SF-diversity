@@ -78,6 +78,7 @@ import pdb
 
 # getSuppressiveSFtuning - returns the normalization pool response
 # makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
+# getNormParams  - given the model params and fit type, return the relevant parameters for normalization
 # genNormWeights - used to generate the weighting matrix for weighting normalization pool responses
 # setSigmaFilter - create the filter we use for determining c50 with SF
 # evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
@@ -1043,7 +1044,10 @@ def organize_adj_responses(data, rvcFits):
       returns adjResps (as in tabulate_responses), adjByTrial (in trial order), 
         adjByComp (as in tabulate_responses, but each component separately), and 
         adjPred (predictions for mixtures based on adjusted single grating responses)
-      NOTE: As of 9.30.18, just puts same response value for each repeat of a condition
+      NOTE: Checked validity of individual trial projections on 11.14.18
+        The agreement between the value in adjResps and the mean of the responses in adjByTrial is high
+        (We know from the nature of the projection/adjustment calculation that avg-->project will not be exactly the same
+         as project-->avg)
   '''
   _, conds, val_con_by_disp, byTrial, _ = tabulate_responses(data);
   allDisps = conds[0];
@@ -1336,6 +1340,28 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
     
     return {'Ori': Or, 'Tf' : Tf, 'Con': Co, 'Ph': Ph, 'Sf': Sf, 'trial_used': trial_used}
 
+def getNormParams(params, normType):
+  if normType == 1:
+    if len(params) > 8:
+      inhAsym = params[8];
+    else:
+      inhAsym = 0; 
+    return inhAsym;
+  elif normType == 2:
+    gs_mean = params[8];
+    gs_std  = params[9];
+    return gs_mean, gs_std;
+  elif normType == 3:
+    # sigma calculation
+    offset_sigma = params[8];  # c50 filter will range between [v_sigOffset, 1]
+    stdLeft      = params[9];  # std of the gaussian to the left of the peak
+    stdRight     = params[10]; # '' to the right '' 
+    sfPeak       = params[11]; # where is the gaussian peak?
+    return offset_sigma, stdLeft, stdRight, sfPeak;
+  else:
+    inhAsym = 0;
+    return inhAsym;
+
 def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials):
   np = numpy;
   # A: do the calculation here - more flexibility
@@ -1392,6 +1418,7 @@ def evalSigmaFilter(filter, scale, offset, evalSfs):
 
 def setNormTypeArr(params, normTypeArr = []):
   '''
+  LEGACY
   Used to create the normTypeArr array which is called in model_responses by SFMGiveBof and SFMsimulate to set
   the parameters/values used to compute the normalization signal for the full model
 

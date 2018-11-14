@@ -1,5 +1,5 @@
 import math, cmath, numpy, os
-from helper_fcns import makeStimulus, random_in_range, genNormWeights, setSigmaFilter, evalSigmaFilter, setNormTypeArr
+from helper_fcns import makeStimulus, random_in_range, getNormParams, genNormWeights, setSigmaFilter, evalSigmaFilter
 from scipy.stats import norm, mode, lognorm, nbinom
 from numpy.matlib import repmat
 import time
@@ -553,7 +553,7 @@ def GetNormResp(iU, loadPath, stimParams = []):
 
     return M;
 
-def SFMGiveBof(params, structureSFM, normTypeArr = []):
+def SFMGiveBof(params, structureSFM, normType):
     # Computes the negative log likelihood for the LN-LN model
     # Returns NLL ###, respModel, E
 
@@ -566,19 +566,15 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     # 06 = late additive noise
     # 07 = variance of response gain    
 
-    # normTypeArr should be [0 or 1 or 2, *params]
-    # if normTypeArr[0] = 0
-    #   08 = asymmetry of normalization
-    #   normTypeArr = [0, [inhAsym]]
-    # if normTypeArr[0] = 1 (Gaussian weights)
-    #   08 = mean of Gaussian
-    #   09 = std of Gaussian
-    #   normTypeArr = [1, [mean], [std]]
-    # if normTypeArr[0] = 2 (freq-dep c50)
-    #   08 = std of left half (rel. to peak)
-    #   09 = std of right half (rel. to peak)
-    #   10 = offset (i.e. what is c50 at peak sensitivity, where c50 is lowest)
-    #   normTypeArr = [2, [offset], [leftSigma], [rightSigma]]
+    # if fitType == 1
+    # currently, no 08; alternatively, 08 = asymmetry (typically bounded [-0.35, 0.35])
+    # if fitType == 2
+    # 08 = mean of normalization weights gaussian
+    # 09 = std of ...
+    # if fitType == 3
+    # 08 = offset of c50 tuning filter (filter bounded between [sigOffset, 1]
+    # 09/10 = standard deviations to the left and right of the peak of the c50 filter
+    # 11 = peak (in sf cpd) of c50 filter
 
     print('ha!');
     
@@ -604,6 +600,22 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     noiseLate  = params[6];  # late additive noise
     varGain    = params[7];  # multiplicative noise
 
+    ### Normalization parameters
+    normParams = getNormParams(params, normType);
+    if normType == 1: # flat
+      inhAsym = normParams[0];
+    elif normType == 2: # gaussian weighting
+      gs_mean = normParams[0];
+      gs_std  = normParams[1];
+    elif normType == 3: # two-halved gaussian for c50
+      # sigma calculation
+      offset_sigma = normParams[0];  # c50 filter will range between [v_sigOffset, 1]
+      stdLeft      = normParams[1];  # std of the gaussian to the left of the peak
+      stdRight     = normParams[2]; # '' to the right '' 
+      sfPeak       = normParams[3]; # where is the gaussian peak?
+    else:
+      inhAsym = normParams[0];
+
     # Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
     priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15)); # matlab: lognpdf(respExp, 1.15, 0.3);
     NLLExp   = 0; #-numpy.log(priorExp);
@@ -614,33 +626,17 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     inhWeight = [];
     nFrames = 120; # always
 
-    normTypeArr = setNormTypeArr(params, normTypeArr);
-    norm_type = int(normTypeArr[0]);
-
-    if norm_type == 2:
-      # sigma calculation
-      sfPeak = normTypeArr[4];
-      stdLeft = normTypeArr[2];
-      stdRight = normTypeArr[3];
+    if normType == 3: 
       filter = setSigmaFilter(sfPeak, stdLeft, stdRight);
-
-      offset_sigma = normTypeArr[1];
       scale_sigma = -(1-offset_sigma);
-
       evalSfs = structureSFM['sfm']['exp']['trial']['sf'][0]; # the center SF of all stimuli
       sigmaFilt = evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
     else:
       sigmaFilt = numpy.square(sigma); # i.e. square the normalization constant
 
-    if norm_type == 1:
-      gs_mean = normTypeArr[1];
-      gs_std = normTypeArr[2];
+    if normType == 2:
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
-    else: # norm_type == 0 or anything else,
-      if norm_type == 0:
-        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 0
-      else:
-        inhAsym = 0; # otherwise, just set to 0
+    else: # normType == 1 or anything else,
       for iP in range(len(nInhChan)):
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                               - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
@@ -686,10 +682,10 @@ def SFMGiveBof(params, structureSFM, normTypeArr = []):
     # Combine data and prior
     #NLL = NLLtempSFM + NLLExp; # sum over NLLtempSFM if you allow it to be d>1
 
-    return NLL, respModel, normTypeArr;
+    return NLL, respModel;
     #return {'NLL': NLL, 'respModel': respModel, 'Exc': E};
 
-def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, normTypeArr = []):
+def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, normType=1):
     # Currently, will get slightly different stimuli for excitatory and inhibitory/normalization pools
     # But differences are just in phase/TF, but for TF, drawn from same distribution, anyway...
     # 4/27/18: if unweighted = 1, then do the calculation/return normResp with weights applied; otherwise, just return the unweighted filter responses
@@ -720,8 +716,6 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     excChannel = {'pref': pref, 'dord': dord};
 
     # Inhibitory channel
-    normTypeArr = setNormTypeArr(params, normTypeArr);
-    norm_type = normTypeArr[0];
 
     # Other (nonlinear)  components
     sigma    = pow(10, params[2]); # normalization constant
@@ -733,6 +727,22 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     noiseEarly = params[5];   # early additive noise
     noiseLate  = params[6];  # late additive noise
     varGain    = params[7];  # multiplicative noise
+
+    ### Normalization parameters
+    normParams = getNormParams(params, normType);
+    if normType == 1:
+      inhAsym = normParams[0];
+    elif normType == 2:
+      gs_mean = normParams[0];
+      gs_std  = normParams[1];
+    elif normType == 3:
+      # sigma calculation
+      offset_sigma = normParams[0];  # c50 filter will range between [v_sigOffset, 1]
+      stdLeft      = normParams[1];  # std of the gaussian to the left of the peak
+      stdRight     = normParams[2]; # '' to the right '' 
+      sfPeak       = normParams[3]; # where is the gaussian peak?
+    else:
+      inhAsym = normParams[0];
     
     # Get stimulus structure ready...
     stimParams = dict();
@@ -747,30 +757,17 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     inhWeight = [];
     nFrames = 120; # always
 
-    if norm_type == 2:
-      # sigma calculation
-      filterPeak = normTypeArr[4];
-      stdLeft = normTypeArr[2];
-      stdRight = normTypeArr[3];
+    if normType == 3:
       filter = setSigmaFilter(filterPeak, stdLeft, stdRight);
-
-      offset_sigma = normTypeArr[1];
       scale_sigma = -(1-offset_sigma);
-
       evalSfs = structureSFM['sfm']['exp']['trial']['sf'][0]; # the center SF of all stimuli
       sigmaFilt = evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
     else:
       sigmaFilt = numpy.square(sigma); # i.e. normalization constant squared
 
-    if norm_type == 1:
-      gs_mean = normTypeArr[1];
-      gs_std = normTypeArr[2];
+    if normType == 2:
       inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
-    else: # norm_type == 0 or anything else, we just go with 
-      if norm_type == 0:
-        inhAsym = normTypeArr[1]; # asym will be there if norm_type == 0
-      else:
-        inhAsym = 0; # otherwise, just set to 0
+    else: # normType == 1 or anything else, we just go with 
       for iP in range(len(nInhChan)):
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                               - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
