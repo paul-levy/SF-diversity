@@ -95,6 +95,8 @@ def np_smart_load(file_path, encoding_str='latin1'):
        break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
        sleep(5); # i.e. wait for 5 seconds
+     except EOFError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
+       sleep(5); # i.e. wait for 5 seconds
 
    return loaded;
 

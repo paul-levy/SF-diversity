@@ -22,6 +22,7 @@ import pdb
 # nbinpdf_log        - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
 # getSuppressiveSFtuning - returns the normalization pool response
 # makeStimulus       - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
+# getNormParams  - given the model params and fit type, return the relevant parameters for normalization
 # genNormWeights     - used to generate the weighting matrix for weighting normalization pool responses
 # setSigmaFilter     - create the filter we use for determining c50 with SF
 # evalSigmaFilter    - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
@@ -38,6 +39,8 @@ def np_smart_load(file_path, encoding_str='latin1'):
          break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
          sleep(10); # i.e. wait for 10 seconds
+     except EOFError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
+         sleep(10); # i.e. wait for 5 seconds
 
    return loaded;
 
@@ -425,6 +428,28 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
     Sf = Sf[inds_des];
     
     return {'Ori': Or, 'Tf' : Tf, 'Con': Co, 'Ph': Ph, 'Sf': Sf, 'trial_used': trial_used}
+
+def getNormParams(params, normType):
+  if normType == 1:
+    if len(params) > 8:
+      inhAsym = params[8];
+    else:
+      inhAsym = 0; 
+    return inhAsym;
+  elif normType == 2:
+    gs_mean = params[8];
+    gs_std  = params[9];
+    return gs_mean, gs_std;
+  elif normType == 3:
+    # sigma calculation
+    offset_sigma = params[8];  # c50 filter will range between [v_sigOffset, 1]
+    stdLeft      = params[9];  # std of the gaussian to the left of the peak
+    stdRight     = params[10]; # '' to the right '' 
+    sfPeak       = params[11]; # where is the gaussian peak?
+    return offset_sigma, stdLeft, stdRight, sfPeak;
+  else:
+    inhAsym = 0;
+    return inhAsym;
 
 def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials):
   np = numpy;
