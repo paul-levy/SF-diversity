@@ -53,7 +53,7 @@ def phase_advance_fit(cell_num, data_loc = dataPath, phAdvName=phAdvName, to_sav
       to the stimulus by taking into account the stimulus phase. 
       Then, make a simple linear model fit (line + constant offset) of the response phase as a function
       of response amplitude.
-      SAVES loss/optimized parameters/and phase advance (if default "to_save" value is kept)
+      vSAVES loss/optimized parameters/and phase advance (if default "to_save" value is kept)
       RETURNS phAdv_model, all_opts
 
       Do ONLY for single gratings
@@ -130,7 +130,10 @@ def rvc_adjusted_fit(cell_num, data_loc=dataPath, rvcName=rvcName, to_save=1, di
   allPhiMeans = [[x[0] for x in sf] for sf in allPhi]; # mean is in the first element; do that for each [mean, var] pair in each list (split by sf)
   allPhiTrials = [[x[2] for x in sf] for sf in allPhi]; # trial-by-trial is third element 
 
+  pdb.set_trace();
+  phAdv_model = hf.get_phAdv_model(allAmpMeans);
   adjMeans   = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
+  phAdv_model = hf.get_phAdv_model(allAmpTrials);
   adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs);
   consRepeat = [valCons] * len(adjMeans);
   

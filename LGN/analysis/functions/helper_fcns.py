@@ -214,8 +214,12 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
     if disp == 0:
       if amp[i] == []: # this shouldn't ever happen for single gratings, but just in case...
         continue;
-      phi_true = phAdv_model(phAdv_params[i][0], phAdv_params[i][1], amp[i]);
-      proj = np.multiply(amp[i], np.cos(np.deg2rad(phi_resp[i])-np.deg2rad(phi_true)));
+      # why list comprehension with numpy array around? we want numpy array as output, but some of the 
+      # sub-arrays (i.e. amp[i] is list of lists, or array of arrays) are of unequal length, so cannot
+      # just compute readily 
+      phi_true = np.array([phAdv_model(phAdv_params[i][0], phAdv_params[i][1], x) for x in amp[i]]);
+      proj = np.array([np.multiply(amp[i][j], np.cos(np.deg2rad(phi_resp[i][j])-np.deg2rad(phi_true[j]))) for j in range(len(amp[i]))]);
+      #proj = np.multiply(amp[i], np.cos(np.deg2rad(phi_resp[i])-np.deg2rad(phi_true)))
       all_proj.append(proj);
     elif disp == 1: # then we'll need to use the allCompSf to get the right phase advance fit for each component
       if amp[i] == []: # 
@@ -460,9 +464,10 @@ def get_rvc_model():
 
   return rvc_model  
 
-def get_phAdv_model():
+def get_phAdv_model(ampz=None):
   ''' simply return the phase advance model used in the fits
   '''
+  # phAdv_model = [numpy.mod(phi0 + numpy.multiply(slope, x), 360) for x in amp] # because the sub-arrays of amp occasionally have
   phAdv_model = lambda phi0, slope, amp: numpy.mod(phi0 + numpy.multiply(slope, amp), 360);
   # must mod by 360! Otherwise, something like 340-355-005 will be fit poorly
   return phAdv_model;
