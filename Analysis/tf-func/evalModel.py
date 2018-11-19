@@ -759,7 +759,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     x = m.run(applyConstraints(fitType, *param_list));
 
     if holdOutCondition is not None:
-      holdoutNLL, _, = nllEval(params=x, structureSFM=S, normTypeArr=[fitType], lossType=lossType, trialSubset=holdOutTr);
+      holdoutNLL, _, = nllEval(params=x, structureSFM=S, normType=fitType, lossType=lossType, trialSubset=holdOutTr);
     else:
       holdoutNLL = [];
 
@@ -811,8 +811,8 @@ if __name__ == '__main__':
 
     holdoutRes = dict();
    
-    for d in range(1): # only care about single gratings for now
-      for c in reversed(range(nCons)):
+    for d in reversed(range(5)):
+      for c in range(nCons):
         for s in range(nSfs):
 
           holdOutCondition = [d+1, c+1, s+1];

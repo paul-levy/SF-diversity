@@ -1,5 +1,5 @@
 import math, cmath, numpy, os
-from helper_fcns import makeStimulus, random_in_range, genNormWeights, setSigmaFilter, evalSigmaFilter, setNormTypeArr
+from helper_fcns import makeStimulus, random_in_range, getNormParams, genNormWeights, setSigmaFilter, evalSigmaFilter, setNormTypeArr
 from scipy.stats import norm, mode, lognorm, nbinom, poisson
 from numpy.matlib import repmat
 import time
@@ -601,19 +601,20 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     varGain    = params[7];  # multiplicative noise
 
     ### Normalization parameters
+    normParams = getNormParams(params, normType);
     if normType == 1:
-      inhAsym = params[8];
+      inhAsym = normParams;
     elif normType == 2:
-      gs_mean = params[8];
-      gs_std  = params[9];
+      gs_mean = normParams[0];
+      gs_std  = normParams[1];
     elif normType == 3:
       # sigma calculation
-      offset_sigma = params[8];  # c50 filter will range between [v_sigOffset, 1]
-      stdLeft      = params[9];  # std of the gaussian to the left of the peak
-      stdRight     = params[10]; # '' to the right '' 
-      sfPeak       = params[11]; # where is the gaussian peak?
+      offset_sigma = normParams[0];  # c50 filter will range between [v_sigOffset, 1]
+      stdLeft      = normParams[1];  # std of the gaussian to the left of the peak
+      stdRight     = normParams[2]; # '' to the right '' 
+      sfPeak       = normParams[3]; # where is the gaussian peak?
     else:
-      inhAsym = 0;
+      inhAsym = normParams;
 
     # Evaluate prior on response exponent -- corresponds loosely to the measurements in Priebe et al. (2004)
     priorExp = lognorm.pdf(respExp, 0.3, 0, numpy.exp(1.15)); # matlab: lognpdf(respExp, 1.15, 0.3);
@@ -757,20 +758,21 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     varGain    = params[7];  # multiplicative noise
 
     ### Normalization parameters
+    normParams = getNormParams(params, normType);
     if normType == 1:
-      inhAsym = params[8];
+      inhAsym = normParams;
     elif normType == 2:
-      gs_mean = params[8];
-      gs_std  = params[9];
+      gs_mean = normParams[0];
+      gs_std  = normParams[1];
     elif normType == 3:
       # sigma calculation
-      offset_sigma = params[8];  # c50 filter will range between [v_sigOffset, 1]
-      stdLeft      = params[9];  # std of the gaussian to the left of the peak
-      stdRight     = params[10]; # '' to the right '' 
-      sfPeak       = params[11]; # where is the gaussian peak?
+      offset_sigma = normParams[0];  # c50 filter will range between [v_sigOffset, 1]
+      stdLeft      = normParams[1];  # std of the gaussian to the left of the peak
+      stdRight     = normParams[2]; # '' to the right '' 
+      sfPeak       = normParams[3]; # where is the gaussian peak?
     else:
-      inhAsym = 0;
-    
+      inhAsym = normParams;
+
     # Get stimulus structure ready...
     stimParams = dict();
     stimParams['stimFamily'] = stimFamily;
