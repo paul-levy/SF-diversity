@@ -22,9 +22,9 @@ module load seaborn/0.7.1
 	# 3 - poisson
 	# 4 - modulated poission
 # third param is fit_type (for full model):
-	# 0 - flat normalization
-	# 1 - gaussian weighting of normalization responses
-	# 2 - c50 controlled by gaussian
+	# 1 - flat normalization
+	# 2 - gaussian weighting of normalization responses
+	# 3 - c50 controlled by gaussian
 # fourth param is crf_fit_type: (i.e. what loss function for naka-rushton fits)
         # 1 - lsq
 	# 2 - square root
@@ -39,7 +39,7 @@ module load seaborn/0.7.1
         # 2 - tony
 # sixth param is 0 (no norm sims) or 1 (do normalization simulations)
 # seventh param is -1 or +1 (phase direction for loading rvc/phAdv fits)
-python plotting.py $SLURM_ARRAY_TASK_ID 0 1 0 3 2 0 1
+python plotting.py $SLURM_ARRAY_TASK_ID 4 2 0 3 2 0 1
  
 # leave a blank line at the end
 

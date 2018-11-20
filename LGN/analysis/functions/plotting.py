@@ -56,10 +56,10 @@ dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/LGN/analysis/figures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_180930';
+fitBase = 'fitList_181115';
 rvcBase = 'rvcFits';
 phAdvBase = 'phaseAdvanceFits';
-descrBase = 'descrFits_181015';
+descrBase = 'descrFits_181102';
 
 # first the fit (or normalization) type
 if normType == 1:

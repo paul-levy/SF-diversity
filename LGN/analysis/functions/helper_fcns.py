@@ -464,7 +464,7 @@ def get_rvc_model():
 
   return rvc_model  
 
-def get_phAdv_model(ampz=None):
+def get_phAdv_model():
   ''' simply return the phase advance model used in the fits
   '''
   # phAdv_model = [numpy.mod(phi0 + numpy.multiply(slope, x), 360) for x in amp] # because the sub-arrays of amp occasionally have
