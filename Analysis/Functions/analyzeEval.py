@@ -9,7 +9,7 @@ nCons = 2;
 nFits = 2; # 0 (flat), 1 (weighted)
 to_print = 0;
 
-def compute_diffs(lossType, dataLoc=dataLoc, baseStr='hQ', to_print=0, nCells=nCells, nDisps=nDisps, nCons=nCons):
+def compute_diffs(lossType, dataLoc=dataLoc, baseStr='holdoutFits', date='181121', nCells=nCells, nDisps=nDisps, nCons=nCons):
 
   # then the loss type
   if lossType == 1:
@@ -22,29 +22,18 @@ def compute_diffs(lossType, dataLoc=dataLoc, baseStr='hQ', to_print=0, nCells=nC
   losses = np.nan * np.zeros((nCells, nDisps, nCons, nFits));
   preds = np.nan * np.zeros((nCells, nDisps, nCons, nFits));
 
+  flat   = np.load(dataLoc + '%s_%s_flat%s' % (baseStr, date, lossSuf), encoding='latin1').item();
+  weight = np.load(dataLoc + '%s_%s_wght%s' % (baseStr, date, lossSuf), encoding='latin1').item();
+
   for i in range(nCells):
 
     try:
-      flat   = np.load(dataLoc + '%s_%d__flat%s' % (baseStr, i+1, lossSuf), encoding='latin1').item();
-      weight = np.load(dataLoc + '%s_%d__wght%s' % (baseStr, i+1, lossSuf), encoding='latin1').item();
 
-      for d in range(nDisps):
+      losses[i, :, :, 0] = np.mean(flat[i]['NLL'], 2)
+      preds[i, :, :, 0] = np.mean(flat[i]['holdoutNLL'], 2)
 
-        losses[i, d, :, 0] = [np.mean(x) for x in flat['NLL'][d]];
-        preds[i, d, :, 0] = [np.mean(x) for x in flat['holdoutNLL'][d]];
-
-        losses[i, d, :, 1] = [np.mean(x) for x in weight['NLL'][d]];
-        preds[i, d, :, 1] = [np.mean(x) for x in weight['holdoutNLL'][d]];
-
-        if to_print:
-
-          print('Cell %d' % (i+1));
-          print('\thigh contrast:');
-          print('\t\tloss (f|w): %.3f, %.3f' % (flat_loss[0], weight_loss[0]));  
-          print('\t\tpred error (f|w): %.3f, %.3f' % (flat_pred[0], weight_pred[0]));  
-          print('\tlow contrast:');
-          print('\t\tloss (f|w): %.3f, %.3f' % (flat_loss[1], weight_loss[1]));  
-          print('\t\tpred error (f|w): %.3f, %.3f' % (flat_pred[1], weight_pred[1]));  
+      losses[i, :, :, 1] = np.mean(weight[i]['NLL'], 2)
+      preds[i, :, :, 1] = np.mean(weight[i]['holdoutNLL'], 2)
 
     except:
       continue;  

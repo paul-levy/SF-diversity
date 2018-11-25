@@ -2,6 +2,7 @@ import math, numpy, random, os
 from scipy.stats import norm, mode, poisson, nbinom
 from scipy.stats.mstats import gmean as geomean
 from numpy.matlib import repmat
+from time import sleep
 import scipy.optimize as opt
 sqrt = math.sqrt
 log = math.log
