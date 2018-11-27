@@ -14,6 +14,7 @@ import pdb
 # np_smart_load - be smart about using numpy load
 # bw_lin_to_log
 # bw_log_to_lin
+# get_exp_params - given an index for a particular version of the sfMix experiments, return parameters of that experiment (i.e. #stimulus components)
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -23,8 +24,10 @@ import pdb
 # tabulate_responses - Organizes measured and model responses for sfMixAlt experiment
 # random_in_range - random real-valued number between A and B
 # nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
+
 # getSuppressiveSFtuning - returns the normalization pool response
 # makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
+# getNormParams  - given the model params and fit type, return the relevant parameters for normalization
 # genNormWeights - used to generate the weighting matrix for weighting normalization pool responses
 # setSigmaFilter - create the filter we use for determining c50 with SF
 # evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
@@ -61,6 +64,26 @@ def bw_log_to_lin(log_bw, pref_sf):
     lin_bw = more_half - less_half;
     
     return lin_bw, sf_range
+
+def get_exp_params(expInd):
+    ''' returns (max) nComponents in each stimulus
+                # of stimulus families (i.e. how many dispersion levels)
+                list of how many components in each level
+    '''
+    if expInd == 1: # original V1 experiment
+      nStimComp = 9;
+      nFamilies = 5; 
+      comps     = [1, 3, 5, 7, 9];
+    elif expInd == 2: # V1 alt exp
+      nStimComp = 7;
+      nFamilies = 4;
+      comps     = [1, 3, 5, 7];
+    elif expInd == 3: # LGN experiment
+      nStimComp = 5;
+      nFamilies = 2;
+      comps     = [1, 5]; 
+
+    return nStimComp, nFamilies, comps;
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
@@ -365,7 +388,7 @@ def getSuppressiveSFtuning(): # written when still new to python. Probably to ma
 
     return numpy.hstack((selSf[0], selSf[1]));
 
-def makeStimulus(stimFamily, conLevel, sf_c, template):
+def makeStimulus(stimFamily, conLevel, sf_c, template, expInd=1):
 
 # returns [Or, Tf, Co, Ph, Sf, trial_used]
 
@@ -379,9 +402,7 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
 # taken from the template, which will be actual stimuli from that cell
 
     # Fixed parameters
-    num_families = 4;
-    num_gratings = 7;
-    comps = [1, 3, 5, 7]; # number of components for each family
+    num_gratings, num_families, comps = get_exp_params(expInd);
 
     spreadVec = numpy.logspace(math.log10(.125), math.log10(1.25), num_families);
     octSeries  = numpy.linspace(1.5, -1.5, num_gratings);
@@ -393,6 +414,7 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
         total_contrast = 1/3;
     elif conLevel>=0 and conLevel<1:
         total_contrast = conLevel;
+        conLevel = 1; # just set to 1 (i.e. get "high contrast" block IDs)
     else:
         #warning('Contrast should be given as 1 [full] or 2 [low/one-third]; setting contrast to 1 (full)');
         total_contrast = 1; # default to that
@@ -418,7 +440,10 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
         trial_to_copy = template.get('trial_used');
     else: # get random trial for phase, TF
         # we'll draw from a random trial with the same stimulus family
-        valid_blockIDs = trial['blockID'][numpy.where(trial['num_comps'] == comps[stimFamily-1])];
+        if expInd == 1:
+          valid_blockIDs = numpy.arange((stimFamily-1)*(13*2)+1+(conLevel-1), ((stimFamily)*(13*2)-5)+(conLevel-1), 2)
+        else:
+          valid_blockIDs = trial['blockID'][numpy.where(trial['num_comps'] == comps[stimFamily-1])];
         num_blockIDs = len(valid_blockIDs);
         # for phase and TF
         valid_trials = trial.get('blockID') == valid_blockIDs[random.randint(0, num_blockIDs-1)] # pick a random block ID
@@ -444,6 +469,30 @@ def makeStimulus(stimFamily, conLevel, sf_c, template):
     Sf = Sf[inds_des];
     
     return {'Ori': Or, 'Tf' : Tf, 'Con': Co, 'Ph': Ph, 'Sf': Sf, 'trial_used': trial_used}
+
+def getNormParams(params, normType):
+  ''' pass in param list, normType (1=original "tilt'; 2=gaussian weighting (wght); 3=con-dep sigma)
+  '''
+  if normType == 1:
+    if len(params) > 8:
+      inhAsym = params[8];
+    else:
+      inhAsym = 0; 
+    return inhAsym;
+  elif normType == 2:
+    gs_mean = params[8];
+    gs_std  = params[9];
+    return gs_mean, gs_std;
+  elif normType == 3:
+    # sigma calculation
+    offset_sigma = params[8];  # c50 filter will range between [v_sigOffset, 1]
+    stdLeft      = params[9];  # std of the gaussian to the left of the peak
+    stdRight     = params[10]; # '' to the right '' 
+    sfPeak       = params[11]; # where is the gaussian peak?
+    return offset_sigma, stdLeft, stdRight, sfPeak;
+  else:
+    inhAsym = 0;
+    return inhAsym;
 
 def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials):
   np = numpy;
