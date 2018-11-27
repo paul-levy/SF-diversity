@@ -441,7 +441,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
     loc_data = '/home/pl1465/SF_diversity/LGN/analysis/structures/'; # Prince cluster
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/'; # Personal mac
 
-    fL_name = 'fitList_180930';
+    fL_name = 'fitList_181115';
     # fitType
     if fitType == 1:
       fL_suffix1 = '_flat';
@@ -466,6 +466,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
     dataNames = dataList['unitName'];
 
     S = np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy')); # why -1? 0 indexing...
+    data = S['sfm']['exp']['trial'];
     rvcFits = np_smart_load(str(loc_data + 'rvcFits_pos.npy'));
     trial_inf = S['sfm']['exp']['trial'];
     #prefOrEst = mode(trial_inf['ori'][1]).mode;
@@ -566,7 +567,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType=1, subset_frac = 1, 
     fixedPh = stimPh[:,~mask];
     
     # cell responses
-    _, spks = organize_adj_responses(S, rvcFits[cellNum-1]);
+    _, spks, _, _ = organize_adj_responses(data, rvcFits[cellNum-1]);
     spikes = spks[~mask];
     #spikes = [numpy.sum(x) for x in trial_inf['power_f1'][~mask]];
     stim_dur = trial_inf['duration'][~mask];
