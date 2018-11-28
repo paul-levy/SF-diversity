@@ -15,6 +15,8 @@ import pdb
 # bw_lin_to_log
 # bw_log_to_lin
 # get_exp_params - given an index for a particular version of the sfMix experiments, return parameters of that experiment (i.e. #stimulus components)
+# fitList_name
+
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -69,21 +71,49 @@ def get_exp_params(expInd):
     ''' returns (max) nComponents in each stimulus
                 # of stimulus families (i.e. how many dispersion levels)
                 list of how many components in each level
+                directory (relative to /common)
     '''
     if expInd == 1: # original V1 experiment
       nStimComp = 9;
       nFamilies = 5; 
       comps     = [1, 3, 5, 7, 9];
+      nCons     = 2;
+      nCells    = 59;
+      dir       = '../Analysis/'
     elif expInd == 2: # V1 alt exp
       nStimComp = 7;
       nFamilies = 4;
-      comps     = [1, 3, 5, 7];
+      comps     = [1, 3, 5, 7]
+      nCons     = 4;
+      nCells    = 8; # check...
+      dir       = '../altExp/analysis/'
     elif expInd == 3: # LGN experiment
       nStimComp = 5;
       nFamilies = 2;
-      comps     = [1, 5]; 
+      comps     = [1, 5];
+      nCons     = 4;
+      nCells    = 34;
+      dir       = '../LGN/analysis/'
 
-    return nStimComp, nFamilies, comps;
+    return nStimComp, nFamilies, comps, nCons, nCells, dir;
+
+def fitList_name(base, fitType, lossType):
+  # first the fit type
+  if fitType == 1:
+    fitSuf = '_flat';
+  elif fitType == 2:
+    fitSuf = '_wght';
+  elif fitType == 3:
+    fitSuf = '_c50';
+  # then the loss type
+  if lossType == 1:
+    lossSuf = '_sqrt.npy';
+  elif lossType == 2:
+    lossSuf = '_poiss.npy';
+  elif lossType == 3:
+    lossSuf = '_modPoiss.npy';
+  return str(base + fitSuf + lossSuf);
+
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
@@ -402,7 +432,7 @@ def makeStimulus(stimFamily, conLevel, sf_c, template, expInd=1):
 # taken from the template, which will be actual stimuli from that cell
 
     # Fixed parameters
-    num_gratings, num_families, comps = get_exp_params(expInd);
+    num_gratings, num_families, comps, _, _, _ = get_exp_params(expInd);
 
     spreadVec = numpy.logspace(math.log10(.125), math.log10(1.25), num_families);
     octSeries  = numpy.linspace(1.5, -1.5, num_gratings);
