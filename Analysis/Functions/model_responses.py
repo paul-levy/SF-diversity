@@ -716,9 +716,9 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           if trialSubset is not None:
             warnings.warn('This loss type (chi squared) is not currently equipped to handle hold out subsets');
           _, _, expByCond, expAll = organize_modResp(spikeCount, structureSFM['sfm']['exp']['trial']);
-          exp_responses = [expByCond, numpy.nanvar(expAll)];
+          exp_responses = [expByCond.flatten(), numpy.nanvar(expAll, axis=3).flatten()];
           _, _, modByCond, modAll = organize_modResp(rateModel, structureSFM['sfm']['exp']['trial']);
-          mod_responses = [modByCond, numpy.nanvar(modAll)];
+          mod_responses = [modByCond.flatten(), numpy.nanvar(modAll, axis=3).flatten()];
           NLL = chiSq(exp_responses, mod_responses);
 
     return NLL, respModel;
