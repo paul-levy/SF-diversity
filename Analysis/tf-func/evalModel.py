@@ -453,7 +453,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     #   2 := gaussian-weighted normalization responses
     #   3 := gaussian-weighted c50/norm "constant"
     #
-    # holdOutCondition - [d, c, sf] or None
+    # holdOutCondition - [d, c, sf] or None 
     #   which condition should we hold out from the dataset
  
     ########
@@ -594,11 +594,20 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
       # first, get all of the conditions... - blockIDs by condition known from Robbe code
       dispInd = holdOutCondition[0];
       conInd = holdOutCondition[1];
-      sfInd = holdOutCondition[2];
 
       StimBlockIDs  = numpy.arange(((dispInd-1)*(13*2)+1)+(conInd-1), ((dispInd)*(13*2)-5)+(conInd-1)+1, 2); # +1 to include the last block ID
-      currBlockID = StimBlockIDs[sfInd-1];
-      holdOutTr = numpy.where(trial_inf['blockID'] == currBlockID)[0];
+
+      if len(numpy.shape(holdOutCondition)) == 3:
+        sfInd = holdOutCondition[2];
+        currBlockID = StimBlockIDs[sfInd-1];
+        holdOutTr = numpy.where(trial_inf['blockID'] == currBlockID)[0];
+      else:
+        holdOutTr = [];
+        for i in StimBlockIDs:
+          newTr = numpy.where(trial_inf['blockID'] == i)[0];
+          holdOutTr.append(newTr);
+        holdOutTr = numpy.array(holdOutTr).flatten();
+
       mask[holdOutTr.astype(numpy.int64)] = True; # as in, don't include those trials either!
       
     fixedOr = stimOr[:,~mask];
@@ -769,7 +778,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
 
 if __name__ == '__main__':
 
-    save_base = 'holdoutFits_181121'
+    save_base = 'holdoutFits_181129'
 
     if len(sys.argv) < 8:
       print('uhoh...you need seven arguments here'); # and one is the script itself...
@@ -779,6 +788,7 @@ if __name__ == '__main__':
     cellNum = int(sys.argv[1]);
     lossType = int(sys.argv[4]);
     fitType = int(sys.argv[5]);
+    collapseSF = int(sys.argv[8]);
 
     print('Running cell ' + str(cellNum) + ' with NLL step threshold of ' + sys.argv[2] + ' with learning rate ' + sys.argv[3]);
     print('Additionally, each iteration will have ' + sys.argv[6] + ' of the data (subsample fraction)');
@@ -800,8 +810,8 @@ if __name__ == '__main__':
 
     save_name = '%s%s%s' % (save_base, fL_suffix1, fL_suffix2);
     save_loc = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster    
-    #save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'
-
+    #save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/
+    
     if os.path.isfile(save_loc + save_name):
       fits = np_smart_load(str(save_loc + save_name));
       if cellNum-1 in fits:
@@ -817,10 +827,15 @@ if __name__ == '__main__':
       nCons = 2;
       nSfs = 11;
 
-      NLLs = numpy.nan * numpy.empty((nDisps, nCons, nSfs));
-      holdoutNLLs = numpy.nan * numpy.empty((nDisps, nCons, nSfs));
-      allParams = numpy.array(numpy.nan * numpy.empty((nDisps, nCons, nSfs)), dtype='O');
-    
+      if collapseSF == 1:
+        NLLs = numpy.nan * numpy.empty((nDisps, nCons));
+        holdoutNLLs = numpy.nan * numpy.empty((nDisps, nCons));
+        allParams = numpy.array(numpy.nan * numpy.empty((nDisps, nCons)), dtype='O');
+      else:
+        NLLs = numpy.nan * numpy.empty((nDisps, nCons, nSfs));
+        holdoutNLLs = numpy.nan * numpy.empty((nDisps, nCons, nSfs));
+        allParams = numpy.array(numpy.nan * numpy.empty((nDisps, nCons, nSfs)), dtype='O');
+
       fits_curr = dict();
       fits_curr['NLL'] = NLLs;
       fits_curr['holdoutNLL'] = holdoutNLLs;
@@ -830,20 +845,31 @@ if __name__ == '__main__':
 
     # find out which conditions have yet to be fit/held out - arranged in [disp x con x sf]
     conds_rem = numpy.where(numpy.isnan(fits_curr['NLL']));
-    conds_as_tuple = zip(conds_rem[0], conds_rem[1], conds_rem[2]);
+    if collapseSF:
+      conds_as_tuple = zip(conds_rem[0], conds_rem[1]);
+    else:
+      conds_as_tuple = zip(conds_rem[0], conds_rem[1], conds_rem[2]);
    
     for i in conds_as_tuple:
       # get the indices of this condition
-      d = i[0]; c = i[1]; s = i[2];      
-
-      holdOutCondition = [d+1, c+1, s+1];
+      if collapseSF:
+        d = i[0]; c = i[1];
+        holdOutCondition = [d+1, c+1];
+      else:
+        d = i[0]; c = i[1]; s = i[2];      
+        holdOutCondition = [d+1, c+1, s+1];
       print('holding out %s' % holdOutCondition);
 
       NLL, params, holdoutNLL = setModel(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]), float(sys.argv[6]), int(sys.argv[7]), holdOutCondition=holdOutCondition);
 
-      fits_curr['NLL'][d, c, s] = NLL;
-      fits_curr['allParams'][d, c, s] = params;
-      fits_curr['holdoutNLL'][d, c, s] = holdoutNLL;
+      if collapseSF:
+        fits_curr['NLL'][d, c] = NLL;
+        fits_curr['allParams'][d, c] = params;
+        fits_curr['holdoutNLL'][d, c] = holdoutNLL;
+      else:
+        fits_curr['NLL'][d, c, s] = NLL;
+        fits_curr['allParams'][d, c, s] = params;
+        fits_curr['holdoutNLL'][d, c, s] = holdoutNLL;
 
       # update and save after each disp x con combination
       if os.path.isfile(save_loc + save_name):
