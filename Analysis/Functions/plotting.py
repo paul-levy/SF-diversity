@@ -51,7 +51,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_181015';
+fitBase = 'fitListSP_181130';
 # first the fit type
 if fitType == 1:
   fitSuf = '_flat';
@@ -66,6 +66,8 @@ elif lossType == 2:
   lossSuf = '_poiss.npy';
 elif lossType == 3:
   lossSuf = '_modPoiss.npy';
+elif lossType == 4:
+  lossSuf = '_chiSq.npy';
 
 fitName = str(fitBase + fitSuf + lossSuf);
 
