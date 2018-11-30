@@ -20,24 +20,33 @@ import model_responses
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/Analysis/Functions/paul_plt_cluster.mplstyle');
 from matplotlib import rcParams
-rcParams['font.size'] = 35;
 rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
 rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['lines.linewidth'] = 6;
-rcParams['axes.linewidth'] = 4;
-rcParams['lines.markersize'] = 15;
-
-rcParams['xtick.major.size'] = 25
-rcParams['xtick.minor.size'] = 12
-rcParams['ytick.major.size'] = 25
-rcParams['ytick.minor.size'] = 12
-
-rcParams['xtick.major.width'] = 6
-rcParams['xtick.minor.width'] = 3
-rcParams['ytick.major.width'] = 6
-rcParams['ytick.minor.width'] = 3
-
 rcParams['font.style'] = 'oblique';
+
+plot_type = int(sys.argv[9]);
+if plot_type == 0: # for standard viewing
+  rcParams['font.size'] = 20;
+  rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
+  rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
+  rcParams['lines.linewidth'] = 2.5;
+  rcParams['axes.linewidth'] = 1.5;
+  rcParams['lines.markersize'] = 5;
+if plot_type == 1: # for illustrator editing
+  rcParams['font.size'] = 35;
+  rcParams['lines.linewidth'] = 6;
+  rcParams['axes.linewidth'] = 4;
+  rcParams['lines.markersize'] = 15;
+
+  rcParams['xtick.major.size'] = 25
+  rcParams['xtick.minor.size'] = 12
+  rcParams['ytick.major.size'] = 25
+  rcParams['ytick.minor.size'] = 12
+
+  rcParams['xtick.major.width'] = 6
+  rcParams['xtick.minor.width'] = 3
+  rcParams['ytick.major.width'] = 6
+  rcParams['ytick.minor.width'] = 3
 
 which_cell = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
@@ -520,8 +529,8 @@ if modParamsCurr:
     inhWeight = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
     inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
   else:
-    if len(modFit) == 9: # i.e. if right number of model parameters...
-      inhAsym = modFit[8];
+    if len(modParamsCurr) == 9: # i.e. if right number of model parameters...
+      inhAsym = modParamsCurr[8];
     else:
       inhAsym = 0;
     inhWeight = [];

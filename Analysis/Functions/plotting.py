@@ -51,7 +51,7 @@ save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
 data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_180713';
+fitBase = 'fitList_181015';
 # first the fit type
 if fitType == 1:
   fitSuf = '_flat';

@@ -37,9 +37,10 @@ module load seaborn/0.7.1
 # sixth param is sf_DoG_model: (i.e. which DoG model)
         # 1 - sach
         # 2 - tony
-# sixth param is 0 (no norm sims) or 1 (do normalization simulations)
-# seventh param is -1 or +1 (phase direction for loading rvc/phAdv fits)
-python plotting.py $SLURM_ARRAY_TASK_ID 4 2 0 3 2 0 1
+# seventh param is 0 (no norm sims) or 1 (do normalization simulations)
+# eighth param is -1 or +1 (phase direction for loading rvc/phAdv fits)
+# ninth param is 0 (plot for viewing/general) vs 1 (plot for editing in illustrator)
+python plotting.py $SLURM_ARRAY_TASK_ID 4 1 0 3 2 0 1 0 0
  
 # leave a blank line at the end
 

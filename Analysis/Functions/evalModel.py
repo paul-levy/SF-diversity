@@ -8,48 +8,6 @@ import os
 
 import pdb
 
-def getConstraints(fitType):
-        # 00 = preferred spatial frequency   (cycles per degree) || [>0.05]
-        # 01 = derivative order in space || [>0.1]
-        # 02 = normalization constant (log10 basis) || unconstrained
-        # 03 = response exponent || >1
-        # 04 = response scalar || >1e-3
-        # 05 = early additive noise || [0, 1]; was [0.001, 1] - see commented out line below
-        # 06 = late additive noise || >0.01
-        # 07 = variance of response gain || >1e-3
-        # if fitType == 2
-        # 08 = mean of normalization weights gaussian || [>-2]
-        # 09 = std of ... || >1e-3 or >5e-1
-        # if fitType == 3
-        # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 0.75]
-        # 09 = standard deviation of the gaussian to the left of the peak || >0.1
-        # 10 = "" to the right "" || >0.1
-        # 11 = peak (i.e. sf location) of c50 tuning curve 
-
-    zero = (0.05, None);
-    one = (0.1, None);
-    two = (None, None);
-    three = (1, None);
-    four = (1e-3, None);
-    five = (0, 1); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
-    six = (0.01, None); # if always positive, then no hard thresholding to ensure rate (strictly) > 0
-    seven = (1e-3, None);
-    if fitType == 1:
-      eight = (0, 0); # flat normalization (i.e. no tilt)
-      return (zero,one,two,three,four,five,six,seven,eight);
-    if fitType == 2:
-      eight = (-2, None);
-      nine = (5e-1, None);
-      return (zero,one,two,three,four,five,six,seven,eight,nine);
-    elif fitType == 3:
-      eight = (0, 0.75);
-      nine = (1e-1, None);
-      ten = (1e-1, None);
-      eleven = (0.05, None);
-      return (zero,one,two,three,four,five,six,seven,eight,nine,ten,eleven);
-    else: # mistake!
-      return [];
-
 def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1, initFromCurr = 1, holdOutCondition = None):
     # Given just a cell number, will fit the Robbe-inspired V1 model to the data
     #
@@ -203,7 +161,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd);
     elif fitType == 3:
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, sigOffset, stdLeft, stdRight, sigPeak);
-    all_bounds = getConstraints(fitType);
+    all_bounds = hf.getConstraints(fitType);
    
     # now set up the optimization
     obj = lambda params: mod_resp.SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask)[0];

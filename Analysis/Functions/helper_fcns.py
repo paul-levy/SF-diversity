@@ -13,6 +13,8 @@ import pdb
 # np_smart_load     - load a .npy file safely
 # bw_lin_to_log
 # bw_log_to_lin
+# chiSq
+
 # deriv_gauss       - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # compute_SF_BW     - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
 # fix_params        - Intended for parameters of flexible Gaussian, makes all parameters non-negative
@@ -28,6 +30,7 @@ import pdb
 # setSigmaFilter     - create the filter we use for determining c50 with SF
 # evalSigmaFilter    - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
 # setNormTypeArr     - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters
+# getConstraints     - get list of constraints for optimization
 
 def np_smart_load(file_path, encoding_str='latin1'):
 
@@ -62,6 +65,22 @@ def bw_log_to_lin(log_bw, pref_sf):
     lin_bw = more_half - less_half;
     
     return lin_bw, sf_range
+
+def chiSq(data_resps, model_resps, stimDur=1):
+  ''' given a set of measured and model responses, compute the chi-squared (see Cavanaugh et al '02a)
+      assumes: resps are mean/variance for each stimulus condition (e.g. like a tuning curve)
+        with each condition a tuple (or 2-array) with [mean, var]
+  '''
+  np = numpy;
+
+  rho = geomean(np.divide(data_resps[1], data_resps[0]));
+  k   = 0.01 * rho * np.max(data_resps[0])
+
+  chi = np.sum(np.divide(np.square(data_resps[0] - model_resps[0]), k + data_resps[0]*rho/stimDur));
+
+  return chi;
+
+######
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
@@ -585,3 +604,47 @@ def setNormTypeArr(params, normTypeArr = []):
     normTypeArr = [norm_type, inhAsym];
 
   return normTypeArr;
+
+def getConstraints(fitType):
+        # 00 = preferred spatial frequency   (cycles per degree) || [>0.05]
+        # 01 = derivative order in space || [>0.1]
+        # 02 = normalization constant (log10 basis) || unconstrained
+        # 03 = response exponent || >1
+        # 04 = response scalar || >1e-3
+        # 05 = early additive noise || [0, 1]; was [0.001, 1] - see commented out line below
+        # 06 = late additive noise || >0.01
+        # 07 = variance of response gain || >1e-3
+        # if fitType == 2
+        # 08 = mean of normalization weights gaussian || [>-2]
+        # 09 = std of ... || >1e-3 or >5e-1
+        # if fitType == 3
+        # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 0.75]
+        # 09 = standard deviation of the gaussian to the left of the peak || >0.1
+        # 10 = "" to the right "" || >0.1
+        # 11 = peak (i.e. sf location) of c50 tuning curve 
+
+    zero = (0.05, None);
+    one = (0.1, None);
+    two = (None, None);
+    three = (1, None);
+    four = (1e-3, None);
+    five = (0, 1); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
+    six = (0.01, None); # if always positive, then no hard thresholding to ensure rate (strictly) > 0
+    seven = (1e-3, None);
+    if fitType == 1:
+      eight = (0, 0); # flat normalization (i.e. no tilt)
+      return (zero,one,two,three,four,five,six,seven,eight);
+    if fitType == 2:
+      eight = (-2, None);
+      nine = (5e-1, None);
+      return (zero,one,two,three,four,five,six,seven,eight,nine);
+    elif fitType == 3:
+      eight = (0, 0.75);
+      nine = (1e-1, None);
+      ten = (1e-1, None);
+      eleven = (0.05, None);
+      return (zero,one,two,three,four,five,six,seven,eight,nine,ten,eleven);
+    else: # mistake!
+      return [];
+
+
