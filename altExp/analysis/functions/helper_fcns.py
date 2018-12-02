@@ -23,6 +23,8 @@ import pdb
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
 # blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
 # tabulate_responses - Organizes measured and model responses for sfMixAlt experiment
+# organize_modResp   - akin to o.modResp in /Analysis/Functions, used for preparing responses for chiSq calculation in optimization
+
 # random_in_range - random real-valued number between A and B
 # nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
 # getSuppressiveSFtuning - returns the normalization pool response
@@ -266,6 +268,64 @@ def tabulate_responses(cellStruct, modResp = []):
                     val_con_by_disp[d].append(con);
                     
     return [respMean, respStd, predMean, predStd], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
+
+def organize_modResp(respsByTr, cellStruct):
+    ''' Given cell list of trial-by-trial responses and cell structure, returns the following:
+          average per condition
+          all responses per condition (i.e. response for each repeat) properly organized
+        NOTE: For use in model_responses.py, for ex, to help with chiSquared calculation
+    '''
+    np = numpy;
+    conDig = 3; # round contrast to the thousandth
+    nReps  = 20; # n reps will always be <= 20 (really 10, but whatever)    
+
+    data = cellStruct['sfm']['exp']['trial'];
+
+    all_cons = np.unique(np.round(data['total_con'], conDig));
+    all_cons = all_cons[~np.isnan(all_cons)];
+
+    all_sfs = np.unique(data['cent_sf']);
+    all_sfs = all_sfs[~np.isnan(all_sfs)];
+
+    all_disps = np.unique(data['num_comps']);
+    all_disps = all_disps[all_disps>0]; # ignore zero...
+
+    nCons = len(all_cons);
+    nSfs = len(all_sfs);
+    nDisps = len(all_disps);
+    
+    respMean = np.nan * np.empty((nDisps, nSfs, nCons));
+    respAll = np.nan * np.empty((nDisps, nSfs, nCons, nReps));
+
+    val_con_by_disp = [];
+    valid_disp = dict();
+    valid_con = dict();
+    valid_sf = dict();
+    
+    for d in range(nDisps):
+        val_con_by_disp.append([]);
+        valid_disp[d] = data['num_comps'] == all_disps[d];
+        for con in range(nCons):
+
+            valid_con[con] = np.round(data['total_con'], conDig) == all_cons[con];
+
+            for sf in range(nSfs):
+
+                valid_sf[sf] = data['cent_sf'] == all_sfs[sf];
+
+                valid_tr = valid_disp[d] & valid_sf[sf] & valid_con[con];
+
+                if np.all(np.unique(valid_tr) == False):
+                    continue;
+                    
+                respMean[d, sf, con] = np.mean(respsByTr[valid_tr]);
+                respAll[d, sf, con, 0:sum(valid_tr)] = respsByTr[valid_tr]; # sum(valid_tr) is how many are True, i.e. actually being "grabbed"
+                
+            if np.any(~np.isnan(respMean[d, :, con])):
+                if ~np.isnan(np.nanmean(respMean[d, :, con])):
+                    val_con_by_disp[d].append(con);
+                    
+    return respMean, respAll;
 
 def mod_poiss(mu, varGain):
     np = numpy;

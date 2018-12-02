@@ -1,7 +1,9 @@
 import math, cmath, numpy, os
 from helper_fcns import makeStimulus, random_in_range, getNormParams, genNormWeights, setSigmaFilter, evalSigmaFilter, np_smart_load, chiSq, getConstraints, organize_modResp
 from scipy.stats import norm, mode, lognorm, nbinom
+from scipy.stats.mstats import gmean
 from numpy.matlib import repmat
+import scipy.optimize as opt
 import time
 import sys
 import warnings
@@ -561,6 +563,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     #   trialSubset - pass in the trials you want to evaluate (ignores all other masks)
     #   maskOri     - in the optimization, we don't include the orientation tuning curve - skip that in the evaluation of loss, too
     #   maskIn      - pass in a mask (overwrite maskOri and trialSubset, i.e. highest presedence) 
+    #   MASK IGNORED FOR NOW (12.02.18)
     # Returns NLL ###, respModel
 
     # 00 = preferred spatial frequency   (cycles per degree)
@@ -668,56 +671,31 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
         meanRate      = ratio.mean(0);
         respModel     = noiseLate + scale*meanRate; # respModel[iR]
+        rateModel     = T['exp']['trial']['duration'] * respModel;
         # and get the spike count
         spikeCount = T['exp']['trial']['spikeCount'];
 
-        ### Masking the data - which trials will we include
-        # now get the "right" subset of the data for evaluating loss (e.x. by default, orientation tuning trials are not included)
-        if maskOri:
-          # start with all trials...
-          mask = numpy.ones_like(spikeCount, dtype=bool); # i.e. true
-          # and get rid of orientation tuning curve trials
-          oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
-
-          oriInds = numpy.empty((0,));
-          for iB in oriBlockIDs:
-              indCond = numpy.where(T['exp']['trial']['blockID'] == iB);
-              if len(indCond[0]) > 0:
-                  oriInds = numpy.append(oriInds, indCond);
-          mask[oriInds.astype(numpy.int64)] = False;
-        else: # just go with all trials
-          # start with all trials...
-          mask = numpy.ones_like(spikeCount, dtype=bool); # i.e. true
-        # BUT, if we pass in trialSubset, then use this as our mask (i.e. overwrite the above mask)
-        if trialSubset is not None: # i.e. if we passed in some trials to specifically include, then include ONLY those (i.e. skip the rest)
-          # start by including NO trials
-          mask = numpy.zeros_like(spikeCount, dtype=bool); # i.e. true
-          mask[trialSubset.astype(numpy.int64)] = True;
-
-        if maskIn is not None:
-          mask = maskIn; # overwrite the mask with the one we've passed in!
-
         if lossType == 1:
           # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
-          lsq = numpy.square(numpy.add(numpy.sqrt(rateModel[mask]), -numpy.sqrt(spikeCount[mask])));
+          lsq = numpy.square(numpy.add(numpy.sqrt(rateModel), -numpy.sqrt(spikeCount)));
           NLL = numpy.mean(lsq);
         elif lossType == 2:
-          poiss_llh = numpy.log(poisson.pmf(spikeCount[mask], rateModel[mask]));
+          poiss_llh = numpy.log(poisson.pmf(spikeCount, rateModel));
           NLL = numpy.mean(-poiss_llh);
         elif lossType == 3:
           # Get predicted spike count distributions
-          mu  = numpy.maximum(.01, rateModel[mask]); # The predicted mean spike count; respModel[iR]
+          mu  = numpy.maximum(.01, rateModel); # The predicted mean spike count; respModel[iR]
           var = mu + (varGain*pow(mu,2));                        # The corresponding variance of the spike count
           r   = pow(mu,2)/(var - mu);                           # The parameters r and p of the negative binomial distribution
           p   = r/(r + mu);
-          llh = nbinom.pmf(spikeCount[mask], r, p); # Likelihood for each pass under doubly stochastic model
+          llh = nbinom.pmf(spikeCount, r, p); # Likelihood for each pass under doubly stochastic model
           NLL = numpy.mean(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]
         elif lossType == 4: #chi squared
           if trialSubset is not None:
             warnings.warn('This loss type (chi squared) is not currently equipped to handle hold out subsets');
-          _, _, expByCond, expAll = organize_modResp(spikeCount, structureSFM['sfm']['exp']['trial']);
+          expByCond, expAll = organize_modResp(spikeCount, structureSFM);
           exp_responses = [expByCond.flatten(), numpy.nanvar(expAll, axis=3).flatten()];
-          _, _, modByCond, modAll = organize_modResp(rateModel, structureSFM['sfm']['exp']['trial']);
+          modByCond, modAll = organize_modResp(rateModel, structureSFM);
           mod_responses = [modByCond.flatten(), numpy.nanvar(modAll, axis=3).flatten()];
           NLL = chiSq(exp_responses, mod_responses);
 
@@ -902,9 +880,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     S = np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy')); # why -1? 0 indexing...
     print('...finished loading');
     trial_inf = S['sfm']['exp']['trial'];
-    prefOrEst = mode(trial_inf['ori'][1]).mode;
-    trialsToCheck = trial_inf['con'][0] == 0.01;
-    prefSfEst = mode(trial_inf['sf'][0][trialsToCheck==True]).mode;
+    prefSfEst = gmean(trial_inf['sf'][0][~numpy.isnan(trial_inf['sf'][0])]); # avoid NaN trials...
     
     ########
 

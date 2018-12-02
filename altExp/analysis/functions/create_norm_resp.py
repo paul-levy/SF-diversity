@@ -11,9 +11,9 @@ if __name__ == '__main__':
     # at CNS
     # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
     # personal mac
-    #dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
+    dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
     # on cluster
-    dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
+    #dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
 
     if len(sys.argv) < 2:
       print('uhoh...you one argument here'); # and one is the script itself...
