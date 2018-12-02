@@ -460,7 +460,8 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     # Load cell
     ########
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal mac
-    loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
+    #loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
+    loc_data = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # CNS
 
     # fitType
     if fitType == 1:

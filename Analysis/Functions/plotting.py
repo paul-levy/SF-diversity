@@ -47,11 +47,16 @@ lossType = int(sys.argv[2]);
 fitType = int(sys.argv[3]);
 log_y = int(sys.argv[4]);
 
-save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
-data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
+# prince
+#save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
+#data_loc = '/home/pl1465/SF_diversity/Analysis/Structures/';
+# CNS
+save_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Figures/';
+data_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitListSP_181130';
+fitBase = 'fitList_181015'
+#fitBase = 'fitListSPcns_181130c';
 # first the fit type
 if fitType == 1:
   fitSuf = '_flat';
@@ -70,6 +75,12 @@ elif lossType == 4:
   lossSuf = '_chiSq.npy';
 
 fitName = str(fitBase + fitSuf + lossSuf);
+
+# set the save directory to save_loc, then create the save directory if needed
+subDir   = fitName.replace('fitList', 'fits').replace('.npy', '');
+save_loc = str(save_loc + subDir + '/');
+if not os.path.exists(save_loc):
+  os.makedirs(save_loc);
 
 descrExpName = 'descrFits.npy';
 descrModName = 'descrFitsModel.npy';
@@ -186,7 +197,7 @@ for con in reversed(range(nCon)): # contrast
 
             
 f.legend((expPoints[0], modRange, modAvgPlt[0], sponRate, sponRateMod), ('data +- 1 s.e.m.', 'model range', 'model average', 'exp spont f.r.', 'mod spont f.r.'), fontsize = 15, loc='upper right');
-f.suptitle('SF mixture experiment', fontsize=25);
+f.suptitle('cell #%d, loss %.2f' % (cellNum, fitList[cellNum-1]['NLL']), fontsize=25);
 
 #########
 # Plot secondary things - CRF, filter, normalization, nonlinearity, etc
@@ -219,11 +230,12 @@ sns.despine(ax=curr_ax, offset = 5);
 curr_ax = plt.subplot2grid(detailSize, (0, 0));
 lower_bound = 1e-2;
 plt.loglog([lower_bound, 1000], [lower_bound, 1000], 'k--');
-meanList = (expData['sfm']['exp']['conRateMean'], expData['sfm']['exp']['oriRateMean'], sfMeanFlat);
-varList = (expData['sfm']['exp']['conRateVar'], expData['sfm']['exp']['oriRateVar'], sfVarFlat);
+meanList = (expData['sfm']['exp']['conRateMean'], expData['sfm']['exp']['oriRateMean'], np.array(sfMeanFlat));
+varList = (expData['sfm']['exp']['conRateVar'], expData['sfm']['exp']['oriRateVar'], np.array(sfVarFlat));
+
 for i in range(len(meanList)):
   gtLB = np.logical_and(meanList[i]>lower_bound, varList[i]>lower_bound);
-  #plt.loglog(meanList[i][gtLB], varList[i][gtLB], 'o');
+  plt.loglog(meanList[i][gtLB], varList[i][gtLB], 'o');
 # skeleton for plotting modulated poisson prediction                                                                                                                                                    
 if fitType == 3: # i.e. modPoiss                                                                                                                                                                          
   varGain = modFit[7];
@@ -288,7 +300,7 @@ plt.semilogx([100, 100], [-1.5, 1], 'k--')
 # now the real stuff
 plt.semilogx(omega, sfExc, 'k-')
 #plt.semilogx(omega, sfInh, 'r--', linewidth=2);
-plt.semilogx(omega, sfNorm, 'r-', linewidth=1);
+plt.semilogx(omega, -sfNorm, 'r-', linewidth=1);
 plt.xlim([omega[0], omega[-1]]);
 plt.ylim([-0.1, 1.1]);
 plt.xlabel('spatial frequency (c/deg)', fontsize=12);
@@ -588,7 +600,7 @@ if log_y:
   log_str = '_logy';
 else:
   log_str = '';
-saveName = "cell_%d%s.pdf" % (cellNum, log_str);
+saveName = "cell_%02d%s.pdf" % (cellNum, log_str);
 pdf = pltSave.PdfPages(str(save_loc + saveName))
 for fig in range(len(allFigs)): ## will open an empty extra figure :(
     pdf.savefig(allFigs[fig])
