@@ -7,26 +7,31 @@ from scipy.stats.mstats import gmean as geomean
 import scipy.optimize as opt
 import pdb
 
-def fit_all_CRF(cell_num, data_loc, each_c50, fit_type, n_iter = 1, each_expn = 0, each_base = 0, each_gain = 1):
+def fit_all_CRF(cell_num, data_loc, each_c50, loss_type, n_iter = 1, each_expn = 0, each_base = 0, each_gain = 1):
+    ''' Given cell#, data loc, load the data. Other inputs:
+          each_c50/expn/base/gain : separate c50/expn/base/gain for each condition?
+          n_iter                  : how many iterations to fit?
+          
+    '''
     print(str(n_iter) + ' fit attempts');
     np = numpy;
     conDig = 3; # round contrast to the thousandth
     n_params = 5; # 4 for NR, 1 for varGain
 
     if each_c50 == 1:
-        fit_key = 'fits_each_rpt';
+      fit_key = 'fits_each_rpt';
     else:
-        fit_key = 'fits_rpt';
+      fit_key = 'fits_rpt';
 
-    if fit_type == 1:
-      type_str = '-lsq';
-    if fit_type == 2:
-      type_str = '-sqrt';
-    if fit_type == 3:
-      type_str = '-poiss';
-    if fit_type == 4:
-      type_str = '-poissMod';
-    fits_name = 'crfFits' + type_str + '.npy';
+    if loss_type == 1:
+      loss_str = '-lsq';
+    if loss_type == 2:
+      loss_str = '-sqrt';
+    if loss_type == 3:
+      loss_str = '-poiss';
+    if loss_type == 4:
+      loss_str = '-poissMod';
+    fits_name = 'crfFits' + loss_str + '.npy';
 
     dataList = np.load(str(data_loc + 'dataList.npy')).item();
     if os.path.isfile(data_loc + fits_name):
@@ -136,7 +141,7 @@ def fit_all_CRF(cell_num, data_loc, each_c50, fit_type, n_iter = 1, each_expn = 
         varGain_ind = base_ind+n_per_param[0];
 
 	obj = lambda params: fit_CRF(cons, resps, params[c50_ind:c50_ind+n_per_param[3]], params[expn_ind:expn_ind+n_per_param[2]], params[gain_ind:gain_ind+n_per_param[1]], \
-                                     params[base_ind:base_ind+n_per_param[0]], params[varGain_ind], fit_type);
+                                     params[base_ind:base_ind+n_per_param[0]], params[varGain_ind], loss_type);
 	opts = opt.minimize(obj, init_params, bounds=boundsAll);
 
 	curr_params = opts['x'];
@@ -185,7 +190,7 @@ def fit_all_CRF(cell_num, data_loc, each_c50, fit_type, n_iter = 1, each_expn = 
 
     return nk_ru;
 
-def fit_all_CRF_boot(cell_num, data_loc, each_c50, fit_type, n_boot_iter = 1000):
+def fit_all_CRF_boot(cell_num, data_loc, each_c50, loss_type, n_boot_iter = 1000):
     np = numpy;
     conDig = 3; # round contrast to the thousandth
     n_params = 5; # 4 for NR, 1 for varGain
@@ -195,15 +200,15 @@ def fit_all_CRF_boot(cell_num, data_loc, each_c50, fit_type, n_boot_iter = 1000)
     else:
 	fit_key = 'fits';
 
-    if fit_type == 1:
-      type_str = '-lsq';
-    if fit_type == 2:
-      type_str = '-sqrt';
-    if fit_type == 1:
-      type_str = '-poiss';
-    if fit_type == 1:
-      type_str = '-poissMod';
-    fits_name = 'crfFits' + type_str + '.npy';
+    if loss_type == 1:
+      loss_str = '-lsq';
+    if loss_type == 2:
+      loss_str = '-sqrt';
+    if loss_type == 1:
+      loss_str = '-poiss';
+    if loss_type == 1:
+      loss_str = '-poissMod';
+    fits_name = 'crfFits' + loss_str + '.npy';
 
     dataList = np.load(str(data_loc + 'dataList.npy')).item();
     if os.path.isfile(data_loc + fits_name):
@@ -305,7 +310,7 @@ def fit_all_CRF_boot(cell_num, data_loc, each_c50, fit_type, n_boot_iter = 1000)
 	varGain_ind = base_ind+1;
 
         # first, fit original dataset
-        obj = lambda params: fit_CRF(cons, resps, params[0:n_c50s], params[expn_ind], params[gain_ind:gain_ind+n_v_sfs], params[base_ind], params[varGain_ind], fit_type);
+        obj = lambda params: fit_CRF(cons, resps, params[0:n_c50s], params[expn_ind], params[gain_ind:gain_ind+n_v_sfs], params[base_ind], params[varGain_ind], loss_type);
         opts_full = opt.minimize(obj, init_params, bounds=boundsAll);
 
         # now unpack...
@@ -335,7 +340,7 @@ def fit_all_CRF_boot(cell_num, data_loc, each_c50, fit_type, n_boot_iter = 1000)
 	    resamp_resps.append(resps[sf_i][resamp_inds]);
 	    resamp_cons.append(cons[sf_i][resamp_inds]);
 
-	  obj = lambda params: fit_CRF(resamp_cons, resamp_resps, params[0:n_c50s], params[expn_ind], params[gain_ind:gain_ind+n_v_sfs], params[base_ind], params[varGain_ind], fit_type);
+	  obj = lambda params: fit_CRF(resamp_cons, resamp_resps, params[0:n_c50s], params[expn_ind], params[gain_ind:gain_ind+n_v_sfs], params[base_ind], params[varGain_ind], loss_type);
 	  opts = opt.minimize(obj, init_params, bounds=boundsAll);
 
           # now unpack...
@@ -374,7 +379,7 @@ if __name__ == '__main__':
 
     if len(sys.argv) < 4:
       print('uhoh...you need at least three arguments here');
-      print('First is cell number, second is if c50 is fixed [0] or free [1] for each SF, third is fit_type (i.e. loss function), fourth [optional] is number of bootstrap iterations [default is 1000]');
+      print('First is cell number, second is if c50 is fixed [0] or free [1] for each SF, third is loss_type (i.e. loss function), fourth [optional] is number of bootstrap iterations [default is 1000]');
       exit();
 
     print('Running cell ' + sys.argv[1] + '...');
