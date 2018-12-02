@@ -866,8 +866,9 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     # Load cell
     ########
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal mac
-    loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
-    fL_name = 'fitListSP_181130'
+    #loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
+    loc_data = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # CNS
+    fL_name = 'fitListSPcns_181130a'
 
     np = numpy;
 
@@ -1016,6 +1017,9 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     # now set up the optimization
     obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask)[0];
     tomin = opt.minimize(obj, param_list, bounds=all_bounds);
+    #tomin = opt.minimize(obj, param_list, method='SLSQP', bounds=all_bounds);
+    #minimizer_kwargs = dict(method='L-BFGS-B', bounds=all_bounds)
+    #tomin = opt.basinhopping(obj, param_list, minimizer_kwargs=minimizer_kwargs);
 
     opt_params = tomin['x'];
     NLL = tomin['fun'];
@@ -1032,6 +1036,9 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
         fitList[cellNum-1] = dict();
       fitList[cellNum-1]['NLL'] = NLL;
       fitList[cellNum-1]['params'] = opt_params;
+      # NEW: Also save whether or not fit was success, exit message (18.12.01)
+      fitList[cellNum-1]['success'] = tomin['success'];
+      fitList[cellNum-1]['message'] = tomin['message'];
       numpy.save(loc_data + fitListName, fitList);   
 
     if holdOutCondition is not None:

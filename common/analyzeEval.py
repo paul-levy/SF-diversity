@@ -43,7 +43,7 @@ def compute_diffs(lossType, expInd=1, baseStr='holdoutFits', date='181121'):
   diffs_loss = losses[:, :, :, 0] - losses[:, :, :, 1];
   diffs_pred = preds[:, :, :, 0] - preds[:, :, :, 1];
 
-  return diffs_loss, diffs_pred, losses, preds;
+  return diffs_loss, diffs_pred, losses, preds, flat, weight;
 
 if __name__ == '__main__':
 
