@@ -76,12 +76,15 @@ def chiSq(data_resps, model_resps, stimDur=1):
         with each condition a tuple (or 2-array) with [mean, var]
   '''
   np = numpy;
+
   rats = np.divide(data_resps[1], data_resps[0]);
   nan_rm = lambda x: x[~np.isnan(x)]
   rho = geomean(nan_rm(rats));
-  k   = 0.01 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
+  # now, only evaluate where both model and data are non-nan!
+  fineTr = ~np.isnan(data_resps[0]) & ~np.isnan(model_resps[0]);
+  k   = 0.10 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
 
-  chi = np.sum(np.divide(np.square(data_resps[0] - model_resps[0]), k + data_resps[0]*rho/stimDur));
+  chi = np.sum(np.divide(np.square(data_resps[0][fineTr] - model_resps[0][fineTr]), k + data_resps[0][fineTr]*rho/stimDur));
 
   return chi;
 
