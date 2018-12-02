@@ -7,7 +7,7 @@
 	# 4 - chi squared
 # third param is log_y: (1 for log y coordinate)
 
-for run in {1..59}
+for run in {1..8}
 do
   /e/2.3/p3/wangzhuo/anaconda3/bin/python3 plot_compare.py $run 4 0 &
 done

@@ -54,7 +54,7 @@ dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_180717';
+fitBase = 'fitListSP_181202a';
 
 # first the fit type
 if fitType == 1:
@@ -122,7 +122,7 @@ data = cellStruct['sfm']['exp']['trial'];
 
 ignore, modRespAll, normTypeArr = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr);
 norm_type = normTypeArr[0];
-print('norm type %d' % (norm_type));
+print('norm type %02d' % (norm_type));
 if norm_type == 2:
   gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 2
   gs_std = normTypeArr[2]; # guaranteed to exist ...
@@ -203,7 +203,7 @@ for d in range(nDisps):
         
           dispAx[d][c_plt_ind, i].set_xscale('log');
           dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
-          dispAx[d][c_plt_ind, i].set_title('D%d: contrast: %.3f' % (d, all_cons[v_cons[c]]));
+          dispAx[d][c_plt_ind, i].set_title('D%02d: contrast: %.3f' % (d, all_cons[v_cons[c]]));
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
           dispAx[d][c_plt_ind, i].tick_params(labelsize=15, width=1, length=8, direction='out');
@@ -216,8 +216,9 @@ for d in range(nDisps):
         dispAx[d][c_plt_ind, 1].set_ylim((1e-1, 1e3));
         dispAx[d][c_plt_ind, 1].set_yscale('log');
 
+    fCurr.suptitle('cell #%d, loss%.2f' % (which_cell, modParams[which_cell-1]['NLL']);
 
-saveName = "/cell_%d.pdf" % (which_cell)
+saveName = "/cell_%02d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fDisp:
@@ -274,10 +275,10 @@ for d in range(nDisps):
       sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
 
       dispAx[d][i].set_ylabel('resp above baseline (sps)');
-      dispAx[d][i].set_title('D%d - sf tuning' % (d));
+      dispAx[d][i].set_title('D%02d - sf tuning' % (d));
       dispAx[d][i].legend(lines, [str(i) for i in reversed(all_cons[v_cons])], loc=0);
 
-saveName = "/allCons_cell_%d.pdf" % (which_cell)
+saveName = "/allCons_cell_%02d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fDisp:
@@ -334,6 +335,8 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].tick_params(labelsize=15, width=1, length=8, direction='out');
         sfMixAx[c_plt_ind, d].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
         sns.despine(ax=sfMixAx[c_plt_ind, d], offset=10, trim=False);
+
+f.suptitle('cell #%d, loss%.2f' % (which_cell, modParams[which_cell-1]['NLL']);
 	        
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc
@@ -523,7 +526,7 @@ if norm_sim_on:
     ### now save all figures (sfMix contrasts, details, normalization stuff)
     #pdb.set_trace()
     allFigs = [f, fDetails, fNorm];
-    saveName = "/cell_%d.pdf" % (which_cell)
+    saveName = "/cell_%02d.pdf" % (which_cell)
     full_save = os.path.dirname(str(save_loc + 'sfMixOnly/'));
     pdfSv = pltSave.PdfPages(full_save + saveName);
     for fig in range(len(allFigs)):
@@ -620,7 +623,7 @@ for d in range(nDisps):
         crfAx[plt_x][plt_y].set_xscale('symlog', linthreshx=0.01); # symlog will allow us to go down to 0 
         crfAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
         crfAx[plt_x][plt_y].set_ylabel('resp (sps)', fontsize='medium');
-        crfAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
+        crfAx[plt_x][plt_y].set_title('D%02d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         sns.despine(ax = crfAx[plt_x][plt_y], offset = 10, trim=False);
@@ -646,17 +649,17 @@ for d in range(nDisps):
     invSF = crfAx[0][d, 1].plot(all_sfs[v_sfs[0]],  maxC50*(1-sfRef/np.max(sfRef)), linestyle='dashed');
     crfAx[0][d, 1].set_xlim([all_sfs[0], all_sfs[-1]]);
 
-    crfAx[0][d, 0].set_title('D%d - all RVC' % (d), fontsize='large');
+    crfAx[0][d, 0].set_title('D%02d - all RVC' % (d), fontsize='large');
     crfAx[0][d, 0].set_xlabel('contrast', fontsize='large');
     crfAx[0][d, 0].set_ylabel('resp (sps)', fontsize='large');
     crfAx[0][d, 0].legend(rvc_plots, [str(i) for i in np.round(all_sfs[v_sfs[0]], 2)], loc='upper left');
 
-    crfAx[0][d, 1].set_title('D%d - C50 (fixed vs free)' % (d), fontsize='large');
+    crfAx[0][d, 1].set_title('D%02d - C50 (fixed vs free)' % (d), fontsize='large');
     crfAx[0][d, 1].set_xlabel('sf (cpd)', fontsize='large');
     crfAx[0][d, 1].set_ylabel('c50', fontsize='large');
     crfAx[0][d, 1].legend((sepC50s[0], allC50s[0], invSF[0]), ('c50 free', 'c50 fixed', 'rescaled SF tuning'), fontsize='large', loc='center left');
     
-saveName = "/cell_NR_%d.pdf" % (which_cell)
+saveName = "/cell_NR_%02d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
@@ -726,7 +729,7 @@ for d in range(nDisps):
         rvcAx[plt_x][plt_y].set_xscale('symlog', linthreshx=0.01); # symlog will allow us to go down to 0 
         rvcAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
         rvcAx[plt_x][plt_y].set_ylabel('resp (sps)', fontsize='medium');
-        rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
+        rvcAx[plt_x][plt_y].set_title('D%02d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
         rvcAx[plt_x][plt_y].legend((dataPlt[0], modPlt[0], nrPlt[0]), ('data', 'model avg', 'Naka-Rushton'), fontsize='large', loc='center left');
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
@@ -734,7 +737,9 @@ for d in range(nDisps):
         rvcAx[plt_x][plt_y].tick_params(labelsize=25, width=2, length=16, direction='out');
         rvcAx[plt_x][plt_y].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
 
-saveName = "/cell_%d.pdf" % (which_cell)
+    fCurr.suptitle('cell #%d, loss%.2f' % (which_cell, modParams[which_cell-1]['NLL']);
+
+saveName = "/cell_%02d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fRVC:
@@ -794,10 +799,10 @@ for d in range(nDisps):
       sns.despine(ax = crfAx[d][i], offset=10, trim=False);
 
       crfAx[d][i].set_ylabel('resp above baseline (sps)');
-      crfAx[d][i].set_title('D%d: sf:all - log resp %s' % (d, title_str));
+      crfAx[d][i].set_title('D%02d: sf:all - log resp %s' % (d, title_str));
       crfAx[d][i].legend(lines_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
 
-saveName = "/allSfs_log_cell_%d.pdf" % (which_cell)
+saveName = "/allSfs_log_cell_%02d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:

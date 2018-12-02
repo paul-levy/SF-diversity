@@ -11,7 +11,7 @@
 	# 3 - c50/normalization "constant" filter
 # fourth param is log_y: (1 for log y coordinate)
 
-for run in {1..59}
+for run in {1..8}
 do
   /e/2.3/p3/wangzhuo/anaconda3/bin/python3 plotting.py $run 3 1 0 &
   /e/2.3/p3/wangzhuo/anaconda3/bin/python3 plotting.py $run 3 2 0 &
