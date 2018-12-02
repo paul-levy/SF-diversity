@@ -114,7 +114,6 @@ def fitList_name(base, fitType, lossType):
     lossSuf = '_modPoiss.npy';
   return str(base + fitSuf + lossSuf);
 
-
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
     prefSf = params[0];

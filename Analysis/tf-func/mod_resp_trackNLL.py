@@ -269,8 +269,8 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
 
      # Other (nonlinear) model components
     sigma    = tf.pow(tf.constant(10, dtype=tf.float32), params[2]); # normalization constant
-    # respExp  = 2; # response exponent
-    respExp  = params[3]; # response exponent
+    respExp  = tf.constant(2, dtype=tf.float32); # response exponent
+    #respExp  = params[3]; # response exponent
     scale    = params[4]; # response scalar
 
     # Noise parameters
@@ -363,7 +363,13 @@ def SFMGiveBof(ph_stimOr, ph_stimTf, ph_stimCo, ph_stimSf, ph_stimPh, ph_spikeCo
       # likelihood based on modulated poisson model
       log_lh = negBinom(ph_spikeCount, r, p);
       NLL = tf.reduce_mean(-1*log_lh);
-    
+    elif lossType == 4: #chi squared (per Cavanaugh '02)
+      # need to average by condition... :( :( :( :( :(
+      sq_err = tf.square(tf.add(respModel, -ph_spikeCount));
+      rho    = tf.reduce_mean(tf.divide(tf.sqrt(###TO FIGURE OUT MEAN BY CONDITION###)))
+      k      = tf.multiply(0.01, tf.multiply(rho, 
+      NLL    = tf.reduce_mean(tf.divide(sq_err, tf.add(k, tf.multiply())))
+
     return NLL;
 
 def applyConstraints(fitType, *args):
@@ -387,7 +393,8 @@ def applyConstraints(fitType, *args):
     zero = tf.add(tf.nn.softplus(args[0]), 0.05);
     one = tf.add(tf.nn.softplus(args[1]), 0.1);
     two = args[2];
-    three = tf.add(tf.nn.softplus(args[3]), 1);
+    three = tf.add(2, tf.multiply(0, args[3]));                                            
+    #three = tf.add(tf.nn.softplus(args[3]), 1);
     four = tf.add(tf.nn.softplus(args[4]), 1e-3);
     five = tf.sigmoid(args[5]); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
     six = tf.add(0.01, tf.nn.softplus(args[6])); # if always positive, then no hard thresholding to ensure rate (strictly) > 0
@@ -439,7 +446,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal mac
     loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
 
-    fL_name = 'fitList_181015';
+    fL_name = 'fitList_181129';
     # fitType
     if fitType == 1:
       fL_suffix1 = '_flat';
@@ -454,6 +461,8 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
       fL_suffix2 = '_poiss.npy';
     elif lossType == 3:
       fL_suffix2 = '_modPoiss.npy';
+    elif lossType == 4:
+      fL_suffix2 = '_chiSq.npy';
     fitListName = str(fL_name + fL_suffix1 + fL_suffix2);
 
     if os.path.isfile(loc_data + fitListName):
@@ -576,8 +585,6 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     objWeight[conInds.astype(numpy.int64)] = 1; # for now, yes it's a "magic number"    
 
     mask[oriInds.astype(numpy.int64)] = True; # as in, don't include those trials either!
-
-    #pdb.set_trace();
 
     fixedOr = stimOr[:,~mask];
     fixedTf = stimTf[:,~mask];

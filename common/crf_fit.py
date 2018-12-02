@@ -1,4 +1,4 @@
-from helper_fcns import naka_rushton, fit_CRF, random_in_range, blankResp
+from helper_fcns import naka_rushton, fit_CRF, random_in_range, blankResp, np_smart_load
 import os.path
 import sys
 import math, numpy
@@ -32,14 +32,14 @@ def fit_all_CRF(cell_num, data_loc, each_c50, loss_type, n_iter = 1, each_expn =
     if loss_type == 4:
       loss_str = '-poissMod';
     fits_name = 'crfFitsCom' + loss_str + '.npy';
-    dataList = np.load(str(data_loc + 'dataList.npy')).item();
+    dataList = np_smart_load(str(data_loc + 'dataList.npy'));
     if os.path.isfile(data_loc + fits_name):
-        crfFits = np.load(str(data_loc + fits_name)).item();
+        crfFits = np_smart_load(str(data_loc + fits_name));
     else:
         crfFits = dict();
 
     # load cell information
-    cellStruct = np.load(str(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy')).item();
+    cellStruct = np_smart_load(str(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy'));
     data = cellStruct['sfm']['exp']['trial'];
 
     all_cons = np.unique(np.round(data['total_con'], conDig));
@@ -177,7 +177,7 @@ def fit_all_CRF(cell_num, data_loc, each_c50, loss_type, n_iter = 1, each_expn =
     # update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(data_loc + fits_name):
       print('reloading CRF Fits...');
-      crfFits = np.load(str(data_loc + fits_name)).item();
+      crfFits = np_smart_load(str(data_loc + fits_name));
     if cell_num-1 not in crfFits:
       crfFits[cell_num-1] = dict();
     crfFits[cell_num-1][fit_key] = nk_ru;
@@ -209,13 +209,13 @@ def fit_all_CRF_boot(cell_num, data_loc, each_c50, loss_type, n_boot_iter = 1000
       loss_str = '-poissMod';
     fits_name = 'crfFits' + loss_str + '.npy';
 
-    dataList = np.load(str(data_loc + 'dataList.npy')).item();
+    dataList = np_smart_load(str(data_loc + 'dataList.npy'));
     if os.path.isfile(data_loc + fits_name):
-        crfFits = np.load(str(data_loc + fits_name)).item();
+        crfFits = np_smart_load(str(data_loc + fits_name));
     else:
         crfFits = dict();
     
-    cellStruct = np.load(str(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy')).item();
+    cellStruct = np_smart_load(str(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy'));
     data = cellStruct['sfm']['exp']['trial'];
 
     all_cons = np.unique(np.round(data['total_con'], conDig));
@@ -360,7 +360,7 @@ def fit_all_CRF_boot(cell_num, data_loc, each_c50, loss_type, n_boot_iter = 1000
     # update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(data_loc + fits_name):
       print('reloading CRF Fits...');
-      crfFits = np.load(str(data_loc + fits_name)).item();
+      crfFits = np_smart_load(str(data_loc + fits_name));
     if cell_num-1 not in crfFits:
       crfFits[cell_num-1] = dict();
     crfFits[cell_num-1][fit_key] = nk_ru;

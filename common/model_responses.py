@@ -1,5 +1,5 @@
 import math, cmath, numpy, os
-from helper_fcns import makeStimulus, random_in_range, getNormParams, genNormWeights, setSigmaFilter, evalSigmaFilter, get_exp_params
+from helper_fcns import makeStimulus, random_in_range, getNormParams, genNormWeights, setSigmaFilter, evalSigmaFilter, get_exp_params, np_smart_load
 from scipy.stats import norm, mode, lognorm, nbinom, poisson
 from numpy.matlib import repmat
 import time
@@ -267,7 +267,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
     # If unitName is char/string, load the data structure
     # Otherwise, we assume that we already are passing loaded data structure
     if isinstance(unitName, str):
-        template = numpy.load(loadPath + unitName + '_sfm.npy')
+        template = np_smart_load(loadPath + unitName + '_sfm.npy')
         S = template.item();
     else:
         S = unitName;
@@ -535,7 +535,7 @@ def GetNormResp(iU, loadPath, stimParams = [], expInd = 1):
     normPool = {'n': n, 'nUnits': nUnits, 'gain': gain};
     
     if isinstance(iU, int):
-        dataList = numpy.load(loadPath + 'dataList.npy');
+        dataList = np_smart_load(loadPath + 'dataList.npy');
         dataList = dataList.item();
         unitName = str(dataList['unitName'][iU]);
         M = SFMNormResp(unitName, loadPath, normPool, expInd=expInd);
