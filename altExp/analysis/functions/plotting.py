@@ -35,17 +35,12 @@ fitType = int(sys.argv[3]);
 crf_fit_type = int(sys.argv[4]);
 descr_fit_type = int(sys.argv[5]);
 norm_sim_on = int(sys.argv[6]);
-normTypeArr = [];
-argInd = 7; # we've already taken 7 arguments off (function call, which_cell, loss_type, fit_type, crf_fit_type, descr_fit_type, norm_sim_on) 
-nArgsIn = len(sys.argv) - argInd; 
-while nArgsIn > 0:
-  normTypeArr.append(float(sys.argv[argInd]));
-  nArgsIn = nArgsIn - 1;
-  argInd = argInd + 1;
+
+norm_type = fitType;
 
 # at CNS
 # dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/recordings/';
-# savePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
+# save_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/';
 # personal mac
 #dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
 #save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/cell4_sandbox/';
@@ -54,7 +49,7 @@ dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
 save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitListSP_181202a';
+fitBase = 'fitListSP_181202c';
 
 # first the fit type
 if fitType == 1:
@@ -73,8 +68,18 @@ elif lossType == 2:
 elif lossType == 3:
   lossSuf = '_modPoiss.npy';
   loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p));
+elif lossType == 4:
+  lossSuf = '_chiSq.npy';
+  # LOSS HERE IS TEMPORARY
+  loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
 
 fitListName = str(fitBase + fitSuf + lossSuf);
+
+# set the save directory to save_loc, then create the save directory if needed
+subDir   = fitListName.replace('fitList', 'fits').replace('.npy', '');
+save_loc = str(save_loc + subDir + '/');
+if not os.path.exists(save_loc):
+  os.makedirs(save_loc);
 
 if crf_fit_type == 1:
   crf_type_str = '-lsq';
@@ -120,13 +125,11 @@ modParamsCurr = modParams[which_cell-1]['params'];
 
 data = cellStruct['sfm']['exp']['trial'];
 
-ignore, modRespAll, normTypeArr = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr);
-norm_type = normTypeArr[0];
+ignore, modRespAll = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normType=norm_type, lossType=lossType);
 print('norm type %02d' % (norm_type));
 if norm_type == 2:
-  gs_mean = normTypeArr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 2
-  gs_std = normTypeArr[2]; # guaranteed to exist ...
-#modRespAll = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normTypeArr)[1]; # NOTE: We're taking [1] (i.e. second) output of SFMGiveBof
+  gs_mean = modParamsCurr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 2
+  gs_std = modParamsCurr[2]; # guaranteed to exist ...
 resp, stimVals, val_con_by_disp, validByStimVal, modResp = helper_fcns.tabulate_responses(cellStruct, modRespAll);
 blankMean, blankStd, _ = helper_fcns.blankResp(cellStruct); 
 modBlankMean = modParamsCurr[6]; # late additive noise is the baseline of the model
@@ -427,20 +430,20 @@ sns.despine(ax=curr_ax, offset=5, trim=False);
     
 if norm_type == 3: # plot the c50 filter (i.e. effective c50 as function of SF)
   stimSf = np.logspace(-2, 2, 101);
-  filtPeak = normTypeArr[4];
-  stdLeft = normTypeArr[2];
-  stdRight = normTypeArr[3];
+  filtPeak = modFit[11];
+  stdLeft = modFit[9];
+  stdRight = modFit[10];
   
   filter = setSigmaFilter(filtPeak, stdLeft, stdRight);
-  offset_filt = normTypeArr[1];
+  offset_filt = modFit[8];
   scale_filt = -(1-offset_filt); # we always scale so that range is [offset_sf, 1]
-  c50_filt = helper_fcns.evalSigmaFilter(filter, scale_filt, offset_filt, stimSf)
-
+  c50_filt = evalSigmaFilter(filter, scale_filt, offset_filt, stimSf)
+ 
   # now plot
   curr_ax = plt.subplot2grid(detailSize, (2, 4));
   plt.semilogx(stimSf, c50_filt);
-  plt.title('(mu, stdL/R, offset) = (%.2f, %.2f|%.2f, %.2f)' % (sfPref, stdLeft, stdRight, offset_filt));
-  plt.xlabel('sf (cpd)');
+  plt.title('(mu, stdL/R, offset) = (%.2f, %.2f|%.2f, %.2f)' % (filtPeak, stdLeft, stdRight, offset_filt));
+  plt.xlabel('spatial frequency (c/deg)');
   plt.ylabel('c50 (con %)')
 
 # print, in text, model parameters:
@@ -491,14 +494,14 @@ if norm_sim_on:
               # if modParamsCurr doesn't have inhAsym parameter, add it!
               if norm_type == 2:
                 unweighted = 1;
-                _, _, _, normRespSimple, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normTypeArr = normTypeArr);
+                _, _, _, normRespSimple, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normType=norm_type);
                 nTrials = normRespSimple.shape[0];
                 nInhChan = cellStruct['sfm']['mod']['normalization']['pref']['sf'];
                 inhWeightMat  = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
                 normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
                 norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
               else: # norm_type == 1 or 3:
-                _, _, _, _, normResp = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], normTypeArr = normTypeArr);
+                _, _, _, _, normResp = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], normType = norm_type);
                 norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
 
           if norm_type == 2:
