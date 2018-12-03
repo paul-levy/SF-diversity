@@ -13,8 +13,8 @@
 
 for run in {1..59}
 do
-  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 plotting.py $run 3 1 0 &
-  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 plotting.py $run 3 2 0 &
+  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 plotting.py $run 4 1 0 &
+  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 plotting.py $run 4 2 0 &
 done
 
 # leave a blank line at the end
