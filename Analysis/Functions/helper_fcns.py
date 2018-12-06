@@ -75,7 +75,7 @@ def chiSq(data_resps, model_resps, stimDur=1):
   rats = np.divide(data_resps[1], data_resps[0]);
   nan_rm = lambda x: x[~np.isnan(x)]
   rho = geomean(nan_rm(rats));
-  k   = 0.01 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
+  k   = 0.10 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
 
   chi = np.sum(np.divide(np.square(data_resps[0] - model_resps[0]), k + data_resps[0]*rho/stimDur));
 

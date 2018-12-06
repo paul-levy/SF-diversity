@@ -868,7 +868,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # personal mac
     #loc_data = '/home/pl1465/SF_diversity/Analysis/Structures/'; # Prince cluster 
     loc_data = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/'; # CNS
-    fL_name = 'fitListSPcns_181130a'
+    fL_name = 'fitListSPcns_181130c'
 
     np = numpy;
 
@@ -941,7 +941,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     dOrdSp = np.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
     normConst = -0.8 if initFromCurr==0 else curr_params[2]; # why -0.8? Talked with Tony, he suggests starting with lower sigma rather than higher/non-saturating one
     #normConst = np.random.uniform(-1, 0) if initFromCurr==0 else curr_params[2];
-    respExp = np.random.uniform(1, 3) if initFromCurr==0 else curr_params[3];
+    respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
     respScalar = np.random.uniform(10, 1000) if initFromCurr==0 else curr_params[4];
     noiseEarly = np.random.uniform(0.001, 0.1) if initFromCurr==0 else curr_params[5];
     noiseLate = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[6];
@@ -1016,8 +1016,8 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
    
     # now set up the optimization
     obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask)[0];
-    tomin = opt.minimize(obj, param_list, bounds=all_bounds);
-    #tomin = opt.minimize(obj, param_list, method='SLSQP', bounds=all_bounds);
+    #tomin = opt.minimize(obj, param_list, bounds=all_bounds);
+    tomin = opt.minimize(obj, param_list, method='TNC', bounds=all_bounds);
     #minimizer_kwargs = dict(method='L-BFGS-B', bounds=all_bounds)
     #tomin = opt.basinhopping(obj, param_list, minimizer_kwargs=minimizer_kwargs);
 

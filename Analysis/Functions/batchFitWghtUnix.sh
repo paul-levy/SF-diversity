@@ -5,6 +5,6 @@
 
 for run in {1..59}
 do
-  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 model_responses.py $run 1e-5 0.1 4 1 1 1 &
-  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 model_responses.py $run 1e-5 0.1 4 2 1 1 &
+  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 model_responses.py $run 1e-5 0.1 4 1 1 0 &
+  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 model_responses.py $run 1e-5 0.1 4 2 1 0 &
 done

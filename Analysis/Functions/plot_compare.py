@@ -80,8 +80,8 @@ save_loc = str(save_loc + subDir + '/');
 if not os.path.exists(save_loc):
   os.makedirs(save_loc);
 
-descrExpName = 'descrFits.npy';
-descrModName = 'descrFitsModel.npy';
+descrExpName = 'descrFits_poiss.npy'; # wrong: 12.03.18 (should be based on specific loss function for descr fits)
+descrModName = 'descrFitsModel.npy'; # wrong: 12.03.18 (should be based on specific loss function for descr fits)
 
 nFam = 5;
 nCon = 2;

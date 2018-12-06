@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+## ADD PROPER DESCR FITS TO THIS
+
 # # Plotting
 
     # parameters
@@ -55,8 +57,8 @@ save_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/
 data_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_181015'
-#fitBase = 'fitListSPcns_181130c';
+#fitBase = 'fitList_181015'
+fitBase = 'fitListSPcns_181130c';
 # first the fit type
 if fitType == 1:
   fitSuf = '_flat';
@@ -82,8 +84,8 @@ save_loc = str(save_loc + subDir + '/');
 if not os.path.exists(save_loc):
   os.makedirs(save_loc);
 
-descrExpName = 'descrFits.npy';
-descrModName = 'descrFitsModel.npy';
+descrExpName = 'descrFits_poiss.npy'; # wrong: 12.03.18 (should be based on specific loss function for descr fits)
+descrModName = 'descrFitsModel.npy'; # wrong: 12.03.18 (should be based on specific loss function for descr fits)
 
 nFam = 5;
 nCon = 2;
@@ -586,7 +588,7 @@ for d in range(nFam):
 # fix subplots to not overlap
 fDetails.tight_layout();
 # fSims must be saved separately...
-saveName = "cell_%d_simulate.pdf" % (cellNum)
+saveName = "cell_%02d_simulate.pdf" % (cellNum)
 pdfSv = pltSave.PdfPages(str(save_loc + saveName));
 for ff in fSims:
     pdfSv.savefig(ff)

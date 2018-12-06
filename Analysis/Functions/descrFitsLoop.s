@@ -18,7 +18,7 @@ module purge
 module load tensorflow/python2.7/20170218
 
 for iii in $(seq 1 59); do
-  python descr_fit.py ${iii} 25
+  python descr_fit.py ${iii} 25 
 done
  
 # leave a blank line at the end

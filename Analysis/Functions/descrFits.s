@@ -14,7 +14,9 @@
 module purge
 module load tensorflow/python2.7/20170218
 
-python descr_fit.py $SLURM_ARRAY_TASK_ID 25 1
+# params are cellNum, nRepeats, fromModelSim (0 or 1), [baseStr, normType, lossType]
+python descr_fit.py $SLURM_ARRAY_TASK_ID 100 1 fitListSPcns_181130c 1 4 
+python descr_fit.py $SLURM_ARRAY_TASK_ID 100 1 fitListSPcns_181130c 2 4
   
 # leave a blank line at the end
 
