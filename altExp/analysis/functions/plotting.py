@@ -90,15 +90,8 @@ if crf_fit_type == 3:
 if crf_fit_type == 4:
   crf_type_str = '-poissMod';
 
-if descr_fit_type == 1:
-  descr_type_str = '_lsq';
-if descr_fit_type == 2:
-  descr_type_str = '_sqrt';
-if descr_fit_type == 3:
-  descr_type_str = '_poiss';
-
 crfFitName = str('crfFits' + crf_type_str + '.npy');
-descrFitName = str('descrFits' + descr_type_str + '.npy');
+descrFitName = helper_fcns.descrFit_name(descr_fit_type);
 
 rpt_fit = 1; # i.e. take the multi-start result
 if rpt_fit:

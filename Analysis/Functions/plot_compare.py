@@ -17,7 +17,7 @@
 import os
 import sys
 import numpy as np
-from helper_fcns import organize_modResp, flexible_Gauss, getSuppressiveSFtuning, compute_SF_BW, genNormWeights, random_in_range, evalSigmaFilter, setSigmaFilter, np_smart_load
+from helper_fcns import organize_modResp, flexible_Gauss, getSuppressiveSFtuning, compute_SF_BW, genNormWeights, random_in_range, evalSigmaFilter, setSigmaFilter, np_smart_load, descrFit_name
 import model_responses as mod_resp
 from itertools import chain
 import matplotlib
@@ -56,7 +56,7 @@ save_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/
 data_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/Analysis/Structures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitListSPcns_181130c';
+fitBase = 'fitListSP_181202a';
 # first the fit type
 fitSuf_fl = '_flat';
 fitSuf_wg = '_wght';
@@ -80,8 +80,9 @@ save_loc = str(save_loc + subDir + '/');
 if not os.path.exists(save_loc):
   os.makedirs(save_loc);
 
-descrExpName = 'descrFits_poiss.npy'; # wrong: 12.03.18 (should be based on specific loss function for descr fits)
-descrModName = 'descrFitsModel.npy'; # wrong: 12.03.18 (should be based on specific loss function for descr fits)
+# load descrFits
+descrExpName = descrFit_name(descrLossType);
+descrModName = descrFit_name(descrLossType, fitName);
 
 nFam = 5;
 nCon = 2;

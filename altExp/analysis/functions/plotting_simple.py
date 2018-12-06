@@ -49,7 +49,7 @@ save_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/an
 #save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitListSPcns_181202c';
+fitBase = 'fitListSP_181202c';
 
 # first the fit type
 if fitType == 1:
@@ -90,13 +90,6 @@ if crf_fit_type == 3:
 if crf_fit_type == 4:
   crf_type_str = '-poissMod';
 
-if descr_fit_type == 1:
-  descr_type_str = '_lsq';
-if descr_fit_type == 2:
-  descr_type_str = '_sqrt';
-if descr_fit_type == 3:
-  descr_type_str = '_poiss';
-
 rpt_fit = 1; # i.e. take the multi-start result
 if rpt_fit:
   is_rpt = '_rpt';
@@ -110,6 +103,7 @@ dataList = np.load(str(dataPath + expName), encoding='latin1').item();
 cellStruct = np.load(str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy'), encoding='latin1').item();
 
 # #### Load descriptive model fits, comp. model fits
+descrFitName = helper_fcns.descrFit_name(descr_fit_type);
 
 modParams = np.load(str(dataPath + fitListName), encoding= 'latin1').item();
 modParamsCurr = modParams[which_cell-1]['params'];

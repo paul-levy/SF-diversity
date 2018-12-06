@@ -24,8 +24,11 @@ module load seaborn/0.7.1
 	# 1 - flat normalization
 	# 2 - gaussian weighted normalization
 	# 3 - c50/normalization "constant" filter
-# fourth param is log_y: (1 for log y coordinate)
-python plotting.py $SLURM_ARRAY_TASK_ID 4 1 0
+# fourth param is loss function for descriptive fits:
+        # lsq (1), sqrt (2), poiss (3)
+# fifth param is log_y: (1 for log y coordinate)
+
+python plotting.py $SLURM_ARRAY_TASK_ID 4 1 3 0
  
 # leave a blank line at the end
 

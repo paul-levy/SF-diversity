@@ -14,6 +14,7 @@ import pdb
 # np_smart_load - be smart about using numpy load
 # bw_lin_to_log
 # bw_log_to_lin
+# descrFit_name
 # chiSq
 
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
@@ -69,6 +70,27 @@ def bw_log_to_lin(log_bw, pref_sf):
     lin_bw = more_half - less_half;
     
     return lin_bw, sf_range
+
+def descrFit_name(lossType, modelName = None):
+  ''' if modelName is none, then we assume we're fitting descriptive tuning curves to the data
+      otherwise, pass in the fitlist name in that argument, and we fit descriptive curves to the model
+      this simply returns the name
+  '''
+  # load descrFits
+  if lossType == 1:
+    floss_str = '_lsq';
+  elif lossType == 2:
+    floss_str = '_sqrt';
+  elif lossType == 3:
+    floss_str = '_poiss';
+  descrFitBase = 'descrFits%s' % floss_str;
+
+  if modelName is None:
+    descrName = '%s.npy' % descrFitBase;
+  else:
+    descrName = '%s_%s' % (descrFitBase, modelName);
+    
+  return descrName;
 
 def chiSq(data_resps, model_resps, stimDur=1):
   ''' given a set of measured and model responses, compute the chi-squared (see Cavanaugh et al '02a)

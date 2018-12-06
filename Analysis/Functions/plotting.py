@@ -19,7 +19,7 @@
 import os
 import sys
 import numpy as np
-from helper_fcns import organize_modResp, flexible_Gauss, getSuppressiveSFtuning, compute_SF_BW, genNormWeights, random_in_range, evalSigmaFilter, setSigmaFilter
+from helper_fcns import organize_modResp, flexible_Gauss, getSuppressiveSFtuning, compute_SF_BW, genNormWeights, random_in_range, evalSigmaFilter, setSigmaFilter, descrFit_name
 import model_responses as mod_resp
 from itertools import chain
 import matplotlib
@@ -44,10 +44,11 @@ rcParams['legend.fontsize'] ='large'; # using a named size
 
 import pdb
 
-cellNum = int(sys.argv[1]);
-lossType = int(sys.argv[2]);
-fitType = int(sys.argv[3]);
-log_y = int(sys.argv[4]);
+cellNum       = int(sys.argv[1]);
+lossType      = int(sys.argv[2]);
+fitType       = int(sys.argv[3]);
+descrLossType = int(sys.argv[4]);
+log_y         = int(sys.argv[5]);
 
 # prince
 #save_loc = '/home/pl1465/SF_diversity/Analysis/Figures/';
@@ -84,8 +85,9 @@ save_loc = str(save_loc + subDir + '/');
 if not os.path.exists(save_loc):
   os.makedirs(save_loc);
 
-descrExpName = 'descrFits_poiss.npy'; # wrong: 12.03.18 (should be based on specific loss function for descr fits)
-descrModName = 'descrFitsModel.npy'; # wrong: 12.03.18 (should be based on specific loss function for descr fits)
+# load descrFits
+descrExpName = descrFit_name(descrLossType);
+descrModName = descrFit_name(descrLossType, fitName);
 
 nFam = 5;
 nCon = 2;

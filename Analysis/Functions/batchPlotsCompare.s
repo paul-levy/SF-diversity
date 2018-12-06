@@ -20,9 +20,11 @@ module load seaborn/0.7.1
 	# 2 - poisson
 	# 3 - modulated poission
 	# 4 - chi squared
-# third param is log_y: (1 for log y coordinate)
+# third param is loss function for descriptive fits:
+        # lsq (1), sqrt (2), poiss (3)
+# fourth param is log_y: (1 for log y coordinate)
 # automatically plots flat + weighted fits
-python plot_compare.py $SLURM_ARRAY_TASK_ID 4 0
+python plot_compare.py $SLURM_ARRAY_TASK_ID 4 3 0
  
 # leave a blank line at the end
 
