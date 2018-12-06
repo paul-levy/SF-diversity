@@ -49,7 +49,7 @@ save_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/an
 #save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitListSP_181202c';
+fitBase = 'fitListSPcns_181202c';
 
 # first the fit type
 if fitType == 1:
@@ -97,9 +97,6 @@ if descr_fit_type == 2:
 if descr_fit_type == 3:
   descr_type_str = '_poiss';
 
-crfFitName = str('crfFits' + crf_type_str + '.npy');
-descrFitName = str('descrFits' + descr_type_str + '.npy');
-
 rpt_fit = 1; # i.e. take the multi-start result
 if rpt_fit:
   is_rpt = '_rpt';
@@ -113,9 +110,6 @@ dataList = np.load(str(dataPath + expName), encoding='latin1').item();
 cellStruct = np.load(str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy'), encoding='latin1').item();
 
 # #### Load descriptive model fits, comp. model fits
-
-descrFits = np.load(str(dataPath + descrFitName), encoding = 'latin1').item();
-descrFits = descrFits[which_cell-1]['params']; # just get this cell
 
 modParams = np.load(str(dataPath + fitListName), encoding= 'latin1').item();
 modParamsCurr = modParams[which_cell-1]['params'];
@@ -192,8 +186,6 @@ for d in range(nDisps):
 #                                      predStd[d, v_sfs, v_cons[c]], fmt='p', clip_on=False);
 
         # plot descriptive model fit
-        curr_mod_params = descrFits[d, v_cons[c], :];
-        #dispAx[d][c_plt_ind, 0].plot(sfs_plot, helper_fcns.flexible_Gauss(curr_mod_params, sfs_plot), clip_on=False)
         
 	# plot model fits
         dispAx[d][c_plt_ind, 0].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
@@ -321,8 +313,6 @@ for d in range(nDisps):
                                        respStd[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
 
         # plot descriptive model fit
-        curr_mod_params = descrFits[d, v_cons[c], :];
-        sfMixAx[c_plt_ind, d].plot(sfs_plot, helper_fcns.flexible_Gauss(curr_mod_params, sfs_plot), clip_on=False)
 
 	# plot model fits
         sfMixAx[c_plt_ind, d].fill_between(all_sfs[v_sfs], modLow[d, v_sfs, v_cons[c]], \
@@ -340,7 +330,7 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
         sns.despine(ax=sfMixAx[c_plt_ind, d], offset=10, trim=False);
 
-f.suptitle('cell #%d, loss .2f' % (which_cell, modParams[which_cell-1]['NLL']));
+f.suptitle('cell #%d, loss %.2f' % (which_cell, modParams[which_cell-1]['NLL']));
 	        
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc

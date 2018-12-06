@@ -846,7 +846,7 @@ def setModel(cellNum, stopThresh, lr, lossType = 1, fitType = 1, subset_frac = 1
     #loc_data = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/'; # personal mac
     #loc_data = '/home/pl1465/SF_diversity/altExp/analysis/structures/'; # Prince cluster 
     loc_data = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/'; # CNS
-    fL_name = 'fitListSPcns_181202a'
+    fL_name = 'fitListSP_181202c'
 
     np = numpy;
 
