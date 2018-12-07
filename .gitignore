@@ -4,7 +4,9 @@ Analysis/Figures/*
 altExp/analysis/figures/**
 altExp/analysis/structures/m*
 **/.ipynb_checkpoints/**
+.ipynb_checkpoints/**
 **/__pycache__/**
+__pycache__/**
 **/.DS_Store
 **/._.DS_Store*
 **/*.pyc
