@@ -136,7 +136,7 @@ def fit_descr(cell_num, data_loc, n_repeats = 4, fromModelSim = 0, fitLossType=1
       else:
           descrFits = dict();
     else:
-      dfModelName = descrFitBase;
+      dfModelName = '%s.npy' % descrFitBase;
       if os.path.isfile(data_loc + dfModelName):
           descrFits = hfunc.np_smart_load(data_loc + dfModelName);
       else:
