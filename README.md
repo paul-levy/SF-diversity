@@ -10,3 +10,5 @@ Within each directory:
 * code for fitting models in Tensorflow is in /tf-func/
 * saved figures are in /Figures/
 * data structures, lists of optimization results from various fits (be it full model, descriptive tuning fits, etc) are in /Structures/
+* notes from the experiments are in /experiments/
+* raw recordings (not yet processed for use in data analysis) are in /recordings/

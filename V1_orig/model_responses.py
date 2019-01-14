@@ -443,7 +443,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = []):
             if stimCo[c] != 0: #if (selSi ~= 0 && stimCo(c) ~= 0)
 
                 # Use the effective number of frames displayed/stimulus duration
-                stimPos = numpy.asarray(range(nFrames))/nFrames + \
+                stimPos = numpy.asarray(range(nFrames))/float(nFrames) + \
                                         stimPh[c] / (2*math.pi*stimTf[c]); # 120 frames + the appropriate phase-offset
                 P3Temp  = repmat(stimPos, 1, len(xCo));
                 P[:,2]  = 2*math.pi*P3Temp; # P(:,2) describes relative location of the filters in time.

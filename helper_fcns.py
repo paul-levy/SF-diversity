@@ -4,18 +4,37 @@ from scipy.stats.mstats import gmean as geomean
 from numpy.matlib import repmat
 import scipy.optimize as opt
 import os
+import importlib as il
 from time import sleep
 sqrt = math.sqrt
 log = math.log
 exp = math.exp
 import pdb
+import warnings
 
 # Functions:
+
+### basics
+
 # np_smart_load - be smart about using numpy load
 # bw_lin_to_log
 # bw_log_to_lin
 # get_exp_params - given an index for a particular version of the sfMix experiments, return parameters of that experiment (i.e. #stimulus components)
 # fitList_name
+# phase_fit_name
+# angle_xy
+
+### fourier
+
+# make_psth - create a psth for a given spike train
+# spike_fft - compute the FFT for a given PSTH, extract the power at a given set of frequencies 
+
+### descriptive fits to sf tuning/basic data analyses
+
+# DiffOfGauss - standard difference of gaussians
+# DoGsach - difference of gaussians as implemented in sach's thesis
+# var_explained - compute the variance explained for a given model fit/set of responses
+# chiSq
 
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
@@ -24,6 +43,12 @@ import pdb
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
 # blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
 # tabulate_responses - Organizes measured and model responses for sfMixAlt experiment
+# organize_adj_responses - wrapper for organize_adj_responses within each experiment subfolder
+# organize_resp       -
+# get_spikes - get correct # spikes for a given cell (will get corrected spikes if needed)
+# mod_poiss - computes "r", "p" for modulated poisson model (neg. binomial)
+# naka_rushton
+# fit_CRF
 # random_in_range - random real-valued number between A and B
 # nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
 
@@ -34,6 +59,7 @@ import pdb
 # setSigmaFilter - create the filter we use for determining c50 with SF
 # evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
 # setNormTypeArr - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters
+# getConstraints - return the constraints used in model optimization
 
 def np_smart_load(file_path, encoding_str='latin1'):
 
@@ -46,6 +72,8 @@ def np_smart_load(file_path, encoding_str='latin1'):
          break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
          sleep(10); # i.e. wait for 10 seconds
+     except EOFError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
+       sleep(10); # i.e. wait for 10 seconds
 
    return loaded;
 
@@ -68,34 +96,54 @@ def bw_log_to_lin(log_bw, pref_sf):
     return lin_bw, sf_range
 
 def get_exp_params(expInd):
-    ''' returns (max) nComponents in each stimulus
+    '''  returns the following
+                (max) nComponents in each stimulus
                 # of stimulus families (i.e. how many dispersion levels)
                 list of how many components in each level
                 directory (relative to /common)
     '''
-    if expInd == 1: # original V1 experiment
-      nStimComp = 9;
-      nFamilies = 5; 
-      comps     = [1, 3, 5, 7, 9];
-      nCons     = 2;
-      nCells    = 59;
-      dir       = '../Analysis/'
-    elif expInd == 2: # V1 alt exp
-      nStimComp = 7;
-      nFamilies = 4;
-      comps     = [1, 3, 5, 7]
-      nCons     = 4;
-      nCells    = 8; # check...
-      dir       = '../altExp/analysis/'
-    elif expInd == 3: # LGN experiment
-      nStimComp = 5;
-      nFamilies = 2;
-      comps     = [1, 5];
-      nCons     = 4;
-      nCells    = 34;
-      dir       = '../LGN/analysis/'
+    class exp_params:
+      
+      def __init__(self, expInd):
+        if expInd == 1: # original V1 experiment
+          self.nStimComp = 9;
+          self.nFamilies = 5; 
+          self.comps     = [1, 3, 5, 7, 9];
+          self.nCons     = 2;
+          self.nSfs      = 11;
+          self.nCells    = 59;
+          self.dir       = 'V1_orig/'
+          self.stimDur   = 1; # in seconds
+          self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
+        elif expInd == 2: # V1 alt exp
+          self.nStimComp = 7;
+          self.nFamilies = 4;
+          self.comps     = [1, 3, 5, 7]
+          self.nCons     = 4;
+          self.nSfs      = 11;
+          self.nCells    = 8; # check...
+          self.dir       = 'altExp/'
+          self.stimDur   = 1; # in seconds
+          self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
+        elif expInd == 3: # LGN experiment
+          self.nStimComp = 5;
+          self.nFamilies = 2;
+          self.comps     = [1, 5];
+          self.nCons     = 4;
+          self.nSfs      = 11;
+          self.nCells    = 34;
+          self.dir       = 'LGN/'
+          self.stimDur   = 1; # in seconds
+          self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
 
-    return nStimComp, nFamilies, comps, nCons, nCells, dir;
+    return exp_params(expInd);
+
+def num_frames(expInd):
+  exper = get_exp_params(expInd);
+  dur = exper.stimDur;
+  fps = exper.fps;
+  nFrames    = dur*fps;
+  return nFrames;
 
 def fitList_name(base, fitType, lossType):
   # first the fit type
@@ -113,6 +161,137 @@ def fitList_name(base, fitType, lossType):
   elif lossType == 3:
     lossSuf = '_modPoiss.npy';
   return str(base + fitSuf + lossSuf);
+
+def phase_fit_name(base, dir, byTrial=0):
+  ''' Given the base name for a file, append the flag for the phase direction (dir)
+  '''
+  if byTrial == 1:
+    byTr = '_byTr'
+  elif byTrial == 0:
+    byTr = '';
+
+  if dir == 1:
+    base = base + byTr + '_pos.npy';
+  if dir == -1:
+    base = base + byTr + '_neg.npy';
+  return base;
+
+def angle_xy(x_coord, y_coord):
+   ''' return list of angles (in deg) given list of x/y coordinates (i.e. polar coordinates)
+   ''' 
+   np = numpy;
+   def smart_angle(x, y, th): 
+     if x>=0 and y>=0: # i.e. quadrant 1
+       return th;
+     if x<=0 and y>=0: # i.e. quadrant 2
+       return 180 - th;
+     if x<=0 and y<=0: # i.e. quadrant 3
+       return 180 + th;
+     if x>=0 and y<=0:
+       return 360 - th;
+
+   th = [np.rad2deg(np.arctan(np.abs(y_coord[i]/x_coord[i]))) for i in range(len(x_coord))];
+   theta = [smart_angle(x_coord[i], y_coord[i], th[i]) for i in range(len(th))];
+   return theta;
+
+### fourier
+
+def make_psth(spikeTimes, binWidth=1e-3, stimDur=1):
+    # given an array of arrays of spike times, create the PSTH for a given bin width and stimulus duration
+    # i.e. spikeTimes has N arrays, each of which is an array of spike times
+    # TODO: Add a smoothing to the psth and return for plotting purposes only
+
+    binEdges = numpy.linspace(0, stimDur, 1+stimDur/binWidth);
+    
+    all = [numpy.histogram(x, bins=binEdges) for x in spikeTimes]; 
+    psth = [x[0] for x in all];
+    bins = [x[1] for x in all];
+    return psth, bins;
+
+def spike_fft(psth, tfs = None):
+    ''' given a psth (and optional list of component TFs), compute the fourier transform of the PSTH
+        if the component TFs are given, return the FT power at the DC, and at all component TFs
+        note: if only one TF is given, also return the power at f2 (i.e. twice f1, the stimulus frequency)
+    '''
+    np = numpy;
+
+    full_fourier = [np.fft.fft(x) for x in psth];
+    spectrum = [np.abs(np.fft.fft(x)) for x in psth];
+
+    if tfs:
+      rel_power = [spectrum[i][tfs[i]] for i in range(len(tfs))];
+    else:
+      rel_power = [];
+
+    return spectrum, rel_power, full_fourier;
+
+### descriptive fits to sf tuning/basic data analyses
+
+def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
+  ''' Difference of gaussians 
+  gain      - overall gain term
+  f_c       - characteristic frequency of the center, i.e. freq at which response is 1/e of maximum
+  gain_s    - relative gain of surround (e.g. gain_s of 0.5 says peak surround response is half of peak center response
+  j_s       - relative characteristic freq. of surround (i.e. char_surround = f_c * j_s)
+  '''
+  np = numpy;
+  dog = lambda f: np.maximum(0, gain*(np.exp(-np.square(f/f_c)) - gain_s * np.exp(-np.square(f/(f_c*j_s)))));
+
+  norm = np.max(dog(stim_sf));
+
+  dog_norm = lambda f: dog(f) / norm;
+
+  return dog(stim_sf), dog_norm(stim_sf);
+
+def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
+  ''' Difference of gaussians as described in Sach's thesis
+  gain_c    - gain of the center mechanism
+  r_c       - radius of the center
+  gain_s    - gain of surround mechanism
+  r_s       - radius of surround
+  '''
+  np = numpy;
+  dog = lambda f: np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(f*np.pi*r_s)));
+
+  norm = np.max(dog(stim_sf));
+  dog_norm = lambda f: dog(f) / norm;
+
+  return dog(stim_sf), dog_norm(stim_sf);
+
+def var_explained(data_resps, modParams, sfVals, dog_model = 2):
+  ''' given a set of responses and model parameters, compute the variance explained by the model 
+  '''
+  np = numpy;
+  resp_dist = lambda x, y: np.sum(np.square(x-y))/np.maximum(len(x), len(y))
+  var_expl = lambda m, r, rr: 100 * (1 - resp_dist(m, r)/resp_dist(r, rr));
+
+  # organize data responses (adjusted)
+  data_mean = np.mean(data_resps) * np.ones_like(data_resps);
+
+  # compute model responses
+  if dog_model == 1:
+    mod_resps = DoGsach(*modParams, stim_sf=sfVals)[0];
+  if dog_model == 2:
+    mod_resps = DiffOfGauss(*modParams, stim_sf=sfVals)[0];
+
+  return var_expl(mod_resps, data_resps, data_mean);
+
+def chiSq(data_resps, model_resps, stimDur=1):
+  ''' given a set of measured and model responses, compute the chi-squared (see Cavanaugh et al '02a)
+      assumes: resps are mean/variance for each stimulus condition (e.g. like a tuning curve)
+        with each condition a tuple (or 2-array) with [mean, var]
+  '''
+  np = numpy;
+  rats = np.divide(data_resps[1], data_resps[0]);
+  nan_rm = lambda x: x[~np.isnan(x)]
+  rho = geomean(nan_rm(rats));
+  k   = 0.10 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
+
+  chi = np.sum(np.divide(np.square(data_resps[0] - model_resps[0]), k + data_resps[0]*rho/stimDur));
+
+  return chi;
+
+##
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
 
@@ -192,14 +371,18 @@ def flexible_Gauss(params, stim_sf, minThresh=0.1):
     return [max(minThresh, respFloor + respRelFloor*x) for x in shape];
 
 def blankResp(cellStruct):
-    tr = cellStruct['sfm']['exp']['trial'];
+    # as of 01.03.19, should check if this works for all experiment variants
+    if 'sfm' in cellStruct:
+      tr = cellStruct['sfm']['exp']['trial'];
+    else:
+      tr = cellStruct;
     blank_tr = tr['spikeCount'][numpy.isnan(tr['con'][0])];
     mu = numpy.mean(blank_tr);
     sig = numpy.std(blank_tr);
     
     return mu, sig, blank_tr;
     
-def tabulate_responses(cellStruct, modResp = []):
+def tabulate_responses(cellStruct, expInd, modResp = []):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
         (ii) all_disps, all_cons, all_sfs - i.e. the stimulus conditions of the experiment
@@ -210,8 +393,16 @@ def tabulate_responses(cellStruct, modResp = []):
     np = numpy;
     conDig = 3; # round contrast to the thousandth
     
-    data = cellStruct['sfm']['exp']['trial'];
+    if 'sfm' in cellStruct: 
+      data = cellStruct['sfm']['exp']['trial'];
+    else: # we've passed in sfm.exp.trial already
+      data = cellStruct;
 
+    if expInd == 1: # this exp structure only has 'con', 'sf'; perform some simple ops to get everything as in other exp structures
+      data['total_con'] = np.sum(data['con'], -1);
+      data['cent_sf']   = data['sf'][0]; # first component, i.e. center SF, is at position 0
+      cons_join         = np.vstack(data['con']);
+      data['num_comps'] = np.sum(cons_join>0, 0);
     all_cons = np.unique(np.round(data['total_con'], conDig));
     all_cons = all_cons[~np.isnan(all_cons)];
 
@@ -288,6 +479,8 @@ def tabulate_responses(cellStruct, modResp = []):
                 
                 if mod:
                     nTrCurr = sum(valid_tr); # how many trials are we getting?
+                    if nTrCurr > 10:
+                      pdb.set_trace();
                     modRespOrg[d, sf, con, 0:nTrCurr] = modResp[valid_tr];
         
             if np.any(~np.isnan(respMean[d, :, con])):
@@ -295,6 +488,80 @@ def tabulate_responses(cellStruct, modResp = []):
                     val_con_by_disp[d].append(con);
                     
     return [respMean, respStd, predMean, predStd], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
+
+def organize_adj_responses(data, rvcFits, expInd):
+  ''' Used as a wrapper to call the organize_adj_responses function for a given experiment
+      We set the organize_adj_responses separately for each experiment since some versions don't have adjusted responses
+        and for those that do, some aspects of the calculation may differ
+  '''
+  dir = get_exp_params(expInd).dir;
+  to_import = dir.replace('/', '.') + 'helper_fcns';
+  new_hf = il.import_module(to_import);
+  if hasattr(new_hf, 'organize_adj_responses'):
+    adjResps = new_hf.organize_adj_responses(data, rvcFits)[0];
+  else:
+    warnings.warn('this experiment (as given by ind) does not have an organize_adj_responses call!');
+    adjResps = None;
+  return adjResps;
+
+def organize_resp(spikes, expStructure, expInd):
+    # the blockIDs are fixed...
+    exper = get_exp_params(expInd);
+    nFam = exper.nFamilies;
+    nCon = exper.nCons;
+    nCond = exper.nSfs;
+    nReps = 20; # never more than 20 reps per stim. condition
+    
+    if expInd == 1: # only the original V1 exp (expInd=1) has separate ori and RVC measurements
+      # Analyze the stimulus-driven responses for the orientation tuning curve
+      oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
+
+      rateOr = numpy.empty((0,));
+      for iB in oriBlockIDs:
+          indCond = numpy.where(expStructure['blockID'] == iB);
+          if len(indCond[0]) > 0:
+              rateOr = numpy.append(rateOr, numpy.mean(spikes[indCond]));
+          else:
+              rateOr = numpy.append(rateOr, numpy.nan);
+
+      # Analyze the stimulus-driven responses for the contrast response function
+      conBlockIDs = numpy.arange(138, 156+1, 2);
+      iC = 0;
+
+      rateCo = numpy.empty((0,));
+      for iB in conBlockIDs:
+          indCond = numpy.where(expStructure['blockID'] == iB);   
+          if len(indCond[0]) > 0:
+              rateCo = numpy.append(rateCo, numpy.mean(spikes[indCond]));
+          else:
+              rateCo = numpy.append(rateCo, numpy.nan);
+    else:
+      rateOr = None;
+      rateCo = None;
+
+    # Analyze the stimulus-driven responses for the spatial frequency mixtures
+    if expInd == 1: # have to do separate work, since the original V1 experiment has tricker stimuli (i.e. not just sfMix, but also ori and rvc measurements done separately)
+      v1_dir = exper.dir.replace('/', '.');
+      v1_hf = il.import_module(v1_dir + 'helper_fcns');
+      _, _, rateSfMix, allSfMix = v1_hf.organize_modResp(spikes, expStructure);
+    else:
+      allSfMix  = tabulate_responses(expStructure, expInd, spikes)[4];
+      rateSfMix = numpy.nanmean(allSfMix, -1);
+
+    return rateOr, rateCo, rateSfMix, allSfMix;  
+
+def get_spikes(data, rvcFits = None, expInd = None):
+  ''' Given the data (S.sfm.exp.trial), if rvcFits is None, simply return saved spike count;
+                                        else return the adjusted spike counts (e.g. LGN, expInd 3)
+  '''
+  if rvcFits is None:
+    spikes = data['spikeCount'];
+  else:
+    if expInd is None:
+      warnings.warn('Should pass in expInd; defaulting to 3');
+      expInd = 3; # should be specified, but just in case
+    spikes = organize_adj_responses(data, rvcFits, expInd)[0];
+  return spikes;
 
 def mod_poiss(mu, varGain):
     np = numpy;
@@ -380,11 +647,14 @@ def nbinpdf_log(x, r, p):
     
     return numpy.real(noGamma + withGamma);
 
-def getSuppressiveSFtuning(): # written when still new to python. Probably to matlab-y...
+# 
+
+def getSuppressiveSFtuning(sfs = numpy.logspace(-2, 2, 1000)): 
+    # written when still new to python. Probably to matlab-y...
     # Not updated for sfMixAlt - 1/31/18
     # normPool details are fixed, ya?
     # plot model details - exc/suppressive components
-    omega = numpy.logspace(-2, 2, 1000);
+    omega = sfs;
 
     # Compute suppressive SF tuning
     # The exponents of the filters used to approximately tile the spatial frequency domain
@@ -430,8 +700,13 @@ def makeStimulus(stimFamily, conLevel, sf_c, template, expInd=1):
 # If argument 'template' is given, then orientation, phase, and tf_center will be
 # taken from the template, which will be actual stimuli from that cell
 
+    if expInd>1:
+      warnings.warn('The contrasts used here match only the 1st, original V1 experiment structure');
     # Fixed parameters
-    num_gratings, num_families, comps, _, _, _ = get_exp_params(expInd);
+    exper = get_exp_params(expInd);
+    num_gratings = exper.nStimComp;
+    num_families = exper.nFamilies;
+    comps        = exper.comps;
 
     spreadVec = numpy.logspace(math.log10(.125), math.log10(1.25), num_families);
     octSeries  = numpy.linspace(1.5, -1.5, num_gratings);
@@ -443,9 +718,8 @@ def makeStimulus(stimFamily, conLevel, sf_c, template, expInd=1):
         total_contrast = 1/3;
     elif conLevel>=0 and conLevel<1:
         total_contrast = conLevel;
-        conLevel = 1; # just set to 1 (i.e. get "high contrast" block IDs)
+        conLevel = 1; # just set to 1 (i.e. get "high contrast" block IDs, used if expInd=1; see valid_blockIDs = ...)
     else:
-        #warning('Contrast should be given as 1 [full] or 2 [low/one-third]; setting contrast to 1 (full)');
         total_contrast = 1; # default to that
         
     spread     = spreadVec[stimFamily-1];
@@ -588,7 +862,7 @@ def setNormTypeArr(params, normTypeArr = []):
   '''
 
   # constants
-  c50_len = 11; # 11 parameters if we've optimized for the filter which sets c50 in a frequency-dependent way
+  c50_len = 12; # 12 parameters if we've optimized for the filter which sets c50 in a frequency-dependent way
   gauss_len = 10; # 10 parameters in the model if we've optimized for the gaussian which weights the normalization filters
   asym_len = 9; # 9 parameters in the model if we've used the old asymmetry calculation for norm weights
 
@@ -597,11 +871,12 @@ def setNormTypeArr(params, normTypeArr = []):
   # now do the work
   if normTypeArr:
     norm_type = int(normTypeArr[0]); # typecast to int
-    if norm_type == 2:
+    if norm_type == 2: # c50
       if len(params) == c50_len:
         filt_offset = params[8];
         std_l = params[9];
         std_r = params[10];
+        filt_peak = params[11];
       else:
         if len(normTypeArr) > 1:
           filt_offset = normTypeArr[1];
@@ -615,7 +890,11 @@ def setNormTypeArr(params, normTypeArr = []):
           std_r = normTypeArr[3];
         else: 
           std_r = random_in_range([0.5, 5])[0]; 
-      normTypeArr = [norm_type, filt_offset, std_l, std_r];
+        if len(normTypeArr) > 4:
+          filt_peak = normTypeArr[4];
+        else: 
+          filt_peak = random_in_range([1, 6])[0]; 
+      normTypeArr = [norm_type, filt_offset, std_l, std_r, filt_peak];
 
     elif norm_type == 1:
       if len(params) == gauss_len: # we've optimized for these parameters
@@ -648,3 +927,45 @@ def setNormTypeArr(params, normTypeArr = []):
     normTypeArr = [norm_type, inhAsym];
 
   return normTypeArr;
+
+def getConstraints(fitType):
+        # 00 = preferred spatial frequency   (cycles per degree) || [>0.05]
+        # 01 = derivative order in space || [>0.1]
+        # 02 = normalization constant (log10 basis) || unconstrained
+        # 03 = response exponent || >1
+        # 04 = response scalar || >1e-3
+        # 05 = early additive noise || [0, 1]; was [0.001, 1] - see commented out line below
+        # 06 = late additive noise || >0.01
+        # 07 = variance of response gain || >1e-3
+        # if fitType == 2
+        # 08 = mean of normalization weights gaussian || [>-2]
+        # 09 = std of ... || >1e-3 or >5e-1
+        # if fitType == 3
+        # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 0.75]
+        # 09 = standard deviation of the gaussian to the left of the peak || >0.1
+        # 10 = "" to the right "" || >0.1
+        # 11 = peak (i.e. sf location) of c50 tuning curve 
+
+    zero = (0.05, None);
+    one = (0.1, None);
+    two = (None, None);
+    three = (1, None);
+    four = (1e-3, None);
+    five = (0, 1); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
+    six = (0.01, None); # if always positive, then no hard thresholding to ensure rate (strictly) > 0
+    seven = (1e-3, None);
+    if fitType == 1:
+      eight = (0, 0); # flat normalization (i.e. no tilt)
+      return (zero,one,two,three,four,five,six,seven,eight);
+    if fitType == 2:
+      eight = (-2, None);
+      nine = (5e-1, None);
+      return (zero,one,two,three,four,five,six,seven,eight,nine);
+    elif fitType == 3:
+      eight = (0, 0.75);
+      nine = (1e-1, None);
+      ten = (1e-1, None);
+      eleven = (0.05, None);
+      return (zero,one,two,three,four,five,six,seven,eight,nine,ten,eleven);
+    else: # mistake!
+      return [];

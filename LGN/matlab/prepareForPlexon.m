@@ -5,11 +5,11 @@
 addpath(genpath('/u/vnl/matlab/ExpoMatlab/'));
 
 
-%% get the files
-basePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/LGN/recordings/';
+ %% get the files
+basePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/LGN/spikesort_test/';
 xmlFiles = dir([basePath, '*xml']);
 
 for i = 1 : length(xmlFiles)
-   
-    XMLtoPlexon([basePath, xmlFiles(i).name]);
+   XMLtoPlexon([basePath, xmlFiles(i).name]);
 end
+

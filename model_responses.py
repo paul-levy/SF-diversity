@@ -1,12 +1,23 @@
 import math, cmath, numpy, os
-from helper_fcns import makeStimulus, random_in_range, getNormParams, genNormWeights, setSigmaFilter, evalSigmaFilter, get_exp_params, np_smart_load
+import helper_fcns as hf
 from scipy.stats import norm, mode, lognorm, nbinom, poisson
 from numpy.matlib import repmat
+import scipy.optimize as opt
 import time
+import sys
 
 import pdb
 
 fft = numpy.fft
+
+###
+# oriFilt        - used only in plotting to create 2D image of receptive field/filter
+# SFMSimpleResp  - compute the response of the cell's linear filter to a given (set of) stimuli
+# SFMNormResp    - compute the response of the normalization pool to stimulus; not called in optimization, but called in simulation
+# GetNormResp    - wrapper for SFMNormResp
+# SFMGiveBof     - gathers simple and normalization responses to get full model response; optimization is here!
+# SFMSimulate    - as in SFMGiveBof, but without optimization; can pass in arbitrary stimuli here
+# setModel       - wrapper+ for optimization and saving optimization results
 
 # orientation filter used in plotting (only, I think?)
 def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
@@ -97,8 +108,8 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1):
     # Pre-allocate memory
     z             = T.get('exp').get('trial');
     nSf           = 1;
-    nStimComp     = get_exp_params(expInd)[0];
-    nFrames       = 120;
+    nStimComp     = hf.get_exp_params(expInd).nStimComp;
+    nFrames       = hf.num_frames(expInd);
     if make_own_stim == 1:
         nTrials = stimParams.get('repeats'); # to keep consistent with number of repetitions used for each stim. condition
     else: # CHECK THIS GUY BELOW
@@ -113,7 +124,7 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1):
         # Set stim parameters
         if make_own_stim == 1:
 
-            all_stim = makeStimulus(stimParams.get('stimFamily'), stimParams.get('conLevel'), \
+            all_stim = hf.makeStimulus(stimParams.get('stimFamily'), stimParams.get('conLevel'), \
                                                                     stimParams.get('sf_c'), stimParams.get('template'), expInd=expInd);
 
             stimOr = all_stim.get('Ori');
@@ -191,7 +202,7 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1):
                                    
                     # Use the effective number of frames displayed/stimulus duration
                     stimPos = numpy.asarray(range(nFrames))/float(nFrames) + \
-                                            stimPh[c] / (2*math.pi*stimTf[c]); # 120 frames + the appropriate phase-offset
+                                            stimPh[c] / (2*math.pi*stimTf[c]); # nFrames + the appropriate phase-offset
                     P3Temp  = numpy.full_like(P[:, 1], stimPos);
                     #P3Temp  = repmat(stimPos, 1, len(xCo));
                     P[:,2]  = 2*math.pi*P3Temp; # P(:,2) describes relative location of the filters in time.
@@ -240,7 +251,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
 # SFNNormResp       Computes normalization response for sfMix experiment
 
 # SFMNormResp(unitName, varargin) returns a simulated V1-normalization
-# response to the mixture stimuli used in sfMix. The normalization pool
+# response to the mixture stimuli used in sfMix (version 'expInd'). The normalization pool
 # consists of spatially distributed filters, tuned for orientation, spatial 
 # frequency, and temporal frequency. The tuning functions decribe responses
 # of spatial filters obtained by taking a d-th order derivative of a 
@@ -267,8 +278,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
     # If unitName is char/string, load the data structure
     # Otherwise, we assume that we already are passing loaded data structure
     if isinstance(unitName, str):
-        template = np_smart_load(loadPath + unitName + '_sfm.npy')
-        S = template.item();
+        S = hf.np_smart_load(loadPath + unitName + '_sfm.npy')
     else:
         S = unitName;
         
@@ -324,8 +334,8 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
     # Pre-allocate memory
     z          = T['exp']['trial'];
     nSf        = 0;
-    nStimComp  = get_exp_params(expInd)[0];
-    nFrames    = 120;
+    nStimComp  = hf.get_exp_params(expInd).nStimComp;
+    nFrames    = hf.num_frames(expInd);
     
     if not isinstance(prefSf, int):
         for iS in range(len(prefSf)):
@@ -347,7 +357,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
         print('Computing normalization response for ' + unitName + ' ...');
 
     for p in range(nTrials):
-        
+       
         # Set stim parameters
         if make_own_stim == 1:
             # So... If we want to pass in specific trials, check that those
@@ -360,7 +370,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
                 else:
                     stimParams['template']['trial_used'] = stimParams.get('trial_used')[0];
             
-            all_stim = makeStimulus(stimParams.get('stimFamily'), stimParams.get('conLevel'), \
+            all_stim = hf.makeStimulus(stimParams.get('stimFamily'), stimParams.get('conLevel'), \
                                     stimParams.get('sf_c'), stimParams.get('template'), expInd=expInd);
             
             stimOr = all_stim.get('Ori');
@@ -387,7 +397,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
             continue;
                 
         # I. Orientation, spatial frequency and temporal frequency
-        # matrix size: 9 x nFilt (i.e., number of stimulus components by number of orientation filters)
+        # matrix size: nComponents x nFilt (i.e., number of stimulus components by number of orientation filters)
           
         # Compute SF tuning
         for iB in range(len(normPool.get('n'))):
@@ -422,7 +432,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
         P[:,1] = 2*math.pi*repmat(yCo, 1, nFrames); # P(:,1) and p(:,2) describe location of the filters in space
                
         # Pre-allocate some variables
-        respComplex = numpy.zeros((nSf, len(xCo), 120));
+        respComplex = numpy.zeros((nSf, len(xCo), nFrames));
         
         selSfVec = numpy.zeros((nStimComp, nSf));
         where = 0;
@@ -436,8 +446,8 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
             if stimCo[c] != 0: #if (selSi ~= 0 && stimCo(c) ~= 0)
 
                 # Use the effective number of frames displayed/stimulus duration
-                stimPos = numpy.asarray(range(nFrames))/nFrames + \
-                                        stimPh[c] / (2*math.pi*stimTf[c]); # 120 frames + the appropriate phase-offset
+                stimPos = numpy.asarray(range(nFrames))/float(nFrames) + \
+                                        stimPh[c] / (2*math.pi*stimTf[c]); # nFrames + the appropriate phase-offset
                 P3Temp  = repmat(stimPos, 1, len(xCo));
                 P[:,2]  = 2*math.pi*P3Temp; # P(:,2) describes relative location of the filters in time.
             
@@ -455,6 +465,9 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
             linR3 = numpy.zeros((nFrames*len(xCo), nStimComp));
             linR4 = numpy.zeros((nFrames*len(xCo), nStimComp));
             computeSum = 0;  # important: if stim contrast or filter sensitivity = zero, no point in computing  response
+
+            if p==469 and iF==16:
+              pdb.set_trace();
                     
             # Modularize - Now do the things that are filter-dependent
             for c in range(nStimComp): # there are up to nine stimulus components
@@ -482,7 +495,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
                 respSimple3 = pow(numpy.maximum(0, linR3.sum(1)), 2);
                 respSimple4 = pow(numpy.maximum(0, linR4.sum(1)), 2);
                 
-                respComplex[iF,:,:] = numpy.reshape(respSimple1 + respSimple2 + respSimple3 + respSimple4, [len(xCo), 120]);
+                respComplex[iF,:,:] = numpy.reshape(respSimple1 + respSimple2 + respSimple3 + respSimple4, [len(xCo), nFrames]);
         
                 if numpy.count_nonzero(numpy.isnan(respComplex[iF,:,:])) > 0:
                     pdb.set_trace();
@@ -533,10 +546,12 @@ def GetNormResp(iU, loadPath, stimParams = [], expInd = 1):
     gain = numpy.array([.57, .614]);
 
     normPool = {'n': n, 'nUnits': nUnits, 'gain': gain};
+
+    curr_dir = hf.get_exp_params(expInd).dir + 'structures/';
+    loadPath = loadPath + curr_dir; # the loadPath passed in is the base path, then we add the directory for the specific experiment
     
     if isinstance(iU, int):
-        dataList = np_smart_load(loadPath + 'dataList.npy');
-        dataList = dataList.item();
+        dataList = hf.np_smart_load(loadPath + 'dataList.npy');
         unitName = str(dataList['unitName'][iU]);
         M = SFMNormResp(unitName, loadPath, normPool, expInd=expInd);
     else:
@@ -545,12 +560,14 @@ def GetNormResp(iU, loadPath, stimParams = [], expInd = 1):
 
     return M;
 
-def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1):
+def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None):
     # Computes the negative log likelihood for the LN-LN model
     #   Optional arguments: //note: true means include in mask, false means exclude
     #   trialSubset - pass in the trials you want to evaluate (ignores all other masks)
     #   maskOri     - in the optimization, we don't include the orientation tuning curve - skip that in the evaluation of loss, too
     #   maskIn      - pass in a mask (overwrite maskOri and trialSubset, i.e. highest presedence) 
+    #   expInd      - which experiment number?
+    #   rvcFits     - if included, then we'll get adjusted spike counts instead of "raw" saved ones
     # Returns NLL ###, respModel, E
 
     # 00 = preferred spatial frequency   (cycles per degree)
@@ -596,7 +613,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     varGain    = params[7];  # multiplicative noise
 
     ### Normalization parameters
-    normParams = getNormParams(params, normType);
+    normParams = hf.getNormParams(params, normType);
     if normType == 1:
       inhAsym = normParams;
     elif normType == 2:
@@ -616,21 +633,22 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     NLLExp   = 0; #-numpy.log(priorExp);
 
     # Compute weights for suppressive signals
+    pdb.set_trace();
     nInhChan = T['mod']['normalization']['pref']['sf'];
     nTrials = len(T['exp']['trial']['num']);
     inhWeight = [];
-    nFrames = 120; # always
+    nFrames = hf.num_frames(expInd); # always
 
     if normType == 3:
-      filter = setSigmaFilter(sfPeak, stdLeft, stdRight);
+      filter = hf.setSigmaFilter(sfPeak, stdLeft, stdRight);
       scale_sigma = -(1-offset_sigma);
       evalSfs = structureSFM['sfm']['exp']['trial']['sf'][0]; # the center SF of all stimuli
-      sigmaFilt = evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
+      sigmaFilt = hf.evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
     else:
       sigmaFilt = numpy.square(sigma); # i.e. square the normalization constant
 
     if normType == 2:
-      inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
+      inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
     else: # normType == 1 or anything else,
       for iP in range(len(nInhChan)):
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
@@ -662,7 +680,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         respModel     = noiseLate + scale*meanRate; # respModel[iR]
         rateModel     = T['exp']['trial']['duration'] * respModel;
         # and get the spike count
-        spikeCount = T['exp']['trial']['spikeCount'];
+        spikeCount = hf.get_spikes(T['exp']['trial'], rvcFits=rvcFits, expInd=expInd);
 
         ### Masking the data - which trials will we include
         # now get the "right" subset of the data for evaluating loss (e.x. by default, orientation tuning trials are not included)
@@ -705,6 +723,15 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           p   = r/(r + mu);
           llh = nbinom.pmf(spikeCount[mask], r, p); # Likelihood for each pass under doubly stochastic model
           NLL = numpy.mean(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]
+        elif lossType == 4: #chi squared
+          if trialSubset is not None:
+            warnings.warn('This loss type (chi squared) is not currently equipped to handle hold out subsets');
+          _, _, expByCond, expAll = hf.organize_resp(spikeCount, structureSFM['sfm']['exp']['trial'], expInd);
+          pdb.set_trace();
+          exp_responses = [expByCond.flatten(), numpy.nanvar(expAll, axis=3).flatten()];
+          _, _, modByCond, modAll = hf.organize_resp(rateModel, structureSFM['sfm']['exp']['trial'], expInd);
+          mod_responses = [modByCond.flatten(), numpy.nanvar(modAll, axis=3).flatten()];
+          NLL = hf.chiSq(exp_responses, mod_responses);
 
     return NLL, respModel;
 
@@ -753,7 +780,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     varGain    = params[7];  # multiplicative noise
 
     ### Normalization parameters
-    normParams = getNormParams(params, normType);
+    normParams = hf.getNormParams(params, normType);
     if normType == 1:
       inhAsym = normParams;
     elif normType == 2:
@@ -779,18 +806,18 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     nInhChan = T['mod']['normalization']['pref']['sf'];
     nTrials = stimParams['repeats'];
     inhWeight = [];
-    nFrames = 120; # always
+    nFrames = hf.num_frames(expInd); # always
 
     if normType == 3:
-      filter = setSigmaFilter(sfPeak, stdLeft, stdRight);
+      filter = hf.setSigmaFilter(sfPeak, stdLeft, stdRight);
       scale_sigma = -(1-offset_sigma);
       evalSfs = structureSFM['sfm']['exp']['trial']['sf'][0]; # the center SF of all stimuli
-      sigmaFilt = evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
+      sigmaFilt = hf.evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
     else:
       sigmaFilt = numpy.square(sigma); # i.e. normalization constant squared
 
     if normType == 2:
-      inhWeightMat = genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
+      inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
     else: # normType == 1 or anything else, we just go with 
       for iP in range(len(nInhChan)):
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
@@ -825,3 +852,233 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     respModel     = noiseLate + scale*meanRate; # respModel[iR]
 
     return respModel, Linh, Lexc, normResp['normResp'], denominator;
+
+## TODO: adapt for all experiments/make flexible for all current/future experiments
+def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdOutCondition = None):
+    # Given just a cell number, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
+    #
+    # lossType
+    #   1 - loss := square(sqrt(resp) - sqrt(pred))
+    #   2 - loss := poissonProb(spikes | modelRate)
+    #   3 - loss := modPoiss model (a la Goris, 2014)
+    #   4 - loss := chi squared (a la Cavanaugh, 2002)
+    #
+    # fitType - what is the model formulation?
+    #   1 := flat normalization
+    #   2 := gaussian-weighted normalization responses
+    #   3 := gaussian-weighted c50/norm "constant"
+    #
+    # holdOutCondition - [d, c, sf] or None
+    #   which condition should we hold out from the dataset
+ 
+    ########
+    # Load cell
+    ########
+    #loc_base = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/'; # personal mac
+    #loc_base = '/home/pl1465/SF_diversity/'; # Prince cluster 
+    loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
+
+    loc_data = loc_base + hf.get_exp_params(expInd).dir + 'structures/';
+    fL_name = 'fitList_190109c'
+
+    np = numpy;
+
+    # fitType
+    if fitType == 1:
+      fL_suffix1 = '_flat';
+    elif fitType == 2:
+      fL_suffix1 = '_wght';
+    elif fitType == 3:
+      fL_suffix1 = '_c50';
+    # lossType
+    if lossType == 1:
+      fL_suffix2 = '_sqrt.npy';
+    elif lossType == 2:
+      fL_suffix2 = '_poiss.npy';
+    elif lossType == 3:
+      fL_suffix2 = '_modPoiss.npy';
+    elif lossType == 4:
+      fL_suffix2 = '_chiSq.npy';
+    fitListName = str(fL_name + fL_suffix1 + fL_suffix2);
+
+    if os.path.isfile(loc_data + fitListName):
+      fitList = hf.np_smart_load(str(loc_data + fitListName));
+    else:
+      fitList = dict();
+
+    dataList = hf.np_smart_load(str(loc_data + 'dataList.npy'));
+    dataNames = dataList['unitName'];
+
+    if expInd == 3: # for now, only the LGN experiment has the response adjustment
+      direc = 1; # default dir is 1 (positive)
+      rvcName = 'rvcFits';
+      rvcFits = hf.np_smart_load(str(loc_data + hf.phase_fit_name(rvcName, direc)));
+    else:
+      rvcFits = None;
+
+    print('loading data structure from %s...' % loc_data);
+    S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy')); # why -1? 0 indexing...
+    print('...finished loading');
+    trial_inf = S['sfm']['exp']['trial'];
+    if expInd == 1:
+      prefOrEst = mode(trial_inf['ori'][1]).mode;
+      trialsToCheck = trial_inf['con'][0] == 0.01;
+      prefSfEst = mode(trial_inf['sf'][0][trialsToCheck==True]).mode;
+    else:
+      prefOrEst = 0;
+      allSfs    = np.unique(trial_inf['sf'][0]);
+      allSfs    = allSfs[~np.isnan(allSfs)]; # remove NaN...
+      prefSfEst = np.median(allSfs);
+    
+    pdb.set_trace();
+
+    ########
+
+    # 00 = preferred spatial frequency   (cycles per degree)
+    # 01 = derivative order in space
+    # 02 = normalization constant        (log10 basis)
+    # 03 = response exponent
+    # 04 = response scalar
+    # 05 = early additive noise
+    # 06 = late additive noise
+    # 07 = variance of response gain - only used if lossType = 3
+    # if fitType == 2
+    # 08 = mean of (log)gaussian for normalization weights
+    # 09 = std of (log)gaussian for normalization weights
+    # if fitType == 3
+    # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 1]
+    # 09 = standard deviation of the gaussian to the left of the peak || >0.1
+    # 10 = "" to the right "" || >0.1
+    # 11 = peak of offset curve
+    
+    if cellNum-1 in fitList:
+      curr_params = fitList[cellNum-1]['params']; # load parameters from the fitList! this is what actually gets updated...
+    else: # set up basic fitList structure...
+      curr_params = [];
+      initFromCurr = 0; # override initFromCurr so that we just go with default parameters
+      fitList[cellNum-1] = dict();
+      fitList[cellNum-1]['NLL'] = 1e4; # large initial value...
+
+    if numpy.any(numpy.isnan(curr_params)): # if there are nans, we need to ignore...
+      curr_params = [];
+      initFromCurr = 0;
+
+    pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
+    dOrdSp = np.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
+    normConst = -0.8 if initFromCurr==0 else curr_params[2]; # why -0.8? Talked with Tony, he suggests starting with lower sigma rather than higher/non-saturating one
+    #normConst = np.random.uniform(-1, 0) if initFromCurr==0 else curr_params[2];
+    respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
+    respScalar = np.random.uniform(10, 1000) if initFromCurr==0 else curr_params[4];
+    noiseEarly = np.random.uniform(0.001, 0.1) if initFromCurr==0 else curr_params[5];
+    noiseLate = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[6];
+    varGain = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
+    if fitType == 1:
+      inhAsym = 0; 
+    if fitType == 2:
+      normMean = np.random.uniform(-1, 1) if initFromCurr==0 else curr_params[8];
+      normStd = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[9];
+    if fitType == 3:
+      sigOffset = np.random.uniform(0, 0.05) if initFromCurr==0 else curr_params[8];
+      stdLeft = np.random.uniform(1, 5) if initFromCurr==0 else curr_params[9];
+      stdRight = np.random.uniform(1, 5) if initFromCurr==0 else curr_params[10];
+      sigPeak = float(prefSfEst) if initFromCurr==0 else curr_params[11];
+
+    print('Initial parameters:\n\tsf: ' + str(pref_sf)  + '\n\td.ord: ' + str(dOrdSp) + '\n\tnormConst: ' + str(normConst));
+    print('\n\trespExp ' + str(respExp) + '\n\trespScalar ' + str(respScalar));
+    
+    #########
+    # Now get all the data we need
+    #########    
+    # stimulus information
+    
+    # vstack to turn into array (not array of arrays!)
+    stimOr = np.vstack(trial_inf['ori']);
+
+    #purge of NaNs...
+    mask = np.isnan(np.sum(stimOr, 0)); # sum over all stim components...if there are any nans in that trial, we know
+    objWeight = np.ones((stimOr.shape[1]));    
+
+    # and get rid of orientation tuning curve trials
+    oriBlockIDs = np.hstack((np.arange(131, 155+1, 2), np.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
+
+    oriInds = np.empty((0,));
+    for iB in oriBlockIDs:
+        indCond = np.where(trial_inf['blockID'] == iB);
+        if len(indCond[0]) > 0:
+            oriInds = np.append(oriInds, indCond);
+
+    # get rid of CRF trials, too? Not yet...
+    conBlockIDs = np.arange(138, 156+1, 2);
+    conInds = np.empty((0,));
+    for iB in conBlockIDs:
+       indCond = np.where(trial_inf['blockID'] == iB);
+       if len(indCond[0]) > 0:
+           conInds = np.append(conInds, indCond);
+
+    objWeight[conInds.astype(np.int64)] = 1; # for now, yes it's a "magic number"    
+
+    mask[oriInds.astype(np.int64)] = True; # as in, don't include those trials either!
+    # hold out a condition if we have specified, and adjust the mask accordingly
+    if holdOutCondition is not None:
+      # dispInd: [1, 5]...conInd: [1, 2]...sfInd: [1, 11]
+      # first, get all of the conditions... - blockIDs by condition known from Robbe code
+      dispInd = holdOutCondition[0];
+      conInd = holdOutCondition[1];
+      sfInd = holdOutCondition[2];
+
+      StimBlockIDs  = np.arange(((dispInd-1)*(13*2)+1)+(conInd-1), ((dispInd)*(13*2)-5)+(conInd-1)+1, 2); # +1 to include the last block ID
+      currBlockID = StimBlockIDs[sfInd-1];
+      holdOutTr = np.where(trial_inf['blockID'] == currBlockID)[0];
+      mask[holdOutTr.astype(np.int64)] = True; # as in, don't include those trials either!
+      
+    # Set up model here - get the parameters and parameter bounds
+    if fitType == 1:
+      param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym);
+    elif fitType == 2:
+      param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd);
+    elif fitType == 3:
+      param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, sigOffset, stdLeft, stdRight, sigPeak);
+    all_bounds = hf.getConstraints(fitType);
+   
+    # now set up the optimization
+    obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits)[0];
+    #tomin = opt.minimize(obj, param_list, bounds=all_bounds);
+    tomin = opt.minimize(obj, param_list, method='TNC', bounds=all_bounds);
+    #minimizer_kwargs = dict(method='L-BFGS-B', bounds=all_bounds)
+    #tomin = opt.basinhopping(obj, param_list, minimizer_kwargs=minimizer_kwargs);
+
+    opt_params = tomin['x'];
+    NLL = tomin['fun'];
+
+    currNLL = fitList[cellNum-1]['NLL']; # exists - either from real fit or as placeholder
+
+    if NLL < currNLL:
+      # reload fitlist in case changes have been made with the file elsewhere!
+      if os.path.exists(loc_data + fitListName):
+        fitList = hf.np_smart_load(str(loc_data + fitListName));
+      # else, nothing to reload!!!
+      # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
+      if cellNum-1 not in fitList:
+        fitList[cellNum-1] = dict();
+      fitList[cellNum-1]['NLL'] = NLL;
+      fitList[cellNum-1]['params'] = opt_params;
+      # NEW: Also save whether or not fit was success, exit message (18.12.01)
+      fitList[cellNum-1]['success'] = tomin['success'];
+      fitList[cellNum-1]['message'] = tomin['message'];
+      numpy.save(loc_data + fitListName, fitList);   
+
+    if holdOutCondition is not None:
+      holdoutNLL, _, = SFMGiveBof(opt_params, structureSFM=S, normType=fitType, lossType=lossType, trialSubset=holdOutTr, expInd=expInd, rvcFits=rvcFits);
+    else:
+      holdoutNLL = [];
+
+    return NLL, opt_params, holdoutNLL;
+
+if __name__ == '__main__':
+
+    if len(sys.argv) < 5:
+      print('uhoh...you need six arguments here'); # and one is the script itself...
+      print('See this file (setModel) or batchFitUnix.sh for guidance');
+      exit();
+
+    setModel(int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]));
