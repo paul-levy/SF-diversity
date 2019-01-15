@@ -13,17 +13,15 @@ import pdb
 ###  (kept)
 ## Functions:
 
-# descrFit_name
-# chiSq
-
 # organize_modResp   - akin to o.modResp in /Analysis/Functions, used for preparing responses for chiSq calculation in optimization
-
 
 ### removed:
 
 # np_smart_load - be smart about using numpy load
 # bw_lin_to_log
 # bw_log_to_lin
+# descrFit_name
+# chiSq
 
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
@@ -44,45 +42,6 @@ import pdb
 
 # makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
 # tabulate_responses - Organizes measured and model responses for sfMixAlt experiment
-
-def descrFit_name(lossType, modelName = None):
-  ''' if modelName is none, then we assume we're fitting descriptive tuning curves to the data
-      otherwise, pass in the fitlist name in that argument, and we fit descriptive curves to the model
-      this simply returns the name
-  '''
-  # load descrFits
-  if lossType == 1:
-    floss_str = '_lsq';
-  elif lossType == 2:
-    floss_str = '_sqrt';
-  elif lossType == 3:
-    floss_str = '_poiss';
-  descrFitBase = 'descrFits%s' % floss_str;
-
-  if modelName is None:
-    descrName = '%s.npy' % descrFitBase;
-  else:
-    descrName = '%s_%s' % (descrFitBase, modelName);
-    
-  return descrName;
-
-def chiSq(data_resps, model_resps, stimDur=1):
-  ''' given a set of measured and model responses, compute the chi-squared (see Cavanaugh et al '02a)
-      assumes: resps are mean/variance for each stimulus condition (e.g. like a tuning curve)
-        with each condition a tuple (or 2-array) with [mean, var]
-  '''
-  np = numpy;
-
-  rats = np.divide(data_resps[1], data_resps[0]);
-  nan_rm = lambda x: x[~np.isnan(x)]
-  rho = geomean(nan_rm(rats));
-  # now, only evaluate where both model and data are non-nan!
-  fineTr = ~np.isnan(data_resps[0]) & ~np.isnan(model_resps[0]);
-  k   = 0.10 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
-
-  chi = np.sum(np.divide(np.square(data_resps[0][fineTr] - model_resps[0][fineTr]), k + data_resps[0][fineTr]*rho/stimDur));
-
-  return chi;
 
 ######
 

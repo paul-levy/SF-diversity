@@ -466,9 +466,6 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
             linR4 = numpy.zeros((nFrames*len(xCo), nStimComp));
             computeSum = 0;  # important: if stim contrast or filter sensitivity = zero, no point in computing  response
 
-            if p==469 and iF==16:
-              pdb.set_trace();
-                    
             # Modularize - Now do the things that are filter-dependent
             for c in range(nStimComp): # there are up to nine stimulus components
                 selSi = selOr[c]*selSfVec[c,iF]*selTf[c];    # filter sensitivity for the sinusoid in the frequency domain
@@ -633,7 +630,6 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     NLLExp   = 0; #-numpy.log(priorExp);
 
     # Compute weights for suppressive signals
-    pdb.set_trace();
     nInhChan = T['mod']['normalization']['pref']['sf'];
     nTrials = len(T['exp']['trial']['num']);
     inhWeight = [];
@@ -727,7 +723,6 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           if trialSubset is not None:
             warnings.warn('This loss type (chi squared) is not currently equipped to handle hold out subsets');
           _, _, expByCond, expAll = hf.organize_resp(spikeCount, structureSFM['sfm']['exp']['trial'], expInd);
-          pdb.set_trace();
           exp_responses = [expByCond.flatten(), numpy.nanvar(expAll, axis=3).flatten()];
           _, _, modByCond, modAll = hf.organize_resp(rateModel, structureSFM['sfm']['exp']['trial'], expInd);
           mod_responses = [modByCond.flatten(), numpy.nanvar(modAll, axis=3).flatten()];
@@ -879,7 +874,7 @@ def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
 
     loc_data = loc_base + hf.get_exp_params(expInd).dir + 'structures/';
-    fL_name = 'fitList_190109c'
+    fL_name = 'fitList_190114c'
 
     np = numpy;
 
@@ -913,6 +908,7 @@ def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdO
       direc = 1; # default dir is 1 (positive)
       rvcName = 'rvcFits';
       rvcFits = hf.np_smart_load(str(loc_data + hf.phase_fit_name(rvcName, direc)));
+      rvcFits = rvcFits[cellNum-1];
     else:
       rvcFits = None;
 
@@ -930,8 +926,6 @@ def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdO
       allSfs    = allSfs[~np.isnan(allSfs)]; # remove NaN...
       prefSfEst = np.median(allSfs);
     
-    pdb.set_trace();
-
     ########
 
     # 00 = preferred spatial frequency   (cycles per degree)
@@ -1042,8 +1036,9 @@ def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdO
    
     # now set up the optimization
     obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits)[0];
-    #tomin = opt.minimize(obj, param_list, bounds=all_bounds);
-    tomin = opt.minimize(obj, param_list, method='TNC', bounds=all_bounds);
+    print('...now minimizing!'); 
+    tomin = opt.minimize(obj, param_list, bounds=all_bounds);
+    #tomin = opt.minimize(obj, param_list, method='TNC', bounds=all_bounds);
     #minimizer_kwargs = dict(method='L-BFGS-B', bounds=all_bounds)
     #tomin = opt.basinhopping(obj, param_list, minimizer_kwargs=minimizer_kwargs);
 
@@ -1052,6 +1047,7 @@ def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdO
 
     currNLL = fitList[cellNum-1]['NLL']; # exists - either from real fit or as placeholder
 
+    print('...finished. Current NLL (%.2f) vs. previous NLL (%.2f)' % (NLL, currNLL)); 
     if NLL < currNLL:
       # reload fitlist in case changes have been made with the file elsewhere!
       if os.path.exists(loc_data + fitListName):
@@ -1065,7 +1061,9 @@ def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdO
       # NEW: Also save whether or not fit was success, exit message (18.12.01)
       fitList[cellNum-1]['success'] = tomin['success'];
       fitList[cellNum-1]['message'] = tomin['message'];
-      numpy.save(loc_data + fitListName, fitList);   
+      numpy.save(loc_data + fitListName, fitList);
+    else:
+      print('new NLL not less than currNLL, not saving result');
 
     if holdOutCondition is not None:
       holdoutNLL, _, = SFMGiveBof(opt_params, structureSFM=S, normType=fitType, lossType=lossType, trialSubset=holdOutTr, expInd=expInd, rvcFits=rvcFits);

@@ -10,16 +10,18 @@ import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
 import seaborn as sns
 sns.set(style='ticks')
-import helper_fcns
 from scipy.stats import poisson, nbinom
 from scipy.stats.mstats import gmean
 
 import pdb
 
-import sys # so that we can import model_responses (in different folder)
-import model_responses
+# import the "main" helper_fcns and model_responses (i.e. the common set)
+import sys
+sys.path.insert(0, '../'); # now hf, mod_resp will be from the parent directory
+import helper_fcns as hf
+import model_responses as mod_resp
 
-plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/Analysis/Functions/paul_plt_cluster.mplstyle');
+plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_cluster.mplstyle');
 from matplotlib import rcParams
 rcParams['font.size'] = 20;
 rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
@@ -37,19 +39,20 @@ descr_fit_type = int(sys.argv[5]);
 norm_sim_on = int(sys.argv[6]);
 
 norm_type = fitType;
+expInd = 2; # (V1) altExp is #2
 
 # at CNS
-dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
-save_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/';
+dataPath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/structures/';
+save_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/figures/';
 # personal mac
-#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
-#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/cell4_sandbox/';
+#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/structures/';
+#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/figures/cell4_sandbox/';
 # prince cluster
-#dataPath = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
-#save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
+#dataPath = '/home/pl1465/SF_diversity/altExp/structures/';
+#save_loc = '/home/pl1465/SF_diversity/altExp/figures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitListSP_181202c';
+fitBase = 'fitList_190114';
 
 # first the fit type
 if fitType == 1:
@@ -103,7 +106,7 @@ dataList = np.load(str(dataPath + expName), encoding='latin1').item();
 cellStruct = np.load(str(dataPath + dataList['unitName'][which_cell-1] + '_sfm.npy'), encoding='latin1').item();
 
 # #### Load descriptive model fits, comp. model fits
-descrFitName = helper_fcns.descrFit_name(descr_fit_type);
+descrFitName = hf.descrFit_name(descr_fit_type);
 
 modParams = np.load(str(dataPath + fitListName), encoding= 'latin1').item();
 modParamsCurr = modParams[which_cell-1]['params'];
@@ -113,13 +116,13 @@ modParamsCurr = modParams[which_cell-1]['params'];
 
 data = cellStruct['sfm']['exp']['trial'];
 
-ignore, modRespAll = model_responses.SFMGiveBof(modParamsCurr, cellStruct, normType=norm_type, lossType=lossType);
+ignore, modRespAll = mod_resp.SFMGiveBof(modParamsCurr, cellStruct, normType=norm_type, lossType=lossType, expInd=expInd);
 print('norm type %02d' % (norm_type));
 if norm_type == 2:
   gs_mean = modParamsCurr[1]; # guaranteed to exist after call to .SFMGiveBof, if norm_type == 2
   gs_std = modParamsCurr[2]; # guaranteed to exist ...
-resp, stimVals, val_con_by_disp, validByStimVal, modResp = helper_fcns.tabulate_responses(cellStruct, modRespAll);
-blankMean, blankStd, _ = helper_fcns.blankResp(cellStruct); 
+resp, stimVals, val_con_by_disp, validByStimVal, modResp = hf.tabulate_responses(cellStruct, expInd, modRespAll);
+blankMean, blankStd, _ = hf.blankResp(cellStruct); 
 modBlankMean = modParamsCurr[6]; # late additive noise is the baseline of the model
 # all responses on log ordinate (y axis) should be baseline subtracted
 
@@ -351,7 +354,7 @@ prefSf    = modParamsCurr[0];
 dOrder    = modParamsCurr[1]
 prefOri = 0; # just fixed value since no model param for this
 aRatio = 1; # just fixed value since no model param for this
-filtTemp  = model_responses.oriFilt(imSizeDeg, pixSize, prefSf, prefOri, dOrder, aRatio);
+filtTemp  = mod_resp.oriFilt(imSizeDeg, pixSize, prefSf, prefOri, dOrder, aRatio);
 filt      = (filtTemp - filtTemp[0,0])/ np.amax(np.abs(filtTemp - filtTemp[0,0]));
 
 plt.subplot2grid(detailSize, (2, 0)); # set the current subplot location/size[default is 1x1]
@@ -367,7 +370,7 @@ s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
 sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
 sfExc = s/sMax;
 
-inhSfTuning = helper_fcns.getSuppressiveSFtuning();
+inhSfTuning = hf.getSuppressiveSFtuning();
 
 # Compute weights for suppressive signals
 inhAsym = 0;
@@ -469,7 +472,7 @@ if norm_sim_on:
     fNorm, conDisp_plots = plt.subplots(nCons, nDisps, sharey=True, figsize=(40,30));
     norm_sim = np.nan * np.empty((nDisps, nCons, len(sfCenters)));
     if len(modParamsCurr) < 9:
-        modParamsCurr.append(helper_fcns.random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
+        modParamsCurr.append(hf.random_in_range([-0.35, 0.35])[0]); # enter asymmetry parameter
 
     # simulations
     for disp in range(nDisps):
@@ -479,14 +482,14 @@ if norm_sim_on:
               # if modParamsCurr doesn't have inhAsym parameter, add it!
               if norm_type == 2:
                 unweighted = 1;
-                _, _, _, normRespSimple, _ = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normType=norm_type);
+                _, _, _, normRespSimple, _ = mod_resp.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], unweighted, normType=norm_type, expInd=expInd);
                 nTrials = normRespSimple.shape[0];
                 nInhChan = cellStruct['sfm']['mod']['normalization']['pref']['sf'];
-                inhWeightMat  = helper_fcns.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
+                inhWeightMat  = hf.genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials);
                 normResp = np.sqrt((inhWeightMat*normRespSimple).sum(1)).transpose();
                 norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
               else: # norm_type == 1 or 3:
-                _, _, _, _, normResp = model_responses.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], normType = norm_type);
+                _, _, _, _, normResp = mod_resp.SFMsimulate(modParamsCurr, cellStruct, disp+1, conLevels[conLvl], sfCenters[sfCent], normType = norm_type, expInd=expInd);
                 norm_sim[disp, conLvl, sfCent] = np.mean(normResp); # take mean of the returned simulations (10 repetitions per stim. condition)
 
           if norm_type == 2:
@@ -571,12 +574,12 @@ for d in range(nDisps):
         curr_fit_sep = crfFitsSepC50[d][sf_ind]['params'];
         curr_fit_all = crfFitsOneC50[d][sf_ind]['params'];
 	# ignore varGain when reporting loss here...
-        sep_pred = helper_fcns.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_sep[0:4]);
-        all_pred = helper_fcns.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_all[0:4]);
+        sep_pred = hf.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_sep[0:4]);
+        all_pred = hf.naka_rushton(np.hstack((0, all_cons[v_cons])), curr_fit_all[0:4]);
 
         if lossType == 3:
-          r_sep, p_sep = helper_fcns.mod_poiss(sep_pred, curr_fit_sep[4]);
-          r_all, p_all = helper_fcns.mod_poiss(all_pred, curr_fit_all[4]);
+          r_sep, p_sep = hf.mod_poiss(sep_pred, curr_fit_sep[4]);
+          r_all, p_all = hf.mod_poiss(all_pred, curr_fit_all[4]);
           sep_loss = -np.sum(loss(np.round(resps_w_blank), r_sep, p_sep));
           all_loss = -np.sum(loss(np.round(resps_w_blank), r_all, p_all));
         elif lossType == 2:	
@@ -597,8 +600,8 @@ for d in range(nDisps):
         stdPts = np.hstack((0, np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, ))));
         expPts = crfAx[d+1][row_ind, col_ind].errorbar(np.hstack((0, all_cons[v_cons])), resps_w_blank, stdPts, fmt='o', clip_on=False);
 
-        sepPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
-        allPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_all), linestyle='dashed');
+        sepPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, hf.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
+        allPlt = crfAx[d+1][row_ind, col_ind].plot(plot_cons, hf.naka_rushton(plot_cons, curr_fit_all), linestyle='dashed');
 	# accompanying text...
         crfAx[d+1][row_ind, col_ind].text(0, 0.9, 'free [%.1f]: gain %.1f; c50 %.3f; exp: %.2f; base: %.1f, varGn: %.2f' % (sep_loss, curr_fit_sep[1], curr_fit_sep[3], curr_fit_sep[2], curr_fit_sep[0], curr_fit_sep[4]), 
 		horizontalalignment='left', verticalalignment='center', transform=crfAx[d+1][row_ind, col_ind].transAxes, fontsize=30);
@@ -701,7 +704,7 @@ for d in range(nDisps):
 
         # RVC from Naka-Rushton fit
         #curr_fit_sep = crfFitsSepC50[d][sf_ind]['params'];
-        #nrPlt = rvcAx[plt_x][plt_y].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
+        #nrPlt = rvcAx[plt_x][plt_y].plot(plot_cons, hf.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
         #pdb.set_trace();
         modPlt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(modAvg[d, sf_ind, v_cons], 0.1), 'r-', alpha=0.7, clip_on=False);
 

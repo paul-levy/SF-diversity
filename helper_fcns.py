@@ -22,6 +22,7 @@ import warnings
 # get_exp_params - given an index for a particular version of the sfMix experiments, return parameters of that experiment (i.e. #stimulus components)
 # fitList_name
 # phase_fit_name
+# descrFit_name
 # angle_xy
 
 ### fourier
@@ -176,6 +177,27 @@ def phase_fit_name(base, dir, byTrial=0):
     base = base + byTr + '_neg.npy';
   return base;
 
+def descrFit_name(lossType, modelName = None):
+  ''' if modelName is none, then we assume we're fitting descriptive tuning curves to the data
+      otherwise, pass in the fitlist name in that argument, and we fit descriptive curves to the model
+      this simply returns the name
+  '''
+  # load descrFits
+  if lossType == 1:
+    floss_str = '_lsq';
+  elif lossType == 2:
+    floss_str = '_sqrt';
+  elif lossType == 3:
+    floss_str = '_poiss';
+  descrFitBase = 'descrFits%s' % floss_str;
+
+  if modelName is None:
+    descrName = '%s.npy' % descrFitBase;
+  else:
+    descrName = '%s_%s' % (descrFitBase, modelName);
+    
+  return descrName;
+
 def angle_xy(x_coord, y_coord):
    ''' return list of angles (in deg) given list of x/y coordinates (i.e. polar coordinates)
    ''' 
@@ -284,10 +306,15 @@ def chiSq(data_resps, model_resps, stimDur=1):
   np = numpy;
   rats = np.divide(data_resps[1], data_resps[0]);
   nan_rm = lambda x: x[~np.isnan(x)]
-  rho = geomean(nan_rm(rats));
+  neg_rm = lambda x: x[x>0]; # particularly for adjusted responses, a few values might be negative; remove these from the rho calculation
+  rho = geomean(neg_rm(nan_rm(rats))); # only need neg_rm, but just being explicit
   k   = 0.10 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
 
-  chi = np.sum(np.divide(np.square(data_resps[0] - model_resps[0]), k + data_resps[0]*rho/stimDur));
+  # some conditions might be blank (and therefore NaN) - remove them!
+  num = data_resps[0] - model_resps[0];
+  non_nan = np.where(~np.isnan(num));
+
+  chi = np.sum(np.divide(np.square(num[non_nan]), k + data_resps[0][non_nan]*rho/stimDur));
 
   return chi;
 
@@ -479,8 +506,6 @@ def tabulate_responses(cellStruct, expInd, modResp = []):
                 
                 if mod:
                     nTrCurr = sum(valid_tr); # how many trials are we getting?
-                    if nTrCurr > 10:
-                      pdb.set_trace();
                     modRespOrg[d, sf, con, 0:nTrCurr] = modResp[valid_tr];
         
             if np.any(~np.isnan(respMean[d, :, con])):
@@ -498,7 +523,7 @@ def organize_adj_responses(data, rvcFits, expInd):
   to_import = dir.replace('/', '.') + 'helper_fcns';
   new_hf = il.import_module(to_import);
   if hasattr(new_hf, 'organize_adj_responses'):
-    adjResps = new_hf.organize_adj_responses(data, rvcFits)[0];
+    adjResps = new_hf.organize_adj_responses(data, rvcFits)[1]; # 2nd returned argument (pos 1) is responses by trial
   else:
     warnings.warn('this experiment (as given by ind) does not have an organize_adj_responses call!');
     adjResps = None;
@@ -560,7 +585,7 @@ def get_spikes(data, rvcFits = None, expInd = None):
     if expInd is None:
       warnings.warn('Should pass in expInd; defaulting to 3');
       expInd = 3; # should be specified, but just in case
-    spikes = organize_adj_responses(data, rvcFits, expInd)[0];
+    spikes = organize_adj_responses(data, rvcFits, expInd);
   return spikes;
 
 def mod_poiss(mu, varGain):
