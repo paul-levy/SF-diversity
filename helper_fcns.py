@@ -438,7 +438,7 @@ def tabulate_responses(cellStruct, expInd, modResp = []):
       blockIDs = data['blockID'];
       inval    = np.in1d(blockIDs, invalidIDs)
     else:
-      inval    = np.zeros_like(blockIDs); # i.e. all are valid, since there's only core sfMix trials
+      inval    = np.in1d(np.zeros_like(data['total_con']), 1); # i.e. all are valid, since there's only core sfMix trials
 
     all_cons = np.unique(np.round(data['total_con'][~inval], conDig));
     all_cons = all_cons[~np.isnan(all_cons)];
