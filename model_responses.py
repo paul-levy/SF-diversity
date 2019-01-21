@@ -598,7 +598,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     # Inhibitory channel
     # nothing in this current iteration - 7/7/17
 
-     # Other (nonlinear) model components
+    # Other (nonlinear) model components
     sigma    = pow(10, params[2]); # normalization constant
     # respExp  = 2; # response exponent
     respExp  = params[3]; # response exponent
@@ -1039,6 +1039,7 @@ def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     print('...now minimizing!'); 
     tomin = opt.minimize(obj, param_list, bounds=all_bounds);
     #tomin = opt.minimize(obj, param_list, method='TNC', bounds=all_bounds);
+    # warning: basin hopping (in informal attempts) is slow and not any better
     #minimizer_kwargs = dict(method='L-BFGS-B', bounds=all_bounds)
     #tomin = opt.basinhopping(obj, param_list, minimizer_kwargs=minimizer_kwargs);
 

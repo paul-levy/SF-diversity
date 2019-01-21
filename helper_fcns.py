@@ -100,6 +100,7 @@ def get_exp_params(expInd):
     '''  returns the following
                 (max) nComponents in each stimulus
                 # of stimulus families (i.e. how many dispersion levels)
+                # of contrasts (in the sfMix core, i.e. not how many for single gratings)
                 list of how many components in each level
                 directory (relative to /common)
     '''
@@ -221,7 +222,6 @@ def angle_xy(x_coord, y_coord):
 def make_psth(spikeTimes, binWidth=1e-3, stimDur=1):
     # given an array of arrays of spike times, create the PSTH for a given bin width and stimulus duration
     # i.e. spikeTimes has N arrays, each of which is an array of spike times
-    # TODO: Add a smoothing to the psth and return for plotting purposes only
 
     binEdges = numpy.linspace(0, stimDur, 1+stimDur/binWidth);
     
@@ -426,17 +426,27 @@ def tabulate_responses(cellStruct, expInd, modResp = []):
       data = cellStruct;
 
     if expInd == 1: # this exp structure only has 'con', 'sf'; perform some simple ops to get everything as in other exp structures
+      v1_dir = get_exp_params(expInd).dir.replace('/', '.');
+      v1_hf = il.import_module(v1_dir+'helper_fcns');
       data['total_con'] = np.sum(data['con'], -1);
       data['cent_sf']   = data['sf'][0]; # first component, i.e. center SF, is at position 0
-      cons_join         = np.vstack(data['con']);
-      data['num_comps'] = np.sum(cons_join>0, 0);
-    all_cons = np.unique(np.round(data['total_con'], conDig));
+      data['num_comps'] = v1_hf.get_num_comps(data['con'][0]);
+      # next, let's prune out the trials from the ori and RVC measurements
+      oriBlockIDs = np.hstack((np.arange(131, 155+1, 2), np.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
+      conBlockIDs = np.arange(138, 156+1, 2);
+      invalidIDs  = np.hstack((oriBlockIDs, conBlockIDs));
+      blockIDs = data['blockID'];
+      inval    = np.in1d(blockIDs, invalidIDs)
+    else:
+      inval    = np.zeros_like(blockIDs); # i.e. all are valid, since there's only core sfMix trials
+
+    all_cons = np.unique(np.round(data['total_con'][~inval], conDig));
     all_cons = all_cons[~np.isnan(all_cons)];
 
-    all_sfs = np.unique(data['cent_sf']);
+    all_sfs = np.unique(data['cent_sf'][~inval]);
     all_sfs = all_sfs[~np.isnan(all_sfs)];
 
-    all_disps = np.unique(data['num_comps']);
+    all_disps = np.unique(data['num_comps'][~inval]);
     all_disps = all_disps[all_disps>0]; # ignore zero...
 
     nCons = len(all_cons);
@@ -460,12 +470,11 @@ def tabulate_responses(cellStruct, expInd, modResp = []):
     valid_disp = dict();
     valid_con = dict();
     valid_sf = dict();
-    
+
     for d in range(nDisps):
         val_con_by_disp.append([]);
 
         valid_disp[d] = data['num_comps'] == all_disps[d];
-
         for con in range(nCons):
 
             valid_con[con] = np.round(data['total_con'], conDig) == all_cons[con];
@@ -475,7 +484,9 @@ def tabulate_responses(cellStruct, expInd, modResp = []):
                 valid_sf[sf] = data['cent_sf'] == all_sfs[sf];
 
                 valid_tr = valid_disp[d] & valid_sf[sf] & valid_con[con];
-
+                ## TODO: fix an issue here with floats being treated as integers...(run plot_compare.py for cell from expInd=1)
+                if expInd == 1: # also take care of excluding ori/rvc trials
+                  valid_tr = valid_tr & ~inval;
                 if np.all(np.unique(valid_tr) == False):
                     continue;
 
@@ -536,14 +547,19 @@ def organize_resp(spikes, expStructure, expInd):
     nCon = exper.nCons;
     nCond = exper.nSfs;
     nReps = 20; # never more than 20 reps per stim. condition
-    
+   
     if expInd == 1: # only the original V1 exp (expInd=1) has separate ori and RVC measurements
       # Analyze the stimulus-driven responses for the orientation tuning curve
       oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
+      if 'sfm' in expStructure:
+        data = expStructure['sfm']['exp']['trial'];
+      else:
+        data = expStructure;
+
 
       rateOr = numpy.empty((0,));
       for iB in oriBlockIDs:
-          indCond = numpy.where(expStructure['blockID'] == iB);
+          indCond = numpy.where(data['blockID'] == iB);
           if len(indCond[0]) > 0:
               rateOr = numpy.append(rateOr, numpy.mean(spikes[indCond]));
           else:
@@ -555,7 +571,7 @@ def organize_resp(spikes, expStructure, expInd):
 
       rateCo = numpy.empty((0,));
       for iB in conBlockIDs:
-          indCond = numpy.where(expStructure['blockID'] == iB);   
+          indCond = numpy.where(data['blockID'] == iB);   
           if len(indCond[0]) > 0:
               rateCo = numpy.append(rateCo, numpy.mean(spikes[indCond]));
           else:
@@ -568,7 +584,7 @@ def organize_resp(spikes, expStructure, expInd):
     if expInd == 1: # have to do separate work, since the original V1 experiment has tricker stimuli (i.e. not just sfMix, but also ori and rvc measurements done separately)
       v1_dir = exper.dir.replace('/', '.');
       v1_hf = il.import_module(v1_dir + 'helper_fcns');
-      _, _, rateSfMix, allSfMix = v1_hf.organize_modResp(spikes, expStructure);
+      _, _, rateSfMix, allSfMix = v1_hf.organize_modResp(spikes, data);
     else:
       allSfMix  = tabulate_responses(expStructure, expInd, spikes)[4];
       rateSfMix = numpy.nanmean(allSfMix, -1);

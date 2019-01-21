@@ -1,4 +1,4 @@
-from helper_fcns import naka_rushton, fit_CRF, random_in_range, blankResp, np_smart_load
+import helper_fcns as hf
 import os.path
 import sys
 import math, numpy
@@ -32,14 +32,14 @@ def fit_all_CRF(cell_num, data_loc, each_c50, loss_type, n_iter = 1, each_expn =
     if loss_type == 4:
       loss_str = '-poissMod';
     fits_name = 'crfFitsCom' + loss_str + '.npy';
-    dataList = np_smart_load(str(data_loc + 'dataList.npy'));
+    dataList = hf.np_smart_load(str(data_loc + 'dataList.npy'));
     if os.path.isfile(data_loc + fits_name):
-        crfFits = np_smart_load(str(data_loc + fits_name));
+        crfFits = hf.np_smart_load(str(data_loc + fits_name));
     else:
         crfFits = dict();
 
     # load cell information
-    cellStruct = np_smart_load(str(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy'));
+    cellStruct = hf.np_smart_load(str(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy'));
     data = cellStruct['sfm']['exp']['trial'];
 
     all_cons = np.unique(np.round(data['total_con'], conDig));
@@ -59,7 +59,7 @@ def fit_all_CRF(cell_num, data_loc, each_c50, loss_type, n_iter = 1, each_expn =
     all_data = dict();
 
     # for use in fitting SF functions...
-    _, _, blankResps = blankResp(cellStruct);    
+    _, _, blankResps = hf.blankResp(cellStruct);    
     blankCons = np.zeros_like(blankResps);
 
     for d in range(nDisps):
@@ -139,7 +139,7 @@ def fit_all_CRF(cell_num, data_loc, each_c50, loss_type, n_iter = 1, each_expn =
 	base_ind = gain_ind+n_per_param[1]; # always n_v_sfs gain parameters
         varGain_ind = base_ind+n_per_param[0];
 
-	obj = lambda params: fit_CRF(cons, resps, params[c50_ind:c50_ind+n_per_param[3]], params[expn_ind:expn_ind+n_per_param[2]], params[gain_ind:gain_ind+n_per_param[1]], \
+	obj = lambda params: hf.fit_CRF(cons, resps, params[c50_ind:c50_ind+n_per_param[3]], params[expn_ind:expn_ind+n_per_param[2]], params[gain_ind:gain_ind+n_per_param[1]], \
                                      params[base_ind:base_ind+n_per_param[0]], params[varGain_ind], loss_type);
 	opts = opt.minimize(obj, init_params, bounds=boundsAll);
 
@@ -147,7 +147,7 @@ def fit_all_CRF(cell_num, data_loc, each_c50, loss_type, n_iter = 1, each_expn =
 	curr_loss = opts['fun'];
 
 	for iter in range(n_iter-1): # now, extra iterations if chosen...
-	  init_params = np.hstack((random_in_range(bounds_c50, n_c50s), random_in_range(bounds_expn), random_in_range(bounds_gain, n_v_sfs), random_in_range(bounds_base), random_in_range((bounds_varGain[0], 1))));
+	  init_params = np.hstack((hf.random_in_range(bounds_c50, n_c50s), hf.random_in_range(bounds_expn), hf.random_in_range(bounds_gain, n_v_sfs), hf.random_in_range(bounds_base), hf.random_in_range((bounds_varGain[0], 1))));
 
           # choose optimization method
           if np.mod(iter, 2) == 0:
@@ -177,7 +177,7 @@ def fit_all_CRF(cell_num, data_loc, each_c50, loss_type, n_iter = 1, each_expn =
     # update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(data_loc + fits_name):
       print('reloading CRF Fits...');
-      crfFits = np_smart_load(str(data_loc + fits_name));
+      crfFits = hf.np_smart_load(str(data_loc + fits_name));
     if cell_num-1 not in crfFits:
       crfFits[cell_num-1] = dict();
     crfFits[cell_num-1][fit_key] = nk_ru;
@@ -209,13 +209,13 @@ def fit_all_CRF_boot(cell_num, data_loc, each_c50, loss_type, n_boot_iter = 1000
       loss_str = '-poissMod';
     fits_name = 'crfFits' + loss_str + '.npy';
 
-    dataList = np_smart_load(str(data_loc + 'dataList.npy'));
+    dataList = hf.np_smart_load(str(data_loc + 'dataList.npy'));
     if os.path.isfile(data_loc + fits_name):
-        crfFits = np_smart_load(str(data_loc + fits_name));
+        crfFits = hf.np_smart_load(str(data_loc + fits_name));
     else:
         crfFits = dict();
     
-    cellStruct = np_smart_load(str(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy'));
+    cellStruct = hf.np_smart_load(str(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy'));
     data = cellStruct['sfm']['exp']['trial'];
 
     all_cons = np.unique(np.round(data['total_con'], conDig));
@@ -309,7 +309,7 @@ def fit_all_CRF_boot(cell_num, data_loc, each_c50, loss_type, n_boot_iter = 1000
 	varGain_ind = base_ind+1;
 
         # first, fit original dataset
-        obj = lambda params: fit_CRF(cons, resps, params[0:n_c50s], params[expn_ind], params[gain_ind:gain_ind+n_v_sfs], params[base_ind], params[varGain_ind], loss_type);
+        obj = lambda params: hf.fit_CRF(cons, resps, params[0:n_c50s], params[expn_ind], params[gain_ind:gain_ind+n_v_sfs], params[base_ind], params[varGain_ind], loss_type);
         opts_full = opt.minimize(obj, init_params, bounds=boundsAll);
 
         # now unpack...
@@ -339,7 +339,7 @@ def fit_all_CRF_boot(cell_num, data_loc, each_c50, loss_type, n_boot_iter = 1000
 	    resamp_resps.append(resps[sf_i][resamp_inds]);
 	    resamp_cons.append(cons[sf_i][resamp_inds]);
 
-	  obj = lambda params: fit_CRF(resamp_cons, resamp_resps, params[0:n_c50s], params[expn_ind], params[gain_ind:gain_ind+n_v_sfs], params[base_ind], params[varGain_ind], loss_type);
+	  obj = lambda params: hf.fit_CRF(resamp_cons, resamp_resps, params[0:n_c50s], params[expn_ind], params[gain_ind:gain_ind+n_v_sfs], params[base_ind], params[varGain_ind], loss_type);
 	  opts = opt.minimize(obj, init_params, bounds=boundsAll);
 
           # now unpack...
@@ -360,7 +360,7 @@ def fit_all_CRF_boot(cell_num, data_loc, each_c50, loss_type, n_boot_iter = 1000
     # update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(data_loc + fits_name):
       print('reloading CRF Fits...');
-      crfFits = np_smart_load(str(data_loc + fits_name));
+      crfFits = hf.np_smart_load(str(data_loc + fits_name));
     if cell_num-1 not in crfFits:
       crfFits[cell_num-1] = dict();
     crfFits[cell_num-1][fit_key] = nk_ru;

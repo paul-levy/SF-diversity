@@ -13,6 +13,7 @@ import pdb
 # Functions:
 
 # get_center_con    - given a family and contrast index, returns the contrast level
+# get_num_comps
 # organize_modResp - Organizes measured and model responses 
 
 ## removed
@@ -79,7 +80,23 @@ def get_center_con(family, contrast):
 
     return con
 
+def get_num_comps(con):
+  ''' in effect, a reverse of the above (get_center_con). Given a contrast, determine what dispersion level it is
+      we're mapping to numComponents, so we go x -> 2x+1 (e.g. family 0, single gratings, becomes 1; family 3 becomes 7)
+  '''
+  np = numpy;
+  con_round = np.round(con, 4);
+  num_comps = np.ones_like(con, dtype=np.int16);
+  for fam in range(5): # 5 families
+    num_comps[np.where(con_round == get_center_con(fam+1, 1))] = int(2*fam+1);
+    num_comps[np.where(con_round == get_center_con(fam+1, 2))] = int(2*fam+1);
+  # if we've made it here, then it's either not part of the sfMix series but still something (RVC or ori; defaulted to 1) or it's nothing (and we need to set to 0)
+  num_comps[np.where(np.isnan(con_round))] = int(0); 
+
+  return num_comps
+
 def organize_modResp(modResp, expStructure):
+    # 01.18.19 - changed order of SF & CON in arrays to match organize_resp from other experiments
     # the blockIDs are fixed...
     nFam = 5;
     nCon = 2;
@@ -112,8 +129,8 @@ def organize_modResp(modResp, expStructure):
     # Analyze the stimulus-driven responses for the spatial frequency mixtures
 
     # Initialize Variables        
-    rateSfMix = numpy.ones((nFam, nCon, nCond)) * numpy.nan;
-    allSfMix = numpy.ones((nFam, nCon, nCond, nReps)) * numpy.nan;
+    rateSfMix = numpy.ones((nFam, nCond, nCon)) * numpy.nan;
+    allSfMix = numpy.ones((nFam, nCond, nCon, nReps)) * numpy.nan;
     for iE in range(nCon):
         for iW in range(nFam):
 
@@ -121,14 +138,15 @@ def organize_modResp(modResp, expStructure):
             nStimBlockIDs = len(StimBlockIDs);
             #print('nStimBlockIDs = ' + str(nStimBlockIDs));
         
+            conInd = nCon-1-iE; # why? to match the way other experiments are organized (low to high contrast)
             iC = 0;
 
             for iB in StimBlockIDs:
                 indCond = numpy.where(expStructure['blockID'] == iB);   
                 if len(indCond[0]) > 0:
                     #print('setting up ' + str((iE, iW, iC)) + ' with ' + str(len(indCond[0])) + 'trials');
-                    rateSfMix[iW, iE, iC] = numpy.nanmean(modResp[indCond]);
-                    allSfMix[iW, iE, iC, 0:len(indCond[0])] = modResp[indCond];
-                    iC         = iC+1;
+                    rateSfMix[iW, iC, conInd] = numpy.nanmean(modResp[indCond]);
+                    allSfMix[iW, iC, conInd, 0:len(indCond[0])] = modResp[indCond];
+                    iC = iC+1;
                  
     return rateOr, rateCo, rateSfMix, allSfMix;

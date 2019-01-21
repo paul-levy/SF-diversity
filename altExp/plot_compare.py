@@ -8,16 +8,18 @@ import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
 import seaborn as sns
 sns.set(style='ticks')
-import helper_fcns
 from scipy.stats import poisson, nbinom
 from scipy.stats.mstats import gmean
 
 import pdb
 
-import sys # so that we can import model_responses (in different folder)
+# import the "main" helper_fcns and model_responses (i.e. the common set)
+import sys
+sys.path.insert(0, '../'); # now hf, mod_resp will be from the parent directory
+import helper_fcns as hf
 import model_responses as mod_resp
 
-plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/Analysis/Functions/paul_plt_cluster.mplstyle');
+plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_cluster.mplstyle');
 from matplotlib import rcParams
 rcParams['font.size'] = 20;
 rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
@@ -27,21 +29,22 @@ rcParams['axes.linewidth'] = 1.5;
 rcParams['lines.markersize'] = 5;
 rcParams['font.style'] = 'oblique';
 
-cellNum = int(sys.argv[1]);
+cellNum  = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
+expInd   = 2; # (V1) altExp is #2
 
 # at CNS
-data_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
-save_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/';
+data_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/structures/';
+save_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/figures/';
 # personal mac
-#data_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/structures/';
-#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/analysis/figures/cell4_sandbox/';
+#data_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/structures/';
+#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/altExp/figures/cell4_sandbox/';
 # prince cluster
-#data_loc = '/home/pl1465/SF_diversity/altExp/analysis/structures/';
-#save_loc = '/home/pl1465/SF_diversity/altExp/analysis/figures/';
+#data_loc = '/home/pl1465/SF_diversity/altExp/structures/';
+#save_loc = '/home/pl1465/SF_diversity/altExp/figures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitListSP_181202a';
+fitBase = 'fitList_190114c';
 
 # first the fit type
 fitSuf_fl = '_flat';
@@ -80,8 +83,8 @@ else:
 conDig = 3; # round contrast to the 3rd digit
 
 dataList = np.load(str(data_loc + expName), encoding='latin1').item();
-fitList_fl = helper_fcns.np_smart_load(data_loc + fitName_fl);
-fitList_wg = helper_fcns.np_smart_load(data_loc + fitName_wg);
+fitList_fl = hf.np_smart_load(data_loc + fitName_fl);
+fitList_wg = hf.np_smart_load(data_loc + fitName_wg);
 
 expData = np.load(str(data_loc + dataList['unitName'][cellNum-1] + '_sfm.npy'), encoding='latin1').item();
 
@@ -95,17 +98,17 @@ normTypes = [1, 2]; # flat, then weighted
 # ### Organize data
 # #### determine contrasts, center spatial frequency, dispersions
 
-modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType) for fit, norm in zip(modFits, normTypes)];
+modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd) for fit, norm in zip(modFits, normTypes)];
 modResps = [x[1] for x in modResps]; # 1st return output is NLL (don't care about that here)
 gs_mean = modFit_wg[8]; 
 gs_std = modFit_wg[9];
 # now organize the responses
-orgs = [helper_fcns.organize_modResp(mr, expData) for mr in modResps];
-sfmixModResps = [org[0] for org in orgs];
-allSfMixs = [org[1] for org in orgs];
+orgs = [hf.organize_resp(mr, expData, expInd) for mr in modResps];
+#orgs = [hf.organize_modResp(mr, expData) for mr in modResps];
+sfmixModResps = [org[2] for org in orgs];
+allSfMixs = [org[3] for org in orgs];
 # now organize the measured responses in the same way
-sfmixExpResp, allSfMixExp = helper_fcns.organize_modResp(expData['sfm']['exp']['trial']['spikeCount'], \
-                                                                           expData)
+_, _, sfmixExpResp, allSfMixExp = hf.organize_resp(expData['sfm']['exp']['trial']['spikeCount'], expData, expInd);
 
 modLows = [np.nanmin(resp, axis=3) for resp in allSfMixs];
 modHighs = [np.nanmax(resp, axis=3) for resp in allSfMixs];
@@ -113,12 +116,12 @@ modAvgs = [np.nanmean(resp, axis=3) for resp in allSfMixs];
 modSponRates = [fit[6] for fit in modFits];
 
 # more tabulation
-resp, stimVals, val_con_by_disp, _, _ = helper_fcns.tabulate_responses(expData, modResps[0]);
+resp, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, modResps[0]);
 
 respMean = resp[0];
 respStd = resp[1];
 
-blankMean, blankStd, _ = helper_fcns.blankResp(expData); 
+blankMean, blankStd, _ = hf.blankResp(expData); 
 
 all_disps = stimVals[0];
 all_cons = stimVals[1];
@@ -333,12 +336,12 @@ for i in modFits:
   sfExcCurr = s/sMax;
   sfExc.append(sfExcCurr);
 
-inhSfTuning = helper_fcns.getSuppressiveSFtuning();
+inhSfTuning = hf.getSuppressiveSFtuning();
 
 # Compute weights for suppressive signals
 nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
 nTrials =  inhSfTuning.shape[0];
-inhWeight = helper_fcns.genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
+inhWeight = hf.genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
 inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
 # first, tuned norm:
 sfNormTune = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);

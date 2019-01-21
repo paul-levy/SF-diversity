@@ -1,7 +1,5 @@
 # coding: utf-8
 
-######################## To do:
-
 import os
 import numpy as np
 import matplotlib
@@ -52,7 +50,7 @@ save_loc = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/altExp/fi
 #save_loc = '/home/pl1465/SF_diversity/altExp/figures/';
 
 expName = 'dataList.npy'
-fitBase = 'fitList_190114';
+fitBase = 'fitList_190114c';
 
 # first the fit type
 if fitType == 1:

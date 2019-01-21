@@ -591,7 +591,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     # Inhibitory channel
     # nothing in this current iteration - 7/7/17
 
-     # Other (nonlinear) model components
+    # Other (nonlinear) model components
     sigma    = pow(10, params[2]); # normalization constant
     # respExp  = 2; # response exponent
     respExp  = params[3]; # response exponent
