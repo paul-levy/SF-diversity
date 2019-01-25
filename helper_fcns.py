@@ -47,6 +47,7 @@ import warnings
 # organize_adj_responses - wrapper for organize_adj_responses within each experiment subfolder
 # organize_resp       -
 # get_spikes - get correct # spikes for a given cell (will get corrected spikes if needed)
+# get_rvc_fits - return the rvc fits for a given cell (if applicable)
 # mod_poiss - computes "r", "p" for modulated poisson model (neg. binomial)
 # naka_rushton
 # fit_CRF
@@ -312,9 +313,13 @@ def chiSq(data_resps, model_resps, stimDur=1):
 
   # some conditions might be blank (and therefore NaN) - remove them!
   num = data_resps[0] - model_resps[0];
-  non_nan = np.where(~np.isnan(num));
+  valid = ~np.isnan(num);
+  # TODO: Figure out how to handle negative data_resps (this can happen e.g. in LGN experiment, due to adjusted responses)
+  #num_nonNeg = ~np.isnan(num);
+  #data_pos   = data_resps[0]>0; # only count if data is non-negative (recall that if the experiment has adjusted responses, these may be negative)
+  #valid      = num_nonNeg & data_pos;
 
-  chi = np.sum(np.divide(np.square(num[non_nan]), k + data_resps[0][non_nan]*rho/stimDur));
+  chi = np.sum(np.divide(np.square(num[valid]), k + data_resps[0][valid]*rho/stimDur));
 
   return chi;
 
@@ -603,6 +608,17 @@ def get_spikes(data, rvcFits = None, expInd = None):
       expInd = 3; # should be specified, but just in case
     spikes = organize_adj_responses(data, rvcFits, expInd);
   return spikes;
+
+def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', direc=1):
+  ''' simple function to return the rvc fits needed for adjusting responses
+  '''
+  if expInd == 3: # for now, only the LGN experiment has the response adjustment
+    rvcFits = np_smart_load(str(loc_data + phase_fit_name(rvcName, direc)));
+    rvcFits = rvcFits[cellNum-1];
+  else:
+    rvcFits = None;
+
+  return rvcFits;
 
 def mod_poiss(mu, varGain):
     np = numpy;

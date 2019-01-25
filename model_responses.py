@@ -874,7 +874,7 @@ def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
 
     loc_data = loc_base + hf.get_exp_params(expInd).dir + 'structures/';
-    fL_name = 'fitList_190114c'
+    fL_name = 'fitList_190122c'
 
     np = numpy;
 
@@ -904,13 +904,7 @@ def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     dataList = hf.np_smart_load(str(loc_data + 'dataList.npy'));
     dataNames = dataList['unitName'];
 
-    if expInd == 3: # for now, only the LGN experiment has the response adjustment
-      direc = 1; # default dir is 1 (positive)
-      rvcName = 'rvcFits';
-      rvcFits = hf.np_smart_load(str(loc_data + hf.phase_fit_name(rvcName, direc)));
-      rvcFits = rvcFits[cellNum-1];
-    else:
-      rvcFits = None;
+    rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum); # see default arguments in helper_fcns.py
 
     print('loading data structure from %s...' % loc_data);
     S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy')); # why -1? 0 indexing...

@@ -44,7 +44,8 @@ save_loc = loc_base + hf.get_exp_params(expInd).dir + 'figures/';
 expName = 'dataList.npy'
 #fitBase = 'fitListSPcns_181130c';
 #fitBase = 'fitListSP_181202c';
-fitBase = 'fitList_190114c';
+#fitBase = 'fitList_190114c';
+fitBase = 'fitList_190122c';
 
 # first the fit type
 fitSuf_fl = '_flat';
@@ -116,11 +117,15 @@ modHighs = [np.nanmax(resp, axis=3) for resp in allSfMixs];
 modAvgs = [np.nanmean(resp, axis=3) for resp in allSfMixs];
 modSponRates = [fit[6] for fit in modFits];
 
+# TODO: make this retrieve the adjusted spikes, as needed
 # more tabulation
-resp, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, modResps[0]);
+_, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, modResps[0]);
+rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum);
+spikes  = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=rvcFits, expInd=expInd);
+_, _, respOrg, respAll    = hf.organize_resp(spikes, expData, expInd);
 
-respMean = resp[0];
-respStd = resp[1];
+respMean = respOrg;
+respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
 
 blankMean, blankStd, _ = hf.blankResp(expData); 
 
@@ -340,7 +345,8 @@ plt.loglog(respMean[val_conds][gt0], np.square(respStd[val_conds][gt0]), 'o');
 # skeleton for plotting modulated poisson prediction
 if lossType == 3: # i.e. modPoiss
   mean_vals = np.logspace(-1, 2, 50);
-  plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals));
+  varGains  = [x[7] for x in modFits];
+  [plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals)) for varGain in varGains];
 plt.xlabel('Mean (sps)');
 plt.ylabel('Variance (sps^2)');
 plt.title('Super-poisson?');
