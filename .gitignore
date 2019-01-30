@@ -1,6 +1,6 @@
-V1_orig/Structures/Structures-extra
-V1_orig/Structures/m*
-V1_orig/Figures/*
+V1_orig/structures/**
+V1_orig/structures/m*
+V1_orig/figures/*
 altExp/figures/**
 altExp/structures/m*
 **/.ipynb_checkpoints/**
@@ -23,7 +23,7 @@ altExp/structures/**
 LGN/structures/matlab/
 LGN/structures/*sfm*.npy*
 LGN/figures/
-LGN/uvnlExpo/
+LGN/
 LGN/experiments
 LGN/sach/figures/
 LGN/sach/forTony/
@@ -34,3 +34,5 @@ LGN/sach/sach-data/
 /tf2.7/
 **/Structures/m*
 **/structures/m*
+mountainsort_instructions.pdf
+uvnlExpo/**

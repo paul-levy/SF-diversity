@@ -19,7 +19,9 @@ import warnings
 # np_smart_load - be smart about using numpy load
 # bw_lin_to_log
 # bw_log_to_lin
-# get_exp_params - given an index for a particular version of the sfMix experiments, return parameters of that experiment (i.e. #stimulus components)
+# exp_name_to_ind - given the name of an exp (e.g. sfMixLGN), return the expInd
+# get_exp_params  - given an index for a particular version of the sfMix experiments, return parameters of that experiment (i.e. #stimulus components)
+# get_exp_ind     - given a .npy for a given sfMix recording, determine the experiment index
 # fitList_name
 # phase_fit_name
 # descrFit_name
@@ -97,7 +99,22 @@ def bw_log_to_lin(log_bw, pref_sf):
     
     return lin_bw, sf_range
 
-def get_exp_params(expInd):
+def exp_name_to_ind(expName):
+    ''' static mapping from name of experiment to expInd
+    '''
+    if expName == 'sfMix':
+      expInd = 1;
+    elif expName == 'sfMixAlt':
+      expInd = 2;
+    elif expName == 'sfMixLGN':
+      expInd = 3;
+    elif expName == 'sfMixInt':
+      expInd = 4;
+    elif expName == 'sfMixHalfInt':
+      expInd = 5;
+    return expInd;
+
+def get_exp_params(expInd, forceDir=None):
     '''  returns the following
                 (max) nComponents in each stimulus
                 # of stimulus families (i.e. how many dispersion levels)
@@ -108,7 +125,7 @@ def get_exp_params(expInd):
     class exp_params:
       
       def __init__(self, expInd):
-        if expInd == 1: # original V1 experiment
+        if expInd == 1: # original V1 experiment - m657, m658, m660
           self.nStimComp = 9;
           self.nFamilies = 5; 
           self.comps     = [1, 3, 5, 7, 9];
@@ -118,7 +135,7 @@ def get_exp_params(expInd):
           self.dir       = 'V1_orig/'
           self.stimDur   = 1; # in seconds
           self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
-        elif expInd == 2: # V1 alt exp
+        elif expInd == 2: # V1 alt exp - m670, m671
           self.nStimComp = 7;
           self.nFamilies = 4;
           self.comps     = [1, 3, 5, 7]
@@ -128,7 +145,7 @@ def get_exp_params(expInd):
           self.dir       = 'altExp/'
           self.stimDur   = 1; # in seconds
           self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
-        elif expInd == 3: # LGN experiment
+        elif expInd == 3: # (original) LGN experiment - m675; two recordings from V1 exp. m676 (in V1/)
           self.nStimComp = 5;
           self.nFamilies = 2;
           self.comps     = [1, 5];
@@ -138,8 +155,53 @@ def get_exp_params(expInd):
           self.dir       = 'LGN/'
           self.stimDur   = 1; # in seconds
           self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
+        elif expInd == 4: # V1 "Int" - same as expInd = 2, but with integer TFs (keeping separate to track # cells)
+          self.nStimComp = 7;
+          self.nFamilies = 4;
+          self.comps     = [1, 3, 5, 7]
+          self.nCons     = 4;
+          self.nSfs      = 11;
+          self.nCells    = 1;
+          self.dir       = 'V1/'
+          self.stimDur   = 1; # in seconds
+          self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
+        elif expInd == 5: # V1 "halfInt" - same as expInd = 4, but with stimDur = 2
+          self.nStimComp = 7;
+          self.nFamilies = 4;
+          self.comps     = [1, 3, 5, 7]
+          self.nCons     = 4;
+          self.nSfs      = 11;
+          self.nCells    = 4;
+          self.dir       = 'V1/'
+          self.stimDur   = 2; # in seconds
+          self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
+
+        if forceDir is not None:
+          self.dir       = forceDir;
 
     return exp_params(expInd);
+
+def get_exp_ind(filePath, fileName):
+    '''  returns the following:
+           index of experiment (see get_exp_params)
+           name of experiment (e.g. sfMix, sfMixHalfInt)
+
+         this function relies on the fact that all .npy files (in /structures) have an associated matlab file
+         in /recordings with the full experiment name
+           EXCEPT: V1_orig files...
+    '''
+    if 'V1_orig' in filePath:
+      return 'sfMix'; # need to handle this case specially, since we don't have /recordings/ for this experiment
+
+    name_root = fileName.split('_')[0];
+    orig_files = os.listdir(filePath + '../recordings/');
+    for f in orig_files:
+      if f.startswith(name_root) and '.xml' in f: # make sure it's not a *_sfm.mat that is in .../recordings/
+        # we rely on the following: fileName#run[expType].[exxd/xml]
+        expName = f.split('[')[1].split(']')[0];
+        return exp_name_to_ind(expName), expName;
+
+    return None, None; # uhoh...
 
 def num_frames(expInd):
   exper = get_exp_params(expInd);
@@ -149,6 +211,8 @@ def num_frames(expInd):
   return nFrames;
 
 def fitList_name(base, fitType, lossType):
+  ''' use this to get the proper name for the full model fits
+  '''
   # first the fit type
   if fitType == 1:
     fitSuf = '_flat';
@@ -167,6 +231,7 @@ def fitList_name(base, fitType, lossType):
 
 def phase_fit_name(base, dir, byTrial=0):
   ''' Given the base name for a file, append the flag for the phase direction (dir)
+      This is used for phase advance fits
   '''
   if byTrial == 1:
     byTr = '_byTr'
@@ -191,6 +256,8 @@ def descrFit_name(lossType, modelName = None):
     floss_str = '_sqrt';
   elif lossType == 3:
     floss_str = '_poiss';
+  elif lossType == 4:
+    floss_str = '_sach';
   descrFitBase = 'descrFits%s' % floss_str;
 
   if modelName is None:
