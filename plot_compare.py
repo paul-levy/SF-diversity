@@ -29,7 +29,7 @@ rcParams['font.style'] = 'oblique';
 
 cellNum  = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
-expInd   = int(sys.argv[3]); 
+expDir   = sys.argv[3]; 
 
 # at CNS
 loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/';
@@ -38,14 +38,15 @@ loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/';
 # prince cluster
 #loc_base = '/home/pl1465/SF_diversity/';
 
-data_loc = loc_base + hf.get_exp_params(expInd).dir + 'structures/';
-save_loc = loc_base + hf.get_exp_params(expInd).dir + 'figures/';
+data_loc = loc_base + expDir + 'structures/';
+save_loc = loc_base + expDir + 'figures/';
 
 expName = 'dataList.npy'
 #fitBase = 'fitListSPcns_181130c';
 #fitBase = 'fitListSP_181202c';
 #fitBase = 'fitList_190114c';
-fitBase = 'fitList_190122c';
+#fitBase = 'fitList_190122c';
+fitBase = 'fitList_190131c';
 
 # first the fit type
 fitSuf_fl = '_flat';
@@ -87,7 +88,9 @@ dataList = np.load(str(data_loc + expName), encoding='latin1').item();
 fitList_fl = hf.np_smart_load(data_loc + fitName_fl);
 fitList_wg = hf.np_smart_load(data_loc + fitName_wg);
 
-expData = np.load(str(data_loc + dataList['unitName'][cellNum-1] + '_sfm.npy'), encoding='latin1').item();
+cellName = dataList['unitName'][cellNum-1];
+expData  = np.load(str(data_loc + cellName + '_sfm.npy'), encoding='latin1').item();
+expInd   = hf.get_exp_ind(data_loc, cellName)[0];
 
 # #### Load model fits
 
@@ -100,7 +103,7 @@ normTypes = [1, 2]; # flat, then weighted
 # #### determine contrasts, center spatial frequency, dispersions
 
 modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd) for fit, norm in zip(modFits, normTypes)];
-modResps = [x[1] for x in modResps]; # 1st return output is NLL (don't care about that here)
+modResps = [x[1] for x in modResps]; # 1st return output (x[0]) is NLL (don't care about that here)
 gs_mean = modFit_wg[8]; 
 gs_std = modFit_wg[9];
 # now organize the responses
@@ -109,17 +112,14 @@ oriModResps = [org[0] for org in orgs]; # only non-empty if expInd = 1
 conModResps = [org[1] for org in orgs]; # only non-empty if expInd = 1
 sfmixModResps = [org[2] for org in orgs];
 allSfMixs = [org[3] for org in orgs];
-# now organize the measured responses in the same way
-_, _, sfmixExpResp, allSfMixExp = hf.organize_resp(expData['sfm']['exp']['trial']['spikeCount'], expData, expInd);
 
 modLows = [np.nanmin(resp, axis=3) for resp in allSfMixs];
 modHighs = [np.nanmax(resp, axis=3) for resp in allSfMixs];
 modAvgs = [np.nanmean(resp, axis=3) for resp in allSfMixs];
 modSponRates = [fit[6] for fit in modFits];
 
-# TODO: make this retrieve the adjusted spikes, as needed
-# more tabulation
-_, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, modResps[0]);
+# more tabulation - stim vals, organize measured responses
+_, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd);
 rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum);
 spikes  = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=rvcFits, expInd=expInd);
 _, _, respOrg, respAll    = hf.organize_resp(spikes, expData, expInd);
@@ -370,7 +370,7 @@ inhSfTuning = hf.getSuppressiveSFtuning();
 # Compute weights for suppressive signals
 nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
 nTrials =  inhSfTuning.shape[0];
-inhWeight = hf.genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials);
+inhWeight = hf.genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials, expInd);
 inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
 # first, tuned norm:
 sfNormTune = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);

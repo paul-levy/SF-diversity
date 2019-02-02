@@ -5,16 +5,14 @@
 	# 2 - poisson
 	# 3 - modulated poission
 	# 4 - chi squared
-# third param is expInd
-	# 1 - V1_orig
-	# 2 - altExp (V1)
-	# 3 - LGN
-	# 4 - ...
+# third param is expDir (e.g. V1/ or LGN/)
 # fourth param is log_y: (1 for log y coordinate)
 
-for run in {1..34}
+source activate lcv-python
+
+for run in {1..5}
 do
-  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 plot_compare.py $run 4 3 0 &
+  python plot_compare.py $run 4 V1/ 0 &
 done
 
 # leave a blank line at the end

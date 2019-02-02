@@ -36,6 +36,10 @@ import warnings
 
 # DiffOfGauss - standard difference of gaussians
 # DoGsach - difference of gaussians as implemented in sach's thesis
+# dog_prefSf - compute the prefSf for a given DoG model/parameter set
+# dog_prefSfMod - fit a simple model of prefSf as f'n of contrast
+# dog_charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
+# dog_charFreqMod - smooth characteristic frequency vs. contrast with a functional form/fit
 # var_explained - compute the variance explained for a given model fit/set of responses
 # chiSq
 
@@ -45,6 +49,8 @@ import warnings
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
 # blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
+# get_valid_trials - rutrn list of valid trials given disp/con/sf
+# get_valid_sfs - return list indices (into allSfs) of valid sfs for given disp/con
 # tabulate_responses - Organizes measured and model responses for sfMixAlt experiment
 # organize_adj_responses - wrapper for organize_adj_responses within each experiment subfolder
 # organize_resp       -
@@ -263,7 +269,7 @@ def descrFit_name(lossType, modelName = None):
   if modelName is None:
     descrName = '%s.npy' % descrFitBase;
   else:
-    descrName = '%s_%s' % (descrFitBase, modelName);
+    descrName = '%s_%s.npy' % (descrFitBase, modelName);
     
   return descrName;
 
@@ -347,6 +353,108 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
   dog_norm = lambda f: dog(f) / norm;
 
   return dog(stim_sf), dog_norm(stim_sf);
+
+def dog_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11)):
+  ''' Compute the preferred SF given a set of DoG parameters
+  '''
+  sf_bound = (numpy.min(all_sfs), numpy.max(all_sfs));
+  if dog_model == 1:
+    obj = lambda sf: -DoGsach(*modParams, stim_sf=sf)[0];
+  elif dog_model == 2:
+    obj = lambda sf: -DiffOfGauss(*modParams, stim_sf=sf)[0];
+  init_sf = numpy.median(all_sfs);
+  optz = opt.minimize(obj, init_sf, bounds=(sf_bound, ))
+  return optz['x'];
+
+def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65, dog_model=2):
+  ''' Given a descrFit dict for a cell, compute a fit for the prefSf as a function of contrast
+      Return ratio of prefSf at highest:lowest contrast, lambda of model, params
+  '''
+  np = numpy;
+  # the model
+  psf_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha);
+  # gather the values
+  #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
+  validInds = np.where(descrFit['varExpl'][disp, :] > varThresh)[0];
+  if len(validInds) == 0: # i.e. no good fits...
+    return np.nan, [], [];
+  if 'prefSf' in descrFit:
+    prefSfs = descrFit['prefSf'][disp, validInds];
+  else:
+    prefSfs = [];
+    for i in validInds:
+      psf_curr = dog_prefSf(descrFit['params'][disp, validInds], dog_model);
+      prefSfs.append(psf_curr);
+  conVals = allCons[validInds];
+  weights = descrFit['varExpl'][disp, validInds];
+  # set up the optimization
+  obj = lambda params: np.sum(np.multiply(weights,
+        np.square(psf_model(params[0], params[1], params[2], conVals) - prefSfs)))
+  init_offset = prefSfs[0];
+  conRange = conVals[-1] - conVals[0];
+  init_slope = (prefSfs[-1] - prefSfs[0]) / conRange;
+  init_alpha = 0.4; # most tend to be saturation (i.e. contrast exp < 1)
+  # run
+  optz = opt.minimize(obj, [init_offset, init_slope, init_alpha], bounds=((0, None), (None, None), (0.25, 4)));
+  opt_params = optz['x'];
+  # ratio:
+  extrema = psf_model(*opt_params, con=(conVals[0], conVals[-1]))
+  pSfRatio = extrema[-1] / extrema[0]
+
+  return pSfRatio, psf_model, opt_params;
+
+def dog_charFreq(prms, DoGmodel=1):
+  if DoGmodel == 1: # sach
+      r_c = prms[1];
+      f_c = 1/(numpy.pi*r_c)
+  elif DoGmodel == 2: # tony
+      f_c = prms[1];
+
+  return f_c;
+
+def dog_charFreqMod(descrFit, allCons, varThresh=70, DoGmodel=1, lowConCut = 0.1, disp=0):
+  ''' Given a descrFit dict for a cell, compute a fit for the charFreq as a function of contrast
+      Return ratio of charFreqat highest:lowest contrast, lambda of model, params, the value of the charFreq at the valid contrasts, the corresponding valid contrast
+      Note: valid contrast means a contrast which is greater than the lowConCut and one for which the Sf tuning fit has a variance explained gerat than varThresh
+  '''
+  np = numpy;
+  # the model
+  fc_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha);
+  # gather the values
+  #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
+  if disp == 0:
+    inds = np.asarray([0, 1, 2, 3, 4, 5, 7, 9, 11]);
+  elif disp == 1:
+    inds = np.asarray([6, 8, 10]);
+  validInds = np.where((descrFit['varExpl'][disp, inds] > varThresh) & (allCons > lowConCut))[0];
+  conVals = allCons[validInds];
+
+  if len(validInds) == 0: # i.e. no good fits...
+    return np.nan, None, None, None, None;
+  if 'charFreq' in descrFit:
+    charFreqs = descrFit['charFreq'][disp, inds[validInds]];
+  else:
+    charFreqs = [];
+    for i in validInds:
+      cf_curr = dog_charFreq(descrFit['params'][disp, i], DoGmodel);
+      charFreqs.append(cf_curr);
+  weights = descrFit['varExpl'][disp, inds[validInds]];
+  # set up the optimization
+  obj = lambda params: np.sum(np.multiply(weights,
+        np.square(fc_model(params[0], params[1], params[2], conVals) - charFreqs)))
+  init_offset = charFreqs[0];
+  conRange = conVals[-1] - conVals[0];
+  init_slope = (charFreqs[-1] - charFreqs[0]) / conRange;
+  init_alpha = 0.4; # most tend to be saturation (i.e. contrast exp < 1)
+  # run
+  optz = opt.minimize(obj, [init_offset, init_slope, init_alpha], bounds=((0, None), (None, None), (0.25, 4)));
+  opt_params = optz['x'];
+  # ratio:
+  extrema = fc_model(*opt_params, con=(conVals[0], conVals[-1]))
+  fcRatio = extrema[-1] / extrema[0]
+
+  return fcRatio, fc_model, opt_params, charFreqs, conVals;
+
 
 def var_explained(data_resps, modParams, sfVals, dog_model = 2):
   ''' given a set of responses and model parameters, compute the variance explained by the model 
@@ -481,6 +589,48 @@ def blankResp(cellStruct):
     
     return mu, sig, blank_tr;
     
+def get_valid_trials(data, disp, con, sf, expInd):
+  ''' Given a data and the disp/con/sf indices (i.e. integers into the list of all disps/cons/sfs
+      Determine which trials are valid (i.e. have those stimulus criteria)
+      RETURN list of valid trials, lists for all dispersion values, all contrast values, all sf values
+  '''
+  _, stimVals, _, validByStimVal, _ = tabulate_responses(data, expInd);
+
+  # gather the conditions we need so that we can index properly
+  valDisp = validByStimVal[0];
+  valCon = validByStimVal[1];
+  valSf = validByStimVal[2];
+
+  allDisps = stimVals[0];
+  allCons = stimVals[1];
+  allSfs = stimVals[2];
+
+  val_trials = numpy.where(valDisp[disp] & valCon[con] & valSf[sf]);
+
+  return val_trials, allDisps, allCons, allSfs;
+
+def get_valid_sfs(data, disp, con, expInd):
+  ''' Self explanatory, innit? Returns the indices (into allSfs) of valid sfs for the given condition
+  '''
+  _, stimVals, _, validByStimVal, _ = tabulate_responses(data, expInd);
+
+  # gather the conditions we need so that we can index properly
+  valDisp = validByStimVal[0];
+  valCon = validByStimVal[1];
+  valSf = validByStimVal[2];
+
+  allDisps = stimVals[0];
+  allCons = stimVals[1];
+  allSfs = stimVals[2];
+
+  val_sfs = [];
+  for i in range(len(allSfs)):
+    val_trials = numpy.where(valDisp[disp] & valCon[con] & valSf[i]);
+    if len(val_trials[0]) > 0:
+      val_sfs.append(i);
+
+  return val_sfs;
+
 def tabulate_responses(cellStruct, expInd, modResp = []):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
@@ -488,9 +638,13 @@ def tabulate_responses(cellStruct, expInd, modResp = []):
         (iii) the valid contrasts for each dispersion level
         (iv) valid_disp, valid_con, valid_sf - which conditions are valid for this particular cell
         (v) modRespOrg - the model responses organized as in (i) - only if modResp argument passed in
+        NOTE: We pass in the overall spike counts (modResp; either real or predicted), and compute 
+          the spike *rates* (i.e. spikes/s)
     '''
     np = numpy;
     conDig = 3; # round contrast to the thousandth
+    exper = get_exp_params(expInd);
+    stimDur = exper.stimDur;
     
     if 'sfm' in cellStruct: 
       data = cellStruct['sfm']['exp']['trial'];
@@ -498,7 +652,7 @@ def tabulate_responses(cellStruct, expInd, modResp = []):
       data = cellStruct;
 
     if expInd == 1: # this exp structure only has 'con', 'sf'; perform some simple ops to get everything as in other exp structures
-      v1_dir = get_exp_params(expInd).dir.replace('/', '.');
+      v1_dir = exper.dir.replace('/', '.');
       v1_hf = il.import_module(v1_dir+'helper_fcns');
       data['total_con'] = np.sum(data['con'], -1);
       data['cent_sf']   = data['sf'][0]; # first component, i.e. center SF, is at position 0
@@ -562,8 +716,8 @@ def tabulate_responses(cellStruct, expInd, modResp = []):
                 if np.all(np.unique(valid_tr) == False):
                     continue;
 
-                respMean[d, sf, con] = np.mean(data['spikeCount'][valid_tr]);
-                respStd[d, sf, con] = np.std((data['spikeCount'][valid_tr]));
+                respMean[d, sf, con] = np.mean(data['spikeCount'][valid_tr]/stimDur);
+                respStd[d, sf, con] = np.std((data['spikeCount'][valid_tr]/stimDur));
                 
                 curr_pred = 0;
                 curr_var = 0; # variance (std^2) adds
@@ -581,16 +735,16 @@ def tabulate_responses(cellStruct, expInd, modResp = []):
                         #print('empty...');
                         continue;
                     
-                    curr_pred = curr_pred + np.mean(data['spikeCount'][val_tr]);
-                    curr_var = curr_var + np.var(data['spikeCount'][val_tr]);
+                    curr_pred = curr_pred + np.mean(data['spikeCount'][val_tr]/stimDur);
+                    curr_var = curr_var + np.var(data['spikeCount'][val_tr]/stimDur);
                     
                 predMean[d, sf, con] = curr_pred;
                 predStd[d, sf, con] = np.sqrt(curr_var);
                 
-                if mod:
+                if mod: # convert spike counts in each trial to spike rate (spks/s)
                     nTrCurr = sum(valid_tr); # how many trials are we getting?
-                    modRespOrg[d, sf, con, 0:nTrCurr] = modResp[valid_tr];
-        
+                    modRespOrg[d, sf, con, 0:nTrCurr] = modResp[valid_tr]/stimDur;
+
             if np.any(~np.isnan(respMean[d, :, con])):
                 if ~np.isnan(np.nanmean(respMean[d, :, con])):
                     val_con_by_disp[d].append(con);
@@ -613,13 +767,15 @@ def organize_adj_responses(data, rvcFits, expInd):
   return adjResps;
 
 def organize_resp(spikes, expStructure, expInd):
+    ''' organizes the responses by condition given spikes, experiment structure, and expInd
+    '''
     # the blockIDs are fixed...
     exper = get_exp_params(expInd);
     nFam = exper.nFamilies;
     nCon = exper.nCons;
     nCond = exper.nSfs;
     nReps = 20; # never more than 20 reps per stim. condition
-   
+    
     if expInd == 1: # only the original V1 exp (expInd=1) has separate ori and RVC measurements
       # Analyze the stimulus-driven responses for the orientation tuning curve
       oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
@@ -681,7 +837,11 @@ def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', direc=1):
   '''
   if expInd == 3: # for now, only the LGN experiment has the response adjustment
     rvcFits = np_smart_load(str(loc_data + phase_fit_name(rvcName, direc)));
-    rvcFits = rvcFits[cellNum-1];
+    try:
+      rvcFits = rvcFits[cellNum-1];
+    except: # if the RVC fits haven't been done...
+      warnings.warn('This experiment type (expInd=3) usually has associated RVC fits for resposne adjustment');
+      rvcFits = None;
   else:
     rvcFits = None;
 
@@ -921,11 +1081,11 @@ def getNormParams(params, normType):
     inhAsym = 0;
     return inhAsym;
 
-def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials):
+def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials, expInd):
   np = numpy;
   # A: do the calculation here - more flexibility
   inhWeight = [];
-  nFrames = 120;
+  nFrames = num_frames(expInd);
   T = cellStruct['sfm'];
   nInhChan = T['mod']['normalization']['pref']['sf'];
         

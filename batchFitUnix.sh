@@ -1,10 +1,19 @@
 #!/bin/bash
 
-# params are: cellNum, expInd, lossType, fitType, initFromCurr
+# params are: cellNum, expDir, lossType, fitType, initFromCurr
 # see model_responses.py for additional details
 
-for run in {1..34}
-do
-  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 model_responses.py $run 3 4 1 1 0 &
-  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 model_responses.py $run 3 4 2 1 0 &
+source activate lcv-python
+
+for run in {1..5}; do
+  python model_responses.py $run V1/ 4 1 0 &
+  python model_responses.py $run V1/ 4 2 0 &
 done
+
+
+#for i in {1..10}; do
+#  for run in {1..5}; do
+#    python model_responses.py $run V1/ 4 1 0 &
+#    python model_responses.py $run V1/ 4 2 0 &
+#  done
+#done

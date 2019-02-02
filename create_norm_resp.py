@@ -2,9 +2,8 @@ import numpy as np
 import sys
 import model_responses
 
-def comp_norm_resp(cellInd, data_loc, expInd):
-  # subtract one, since cell 1 is at location 0, etc, etc (zero-index)...
-   model_responses.GetNormResp(cellInd-1, data_loc, expInd=expInd);
+def comp_norm_resp(cellInd, data_loc, expDir):
+   model_responses.GetNormResp(cellInd, data_loc, expDir=expDir);
 
 if __name__ == '__main__':
 
@@ -23,7 +22,7 @@ if __name__ == '__main__':
       exit();
 
     cellNum = int(sys.argv[1]);
-    expInd  = int(sys.argv[2]);
+    expDir  = sys.argv[2];
     print('Running cell ' + str(cellNum) + '...');
 
-    comp_norm_resp(cellNum, dataPath, expInd)
+    comp_norm_resp(cellNum, dataPath, expDir)

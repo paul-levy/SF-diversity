@@ -13,13 +13,15 @@ basePath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/';
 # prince cluster
 basePath = '/home/pl1465/SF_diversity/';
 # LCV/cns machines
-basePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python';
+basePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/';
 
 data_suff = 'structures/';
-save_suff = 'structures/';
 
 expName = 'dataList.npy'
 dogName =  'descrFits_190129';
+# TODO:check to see if following two lines are needed
+phAdvName = 'phaseAdvanceFits'
+rvcName   = 'rvcFits'
 
 ### TODO:
 # all of 1.
@@ -52,7 +54,7 @@ dogName =  'descrFits_190129';
     The Sach DoG curves should also be fit to this sum.
 '''
 
-def phase_advance_fit(cell_num, data_loc = dataPath, phAdvName=phAdvName, to_save = 1, disp=0, dir=-1):
+def phase_advance_fit(cell_num, data_loc, phAdvName=phAdvName, to_save = 1, disp=0, dir=-1):
   ''' Given the FFT-derived response amplitude and phase, determine the response phase relative
       to the stimulus by taking into account the stimulus phase. 
       Then, make a simple linear model fit (line + constant offset) of the response phase as a function
@@ -69,7 +71,7 @@ def phase_advance_fit(cell_num, data_loc = dataPath, phAdvName=phAdvName, to_sav
   phAdvName = hf.fit_name(phAdvName, dir);
 
   # first, get the set of stimulus values:
-  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data);
+  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd);
   allCons = stimVals[1];
   allSfs = stimVals[2];
 
@@ -105,7 +107,7 @@ def phase_advance_fit(cell_num, data_loc = dataPath, phAdvName=phAdvName, to_sav
 
   return phAdv_model, all_opts;
 
-def rvc_adjusted_fit(cell_num, data_loc=dataPath, rvcName=rvcName, to_save=1, disp=0, dir=-1):
+def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, disp=0, dir=-1):
   ''' Piggy-backing off of phase_advance_fit above, get prepare to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
   '''
@@ -115,7 +117,7 @@ def rvc_adjusted_fit(cell_num, data_loc=dataPath, rvcName=rvcName, to_save=1, di
   rvcNameFinal = hf.fit_name(rvcName, dir);
 
   # first, get the set of stimulus values:
-  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data);
+  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd);
   allCons = stimVals[1];
   allSfs = stimVals[2];
   valCons = allCons[valConByDisp[disp]];
@@ -228,14 +230,20 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
     loss = loss + np.sum((sq_err/(k+np.square(sigma)))) + gain_reg*(params[0] + params[2]); # regularize - want gains as low as possible
   return loss;
 
-def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGmodel=1, disp=0, rvcName=rvcName, dir=-1, gain_reg=0, fLname = dogName):
-
+def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, dir=+1, gain_reg=0, fLname = dogName):
+  ''' 
+      NOTE: as of now, fLname is overwritten (we just use default from helper_fcns, meaning no date appending)
+  '''
   nParam = 4;
 
   # load cell information
   dataList = hf.np_smart_load(data_loc + 'dataList.npy');
   assert dataList!=[], "data file not found!"
-  expInd = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1]);
+  cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
+  data = cellStruct['sfm']['exp']['trial'];
+  # get expInd, load rvcFits [if existing]
+  expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1]);
+  print('Making DoG fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num); # see default arguments in helper_fcns.py
 
   if DoGmodel == 1:
@@ -243,30 +251,20 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGm
   elif DoGmodel == 2:
     modStr = 'tony';
   fLname  = hf.descrFit_name(loss_type, modelName=modStr);
-
-  if os.path.isfile(fLname):
-      descrFits = hf.np_smart_load(fLname);
+  if os.path.isfile(data_loc + fLname):
+      descrFits = hf.np_smart_load(data_loc + fLname);
   else:
       descrFits = dict();
 
-  cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
-  data = cellStruct['sfm']['exp']['trial'];
-  if rvcFits is not None:
-    adjResps = rvcFits[cell_num-1][disp]['adjMeans'];
-    adjSem = rvcFits[cell_num-1][disp]['adjSem'];
-  if 'adjByTr' in rvcFits[cell_num-1][disp]:
-    adjByTr = rvcFits[cell_num-1][disp]['adjByTr'];
-  if disp == 1:
-    adjResps = [np.sum(x, 1) if x else [] for x in adjResps];
-    if adjByTr:
-      adjByTr = [np.sum(x, 1) if x else [] for x in adjByTr];
-  adjResps = np.array(adjResps); # indexing multiple SFs will work only if we convert to numpy array first
-  adjSem = np.array([np.array(x) for x in adjSem]); # make each inner list an array, and the whole thing an array
+  # now, get the spikes (adjusted, if needed) and organize for fitting
+  spks = hf.get_spikes(data, rvcFits, expInd);
+  _, _, resps_mean, resps_all = hf.organize_resp(spks, cellStruct, expInd);
+  resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
   
   print('Doing the work, now');
 
   # first, get the set of stimulus values:
-  resps, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data);
+  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd);
   all_disps = stimVals[0];
   all_cons = stimVals[1];
   all_sfs = stimVals[2];
@@ -303,23 +301,18 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGm
 
   for d in range(nDisps): # should be nDisps - just setting to 1 for now (i.e. fitting single gratings and mixtures separately)
     for con in range(nCons):
-      if con not in valConByDisp[disp]:
+      if con not in valConByDisp[d]:
         continue;
 
-      valSfInds = hf.get_valid_sfs(data, disp, con);
+      valSfInds = hf.get_valid_sfs(data, d, con, expInd);
       valSfVals = all_sfs[valSfInds];
 
       print('.');
-      # adjResponses (f1) in the rvcFits are separate by sf, values within contrast - so to get all responses for a given SF, 
-      # access all sfs and get the specific contrast response
-      respConInd = np.where(np.asarray(valConByDisp[disp]) == con)[0];
-      resps = hf.flatten([x[respConInd] for x in adjResps[valSfInds]]);
-      resps_sem = [x[respConInd] for x in adjSem[valSfInds]];
-      if isinstance(resps_sem[0], np.ndarray): # i.e. if it's still array of arrays...
-        resps_sem = hf.flatten(resps_sem);
-      #resps_sem = None;
-      maxResp = np.max(resps);
-      freqAtMaxResp = all_sfs[np.argmax(resps)];
+      respConInd = np.where(np.asarray(valConByDisp[d]) == con)[0];
+      resps_curr = resps_mean[d, valSfInds, con];
+      sem_curr   = resps_sem[d, valSfInds, con];
+      maxResp       = np.max(resps_curr);
+      freqAtMaxResp = all_sfs[np.argmax(resps_curr)];
 
       for n_try in range(n_repeats):
         # pick initial params
@@ -342,24 +335,24 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGm
         else:
             methodStr = 'TNC';
 
-        obj = lambda params: DoG_loss(params, resps, valSfVals, resps_std=resps_sem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg);
+        obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg);
         wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
 
         # compare
         NLL = wax['fun'];
         params = wax['x'];
 
-        if np.isnan(bestNLL[disp, con]) or NLL < bestNLL[disp, con]:
-          bestNLL[disp, con] = NLL;
-          currParams[disp, con, :] = params;
-          varExpl[disp, con] = hf.var_explained(resps, params, valSfVals);
-          prefSf[disp, con] = hf.dog_prefSf(params, DoGmodel, valSfVals);
-          charFreq[disp, con] = hf.dog_charFreq(params, DoGmodel);
+        if np.isnan(bestNLL[d, con]) or NLL < bestNLL[d, con]:
+          bestNLL[d, con] = NLL;
+          currParams[d, con, :] = params;
+          varExpl[d, con] = hf.var_explained(resps_curr, params, valSfVals, DoGmodel);
+          prefSf[d, con] = hf.dog_prefSf(params, DoGmodel, valSfVals);
+          charFreq[d, con] = hf.dog_charFreq(params, DoGmodel);
 
     # update stuff - load again in case some other run has saved/made changes
-    if os.path.isfile(fLname):
+    if os.path.isfile(data_loc + fLname):
       print('reloading descrFits...');
-      descrFits = hf.np_smart_load(fLname);
+      descrFits = hf.np_smart_load(data_loc + fLname);
     if cell_num-1 not in descrFits:
       descrFits[cell_num-1] = dict();
     descrFits[cell_num-1]['NLL'] = bestNLL;
@@ -369,7 +362,7 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGm
     descrFits[cell_num-1]['charFreq'] = charFreq;
     descrFits[cell_num-1]['gainRegFactor'] = gain_reg;
 
-    np.save(fLname, descrFits);
+    np.save(data_loc + fLname, descrFits);
     print('saving for cell ' + str(cell_num));
 
 ### Fin: Run the stuff!
@@ -380,21 +373,25 @@ if __name__ == '__main__':
       print('uhoh...you need at least one argument(s) here');
       exit();
 
-    cell_num = int(sys.argv[1]);
-    disp = int(sys.argv[2]);
-    ph_fits = int(sys.argv[3]);
-    rvc_fits = int(sys.argv[4]);
-    descr_fits = int(sys.argv[5]);
-    dog_model = int(sys.argv[6]);
-    if len(sys.argv) > 7:
-      dir = float(sys.argv[7]);
+    cell_num   = int(sys.argv[1]);
+    disp       = int(sys.argv[2]);
+    data_dir   = sys.argv[3];
+    ph_fits    = int(sys.argv[4]);
+    rvc_fits   = int(sys.argv[5]);
+    descr_fits = int(sys.argv[6]);
+    dog_model  = int(sys.argv[7]);
+    if len(sys.argv) > 8:
+      dir = float(sys.argv[8]);
     else:
       dir = None;
-    if len(sys.argv) > 8:
-      gainReg = float(sys.argv[8]);
+    if len(sys.argv) > 9:
+      gainReg = float(sys.argv[9]);
     else:
       gainReg = 0;
     print('Running cell %d' % cell_num);
+
+    # get the full data directory
+    dataPath = basePath + data_dir + data_suff;
 
     # then, put what to run here...
     if dir == None:
@@ -403,11 +400,11 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, disp=disp);
       if descr_fits == 1:
-        fit_descr_DoG(cell_num, gain_reg=gainReg, disp=disp, DoGmodel=dog_model);
+        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, DoGmodel=dog_model);
     else:
       if ph_fits == 1:
         phase_advance_fit(cell_num, disp=disp, dir=dir);
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, disp=disp, dir=dir);
       if descr_fits == 1:
-        fit_descr_DoG(cell_num, gain_reg=gainReg, disp=disp, dir=dir, DoGmodel=dog_model);
+        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model);

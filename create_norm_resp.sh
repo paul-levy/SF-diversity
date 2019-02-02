@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# params are: cellNum, expInd
+# params are: cellNum, expDir
 # see model_responses.py or create_norm_resp.py for additional details
 
-for run in {1..34}
+source activate lcv-python
+
+for run in {1..5}
 do
-  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 create_norm_resp.py $run 3 &
+  python create_norm_resp.py $run V1/ & 
 done

@@ -520,13 +520,11 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
         
     return M;
 
-def GetNormResp(iU, loadPath, stimParams = [], expInd = 1):
-   
-    
-    # GETNORMRESP    Runs the code that computes the response of the
-    # normalization pool for the recordings in the SfDiv project.
-    # Returns 'M', result from SFMNormResp
-    
+def GetNormResp(iU, loadPath, expDir, stimParams = []):
+    ''' GETNORMRESP    Runs the code that computes the response of the
+     normalization pool for the recordings in the SfDiv project.
+     Returns 'M', result from SFMNormResp
+    '''
 
     # Robbe Goris, 10-30-2015
 
@@ -544,28 +542,34 @@ def GetNormResp(iU, loadPath, stimParams = [], expInd = 1):
 
     normPool = {'n': n, 'nUnits': nUnits, 'gain': gain};
 
-    curr_dir = hf.get_exp_params(expInd).dir + 'structures/';
+    curr_dir = expDir + 'structures/';
     loadPath = loadPath + curr_dir; # the loadPath passed in is the base path, then we add the directory for the specific experiment
-    
+
     if isinstance(iU, int):
         dataList = hf.np_smart_load(loadPath + 'dataList.npy');
-        unitName = str(dataList['unitName'][iU]);
+        unitName = str(dataList['unitName'][iU-1]);
+        expInd = hf.get_exp_ind(loadPath, unitName)[0];
         M = SFMNormResp(unitName, loadPath, normPool, expInd=expInd);
     else:
         unitName = iU;
+        expInd = hf.get_exp_ind(loadPath, unitName)[0];
         M = SFMNormResp(unitName, [], normPool, stimParams, expInd=expInd);
 
     return M;
 
 def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None):
-    # Computes the negative log likelihood for the LN-LN model
-    #   Optional arguments: //note: true means include in mask, false means exclude
-    #   trialSubset - pass in the trials you want to evaluate (ignores all other masks)
-    #   maskOri     - in the optimization, we don't include the orientation tuning curve - skip that in the evaluation of loss, too
-    #   maskIn      - pass in a mask (overwrite maskOri and trialSubset, i.e. highest presedence) 
-    #   expInd      - which experiment number?
-    #   rvcFits     - if included, then we'll get adjusted spike counts instead of "raw" saved ones
-    # Returns NLL ###, respModel, E
+    '''
+    Computes the negative log likelihood for the LN-LN model
+       Optional arguments: //note: true means include in mask, false means exclude
+       trialSubset - pass in the trials you want to evaluate (ignores all other masks)
+       maskOri     - in the optimization, we don't include the orientation tuning curve - skip that in the evaluation of loss, too
+       maskIn      - pass in a mask (overwrite maskOri and trialSubset, i.e. highest presedence) 
+       expInd      - which experiment number?
+       rvcFits     - if included, then we'll get adjusted spike counts instead of "raw" saved ones
+     Returns NLL ###, respModel
+       Note: to keep in sync with the organization/gathering of measured spiking responses, we return
+         respModel as spikes/trial (and not a rate of spks/s)
+    '''
 
     # 00 = preferred spatial frequency   (cycles per degree)
     # 01 = derivative order in space
@@ -633,7 +637,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     nInhChan = T['mod']['normalization']['pref']['sf'];
     nTrials = len(T['exp']['trial']['num']);
     inhWeight = [];
-    nFrames = hf.num_frames(expInd); # always
+    nFrames = hf.num_frames(expInd);
 
     if normType == 3:
       filter = hf.setSigmaFilter(sfPeak, stdLeft, stdRight);
@@ -644,7 +648,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
       sigmaFilt = numpy.square(sigma); # i.e. square the normalization constant
 
     if normType == 2:
-      inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
+      inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials, expInd);
     else: # normType == 1 or anything else,
       for iP in range(len(nInhChan)):
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
@@ -674,7 +678,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
         meanRate      = ratio.mean(0);
         respModel     = noiseLate + scale*meanRate; # respModel[iR]
-        rateModel     = T['exp']['trial']['duration'] * respModel;
+        rateModel     = respModel / T['exp']['trial']['duration'];
         # and get the spike count
         spikeCount = hf.get_spikes(T['exp']['trial'], rvcFits=rvcFits, expInd=expInd);
 
@@ -706,14 +710,14 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
 
         if lossType == 1:
           # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
-          lsq = numpy.square(numpy.add(numpy.sqrt(rateModel[mask]), -numpy.sqrt(spikeCount[mask])));
+          lsq = numpy.square(numpy.add(numpy.sqrt(respModel[mask]), -numpy.sqrt(spikeCount[mask])));
           NLL = numpy.mean(lsq);
         elif lossType == 2:
-          poiss_llh = numpy.log(poisson.pmf(spikeCount[mask], rateModel[mask]));
+          poiss_llh = numpy.log(poisson.pmf(spikeCount[mask], respModel[mask]));
           NLL = numpy.mean(-poiss_llh);
         elif lossType == 3:
           # Get predicted spike count distributions
-          mu  = numpy.maximum(.01, rateModel[mask]); # The predicted mean spike count; respModel[iR]
+          mu  = numpy.maximum(.01, respModel[mask]); # The predicted mean spike count; respModel[iR]
           var = mu + (varGain*pow(mu,2));                        # The corresponding variance of the spike count
           r   = pow(mu,2)/(var - mu);                           # The parameters r and p of the negative binomial distribution
           p   = r/(r + mu);
@@ -724,7 +728,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
             warnings.warn('This loss type (chi squared) is not currently equipped to handle hold out subsets');
           _, _, expByCond, expAll = hf.organize_resp(spikeCount, structureSFM['sfm']['exp']['trial'], expInd);
           exp_responses = [expByCond.flatten(), numpy.nanvar(expAll, axis=3).flatten()];
-          _, _, modByCond, modAll = hf.organize_resp(rateModel, structureSFM['sfm']['exp']['trial'], expInd);
+          _, _, modByCond, modAll = hf.organize_resp(respModel, structureSFM['sfm']['exp']['trial'], expInd);
           mod_responses = [modByCond.flatten(), numpy.nanvar(modAll, axis=3).flatten()];
           NLL = hf.chiSq(exp_responses, mod_responses);
 
@@ -802,6 +806,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     nTrials = stimParams['repeats'];
     inhWeight = [];
     nFrames = hf.num_frames(expInd); # always
+    stimDur = hf.get_exp_params(expInd).stimDur;
 
     if normType == 3:
       filter = hf.setSigmaFilter(sfPeak, stdLeft, stdRight);
@@ -812,7 +817,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
       sigmaFilt = numpy.square(sigma); # i.e. normalization constant squared
 
     if normType == 2:
-      inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials);
+      inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials, expInd);
     else: # normType == 1 or anything else, we just go with 
       for iP in range(len(nInhChan)):
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
@@ -845,11 +850,12 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
     meanRate      = ratio.mean(0);
     respModel     = noiseLate + scale*meanRate; # respModel[iR]
+    rateModel     = respModel / stimDur;
 
     return respModel, Linh, Lexc, normResp['normResp'], denominator;
 
 ## TODO: adapt for all experiments/make flexible for all current/future experiments
-def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdOutCondition = None):
+def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdOutCondition = None):
     # Given just a cell number, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
     #
     # lossType
@@ -873,8 +879,8 @@ def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     #loc_base = '/home/pl1465/SF_diversity/'; # Prince cluster 
     loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
 
-    loc_data = loc_base + hf.get_exp_params(expInd).dir + 'structures/';
-    fL_name = 'fitList_190122c'
+    loc_data = loc_base + expDir + 'structures/';
+    fL_name = 'fitList_190202c'
 
     np = numpy;
 
@@ -904,6 +910,8 @@ def setModel(cellNum, expInd, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     dataList = hf.np_smart_load(str(loc_data + 'dataList.npy'));
     dataNames = dataList['unitName'];
 
+    expInd = hf.get_exp_ind(loc_data, dataNames[cellNum-1])[0];
+    
     rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum); # see default arguments in helper_fcns.py
 
     print('loading data structure from %s...' % loc_data);
@@ -1074,4 +1082,4 @@ if __name__ == '__main__':
       print('See this file (setModel) or batchFitUnix.sh for guidance');
       exit();
 
-    setModel(int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]));
+    setModel(int(sys.argv[1]), sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]));
