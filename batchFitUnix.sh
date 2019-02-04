@@ -9,11 +9,3 @@ for run in {1..5}; do
   python model_responses.py $run V1/ 4 1 0 &
   python model_responses.py $run V1/ 4 2 0 &
 done
-
-
-#for i in {1..10}; do
-#  for run in {1..5}; do
-#    python model_responses.py $run V1/ 4 1 0 &
-#    python model_responses.py $run V1/ 4 2 0 &
-#  done
-#done

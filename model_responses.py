@@ -3,7 +3,7 @@ import helper_fcns as hf
 from scipy.stats import norm, mode, lognorm, nbinom, poisson
 from numpy.matlib import repmat
 import scipy.optimize as opt
-import time
+import datetime
 import sys
 
 import pdb
@@ -675,7 +675,9 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
         numerator     = noiseEarly + Lexc;
         denominator   = pow(sigmaFilt + pow(Linh, 2), 0.5); # square Linh added 7/24 - was mistakenly not fixed earlier
-        ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
+        ratio         = pow(numerator/denominator, respExp);
+        # NOTE: TODO - turned off the 0 thresholding to see what happens and to better fit LGN responses, which - when adjusted - can be negative
+        #ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
         meanRate      = ratio.mean(0);
         respModel     = noiseLate + scale*meanRate; # respModel[iR]
         rateModel     = respModel / T['exp']['trial']['duration'];
@@ -880,7 +882,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
 
     loc_data = loc_base + expDir + 'structures/';
-    fL_name = 'fitList_190202c'
+    fL_name = 'fitList_190204c'
 
     np = numpy;
 
@@ -954,6 +956,11 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
       initFromCurr = 0; # override initFromCurr so that we just go with default parameters
       fitList[cellNum-1] = dict();
       fitList[cellNum-1]['NLL'] = 1e4; # large initial value...
+    # get the list of NLL per run
+    try:
+      nll_history = fitList[cellNum-1]['NLL_history'];
+    except:
+      nll_history = np.array([]);
 
     if numpy.any(numpy.isnan(curr_params)): # if there are nans, we need to ignore...
       curr_params = [];
@@ -1051,22 +1058,26 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     currNLL = fitList[cellNum-1]['NLL']; # exists - either from real fit or as placeholder
 
     print('...finished. Current NLL (%.2f) vs. previous NLL (%.2f)' % (NLL, currNLL)); 
+    # reload fitlist in case changes have been made with the file elsewhere!
+    if os.path.exists(loc_data + fitListName):
+      fitList = hf.np_smart_load(str(loc_data + fitListName));
+    # else, nothing to reload!!!
+    # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
+    if cellNum-1 not in fitList:
+      fitList[cellNum-1] = dict();
+    # now, if the NLL is now the best, update this
     if NLL < currNLL:
-      # reload fitlist in case changes have been made with the file elsewhere!
-      if os.path.exists(loc_data + fitListName):
-        fitList = hf.np_smart_load(str(loc_data + fitListName));
-      # else, nothing to reload!!!
-      # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
-      if cellNum-1 not in fitList:
-        fitList[cellNum-1] = dict();
       fitList[cellNum-1]['NLL'] = NLL;
       fitList[cellNum-1]['params'] = opt_params;
       # NEW: Also save whether or not fit was success, exit message (18.12.01)
       fitList[cellNum-1]['success'] = tomin['success'];
       fitList[cellNum-1]['message'] = tomin['message'];
-      numpy.save(loc_data + fitListName, fitList);
+      # NEW: Also save *when* this most recent fit was made (19.02.04); and nll_history below
+      fitList[cellNum-1]['time'] = datetime.datetime.now();
     else:
-      print('new NLL not less than currNLL, not saving result');
+      print('new NLL not less than currNLL, not saving result, but updating ovreal fit list (i.e. tracking each fit)');
+    fitList[cellNum-1]['nll_history'] = np.append(nll_history, NLL);
+    numpy.save(loc_data + fitListName, fitList);
 
     if holdOutCondition is not None:
       holdoutNLL, _, = SFMGiveBof(opt_params, structureSFM=S, normType=fitType, lossType=lossType, trialSubset=holdOutTr, expInd=expInd, rvcFits=rvcFits);

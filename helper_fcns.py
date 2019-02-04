@@ -202,7 +202,7 @@ def get_exp_ind(filePath, fileName):
     name_root = fileName.split('_')[0];
     orig_files = os.listdir(filePath + '../recordings/');
     for f in orig_files:
-      if f.startswith(name_root) and '.xml' in f: # make sure it's not a *_sfm.mat that is in .../recordings/
+      if f.startswith(name_root) and '.xml' in f and 'sfMix' in f: # make sure it's not a *_sfm.mat that is in .../recordings/, and that .xml and "sfMix" are in the file
         # we rely on the following: fileName#run[expType].[exxd/xml]
         expName = f.split('[')[1].split(']')[0];
         return exp_name_to_ind(expName), expName;

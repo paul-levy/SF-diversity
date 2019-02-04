@@ -15,6 +15,9 @@ from scipy.stats.mstats import gmean
 import helper_fcns as hf
 import model_responses as mod_resp
 
+import warnings
+warnings.filterwarnings('once');
+
 import pdb
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_cluster.mplstyle');
@@ -45,8 +48,9 @@ expName = 'dataList.npy'
 #fitBase = 'fitListSPcns_181130c';
 #fitBase = 'fitListSP_181202c';
 #fitBase = 'fitList_190114c';
-#fitBase = 'fitList_190122c';
-fitBase = 'fitList_190131c';
+fitBase = 'fitList_190122c';
+#fitBase = 'fitList_190131c';
+#fitBase = 'fitList_190202c';
 
 # first the fit type
 fitSuf_fl = '_flat';
@@ -89,6 +93,12 @@ fitList_fl = hf.np_smart_load(data_loc + fitName_fl);
 fitList_wg = hf.np_smart_load(data_loc + fitName_wg);
 
 cellName = dataList['unitName'][cellNum-1];
+try:
+  cellType = dataList['unitType'][cellNum-1];
+except: 
+  # TODO: note, this is dangerous; thus far, only V1 cells don't have 'unitType' field in dataList, so we can safely do this
+  cellType = 'V1'; 
+
 expData  = np.load(str(data_loc + cellName + '_sfm.npy'), encoding='latin1').item();
 expInd   = hf.get_exp_ind(data_loc, cellName)[0];
 
@@ -195,9 +205,9 @@ for d in range(nDisps):
         dispAx[d][c_plt_ind, 1].set_yscale('log');
         dispAx[d][c_plt_ind, 1].legend();
 
-    fCurr.suptitle('cell #%d, loss %.2f|%.2f' % (cellNum, fitList_fl[cellNum-1]['NLL'], fitList_wg[cellNum-1]['NLL']));
+    fCurr.suptitle('%s #%d, loss %.2f|%.2f' % (cellType, cellNum, fitList_fl[cellNum-1]['NLL'], fitList_wg[cellNum-1]['NLL']));
 
-saveName = "/cell_%02d.pdf" % (cellNum)
+saveName = "/cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
@@ -208,7 +218,7 @@ for f in fDisp:
 pdfSv.close();
 
 # #### All SF tuning on one graph, split by dispersion
-'''
+
 fDisp = []; dispAx = [];
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
@@ -218,20 +228,18 @@ for d in range(nDisps):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(1, 2, figsize=(20, 20)); # left side for data, right side for model predictions
+    fCurr, dispCurr = plt.subplots(1, 3, figsize=(35, 20)); # left side for flat; middle for data; right side for weighted model
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
 
-    for i in range(2):
-    
-      if i == 0:
-        curr_resps = respMean;
-        curr_mean = blankMean;
-        maxResp = np.max(np.max(curr_resps[d, ~np.isnan(curr_resps[d, :, :])]));
-      else:
-        curr_resps = modAvgs;
-        curr_mean = modSponRates;
-        maxResp = np.max([np.max(np.max(cr[d, ~np.isnan(cr[d, :, :])])) for cr in curr_resps]);
+    fCurr.suptitle('%s #%d' % (cellType, cellNum));
+
+    resps_curr = [modAvgs[0], respMean, modAvgs[1]];
+    labels     = [modLabels[0], 'data', modLabels[1]];
+
+    for i in range(3):
+      curr_resps = resps_curr[i];
+      maxResp = np.max(np.max(np.max(curr_resps[~np.isnan(curr_resps)])));  
 
       lines = [];
       for c in reversed(range(n_v_cons)):
@@ -239,16 +247,18 @@ for d in range(nDisps):
 
           # plot data
           col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
-          respAbBaseline = curr_resps[d, v_sfs, v_cons[c]] - curr_mean;
-          curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', clip_on=False, color=col);
+          plot_resp = curr_resps[d, v_sfs, v_cons[c]];
+
+          curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', clip_on=False, \
+                                         color=col, label=str(np.round(all_cons[v_cons[c]], 2)));
           lines.append(curr_line);
 
-      dispAx[d][i].set_aspect('equal', 'box'); 
+      #dispAx[d][i].set_aspect('equal', 'box'); 
       dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
       dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
 
       dispAx[d][i].set_xscale('log');
-      dispAx[d][i].set_yscale('log');
+      #dispAx[d][i].set_yscale('log');
       dispAx[d][i].set_xlabel('sf (c/deg)'); 
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
@@ -257,10 +267,10 @@ for d in range(nDisps):
       sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
 
       dispAx[d][i].set_ylabel('resp above baseline (sps)');
-      dispAx[d][i].set_title('D%02d - sf tuning' % (d));
-      dispAx[d][i].legend(lines, [str(i) for i in reversed(all_cons[v_cons])], loc=0);
+      dispAx[d][i].set_title('D%02d - sf tuning %s' % (d, labels[i]));
+      dispAx[d][i].legend(); 
 
-saveName = "/allCons_cell_%02d.pdf" % (cellNum)
+saveName = "/allCons_cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
@@ -269,7 +279,7 @@ for f in fDisp:
     pdfSv.savefig(f)
     plt.close(f)
 pdfSv.close()
-'''
+
 # #### Plot just sfMix contrasts
 
 mixCons = hf.get_exp_params(expInd).nCons;
@@ -309,7 +319,7 @@ for d in range(nDisps):
         sns.despine(ax=sfMixAx[c_plt_ind, d], offset=10, trim=False);
 
 f.legend();
-f.suptitle('cell #%d, loss %.2f|%.2f' % (cellNum, fitList_fl[cellNum-1]['NLL'], fitList_wg[cellNum-1]['NLL']));
+f.suptitle('%s #%d, loss %.2f|%.2f' % (cellType, cellNum, fitList_fl[cellNum-1]['NLL'], fitList_wg[cellNum-1]['NLL']));
 	        
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc
@@ -424,7 +434,7 @@ plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, modFits[0][2
 
 ### now save all figures (sfMix contrasts, details, normalization stuff)
 allFigs = [f, fDetails];
-saveName = "/cell_%02d.pdf" % (cellNum)
+saveName = "/cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'sfMixOnly/'));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
@@ -434,51 +444,132 @@ for fig in range(len(allFigs)):
     plt.close(allFigs[fig])
 pdfSv.close()
 
-'''
+#### Response versus contrast
+
+# #### Plot contrast response functions with (full) model predictions
+
+rvcAx = []; fRVC = [];
+
+for d in range(nDisps):
+    # which sfs have at least one contrast presentation? within a dispersion, all cons have the same # of sfs
+    v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd);
+    n_v_sfs = len(v_sf_inds);
+    n_rows = int(np.ceil(n_v_sfs/np.floor(np.sqrt(n_v_sfs)))); # make this close to a rectangle/square in arrangement (cycling through sfs)
+    n_cols = int(np.ceil(n_v_sfs/n_rows));
+    fCurr, rvcCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*10, n_rows*10), sharex = True, sharey = True);
+    fRVC.append(fCurr);
+    rvcAx.append(rvcCurr);
+    
+    fCurr.suptitle('%s #%d' % (cellType, cellNum-1));
+
+    #print('%d rows, %d cols\n' % (n_rows, n_cols));
+
+    for sf in range(n_v_sfs):
+        row_ind = int(sf/n_cols);
+        col_ind = np.mod(sf, n_cols);
+        sf_ind = v_sf_inds[sf];
+       	plt_x = d; 
+        if n_cols > 1:
+          plt_y = (row_ind, col_ind);
+        else: # pyplot makes it (n_rows, ) if n_cols == 1
+          plt_y = (row_ind, );
+        #print(plt_y);
+
+        v_cons = val_con_by_disp[d];
+        n_cons = len(v_cons);
+        plot_cons = np.linspace(np.min(all_cons[v_cons]), np.max(all_cons[v_cons]), 100); # 100 steps for plotting...
+
+	# organize (measured) responses
+        resp_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
+        respPlt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(resp_curr, 0.1), '-', clip_on=False, label='data');
+
+ 	# RVC with full model fits (i.e. flat and weighted)
+        [rvcAx[plt_x][plt_y].fill_between(all_cons[v_cons], mLow[d,sf_ind,v_cons], mHigh[d,sf_ind,v_cons], color=cc, \
+          alpha=0.7, clip_on=False) for mLow, mHigh, cc in zip(modLows,modHighs, modColors)];
+        [rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(modAvg[d, sf_ind, v_cons], 0.1), color=cc, \
+          alpha=0.7, clip_on=False, label=s) for modAvg,cc,s in zip(modAvgs, modColors, modLabels)];
+
+        # summary plots
+        '''
+	curr_rvc = rvcAx[0][d, 0].plot(all_cons[v_cons], resps_curr, '-', clip_on=False);
+        rvc_plots.append(curr_rvc[0]);
+
+        stdPts = np.hstack((0, np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, ))));
+        expPts = rvcAx[d+1][row_ind, col_ind].errorbar(np.hstack((0, all_cons[v_cons])), resps_w_blank, stdPts, fmt='o', clip_on=Fals
+e);
+
+        sepPlt = rvcAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_sep), linestyle='dashed');
+        allPlt = rvcAx[d+1][row_ind, col_ind].plot(plot_cons, helper_fcns.naka_rushton(plot_cons, curr_fit_all), linestyle='dashed');
+	# accompanying legend/comments
+	rvcAx[d+1][row_ind, col_ind].legend((expPts[0], sepPlt[0], allPlt[0]), ('data', 'model fits'), fontsize='large', loc='center left')
+        '''
+
+        rvcAx[plt_x][plt_y].set_xscale('log', basex=10); # was previously symlog, linthreshx=0.01
+        if col_ind == 0:
+          rvcAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
+          rvcAx[plt_x][plt_y].set_ylabel('response (spikes/s)', fontsize='medium');
+          rvcAx[plt_x][plt_y].legend();
+        
+        rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
+
+	# Set ticks out, remove top/right axis, put ticks only on bottom/left
+        sns.despine(ax = rvcAx[plt_x][plt_y], offset = 10, trim=False);
+        rvcAx[plt_x][plt_y].tick_params(labelsize=25, width=2, length=16, direction='out');
+        rvcAx[plt_x][plt_y].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+
+saveName = "/cell_%03d.pdf" % (cellNum)
+full_save = os.path.dirname(str(save_loc + 'CRF/'));
+if not os.path.exists(full_save):
+  os.makedirs(full_save);
+pdfSv = pltSave.PdfPages(full_save + saveName);
+for f in fRVC:
+    pdfSv.savefig(f)
+    plt.close(f)
+pdfSv.close()
+
 # #### Plot contrast response functions - all sfs on one axis (per dispersion)
 
 crfAx = []; fCRF = [];
 
 for d in range(nDisps):
     
-    fCurr, crfCurr = plt.subplots(1, 2, figsize=(20, 25), sharex = False, sharey = False); # left side for data, right side for model predictions
+    fCurr, crfCurr = plt.subplots(1, 3, figsize=(35, 20), sharex = False, sharey = True); # left side for flat; middle for data; right side for weighted model
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
 
-    for i in range(2):
-      
-      if i == 0:
-        curr_resps = respMean;
-        curr_base = blankMean;
-        title_str = 'data';
-      else:
-        curr_resps = modAvg;
-        curr_base = modBlankMean;
-        title_str = 'model';
+    fCurr.suptitle('%s #%d' % (cellType, cellNum));
+
+    resps_curr = [modAvgs[0], respMean, modAvgs[1]];
+    labels     = [modLabels[0], 'data', modLabels[1]];
+
+    v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd);
+    n_v_sfs = len(v_sf_inds);
+
+    for i in range(3):
+      curr_resps = resps_curr[i];
       maxResp = np.max(np.max(np.max(curr_resps[~np.isnan(curr_resps)])));
 
-      # which sfs have at least one contrast presentation?
-      v_sfs = np.where(np.sum(~np.isnan(curr_resps[d, :, :]), axis = 1) > 0);
-      n_v_sfs = len(v_sfs[0])
-
-      lines = []; lines_log = [];
+      lines_log = [];
       for sf in range(n_v_sfs):
-          sf_ind = v_sfs[0][sf];
+          sf_ind = v_sf_inds[sf];
           v_cons = ~np.isnan(curr_resps[d, sf_ind, :]);
           n_cons = sum(v_cons);
 
           col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
-          plot_resps = np.reshape([curr_resps[d, sf_ind, v_cons]], (n_cons, ));
-          respAbBaseline = plot_resps-curr_base;
-          line_curr, = crfAx[d][i].plot(all_cons[v_cons][respAbBaseline>1e-1], respAbBaseline[respAbBaseline>1e-1], '-o', color=col, clip_on=False);
-          #line_curr, = crfAx[d][i].plot(all_cons[v_cons], np.maximum(1e-1, curr_resps-blankMean), '-o', color=col, clip_on=False);
+          plot_resp = curr_resps[d, sf_ind, v_cons];
+
+          line_curr, = crfAx[d][i].plot(all_cons[v_cons][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', color=col, \
+                                        clip_on=False, label = str(np.round(all_sfs[sf_ind], 2)));
           lines_log.append(line_curr);
 
-      crfAx[d][i].set_xlim([1e-2, 1]);
-      crfAx[d][i].set_ylim([1e-2, 1.5*maxResp]);
-      crfAx[d][i].set_aspect('equal', 'box')
+      crfAx[d][i].set_xlim([-0.1, 1]);
+      crfAx[d][i].set_ylim([-0.1*maxResp, 1.1*maxResp]);
+      '''
       crfAx[d][i].set_xscale('log');
       crfAx[d][i].set_yscale('log');
+      crfAx[d][i].set_xlim([1e-2, 1]);
+      crfAx[d][i].set_ylim([1e-2, 1.5*maxResp]);
+      '''
       crfAx[d][i].set_xlabel('contrast');
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
@@ -487,16 +578,15 @@ for d in range(nDisps):
       sns.despine(ax = crfAx[d][i], offset=10, trim=False);
 
       crfAx[d][i].set_ylabel('resp above baseline (sps)');
-      crfAx[d][i].set_title('D%02d: sf:all - log resp %s' % (d, title_str));
-      crfAx[d][i].legend(lines_log, [str(i) for i in np.round(all_sfs[v_sfs], 2)], loc='upper left');
+      crfAx[d][i].set_title('D%d: sf:all - log resp %s' % (d, labels[i]));
+      crfAx[d][i].legend();
 
-saveName = "/allSfs_log_cell_%02d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'CRF/'));
+saveName = "/allSfs_cell_%03d.pdf" % (cellNum)
 if not os.path.exists(full_save):
   os.makedirs(full_save);
+full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
     pdfSv.savefig(f)
     plt.close(f)
 pdfSv.close()
-'''
