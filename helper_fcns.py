@@ -489,12 +489,10 @@ def chiSq(data_resps, model_resps, stimDur=1):
   # some conditions might be blank (and therefore NaN) - remove them!
   num = data_resps[0] - model_resps[0];
   valid = ~np.isnan(num);
-  # TODO: Figure out how to handle negative data_resps (this can happen e.g. in LGN experiment, due to adjusted responses)
-  #num_nonNeg = ~np.isnan(num);
-  #data_pos   = data_resps[0]>0; # only count if data is non-negative (recall that if the experiment has adjusted responses, these may be negative)
-  #valid      = num_nonNeg & data_pos;
-
-  chi = np.sum(np.divide(np.square(num[valid]), k + data_resps[0][valid]*rho/stimDur));
+  data_resp_recenter = data_resps[0][valid] - np.min(data_resps[0][valid]);
+  # the numerator is (.)^2, and therefore always >=0; the denominator is now "recentered" so that the values are >=0
+  # thus, chi will always be >=0, avoiding a fit which maximizes the numerator to reduce the loss (denom was not strictly >0)   
+  chi = np.sum(np.divide(np.square(num[valid]), k + data_resp_recenter*rho/stimDur));
 
   return chi;
 

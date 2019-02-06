@@ -882,7 +882,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
 
     loc_data = loc_base + expDir + 'structures/';
-    fL_name = 'fitList_190204c'
+    fL_name = 'fitList_190206c'
 
     np = numpy;
 
@@ -958,7 +958,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
       fitList[cellNum-1]['NLL'] = 1e4; # large initial value...
     # get the list of NLL per run
     try:
-      nll_history = fitList[cellNum-1]['NLL_history'];
+      nll_history = fitList[cellNum-1]['nll_history'];
     except:
       nll_history = np.array([]);
 
