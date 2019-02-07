@@ -197,7 +197,7 @@ def get_exp_ind(filePath, fileName):
            EXCEPT: V1_orig files...
     '''
     if 'V1_orig' in filePath:
-      return 'sfMix'; # need to handle this case specially, since we don't have /recordings/ for this experiment
+      return 1, 'sfMix'; # need to handle this case specially, since we don't have /recordings/ for this experiment
 
     name_root = fileName.split('_')[0];
     orig_files = os.listdir(filePath + '../recordings/');
