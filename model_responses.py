@@ -856,7 +856,6 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
 
     return respModel, Linh, Lexc, normResp['normResp'], denominator;
 
-## TODO: adapt for all experiments/make flexible for all current/future experiments
 def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdOutCondition = None):
     # Given just a cell number, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
     #
