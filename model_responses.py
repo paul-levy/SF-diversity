@@ -880,7 +880,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     #loc_base = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/'; # personal mac
     #loc_base = '/home/pl1465/SF_diversity/'; # Prince cluster 
     #loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
-    loc_base = os.getcwd();
+    loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory
 
     loc_data = loc_base + expDir + 'structures/';
 
