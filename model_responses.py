@@ -879,10 +879,15 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     ########
     #loc_base = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/'; # personal mac
     #loc_base = '/home/pl1465/SF_diversity/'; # Prince cluster 
-    loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
+    #loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
+    loc_base = os.getcwd();
 
     loc_data = loc_base + expDir + 'structures/';
-    fL_name = 'fitList_190204c'
+    if 'pl1465' in loc_base:
+      loc_str = 'HPC';
+    else:
+      loc_str = '';  
+    fL_name = 'fitList%s_190206c' % loc_str
 
     np = numpy;
 
