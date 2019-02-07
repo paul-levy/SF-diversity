@@ -883,6 +883,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     loc_base = os.getcwd();
 
     loc_data = loc_base + expDir + 'structures/';
+
     if 'pl1465' in loc_base:
       loc_str = 'HPC';
     else:
@@ -963,7 +964,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
       fitList[cellNum-1]['NLL'] = 1e4; # large initial value...
     # get the list of NLL per run
     try:
-      nll_history = fitList[cellNum-1]['NLL_history'];
+      nll_history = fitList[cellNum-1]['nll_history'];
     except:
       nll_history = np.array([]);
 
