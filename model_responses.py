@@ -520,7 +520,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
         
     return M;
 
-def GetNormResp(iU, loadPath, expDir, stimParams = []):
+def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None):
     ''' GETNORMRESP    Runs the code that computes the response of the
      normalization pool for the recordings in the SfDiv project.
      Returns 'M', result from SFMNormResp
@@ -548,11 +548,11 @@ def GetNormResp(iU, loadPath, expDir, stimParams = []):
     if isinstance(iU, int):
         dataList = hf.np_smart_load(loadPath + 'dataList.npy');
         unitName = str(dataList['unitName'][iU-1]);
-        expInd = hf.get_exp_ind(loadPath, unitName)[0];
+        if expInd is None:
+          expInd = dataList['expType'][iU-1];
         M = SFMNormResp(unitName, loadPath, normPool, expInd=expInd);
     else:
         unitName = iU;
-        expInd = hf.get_exp_ind(loadPath, unitName)[0];
         M = SFMNormResp(unitName, [], normPool, stimParams, expInd=expInd);
 
     return M;
@@ -918,7 +918,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     dataList = hf.np_smart_load(str(loc_data + 'dataList.npy'));
     dataNames = dataList['unitName'];
 
-    expInd = hf.get_exp_ind(loc_data, dataNames[cellNum-1])[0];
+    expInd = hf.exp_name_to_ind(dataList['expType'][cellNum-1]);
     
     rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum); # see default arguments in helper_fcns.py
 
