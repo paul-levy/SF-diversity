@@ -21,7 +21,7 @@ altExp/firstPass/**
 altExp/recordings/**
 altExp/structures/**
 LGN/structures/matlab/
-LGN/structures/*sfm*.npy*
+#LGN/structures/*sfm*.npy*
 LGN/figures/
 LGN/
 LGN/experiments
