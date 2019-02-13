@@ -10,9 +10,9 @@
 
 source activate lcv-python
 
-for run in {1..5}
+for run in {1..34}
 do
-  python plot_compare.py $run 4 V1/ 0 &
+  python plot_compare.py $run 4 LGN/ 0 &
 done
 
 # leave a blank line at the end

@@ -48,9 +48,10 @@ expName = 'dataList.npy'
 #fitBase = 'fitListSPcns_181130c';
 #fitBase = 'fitListSP_181202c';
 #fitBase = 'fitList_190114c';
-fitBase = 'fitList_190122c';
+#fitBase = 'fitList_190122c';
 #fitBase = 'fitList_190131c';
 #fitBase = 'fitList_190202c';
+fitBase = 'fitList_190206c';
 
 # first the fit type
 fitSuf_fl = '_flat';

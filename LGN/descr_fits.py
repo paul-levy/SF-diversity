@@ -1,6 +1,5 @@
 import numpy as np
 import sys
-import helper_fcns as hf
 import scipy.optimize as opt
 import os
 from time import sleep
@@ -8,17 +7,29 @@ from scipy.stats import sem
 import warnings
 import pdb
 
-# personal mac
-#dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
-#save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/analysis/structures/';
-# prince cluster
-dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
-save_loc = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
+import sys
+sys.path.insert(0, '../');
+import helper_fcns as hf
 
-expName = 'dataList.npy'
+# LCV/CNS
+dataPath = '/users/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/LGN/structures/';
+save_loc = '/users/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/LGN/structures/';
+# personal mac
+# dataPath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/structures/';
+# save_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/structures/';
+# prince cluster
+#dataPath = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
+#save_loc = '/home/pl1465/SF_diversity/LGN/analysis/structures/';
+
+expName   = 'dataList.npy'
 phAdvName = 'phaseAdvanceFits'
-rvcName = 'rvcFits'
-dogName =  'descrFits_181102';
+rvcName   = 'rvcFits'
+dogName   =  'descrFits_181102';
+expInd    = 3;
+
+def flatten(l):
+  flatten = lambda l: [item for sublist in l for item in sublist];
+  return flatten(l);
 
 ### 1: Recreate Movshon, Kiorpes, Hawken, Cavanaugh '05 figure 6 analyses
 ''' These plots show response versus contrast data (with model fit) AND
@@ -65,7 +76,7 @@ def phase_advance_fit(cell_num, data_loc = dataPath, phAdvName=phAdvName, to_sav
   phAdvName = hf.fit_name(phAdvName, dir);
 
   # first, get the set of stimulus values:
-  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data);
+  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd=expInd);
   allCons = stimVals[1];
   allSfs = stimVals[2];
 
@@ -111,7 +122,7 @@ def rvc_adjusted_fit(cell_num, data_loc=dataPath, rvcName=rvcName, to_save=1, di
   rvcNameFinal = hf.fit_name(rvcName, dir);
 
   # first, get the set of stimulus values:
-  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data);
+  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd=expInd);
   allCons = stimVals[1];
   allSfs = stimVals[2];
   valCons = allCons[valConByDisp[disp]];
@@ -248,7 +259,7 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGm
 
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
-  rvcNameFinal = hf.fit_name(rvcName, dir);
+  rvcNameFinal = hf.phase_fit_name(rvcName, dir);
   rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
   adjResps = rvcFits[cell_num-1][disp]['adjMeans'];
   adjSem = rvcFits[cell_num-1][disp]['adjSem'];
@@ -264,7 +275,7 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGm
   print('Doing the work, now');
 
   # first, get the set of stimulus values:
-  resps, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data);
+  resps, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd=expInd); # LGN is expInd=3
   all_disps = stimVals[0];
   all_cons = stimVals[1];
   all_sfs = stimVals[2];
@@ -304,17 +315,22 @@ def fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=1000, loss_type=3, DoGm
       if con not in valConByDisp[disp]:
         continue;
 
-      valSfInds = hf.get_valid_sfs(data, disp, con);
+      valSfInds = hf.get_valid_sfs(data, disp, con, expInd);
       valSfVals = all_sfs[valSfInds];
 
       print('.');
       # adjResponses (f1) in the rvcFits are separate by sf, values within contrast - so to get all responses for a given SF, 
       # access all sfs and get the specific contrast response
       respConInd = np.where(np.asarray(valConByDisp[disp]) == con)[0];
-      resps = hf.flatten([x[respConInd] for x in adjResps[valSfInds]]);
+      pdb.set_trace();
+      ### interlude...
+      spks = hf.get_spikes(data, rvcFits=rvcFits[cell_num-1], expInd=expInd);
+      _, _, mnResp, alResp =hf.organize_resp(spks, data, expInd);
+      ###
+      resps = flatten([x[respConInd] for x in adjResps[valSfInds]]);
       resps_sem = [x[respConInd] for x in adjSem[valSfInds]];
       if isinstance(resps_sem[0], np.ndarray): # i.e. if it's still array of arrays...
-        resps_sem = hf.flatten(resps_sem);
+        resps_sem = flatten(resps_sem);
       #resps_sem = None;
       maxResp = np.max(resps);
       freqAtMaxResp = all_sfs[np.argmax(resps)];

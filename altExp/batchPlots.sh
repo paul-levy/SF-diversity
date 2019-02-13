@@ -20,7 +20,7 @@
 
 for run in {1..8}
 do
-  /e/2.3/p3/wangzhuo/anaconda3/bin/python3 plotting_simple.py $run 4 1 3 3 0 &
+  # /e/2.3/p3/wangzhuo/anaconda3/bin/python3 plotting_simple.py $run 4 1 3 3 0 &
   /e/2.3/p3/wangzhuo/anaconda3/bin/python3 plotting_simple.py $run 4 2 3 3 0 &
 done
 
