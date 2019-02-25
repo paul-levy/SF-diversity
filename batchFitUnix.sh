@@ -5,7 +5,7 @@
 
 source activate lcv-python
 
-for run in {1..5}; do
-  python model_responses.py $run V1/ 4 1 0 &
-  python model_responses.py $run V1/ 4 2 0 &
+for run in {1..34}; do
+  python model_responses.py $run LGN/ 4 1 1 &
+  python model_responses.py $run LGN/ 4 2 1 &
 done

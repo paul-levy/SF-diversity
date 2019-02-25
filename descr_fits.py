@@ -9,7 +9,7 @@ import warnings
 import pdb
 
 # personal mac
-basePath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/';
+#basePath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/';
 # prince cluster
 basePath = '/home/pl1465/SF_diversity/';
 # LCV/cns machines
@@ -19,12 +19,11 @@ data_suff = 'structures/';
 
 expName = 'dataList.npy'
 dogName =  'descrFits_190129';
-# TODO:check to see if following two lines are needed
-phAdvName = 'phaseAdvanceFits'
-rvcName   = 'rvcFits'
+phAdvName = 'phaseAdvanceFitsTest'
+rvcName   = 'rvcFitsTest'
 
 ### TODO:
-# all of 1.
+# Redo all of (1) for more general use!
 
 ### 1: Recreate Movshon, Kiorpes, Hawken, Cavanaugh '05 figure 6 analyses
 ''' These plots show response versus contrast data (with model fit) AND
@@ -54,7 +53,7 @@ rvcName   = 'rvcFits'
     The Sach DoG curves should also be fit to this sum.
 '''
 
-def phase_advance_fit(cell_num, data_loc, phAdvName=phAdvName, to_save = 1, disp=0, dir=-1):
+def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save = 1, disp=0, dir=1):
   ''' Given the FFT-derived response amplitude and phase, determine the response phase relative
       to the stimulus by taking into account the stimulus phase. 
       Then, make a simple linear model fit (line + constant offset) of the response phase as a function
@@ -65,10 +64,12 @@ def phase_advance_fit(cell_num, data_loc, phAdvName=phAdvName, to_save = 1, disp
       Do ONLY for single gratings
   '''
 
+  assert disp==0, "In phase_advance_fit; we only fit ph-amp relationship for single gratings."
+
   dataList = hf.np_smart_load(data_loc + 'dataList.npy');
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
-  phAdvName = hf.fit_name(phAdvName, dir);
+  phAdvName = hf.phase_fit_name(phAdvName, dir);
 
   # first, get the set of stimulus values:
   _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd);
@@ -76,7 +77,7 @@ def phase_advance_fit(cell_num, data_loc, phAdvName=phAdvName, to_save = 1, disp
   allSfs = stimVals[2];
 
   # for all con/sf values for this dispersion, compute the mean amplitude/phase per condition
-  allAmp, allPhi, allTf, _, _ = hf.get_all_fft(data, disp, dir=dir); 
+  allAmp, allPhi, allTf, _, _ = hf.get_all_fft(data, disp, expInd, dir=dir); 
      
   # now, compute the phase advance
   conInds = valConByDisp[disp];
@@ -84,7 +85,7 @@ def phase_advance_fit(cell_num, data_loc, phAdvName=phAdvName, to_save = 1, disp
   nConds = len(allAmp); # this is how many conditions are present for this dispersion
   # recall that nConds = nCons * nSfs
   allCons = [conVals] * nConds; # repeats list and nests
-  phAdv_model, all_opts, all_phAdv, all_loss = hf.phase_advance(allAmp, allPhi, conVals, allTf);
+  phAdv_model, all_opts, all_phAdv, all_loss = hf.phase_advance(allAmp, allPhi, allCons, allTf);
 
   if os.path.isfile(data_loc + phAdvName):
       phFits = hf.np_smart_load(data_loc + phAdvName);
@@ -114,7 +115,7 @@ def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, disp=0, dir
   dataList = hf.np_smart_load(data_loc + 'dataList.npy');
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
-  rvcNameFinal = hf.fit_name(rvcName, dir);
+  rvcNameFinal = hf.phase_fit_name(rvcName, dir);
 
   # first, get the set of stimulus values:
   _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd);
@@ -127,8 +128,9 @@ def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, disp=0, dir
   # NOTE: We always call phase_advance_fit with disp=0 (default), since we don't make a fit
   # for the mixtrue stimuli - instead, we use the fits made on single gratings to project the
   # individual-component-in-mixture responses
-  phAdv_model, all_opts = phase_advance_fit(cell_num, dir=dir, to_save = 0); # don't save
-  allAmp, allPhi, _, allCompCon, allCompSf = hf.get_all_fft(data, disp, dir=dir, all_trials=1);
+  phAdv_model, all_opts = phase_advance_fit(cell_num, data_loc=data_loc, expInd=expInd, dir=dir, to_save = 0); # don't save
+  # TODO: problem in todo below is in get_all_fft...with expInd != LGN exp ind, we get individual trials within allAmpTrials (i.e. for LGN, allAmpTrials[0][0] is array of single entry arrays; with new V1 data, allAmpTrials[0][0] will be array of 5-entry arrays (i.e. still per trial???)
+  allAmp, allPhi, _, allCompCon, allCompSf = hf.get_all_fft(data, disp, expInd, dir=dir, all_trials=1);
   # get just the mean amp/phi and put into convenient lists
   allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)
   allAmpTrials = [[x[2] for x in sf] for sf in allAmp]; # trial-by-trial is third element 
@@ -392,19 +394,23 @@ if __name__ == '__main__':
 
     # get the full data directory
     dataPath = basePath + data_dir + data_suff;
+    # get the expInd
+    dL = hf.np_smart_load(dataPath + 'dataList.npy');
+    unitName = dL['unitName'][cell_num-1];
+    expInd = hf.get_exp_ind(dataPath, unitName)[0];
 
     # then, put what to run here...
     if dir == None:
       if ph_fits == 1:
-        phase_advance_fit(cell_num, disp=disp);
+        phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp);
       if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, disp=disp);
+        rvc_adjusted_fit(cell_num, data_loc=dataPath, disp=disp);
       if descr_fits == 1:
         fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, DoGmodel=dog_model);
     else:
       if ph_fits == 1:
-        phase_advance_fit(cell_num, disp=disp, dir=dir);
+        phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp, dir=dir);
       if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, disp=disp, dir=dir);
+        rvc_adjusted_fit(cell_num, data_loc=dataPath, disp=disp, dir=dir);
       if descr_fits == 1:
         fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model);
