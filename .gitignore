@@ -1,6 +1,9 @@
 V1_orig/structures/**
 V1_orig/structures/m*
 V1_orig/figures/*
+V1/structures/**
+V1/structures/m*
+V1/figures/*
 altExp/figures/**
 altExp/structures/m*
 **/.ipynb_checkpoints/**
@@ -21,9 +24,9 @@ altExp/firstPass/**
 altExp/recordings/**
 altExp/structures/**
 LGN/structures/matlab/
-#LGN/structures/*sfm*.npy*
+LGN/structures/*sfm*.npy*
 LGN/figures/
-LGN/
+LGN/*
 LGN/experiments
 LGN/sach/figures/
 LGN/sach/forTony/
@@ -36,3 +39,4 @@ LGN/sach/sach-data/
 **/structures/m*
 mountainsort_instructions.pdf
 uvnlExpo/**
+**/figures*/**
