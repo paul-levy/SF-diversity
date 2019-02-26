@@ -129,7 +129,6 @@ def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, disp=0, dir
   # for the mixtrue stimuli - instead, we use the fits made on single gratings to project the
   # individual-component-in-mixture responses
   phAdv_model, all_opts = phase_advance_fit(cell_num, data_loc=data_loc, expInd=expInd, dir=dir, to_save = 0); # don't save
-  # TODO: problem in todo below is in get_all_fft...with expInd != LGN exp ind, we get individual trials within allAmpTrials (i.e. for LGN, allAmpTrials[0][0] is array of single entry arrays; with new V1 data, allAmpTrials[0][0] will be array of 5-entry arrays (i.e. still per trial???)
   allAmp, allPhi, _, allCompCon, allCompSf = hf.get_all_fft(data, disp, expInd, dir=dir, all_trials=1);
   # get just the mean amp/phi and put into convenient lists
   allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)

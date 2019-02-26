@@ -887,7 +887,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
       loc_str = 'HPC';
     else:
       loc_str = '';  
-    fL_name = 'fitList%s_190206c' % loc_str
+    fL_name = 'fitList%s_190226c' % loc_str
 
     np = numpy;
 
@@ -1079,6 +1079,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
       fitList[cellNum-1]['message'] = tomin['message'];
       # NEW: Also save *when* this most recent fit was made (19.02.04); and nll_history below
       fitList[cellNum-1]['time'] = datetime.datetime.now();
+      # NEW: Also also save entire loss/optimization structure
+      fitList[cellNum-1]['opt'] = tomin;
     else:
       print('new NLL not less than currNLL, not saving result, but updating ovreal fit list (i.e. tracking each fit)');
     fitList[cellNum-1]['nll_history'] = np.append(nll_history, NLL);

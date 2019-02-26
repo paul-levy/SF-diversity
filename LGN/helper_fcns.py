@@ -28,7 +28,7 @@ import pdb
 
 ### fourier
 
-# removed
+# removed - temporally "reinstalled" on 2.13.19
 # make_psth - create a psth for a given spike train
 # spike_fft - compute the FFT for a given PSTH, extract the power at a given set of frequencies 
 
@@ -122,6 +122,52 @@ def sum_comps(l, stdFlag = 0):
     return [np.sqrt(np.sum(np.square(x), 1)) if x else [] for x in l];
 
 ### Basic Fourier analyses
+
+def angle_xy(x_coord, y_coord):
+   ''' return list of angles (in deg) given list of x/y coordinates (i.e. polar coordinates)
+   ''' 
+   np = numpy;
+   def smart_angle(x, y, th): 
+     if x>=0 and y>=0: # i.e. quadrant 1
+       return th;
+     if x<=0 and y>=0: # i.e. quadrant 2
+       return 180 - th;
+     if x<=0 and y<=0: # i.e. quadrant 3
+       return 180 + th;
+     if x>=0 and y<=0:
+       return 360 - th;
+
+   th = [np.rad2deg(np.arctan(np.abs(y_coord[i]/x_coord[i]))) for i in range(len(x_coord))];
+   theta = [smart_angle(x_coord[i], y_coord[i], th[i]) for i in range(len(th))];
+   return theta;
+
+def make_psth(spikeTimes, binWidth=1e-3, stimDur=1):
+    # given an array of arrays of spike times, create the PSTH for a given bin width and stimulus duration
+    # i.e. spikeTimes has N arrays, each of which is an array of spike times
+
+    binEdges = numpy.linspace(0, stimDur, 1+stimDur/binWidth);
+    
+    all = [numpy.histogram(x, bins=binEdges) for x in spikeTimes]; 
+    psth = [x[0] for x in all];
+    bins = [x[1] for x in all];
+    return psth, bins;
+
+def spike_fft(psth, tfs = None):
+    ''' given a psth (and optional list of component TFs), compute the fourier transform of the PSTH
+        if the component TFs are given, return the FT power at the DC, and at all component TFs
+        note: if only one TF is given, also return the power at f2 (i.e. twice f1, the stimulus frequency)
+    '''
+    np = numpy;
+
+    full_fourier = [np.fft.fft(x) for x in psth];
+    spectrum = [np.abs(np.fft.fft(x)) for x in psth];
+
+    if tfs:
+      rel_power = [spectrum[i][tfs[i]] for i in range(len(tfs))];
+    else:
+      rel_power = [];
+
+    return spectrum, rel_power, full_fourier;
 
 ### phase and amplitude analyses
 

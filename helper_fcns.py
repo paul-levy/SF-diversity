@@ -552,7 +552,7 @@ def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3,
       # get the phase relative to the stimulus
       ph_rel_stim, stim_ph, resp_ph, curr_tf = get_true_phase(data, val_trials, expInd, dir, psth_binWidth);
       # compute the fourier amplitudes
-      psth_val, _ = make_psth(data['spikeTimes'][val_trials], stimDur);
+      psth_val, _ = make_psth(data['spikeTimes'][val_trials], binWidth=psth_binWidth, stimDur=stimDur);
       _, rel_amp, full_fourier = spike_fft(psth_val, curr_tf, stimDur)
 
       if disp == 0:
@@ -642,7 +642,6 @@ def rvc_fit(amps, cons, var = None):
        loss_weights = np.divide(1, var[i]);
      else:
        loss_weights = np.ones_like(var[i]);
-     ## TODO: adjSemTr is not the right shape for working with rvc_model (see "obj = ...") in hf
      obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - rvc_model(params[0], params[1], params[2], curr_cons))));
      init_params = [0, np.max(curr_amps), 0.5]; 
      b_bounds = (0, 0); # 9.14.18 - per Tony, set to be just 0 for now
@@ -729,8 +728,14 @@ def phase_advance(amps, phis, cons, tfs):
    return phAdv_model, all_opts, all_phAdv, all_loss;
 
 def tf_to_ind(tfs, stimDur):
-  ''' simple conversion from temporal frequency to index into the fourier spectrum '''
-  return numpy.multiply(tfs, stimDur, casting='unsafe', dtype=numpy.int16);
+  ''' simple conversion from temporal frequency to index into the fourier spectrum 
+      we simply cast the result to integer, since the exp design guarantees (as of 02.26.19) 
+      that tf*stimDur will be an integer (just kept as a float due to tf being a float
+  '''
+  try: # if tfs is an array, then we do it this way...
+    return [numpy.multiply(tf, stimDur).astype(numpy.int16) for tf in tfs];
+  except: # otherwise, just the simple way
+    return numpy.multiply(tfs, stimDur).astype(numpy.int16);
 
 ### descriptive fits to sf tuning/basic data analyses
 
