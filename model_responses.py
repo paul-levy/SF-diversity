@@ -10,6 +10,11 @@ import pdb
 
 fft = numpy.fft
 
+# create global variables for use in saving each step of the iteration
+params_glob = [];
+loss_glob = [];
+resp_glob = [];
+
 ###
 # oriFilt        - used only in plotting to create 2D image of receptive field/filter
 # SFMSimpleResp  - compute the response of the cell's linear filter to a given (set of) stimuli
@@ -557,7 +562,7 @@ def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None):
 
     return M;
 
-def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None):
+def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None, trackSteps=False):
     '''
     Computes the negative log likelihood for the LN-LN model
        Optional arguments: //note: true means include in mask, false means exclude
@@ -734,6 +739,12 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           mod_responses = [modByCond.flatten(), numpy.nanvar(modAll, axis=3).flatten()];
           NLL = hf.chiSq(exp_responses, mod_responses);
 
+    if trackSteps:
+      global params_glob, loss_glob, resp_glob;
+      params_glob.append(params);
+      loss_glob.append(NLL);
+      resp_glob.append(respModel);
+
     return NLL, respModel;
 
 def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, normType=1, expInd=1):
@@ -856,7 +867,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
 
     return respModel, Linh, Lexc, normResp['normResp'], denominator;
 
-def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdOutCondition = None):
+def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, trackSteps=False, holdOutCondition = None):
     # Given just a cell number, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
     #
     # lossType
@@ -887,7 +898,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
       loc_str = 'HPC';
     else:
       loc_str = '';  
-    fL_name = 'fitList%s_190226c' % loc_str
+    fL_name = 'fitList%s_190206c' % loc_str
 
     np = numpy;
 
@@ -908,6 +919,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     elif lossType == 4:
       fL_suffix2 = '_chiSq.npy';
     fitListName = str(fL_name + fL_suffix1 + fL_suffix2);
+    # get the name for the stepList name, regardless of whether or not we run this now
+    stepListName = str(fL_name + fL_suffix1 + fL_suffix2.replace('.npy', '_details.npy'));
 
     if os.path.isfile(loc_data + fitListName):
       fitList = hf.np_smart_load(str(loc_data + fitListName));
@@ -977,7 +990,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     #normConst = np.random.uniform(-1, 0) if initFromCurr==0 else curr_params[2];
     respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
     respScalar = np.random.uniform(10, 1000) if initFromCurr==0 else curr_params[4];
-    noiseEarly = np.random.uniform(0.001, 0.1) if initFromCurr==0 else curr_params[5];
+    noiseEarly = np.random.uniform(0.001, 0.01) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
     noiseLate = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[6];
     varGain = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
     if fitType == 1:
@@ -1049,19 +1062,17 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
     all_bounds = hf.getConstraints(fitType);
    
     # now set up the optimization
-    obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits)[0];
+    obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits, trackSteps=trackSteps)[0];
     print('...now minimizing!'); 
     tomin = opt.minimize(obj, param_list, bounds=all_bounds);
     #tomin = opt.minimize(obj, param_list, method='TNC', bounds=all_bounds);
-    # warning: basin hopping (in informal attempts) is slow and not any better
-    #minimizer_kwargs = dict(method='L-BFGS-B', bounds=all_bounds)
-    #tomin = opt.basinhopping(obj, param_list, minimizer_kwargs=minimizer_kwargs);
 
     opt_params = tomin['x'];
     NLL = tomin['fun'];
 
     currNLL = fitList[cellNum-1]['NLL']; # exists - either from real fit or as placeholder
 
+    ### SAVE: Now we save the results, including the results of each step, if specified
     print('...finished. Current NLL (%.2f) vs. previous NLL (%.2f)' % (NLL, currNLL)); 
     # reload fitlist in case changes have been made with the file elsewhere!
     if os.path.exists(loc_data + fitListName):
@@ -1085,6 +1096,17 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, holdO
       print('new NLL not less than currNLL, not saving result, but updating ovreal fit list (i.e. tracking each fit)');
     fitList[cellNum-1]['nll_history'] = np.append(nll_history, NLL);
     numpy.save(loc_data + fitListName, fitList);
+    # now the step list, if needed
+    if trackSteps and NLL < currNLL:
+      if os.path.exists(loc_data + stepListName):
+        stepList = hf.np_smart_load(str(loc_data + stepListName));
+      else:
+        stepList = dict();
+      stepList[cellNum-1] = dict();
+      stepList[cellNum-1]['params'] = params_glob;
+      stepList[cellNum-1]['loss']   = loss_glob;
+      stepList[cellNum-1]['resp']   = resp_glob;
+      numpy.save(loc_data + stepListName, stepList);
 
     if holdOutCondition is not None:
       holdoutNLL, _, = SFMGiveBof(opt_params, structureSFM=S, normType=fitType, lossType=lossType, trialSubset=holdOutTr, expInd=expInd, rvcFits=rvcFits);
@@ -1100,4 +1122,11 @@ if __name__ == '__main__':
       print('See this file (setModel) or batchFitUnix.sh for guidance');
       exit();
 
-    setModel(int(sys.argv[1]), sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]));
+    cellNum      = int(sys.argv[1]);
+    expDir       = sys.argv[2];
+    lossType     = int(sys.argv[3]);
+    fitType      = int(sys.argv[4]);
+    initFromCurr = int(sys.argv[5]);
+    trackSteps   = int(sys.argv[6]);
+
+    setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps);

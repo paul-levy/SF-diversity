@@ -26,6 +26,7 @@ import warnings
 # phase_fit_name
 # descrFit_name
 # angle_xy
+# flatten_list
 
 ### fourier, and repsonse-phase adjustment
 
@@ -292,6 +293,10 @@ def angle_xy(x_coord, y_coord):
    th = [np.rad2deg(np.arctan(np.abs(y_coord[i]/x_coord[i]))) for i in range(len(x_coord))];
    theta = [smart_angle(x_coord[i], y_coord[i], th[i]) for i in range(len(th))];
    return theta;
+
+def flatten_list(l):
+  flatten = lambda l: [item for sublist in l for item in sublist];
+  return flatten(l);
 
 ### fourier
 
