@@ -20,7 +20,7 @@ data_suff = 'structures/';
 expName = 'dataList.npy'
 dogName =  'descrFits_190129';
 phAdvName = 'phaseAdvanceFitsTest'
-rvcName   = 'rvcFitsTest'
+rvcName   = 'rvcFits'
 
 ### TODO:
 # Redo all of (1) for more general use!
@@ -121,8 +121,11 @@ def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, disp=0, dir
   _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd);
   allCons = stimVals[1];
   allSfs = stimVals[2];
-  valCons = allCons[valConByDisp[disp]];
-
+  try:
+    valCons = allCons[valConByDisp[disp]];
+  except:
+    warnings.warn('This experiment does not have dispersion level %d; returning empty arrays' % disp);
+    return [], [], [], [];
   # calling phase_advance fit, use the phAdv_model and optimized paramters to compute the true response amplitude
   # given the measured/observed amplitude and phase of the response
   # NOTE: We always call phase_advance_fit with disp=0 (default), since we don't make a fit
@@ -140,8 +143,8 @@ def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, disp=0, dir
   adjMeans   = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
   adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs);
   consRepeat = [valCons] * len(adjMeans);
-  
-  if disp == 1: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)
+
+  if disp > 0: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)
     adjSumResp  = [np.sum(x, 1) if x else [] for x in adjMeans];
     adjSemTr    = [[sem(np.sum(hf.switch_inner_outer(x), 1)) for x in y] for y in adjByTrial]
     adjSemCompTr  = [[sem(hf.switch_inner_outer(x)) for x in y] for y in adjByTrial];
@@ -300,7 +303,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
     bound_freqFracSurr = (1e-2, 1);
     allBounds = (bound_gainCent, bound_freqCent, bound_gainFracSurr, bound_freqFracSurr);
 
-  for d in range(nDisps): # should be nDisps - just setting to 1 for now (i.e. fitting single gratings and mixtures separately)
+  for d in range(nDisps): # TODO: check nDisps is ok (and not range(1))
     for con in range(nCons):
       if con not in valConByDisp[d]:
         continue;
@@ -335,7 +338,6 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
             methodStr = 'L-BFGS-B';
         else:
             methodStr = 'TNC';
-
         obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg);
         wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
 

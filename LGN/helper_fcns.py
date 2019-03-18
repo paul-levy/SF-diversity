@@ -780,6 +780,8 @@ def tabulate_responses(data, modResp = []):
         (iv) valid_disp, valid_con, valid_sf - which conditions are valid for this particular cell
         (v) modRespOrg - the model responses organized as in (i) - only if modResp argument passed in
     '''
+
+    # TODO: Problem here (with power_f1?) for new V1/ data
     np = numpy;
     conDig = 3; # round contrast to the thousandth
     
@@ -838,11 +840,17 @@ def tabulate_responses(data, modResp = []):
 
                 respMean[d, sf, con] = np.mean(data['spikeCount'][valid_tr]);
                 respSEM[d, sf, con] = sem((data['spikeCount'][valid_tr]));
-                f1Mean[d, sf, con] = np.mean(data['power_f1'][valid_tr]); # default axis takes avg within components (and across trials)
-                if d > 0:
-                  f1SEM[d, sf, con] = np.asarray([sem([x[i] for x in data['power_f1'][valid_tr]]) for i in range(all_disps[d])]); # need to be careful, since sem cannot handle numpy array well
+                try:
+                  f1Mean[d, sf, con] = np.mean(data['power_f1'][valid_tr]); # default axis takes avg within components (and across trials)
+                except:
+                  f1Mean[d, sf, con] = np.nan;
+                try:
+                  if d > 0:
+                    f1SEM[d, sf, con] = np.asarray([sem([x[i] for x in data['power_f1'][valid_tr]]) for i in range(all_disps[d])]); # need to be careful, since sem cannot handle numpy array well
+                  else:
+                    f1SEM[d, sf, con] = sem(data['power_f1'][valid_tr]);
                 else:
-                  f1SEM[d, sf, con] = sem(data['power_f1'][valid_tr]);
+                  f1SEM[d, sf, con] = np.nan;
                 curr_pred = 0;
                 curr_var = 0; # variance (std^2) adds
                 curr_pred_f1 = 0;
@@ -864,8 +872,12 @@ def tabulate_responses(data, modResp = []):
                     
                     curr_pred = curr_pred + np.mean(data['spikeCount'][val_tr]);
                     curr_var = curr_var + np.var(data['spikeCount'][val_tr]);
-                    curr_pred_f1 = curr_pred_f1 + np.sum(np.mean(data['power_f1'][val_tr]));
-                    curr_var_f1 = curr_var_f1 + np.sum(np.var(data['power_f1'][val_tr]));
+                    try:
+                      curr_pred_f1 = curr_pred_f1 + np.sum(np.mean(data['power_f1'][val_tr]));
+                      curr_var_f1 = curr_var_f1 + np.sum(np.var(data['power_f1'][val_tr]));
+                    except:
+                      curr_pred_f1 = np.nan;
+                      curr_var_f1 = np.nan;
                     
                 predMean[d, sf, con] = curr_pred;
                 predStd[d, sf, con] = np.sqrt(curr_var);

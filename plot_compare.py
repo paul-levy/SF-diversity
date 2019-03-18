@@ -50,8 +50,8 @@ expName = 'dataList.npy'
 #fitBase = 'fitList_190114c';
 #fitBase = 'fitList_190122c';
 #fitBase = 'fitList_190131c';
-#fitBase = 'fitList_190202c';
-fitBase = 'fitList_190206c';
+#fitBase = 'fitList_190206c';
+fitBase = 'fitList_190315c';
 
 # first the fit type
 fitSuf_fl = '_flat';
@@ -363,6 +363,18 @@ plt.ylabel('Variance (sps^2)');
 plt.title('Super-poisson?');
 plt.axis('equal');
 sns.despine(ax=curr_ax, offset=5, trim=False);
+
+#  RVC - pick center SF
+curr_ax = plt.subplot2grid(detailSize, (0, 1)); # default size is 1x1
+disp_rvc = 0;
+val_cons = np.array(val_con_by_disp[disp_rvc]);
+v_sfs = ~np.isnan(respMean[disp_rvc, :, val_cons[0]]); # remember, for single gratings, all cons have same #/index of sfs
+sfToUse = np.int(np.floor(len(v_sfs)/2));
+plt.semilogx(all_cons[val_cons], respMean[disp_rvc, sfToUse, val_cons], 'o', clip_on=False); # Measured responses
+[plt.plot(all_cons[val_cons], modAvg[disp_rvc, sfToUse, val_cons], '%so-' % c, clip_on=False, label=s) for modAvg, c, s in zip(modAvgs, modColors, modLabels)]; # Model responses
+plt.xlabel('Con (%)', fontsize=20);
+# Remove top/right axis, put ticks only on bottom/left
+sns.despine(ax=curr_ax, offset = 5);
 
 # plot model details - exc/suppressive components
 omega = np.logspace(-2, 2, 1000);

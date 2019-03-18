@@ -27,6 +27,7 @@ import warnings
 # descrFit_name
 # angle_xy
 # flatten_list
+# switch_inner_outer
 
 ### fourier, and repsonse-phase adjustment
 
@@ -34,6 +35,20 @@ import warnings
 # spike_fft - compute the FFT for a given PSTH, extract the power at a given set of frequencies 
 # phase_advance
 # tf_to_ind - convert the given temporal frequency into an (integer) index into the fourier spectrum
+
+### phase/more psth
+
+# project_resp - project the measured response onto the true/predicted phase and determine the "true" response amplitude
+# project_resp_cond - project the individual responses for a given condition
+# first_ph0 - for a given stimulus start phase, compute how much of a cycle (and how much time) before the stimulus gets to the start of a cycle (i.e. ph=0)
+# fold_psth - fold a psth for a given number of cycles (given spike times)
+# get_true_phase - compute the response phase relative to the stimulus phase given a response phase (rel. to trial time window) and a stimulus phase (rel. to trial start)
+# polar_vec_mean - compute the vector mean given a set of amplitude/phase pairs for responses on individual trials
+# get_all_fft - extract the amp/phase for a condition or set of conditions
+# get_rvc_model - return the lambda function describing the rvc model
+# get_phAdv_model - return the lambda function describing the responsePhase-as-function-of-respAmplitude model
+# rvc_fit - fit response versus contrast with a model used in Movshon/Kiorpes/+ 2005
+# phase_advance - compute the phase advance (a la Movshon/Kiorpes/+ 2005)
 
 ### descriptive fits to sf tuning/basic data analyses
 
@@ -295,8 +310,15 @@ def angle_xy(x_coord, y_coord):
    return theta;
 
 def flatten_list(l):
+  ''' turn ((a), (b), ...) into (a, b, ...) '''
   flatten = lambda l: [item for sublist in l for item in sublist];
   return flatten(l);
+
+def switch_inner_outer(x):
+  ''' switch the inner and outer parts of a list '''
+  switch_inner_outer = lambda arr: [[x[i] for x in arr] for i in range(len(arr[0]))];
+  return switch_inner_outer(x);
+
 
 ### fourier
 
@@ -341,7 +363,7 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
       vectorized: expects/returns lists of amplitudes/phis
   '''
   np = numpy;
-
+  sfDig = 2; # round SFs to the thousandth when comparing for equality
   all_proj = [];
 
   for i in range(len(amp)):
@@ -355,7 +377,7 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
       proj = np.array([np.multiply(amp[i][j], np.cos(np.deg2rad(phi_resp[i][j])-np.deg2rad(phi_true[j]))) for j in range(len(amp[i]))]);
       #proj = np.multiply(amp[i], np.cos(np.deg2rad(phi_resp[i])-np.deg2rad(phi_true)))
       all_proj.append(proj);
-    elif disp == 1: # then we'll need to use the allCompSf to get the right phase advance fit for each component
+    elif disp > 0: # then we'll need to use the allCompSf to get the right phase advance fit for each component
       if amp[i] == []: # 
         all_proj.append([]);
         continue;
@@ -368,7 +390,7 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
           curr_phi = phi_resp[i][con_ind][comp_ind];
           # now, for that component, find out the SF and get the right phase advance fit
           # note: where is array, so unpack one level to get  
-          sf_ind = np.where(allSfs == allCompSf[i][con_ind][comp_ind])[0][0];
+          sf_ind = np.where(np.round(allSfs, sfDig) == np.round(allCompSf[i][con_ind][comp_ind], sfDig))[0][0];
           phi_true = phAdv_model(phAdv_params[sf_ind][0], phAdv_params[sf_ind][1], curr_amp);
           if isinstance(phi_true, np.ndarray): # i.e. array
             if isinstance(phi_true[0], np.ndarray): # i.e. nested array
@@ -595,7 +617,7 @@ def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3,
     all_r.append(curr_r);
     all_ph.append(curr_ph);
     all_tf.append(curr_tf);
-    if disp == 1:
+    if disp > 0:
       all_conComp.append(curr_conComp);
       all_sfComp.append(curr_sfComp);
 
@@ -1050,6 +1072,267 @@ def get_valid_sfs(data, disp, con, expInd):
 
   return val_sfs;
 
+###
+### Descriptive functions - fits to spatial frequency tuning, other related calculations
+
+def dog_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11)):
+  ''' Compute the preferred SF given a set of DoG parameters
+  '''
+  sf_bound = (numpy.min(all_sfs), numpy.max(all_sfs));
+  if dog_model == 1:
+    obj = lambda sf: -DoGsach(*modParams, stim_sf=sf)[0];
+  elif dog_model == 2:
+    obj = lambda sf: -DiffOfGauss(*modParams, stim_sf=sf)[0];
+  init_sf = numpy.median(all_sfs);
+  optz = opt.minimize(obj, init_sf, bounds=(sf_bound, ))
+  return optz['x'];
+
+def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65, dog_model=2):
+  ''' Given a descrFit dict for a cell, compute a fit for the prefSf as a function of contrast
+      Return ratio of prefSf at highest:lowest contrast, lambda of model, params
+  '''
+  np = numpy;
+  # the model
+  psf_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha);
+  # gather the values
+  #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
+  validInds = np.where(descrFit['varExpl'][disp, :] > varThresh)[0];
+  if len(validInds) == 0: # i.e. no good fits...
+    return np.nan, [], [];
+  if 'prefSf' in descrFit:
+    prefSfs = descrFit['prefSf'][disp, validInds];
+  else:
+    prefSfs = [];
+    for i in validInds:
+      psf_curr = dog_prefSf(descrFit['params'][disp, validInds], dog_model);
+      prefSfs.append(psf_curr);
+  conVals = allCons[validInds];
+  weights = descrFit['varExpl'][disp, validInds];
+  # set up the optimization
+  obj = lambda params: np.sum(np.multiply(weights,
+        np.square(psf_model(params[0], params[1], params[2], conVals) - prefSfs)))
+  init_offset = prefSfs[0];
+  conRange = conVals[-1] - conVals[0];
+  init_slope = (prefSfs[-1] - prefSfs[0]) / conRange;
+  init_alpha = 0.4; # most tend to be saturation (i.e. contrast exp < 1)
+  # run
+  optz = opt.minimize(obj, [init_offset, init_slope, init_alpha], bounds=((0, None), (None, None), (0.25, 4)));
+  opt_params = optz['x'];
+  # ratio:
+  extrema = psf_model(*opt_params, con=(conVals[0], conVals[-1]))
+  pSfRatio = extrema[-1] / extrema[0]
+
+  return pSfRatio, psf_model, opt_params;
+
+def dog_charFreq(prms, DoGmodel=1):
+  if DoGmodel == 1: # sach
+      r_c = prms[1];
+      f_c = 1/(numpy.pi*r_c)
+  elif DoGmodel == 2: # tony
+      f_c = prms[1];
+
+  return f_c;
+
+def dog_charFreqMod(descrFit, allCons, varThresh=70, DoGmodel=1, lowConCut = 0.1, disp=0):
+  ''' Given a descrFit dict for a cell, compute a fit for the charFreq as a function of contrast
+      Return ratio of charFreqat highest:lowest contrast, lambda of model, params, the value of the charFreq at the valid contrasts, the corresponding valid contrast
+      Note: valid contrast means a contrast which is greater than the lowConCut and one for which the Sf tuning fit has a variance explained gerat than varThresh
+  '''
+  np = numpy;
+  # the model
+  fc_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha);
+  # gather the values
+  #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
+  if disp == 0:
+    inds = np.asarray([0, 1, 2, 3, 4, 5, 7, 9, 11]);
+  elif disp == 1:
+    inds = np.asarray([6, 8, 10]);
+  validInds = np.where((descrFit['varExpl'][disp, inds] > varThresh) & (allCons > lowConCut))[0];
+  conVals = allCons[validInds];
+
+  if len(validInds) == 0: # i.e. no good fits...
+    return np.nan, None, None, None, None;
+  if 'charFreq' in descrFit:
+    charFreqs = descrFit['charFreq'][disp, inds[validInds]];
+  else:
+    charFreqs = [];
+    for i in validInds:
+      cf_curr = dog_charFreq(descrFit['params'][disp, i], DoGmodel);
+      charFreqs.append(cf_curr);
+  weights = descrFit['varExpl'][disp, inds[validInds]];
+  # set up the optimization
+  obj = lambda params: np.sum(np.multiply(weights,
+        np.square(fc_model(params[0], params[1], params[2], conVals) - charFreqs)))
+  init_offset = charFreqs[0];
+  conRange = conVals[-1] - conVals[0];
+  init_slope = (charFreqs[-1] - charFreqs[0]) / conRange;
+  init_alpha = 0.4; # most tend to be saturation (i.e. contrast exp < 1)
+  # run
+  optz = opt.minimize(obj, [init_offset, init_slope, init_alpha], bounds=((0, None), (None, None), (0.25, 4)));
+  opt_params = optz['x'];
+  # ratio:
+  extrema = fc_model(*opt_params, con=(conVals[0], conVals[-1]))
+  fcRatio = extrema[-1] / extrema[0]
+
+  return fcRatio, fc_model, opt_params, charFreqs, conVals;
+
+## 
+
+def get_condition(data, n_comps, con, sf):
+    ''' Returns the trial responses (f0 and f1) and corresponding trials for a given 
+        dispersion level (note: # of components), contrast, and spatial frequency
+    '''
+    np = numpy;
+    conDig = 3; # default...
+
+    val_disp = data['num_comps'] == n_comps;
+    val_con = np.round(data['total_con'], conDig) == con;
+    val_sf = data['cent_sf'] == sf;
+
+    #val_trials = val_disp & val_con & val_sf;
+    val_trials = np.where(val_disp & val_con & val_sf)[0]; # get as int array of indices rather than boolean array
+ 
+    f0 = data['spikeCount'][val_trials];
+    try:
+      f1 = data['power_f1'][val_trials];
+    except: # not every experiment/cell will have measured f1 responses
+      f1 = np.nan * np.zeros_like(f0);
+
+    return f0, f1, val_trials;
+
+def get_conditionAdj(data, n_comps, con, sf, adjByTrial):
+  ''' Returns the trial responses (f0 and f1) and corresponding trials for a given 
+      dispersion level (note: # of components), contrast, and spatial frequency
+      Note: Access trial responses from a vector of adjusted (i.e. "projected") responses
+  '''
+  np = numpy;
+  conDig = 3; # default...
+
+  val_disp = data['num_comps'] == n_comps;
+  val_con = np.round(data['total_con'], conDig) == con;
+  val_sf = data['cent_sf'] == sf;
+
+  val_trials = np.where(val_disp & val_con & val_sf)[0]; # get as int array of indices rather than boolean array
+  resps = adjByTrial[val_trials];
+
+  return resps, val_trials;
+    
+def get_isolated_response(data, trials):
+   ''' Given a set of trials (assumed to be all from one unique disp-con-sf set), collect the responses to the components of the 
+       stimulus when presented in isolation - returns the mean/sem and individual trial responses
+       Assumed to be for mixture stimuli
+   '''
+   np = numpy; conDig = 3;
+   n_comps = np.unique(data['num_comps'][trials]);
+   if len(n_comps) > 1:
+     warnings.warn('must have only one level of dispersion for the requested trials');
+     return [], [], [], [];
+   n_comps = n_comps[0]; # get just the value so it's an integer rather than array
+
+   # assumption is that #trials of mixture stimulus will be >= the number of repetitions of the isolated presentations of that stimulus component
+   f0all = np.array(np.nan * np.zeros((n_comps, )), dtype='O'); # might have different number of responses for each component, so create object/flexible array
+   f1all = np.array(np.nan * np.zeros((n_comps, )), dtype='O');
+   f0summary = np.nan * np.zeros((n_comps, 2)); # mean/std in [:, 0 or 1], respectively
+   f1summary = np.nan * np.zeros((n_comps, 2));
+
+   cons = []; sfs = [];
+   for i in range(n_comps):
+
+     # now go through for each component and get the response to that stimulus component when presented alone
+     con = np.unique(data['con'][i][trials]); cons.append(np.round(con, conDig));
+     sf = np.unique(data['sf'][i][trials]); sfs.append(sf);
+
+     if len(con)>1 or len(sf)>1:
+       warnings.warn('the trials requested must have only one sf/con for a given stimulus component');
+       return [], [], [], [];
+     
+     f0curr, f1curr, _ = get_condition(data, 1, np.round(con, conDig), sf); # 1 is for #components - we're looking for single component trials/responses
+     f0all[i] = f0curr;
+     f1all[i] = f1curr;
+
+     f0summary[i, :] = [np.nanmean(f0all[i]), sem(f0all[i])]; # nanmean/std in case fewer presentations of individual component than mixture
+     f1summary[i, :] = [np.nanmean(f1all[i]), sem(f1all[i])];
+
+   return f0summary, f1summary, f0all, f1all, cons, sfs;
+
+def get_isolated_responseAdj(data, trials, adjByTrial):
+   ''' Given a set of trials (assumed to be all from one unique disp-con-sf set), collect the responses to the components of the 
+       stimulus when presented in isolation - returns the mean/std and individual trial responses
+       Assumed to be for mixture stimuli
+   '''
+   np = numpy; conDig = 3;
+   n_comps = np.unique(data['num_comps'][trials]);
+   if len(n_comps) > 1:
+     warnings.warn('must have only one level of dispersion for the requested trials');
+     return [], [], [], [];
+   n_comps = n_comps[0]; # get just the value so it's an integer rather than array
+
+   f1all = np.array(np.nan * np.zeros((n_comps, )), dtype='O');
+   f1summary = np.nan * np.zeros((n_comps, 2));
+
+   cons = []; sfs = [];
+   for i in range(n_comps):
+     # now go through for each component and get the response to that stimulus component when presented alone
+     con = np.round(np.unique(data['con'][i][trials]), conDig); cons.append(con);
+     sf = np.unique(data['sf'][i][trials]); sfs.append(sf);
+
+     if len(con)>1 or len(sf)>1:
+       warnings.warn('the trials requested must have only one sf/con for a given stimulus component');
+       return [], [], [], [];
+     # always getting for a single component (hence "1")
+     curr_resps, _ = get_conditionAdj(data, 1, con, sf, adjByTrial);
+
+     f1all[i] = curr_resps;
+     f1summary[i, :] = [np.nanmean(f1all[i]), sem(f1all[i])];
+
+   return f1summary, f1all, cons, sfs;
+
+## 
+
+
+
+###
+
+def get_isolated_response(data, trials):
+   ''' Given a set of trials (assumed to be all from one unique disp-con-sf set), collect the responses to the components of the 
+       stimulus when presented in isolation - returns the mean/sem and individual trial responses
+       Assumed to be for mixture stimuli
+   '''
+   np = numpy; conDig = 3;
+   n_comps = np.unique(data['num_comps'][trials]);
+   if len(n_comps) > 1:
+     warnings.warn('must have only one level of dispersion for the requested trials');
+     return [], [], [], [];
+   n_comps = n_comps[0]; # get just the value so it's an integer rather than array
+
+   # assumption is that #trials of mixture stimulus will be >= the number of repetitions of the isolated presentations of that stimulus component
+   f0all = np.array(np.nan * np.zeros((n_comps, )), dtype='O'); # might have different number of responses for each component, so create object/flexible array
+   f1all = np.array(np.nan * np.zeros((n_comps, )), dtype='O');
+   f0summary = np.nan * np.zeros((n_comps, 2)); # mean/std in [:, 0 or 1], respectively
+   f1summary = np.nan * np.zeros((n_comps, 2));
+
+   cons = []; sfs = [];
+   for i in range(n_comps):
+
+     # now go through for each component and get the response to that stimulus component when presented alone
+     con = np.unique(data['con'][i][trials]); cons.append(np.round(con, conDig));
+     sf = np.unique(data['sf'][i][trials]); sfs.append(sf);
+
+     if len(con)>1 or len(sf)>1:
+       warnings.warn('the trials requested must have only one sf/con for a given stimulus component');
+       return [], [], [], [];
+     
+     f0curr, f1curr, _ = get_condition(data, 1, np.round(con, conDig), sf); # 1 is for #components - we're looking for single component trials/responses
+     f0all[i] = f0curr;
+     f1all[i] = f1curr;
+
+     f0summary[i, :] = [np.nanmean(f0all[i]), sem(f0all[i])]; # nanmean/std in case fewer presentations of individual component than mixture
+     f1summary[i, :] = [np.nanmean(f1all[i]), sem(f1all[i])];
+
+   return f0summary, f1summary, f0all, f1all, cons, sfs;
+
+##
+
 def tabulate_responses(cellStruct, expInd, modResp = []):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
@@ -1247,7 +1530,11 @@ def get_spikes(data, rvcFits = None, expInd = None):
     if expInd is None:
       warnings.warn('Should pass in expInd; defaulting to 3');
       expInd = 3; # should be specified, but just in case
-    spikes = organize_adj_responses(data, rvcFits, expInd);
+    try:
+      spikes = organize_adj_responses(data, rvcFits, expInd);
+    except: # in case this does not work...
+      warnings.warn('Tried to access f1/adjusted responses, defaulting to F0');
+      spikes = data['spikeCount'];
   return spikes;
 
 def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', direc=1):
@@ -1651,7 +1938,8 @@ def getConstraints(fitType):
     zero = (0.05, None);
     one = (0.1, None);
     two = (None, None);
-    three = (1, None);
+    three = (0.25, None); # trying, per conversation with Tony (03.01.19)
+    #three = (1, None);
     four = (1e-3, None);
     five = (0, 1); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
     six = (0.01, None); # if always positive, then no hard thresholding to ensure rate (strictly) > 0

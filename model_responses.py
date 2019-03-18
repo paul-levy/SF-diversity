@@ -549,12 +549,12 @@ def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None):
 
     curr_dir = expDir + 'structures/';
     loadPath = loadPath + curr_dir; # the loadPath passed in is the base path, then we add the directory for the specific experiment
-
+    
     if isinstance(iU, int):
         dataList = hf.np_smart_load(loadPath + 'dataList.npy');
         unitName = str(dataList['unitName'][iU-1]);
         if expInd is None:
-          expInd = dataList['expType'][iU-1];
+          expInd = hf.exp_name_to_ind(dataList['expType'][iU-1]);
         M = SFMNormResp(unitName, loadPath, normPool, expInd=expInd);
     else:
         unitName = iU;
@@ -898,7 +898,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
       loc_str = 'HPC';
     else:
       loc_str = '';  
-    fL_name = 'fitList%s_190206c' % loc_str
+    fL_name = 'fitList%s_190315c' % loc_str
 
     np = numpy;
 
