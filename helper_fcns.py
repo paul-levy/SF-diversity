@@ -1786,6 +1786,21 @@ def getNormParams(params, normType):
     inhAsym = 0;
     return inhAsym;
 
+def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None):
+  ''' simply evaluates the usual normalization weighting but at the frequencies of the stimuli directly
+  i.e. in effect, we are eliminating the bank of filters in the norm. pool
+  '''
+  np = numpy;
+  trialInf = cellStruct['sfm']['exp']['trial'];
+  sfs = np.vstack([comp for comp in trialInf['sf']]); # [nComps x nTrials]
+  if gs_mean is None or gs_std is None: # we assume inhAsym is 0
+    inhAsym = 0;
+    new_weights = 1 + inhAsym*(np.log(sfs) - np.nanmean(np.log(sfs)));
+  else:
+    log_sfs = np.log(sfs);
+    new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
+  return new_weights;
+
 def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials, expInd):
   np = numpy;
   # A: do the calculation here - more flexibility
@@ -1793,7 +1808,7 @@ def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials, expInd):
   nFrames = num_frames(expInd);
   T = cellStruct['sfm'];
   nInhChan = T['mod']['normalization']['pref']['sf'];
-        
+
   for iP in range(len(nInhChan)): # two channels: narrow and broad
 
     # if asym, put where '0' is

@@ -20,6 +20,7 @@ resp_glob = [];
 # SFMSimpleResp  - compute the response of the cell's linear filter to a given (set of) stimuli
 # SFMNormResp    - compute the response of the normalization pool to stimulus; not called in optimization, but called in simulation
 # GetNormResp    - wrapper for SFMNormResp
+# SimpleNormResp - a simplified normalization calculation per discussions with JAM
 # SFMGiveBof     - gathers simple and normalization responses to get full model response; optimization is here!
 # SFMSimulate    - as in SFMGiveBof, but without optimization; can pass in arbitrary stimuli here
 # setModel       - wrapper+ for optimization and saving optimization results
@@ -562,6 +563,24 @@ def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None):
 
     return M;
 
+def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None):
+  ''' A simplified version of the normalization response, in effect, without filters
+    The contrast of each stimulus component will be squared and weighted with the same 
+    weighting function typically applied (whether that be flat or tuned)
+    This replace Linh, which is (nFrames x nTrials) matrix of responses
+  '''
+  np = numpy;
+  trialInf = S['sfm']['exp']['trial'];
+  cons = np.vstack([comp for comp in trialInf['con']]);
+  consSq = np.square(cons);
+  # cons (and wghts) will be (nComps x nTrials)
+  wghts = hf.genNormWeightsSimple(S, gs_mean, gs_std);
+  resp = np.multiply(wghts, consSq);
+  respPerTr = np.sqrt(resp.sum(0)); # i.e. sum over components, then sqrt
+  nFrames = hf.num_frames(expInd);
+  respByFr = np.array(nFrames * [respPerTr]); # broadcast - response will be same for every frame
+  return respByFr;
+
 def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None, trackSteps=False):
     '''
     Computes the negative log likelihood for the LN-LN model
@@ -655,6 +674,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     if normType == 2:
       inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials, expInd);
     else: # normType == 1 or anything else,
+      gs_mean = None; gs_std = None;
       for iP in range(len(nInhChan)):
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                               - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
@@ -674,9 +694,10 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         # Extract simple cell response (half-rectified linear filtering)
         Lexc = E['simpleResp'];
 
-        # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to         bring everything in linear contrast scale again)
-        Linh = numpy.sqrt((inhWeightMat*T['mod']['normalization']['normResp']).sum(1)).transpose();
-
+        # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to bring everything in linear contrast scale again)
+        #Linh = numpy.sqrt((inhWeightMat*T['mod']['normalization']['normResp']).sum(1)).transpose();
+        Linh = SimpleNormResp(structureSFM, expInd, gs_mean, gs_std);
+ 
         # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
         numerator     = noiseEarly + Lexc;
         denominator   = pow(sigmaFilt + pow(Linh, 2), 0.5); # square Linh added 7/24 - was mistakenly not fixed earlier
@@ -898,7 +919,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
       loc_str = 'HPC';
     else:
       loc_str = '';  
-    fL_name = 'fitList%s_190315c' % loc_str
+    fL_name = 'fitList%s_190321c' % loc_str
 
     np = numpy;
 
