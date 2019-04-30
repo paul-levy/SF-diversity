@@ -9,6 +9,7 @@ import sys
 import pdb
 
 fft = numpy.fft
+dataListName = 'dataList_glx_full.npy'
 
 # create global variables for use in saving each step of the iteration
 params_glob = [];
@@ -250,7 +251,7 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1):
         
     return M;
         
-def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
+def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1, overwrite = 0):
 
 # returns M which contains normPool response, trial_used, filter preferences
 
@@ -287,7 +288,13 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
         S = hf.np_smart_load(loadPath + unitName + '_sfm.npy')
     else:
         S = unitName;
-        
+
+    if overwrite == 0:
+      if 'mod' in S['sfm']:
+        if 'normalization' in S['sfm']['mod']:
+          print('Overwrite flag is set to 0, and %s already has a computed normalization response' % (loadPath+unitName+'_sfm.npy'));
+          return S['sfm']['mod']['normalization'];
+
     if make_own_stim:
         if not 'template' in stimParams:
             stimParams['template'] = S;
@@ -526,7 +533,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1):
         
     return M;
 
-def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None):
+def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None, overwrite=0):
     ''' GETNORMRESP    Runs the code that computes the response of the
      normalization pool for the recordings in the SfDiv project.
      Returns 'M', result from SFMNormResp
@@ -551,15 +558,15 @@ def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None):
     curr_dir = expDir + 'structures/';
     loadPath = loadPath + curr_dir; # the loadPath passed in is the base path, then we add the directory for the specific experiment
     
-    if isinstance(iU, int):
-        dataList = hf.np_smart_load(loadPath + 'dataList.npy');
+    if isinstance(iU, int): # if we've passd in an index to the datalist
+        dataList = hf.np_smart_load(loadPath + dataListName);
         unitName = str(dataList['unitName'][iU-1]);
         if expInd is None:
           expInd = hf.exp_name_to_ind(dataList['expType'][iU-1]);
-        M = SFMNormResp(unitName, loadPath, normPool, expInd=expInd);
+        M = SFMNormResp(unitName, loadPath, normPool, expInd=expInd, overwrite=overwrite);
     else:
         unitName = iU;
-        M = SFMNormResp(unitName, [], normPool, stimParams, expInd=expInd);
+        M = SFMNormResp(unitName, [], normPool, stimParams, expInd=expInd, overwrite=overwrite);
 
     return M;
 
@@ -628,7 +635,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
 
     # Other (nonlinear) model components
     sigma    = pow(10, params[2]); # normalization constant
-    # respExp  = 2; # response exponent
+    #respExp  = 2; # response exponent
     respExp  = params[3]; # response exponent
     scale    = params[4]; # response scalar
 
@@ -918,8 +925,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     if 'pl1465' in loc_base:
       loc_str = 'HPC';
     else:
-      loc_str = '';  
-    fL_name = 'fitList%s_190321c' % loc_str
+      loc_str = '';
+    fL_name = 'fitList%s_190430cA_glx' % loc_str
 
     np = numpy;
 
@@ -948,12 +955,12 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     else:
       fitList = dict();
 
-    dataList = hf.np_smart_load(str(loc_data + 'dataList.npy'));
+    dataList = hf.np_smart_load(str(loc_data + dataListName));
     dataNames = dataList['unitName'];
 
     expInd = hf.exp_name_to_ind(dataList['expType'][cellNum-1]);
     
-    rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum); # see default arguments in helper_fcns.py
+    rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum, rvcName='none'); # see default arguments in helper_fcns.py
 
     print('loading data structure from %s...' % loc_data);
     S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy')); # why -1? 0 indexing...
@@ -1018,7 +1025,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
       inhAsym = 0; 
     if fitType == 2:
       normMean = np.random.uniform(-1, 1) if initFromCurr==0 else curr_params[8];
-      normStd = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[9];
+      #normStd = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[9];
+      normStd = 1.5 if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
     if fitType == 3:
       sigOffset = np.random.uniform(0, 0.05) if initFromCurr==0 else curr_params[8];
       stdLeft = np.random.uniform(1, 5) if initFromCurr==0 else curr_params[9];

@@ -2,8 +2,8 @@ import numpy as np
 import sys
 import model_responses
 
-def comp_norm_resp(cellInd, data_loc, expDir):
-   model_responses.GetNormResp(cellInd, data_loc, expDir=expDir);
+def comp_norm_resp(cellInd, data_loc, expDir, overwrite=0):
+   model_responses.GetNormResp(cellInd, data_loc, expDir=expDir, overwrite=overwrite);
 
 if __name__ == '__main__':
 
@@ -23,6 +23,10 @@ if __name__ == '__main__':
 
     cellNum = int(sys.argv[1]);
     expDir  = sys.argv[2];
+    if len(sys.argv) > 3:
+      overwrite = int(sys.argv[3]);
+    else:
+      overwrite = 0;
     print('Running cell ' + str(cellNum) + '...');
-
-    comp_norm_resp(cellNum, dataPath, expDir)
+    
+    comp_norm_resp(cellNum, dataPath, expDir, overwrite)
