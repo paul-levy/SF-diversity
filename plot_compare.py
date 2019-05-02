@@ -33,6 +33,10 @@ rcParams['font.style'] = 'oblique';
 cellNum  = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
 expDir   = sys.argv[3]; 
+if len(sys.argv) > 4:
+  respVar = int(sys.argv[4]);
+else:
+  respVar = 1;
 
 # at CNS
 loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/';
@@ -44,14 +48,16 @@ loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/';
 data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
-expName = 'dataList.npy'
+### DATALIST
+expName = 'dataList.npy';
+#expName = 'dataList_glx_full.npy'
+### FITLIST
+fitBase = 'fitList_190321c';
 #fitBase = 'fitListSPcns_181130c';
 #fitBase = 'fitListSP_181202c';
-#fitBase = 'fitList_190114c';
-#fitBase = 'fitList_190122c';
-#fitBase = 'fitList_190131c';
 #fitBase = 'fitList_190206c';
-fitBase = 'fitList_190315c';
+#fitBase = 'fitList_190321c';
+#fitBase = 'fitList_190501cA_glx_full';
 
 # first the fit type
 fitSuf_fl = '_flat';
@@ -131,12 +137,21 @@ modSponRates = [fit[6] for fit in modFits];
 
 # more tabulation - stim vals, organize measured responses
 _, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd);
-rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum);
+rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
 spikes  = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=rvcFits, expInd=expInd);
 _, _, respOrg, respAll    = hf.organize_resp(spikes, expData, expInd);
 
 respMean = respOrg;
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
+# compute SEM, too
+findNaN = np.isnan(respAll);
+nonNaN  = np.sum(findNaN == False, axis=-1);
+respSem = np.nanstd(respAll, -1) / np.sqrt(nonNaN);
+# pick which measure of response variance
+if respVar == 1:
+  respVar = respSem;
+else:
+  respVar = respStd;
 
 blankMean, blankStd, _ = hf.blankResp(expData); 
 
@@ -166,7 +181,7 @@ for d in range(nDisps):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(25, n_v_cons*8), sharey=False);
+    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(nDisps*8, n_v_cons*8), sharey=False);
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
     
@@ -178,7 +193,7 @@ for d in range(nDisps):
 
         # plot data
         dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                      respStd[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+                                      respVar[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
 
 	# plot model fits
         # plot model average for both models (flat + weighted)
@@ -303,7 +318,7 @@ for d in range(nDisps):
         
         # plot data
         sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                       respStd[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+                                       respVar[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
 
 	# plot model fits
         [sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=False, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
@@ -320,7 +335,7 @@ for d in range(nDisps):
         sns.despine(ax=sfMixAx[c_plt_ind, d], offset=10, trim=False);
 
 f.legend();
-f.suptitle('%s #%d, loss %.2f|%.2f' % (cellType, cellNum, fitList_fl[cellNum-1]['NLL'], fitList_wg[cellNum-1]['NLL']));
+f.suptitle('%s #%d (%s), loss %.2f|%.2f' % (cellType, cellNum, cellName, fitList_fl[cellNum-1]['NLL'], fitList_wg[cellNum-1]['NLL']));
 	        
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc
@@ -350,9 +365,9 @@ if ~np.any([i is None for i in conModResps]): # then we're using an experiment w
 # poisson test - mean/var for each condition (i.e. sfXdispXcon)
 curr_ax = plt.subplot2grid(detailSize, (0, 0)); # set the current subplot location/size[default is 1x1]
 val_conds = ~np.isnan(respMean);
-gt0 = np.logical_and(respMean[val_conds]>0, respStd[val_conds]>0);
+gt0 = np.logical_and(respMean[val_conds]>0, respVar[val_conds]>0);
 plt.loglog([0.01, 1000], [0.01, 1000], 'k--');
-plt.loglog(respMean[val_conds][gt0], np.square(respStd[val_conds][gt0]), 'o');
+plt.loglog(respMean[val_conds][gt0], np.square(respVar[val_conds][gt0]), 'o');
 # skeleton for plotting modulated poisson prediction
 if lossType == 3: # i.e. modPoiss
   mean_vals = np.logspace(-1, 2, 50);
@@ -418,6 +433,29 @@ plt.semilogx([100, 100], [-1.5, 1], 'k--')
 # now the real stuff
 [plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
 [plt.semilogx(omega, -norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNorms, modColors, modLabels)]
+plt.xlim([omega[0], omega[-1]]);
+plt.ylim([-0.1, 1.1]);
+plt.xlabel('spatial frequency (c/deg)', fontsize=12);
+plt.ylabel('Normalized response (a.u.)', fontsize=12);
+# Remove top/right axis, put ticks only on bottom/left
+sns.despine(ax=curr_ax, offset=5);
+
+# SIMPLE normalization
+curr_ax = plt.subplot2grid(detailSize, (2, 1));
+plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+plt.semilogx([.01, .01], [-1.5, 1], 'k--')
+plt.semilogx([.1, .1], [-1.5, 1], 'k--')
+plt.semilogx([1, 1], [-1.5, 1], 'k--')
+plt.semilogx([10, 10], [-1.5, 1], 'k--')
+plt.semilogx([100, 100], [-1.5, 1], 'k--')
+# now the real stuff
+unwt_weights = np.sqrt(hf.genNormWeightsSimple(omega, None, None));
+sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
+wt_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
+sfNormTuneSim = wt_weights/np.amax(np.abs(wt_weights));
+sfNormsSimple = [sfNormSim, sfNormTuneSim]
+[plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
+[plt.semilogx(omega, norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
 plt.xlim([omega[0], omega[-1]]);
 plt.ylim([-0.1, 1.1]);
 plt.xlabel('spatial frequency (c/deg)', fontsize=12);
@@ -507,7 +545,7 @@ for d in range(nDisps):
 	curr_rvc = rvcAx[0][d, 0].plot(all_cons[v_cons], resps_curr, '-', clip_on=False);
         rvc_plots.append(curr_rvc[0]);
 
-        stdPts = np.hstack((0, np.reshape([respStd[d, sf_ind, v_cons]], (n_cons, ))));
+        stdPts = np.hstack((0, np.reshape([respVar[d, sf_ind, v_cons]], (n_cons, ))));
         expPts = rvcAx[d+1][row_ind, col_ind].errorbar(np.hstack((0, all_cons[v_cons])), resps_w_blank, stdPts, fmt='o', clip_on=Fals
 e);
 

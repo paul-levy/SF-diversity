@@ -83,6 +83,7 @@ import warnings
 # getSuppressiveSFtuning - returns the normalization pool response
 # makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
 # getNormParams  - given the model params and fit type, return the relevant parameters for normalization
+# genNormWeightsSimple - for the simple version of the normalization model
 # genNormWeights - used to generate the weighting matrix for weighting normalization pool responses
 # setSigmaFilter - create the filter we use for determining c50 with SF
 # evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
@@ -1791,8 +1792,11 @@ def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None):
   i.e. in effect, we are eliminating the bank of filters in the norm. pool
   '''
   np = numpy;
-  trialInf = cellStruct['sfm']['exp']['trial'];
-  sfs = np.vstack([comp for comp in trialInf['sf']]); # [nComps x nTrials]
+  try:
+    trialInf = cellStruct['sfm']['exp']['trial'];
+    sfs = np.vstack([comp for comp in trialInf['sf']]); # [nComps x nTrials]
+  except: # we allow cellStruct to simply be an array of sfs...
+    sfs = cellStruct;
   if gs_mean is None or gs_std is None: # we assume inhAsym is 0
     inhAsym = 0;
     new_weights = 1 + inhAsym*(np.log(sfs) - np.nanmean(np.log(sfs)));
@@ -1953,7 +1957,8 @@ def getConstraints(fitType):
     zero = (0.05, None);
     one = (0.1, None);
     two = (None, None);
-    three = (0.25, None); # trying, per conversation with Tony (03.01.19)
+    three = (2.0, 2.0); # fix at 2
+    #three = (0.25, None); # trying, per conversation with Tony (03.01.19)
     #three = (1, None);
     four = (1e-3, None);
     five = (0, 1); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
