@@ -5,15 +5,15 @@ spkOffset = 0.135; % from Manu, offset is 135 ms, roughly...
 baseDir = pwd;
 baseDir = strrep(baseDir, '/matlab', '/');
 disp(baseDir);
-expDir  = 'V1/recordings/';
-expName = 'm676p3l11#16/';
+expDir  = 'V1/recordings';
+expName = 'm676p3l06#13/';
 progName = 'sfMixHalfInt';
 
-msFolder = [baseDir expDir 'sorted/' expName];
+msFolder = [baseDir expDir '/sorted/' expName];
 filename = 'sfMixHalfInt.dat';
 expoName = [baseDir expDir strrep(expName, '/', '[sfMixHalfInt].xml')];
-firingsName = 'firings_355_384.curated.mda';
-metricsName = 'cluster_metrics_355_384.json';
+firingsName = 'firings_180_209.curated.mda';
+metricsName = 'cluster_metrics_180_209.json';
 
 glx.msFolder = msFolder;
 glx.filename = filename;
@@ -22,4 +22,5 @@ glx.firingsName = firingsName;
 glx.metricsName = metricsName;
 
 %%
-sfMixLoad(strrep(expName, '#16/', ''), 'loadPath', [baseDir expDir], 'savePath', [baseDir strrep(expDir, 'recordings', 'structures')], 'spkOffset', spkOffset, 'glxStruct', glx, 'prog', progName);
+% sfMixLoad(strrep(expName, '#13/', ''), 'loadPath', [baseDir expDir], 'savePath', [baseDir strrep(expDir, 'recordings', 'structures')], 'spkOffset', spkOffset, 'prog', progName);
+sfMixLoad(strrep(expName, '#13/', ''), 'loadPath', [baseDir expDir], 'savePath', [baseDir strrep(expDir, 'recordings', 'structures')], 'spkOffset', spkOffset, 'glxStruct', glx, 'prog', progName);

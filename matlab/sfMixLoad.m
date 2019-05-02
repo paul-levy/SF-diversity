@@ -131,7 +131,7 @@ for iU = 1:nUnits
         nFiles,length(progNames)-length(unique(progNames)),length(FileNDX));
 
     toSave = 0;
-    
+
     % Check all these experiments
     for iF = FileNDX
         
@@ -228,7 +228,6 @@ latency = GetLatency(DIS, 10:150, mBlockIDs);
 
 % Get the stimulus durations, spike times, and full waveform, if specified
 duration   = GetDurations(DIS, ValidPassIDs, 'sec');                                                            % durations only for valid trials
-keyboard;
 spikeTimes = GetSpikeTimes(DIS, 0, ValidPassIDs, .001*latency + spkOffset, .001*latency + spkOffset, 0, 'sec');                          % spikeTimes only for valid trials
 if getFullWave
     fullWaves  = GetWaveforms(DIS,0 , ValidPassIDs, .001*latency, .001*latency, 0);
@@ -236,8 +235,8 @@ else
     fullWaves = [];
 end
 % get sorted spike times, if present
-sortPath = [loadPath '/' sortDir fileName];
-if glxStruct ~= -1
+sortPath = [glxStruct.msFolder, fileName];
+if isa(glxStruct, 'struct')
   fprintf('Getting mountainsort spike times\n');
   [clusid, spikes_by_clus, classification] = alignExpoGLX(DIS, glxStruct.msFolder, [glxStruct.msFolder glxStruct.filename], glxStruct.expoName, glxStruct.firingsName, glxStruct.metricsName);
   spks_GLX.times = spikes_by_clus;
@@ -252,8 +251,7 @@ trial.num           = 1:length(ValidPassIDs);                                   
 trial.blockID       = ValidBlockIDs;                                                                            % block ids of valid trials
 trial.duration      = duration;
 trial.spikeTimes    = spikeTimes;
-trial.spikeCount    = GetSpikeCounts(spikeTimes, 0, duration, 'sec', 'impulses');                               % spikeCounts for val
-id trials
+trial.spikeCount    = GetSpikeCounts(spikeTimes, 0, duration, 'sec', 'impulses');                               % spikeCounts for valid trials
 trial.fullWaves     = fullWaves;
 trial.spikeTimesGLX = spks_GLX;
 trial.f1            = SpikeTrainFT(spikeTimes, tfPass, trial.duration);                                         % response modulation at fundamental Fourier component
