@@ -9,7 +9,8 @@ import sys
 import pdb
 
 fft = numpy.fft
-dataListName = 'dataList_glx_full.npy'
+dataListName = 'dataList_mr.npy'
+modRecov = 1;
 
 # create global variables for use in saving each step of the iteration
 params_glob = [];
@@ -244,8 +245,6 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1):
                                 + pow(respSimple3, 2) + pow(respSimple4, 2); 
                             respSimple[iF, :] = numpy.sqrt(respComplex);
                         
-        #pdb.set_trace();
-            
         # Store response in desired format
         M['simpleResp'][:,p] = respSimple;
         
@@ -588,7 +587,7 @@ def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None):
   respByFr = np.array(nFrames * [respPerTr]); # broadcast - response will be same for every frame
   return respByFr;
 
-def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None, trackSteps=False):
+def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None, trackSteps=False, overwriteSpikes=None):
     '''
     Computes the negative log likelihood for the LN-LN model
        Optional arguments: //note: true means include in mask, false means exclude
@@ -597,7 +596,8 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
        maskIn      - pass in a mask (overwrite maskOri and trialSubset, i.e. highest presedence) 
        expInd      - which experiment number?
        rvcFits     - if included, then we'll get adjusted spike counts instead of "raw" saved ones
-     Returns NLL ###, respModel
+     
+    Returns NLL ###, respModel
        Note: to keep in sync with the organization/gathering of measured spiking responses, we return
          respModel as spikes/trial (and not a rate of spks/s)
     '''
@@ -715,7 +715,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         respModel     = noiseLate + scale*meanRate; # respModel[iR]
         rateModel     = respModel / T['exp']['trial']['duration'];
         # and get the spike count
-        spikeCount = hf.get_spikes(T['exp']['trial'], rvcFits=rvcFits, expInd=expInd);
+        spikeCount = hf.get_spikes(T['exp']['trial'], rvcFits=rvcFits, expInd=expInd, overwriteSpikes=overwriteSpikes);
 
         ### Masking the data - which trials will we include
         # now get the "right" subset of the data for evaluating loss (e.x. by default, orientation tuning trials are not included)
@@ -895,7 +895,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
 
     return respModel, Linh, Lexc, normResp['normResp'], denominator;
 
-def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, trackSteps=False, holdOutCondition = None):
+def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, trackSteps=False, holdOutCondition = None, modRecov = None):
     # Given just a cell number, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
     #
     # lossType
@@ -918,6 +918,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     #loc_base = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/'; # personal mac
     #loc_base = '/home/pl1465/SF_diversity/'; # Prince cluster 
     #loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
+
     loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory
 
     loc_data = loc_base + expDir + 'structures/';
@@ -926,7 +927,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
       loc_str = 'HPC';
     else:
       loc_str = '';
-    fL_name = 'fitList%s_190430cA_glx' % loc_str
+    #fL_name = 'mr_fitList%s_190502cA' % loc_str
+    fL_name = 'fitList%s_190502cA' % loc_str
 
     np = numpy;
 
@@ -1091,7 +1093,16 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     all_bounds = hf.getConstraints(fitType);
    
     # now set up the optimization
-    obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits, trackSteps=trackSteps)[0];
+    recovSpikes = None;
+    if modRecov is not None: # Not very clean, but it will have to do for now
+      if fitType == 1:
+        recovSpikes = S['sfm']['mod']['recovery']['respFlat'];
+      elif fitType == 2:
+        recovSpikes = S['sfm']['mod']['recovery']['respWght'];
+      else:
+        warnings.warn('You are not set up to run model recovery analysis with a norm type that is not flat (1) or wght (2)\nSetting recovery spikes to None');
+    ## NOW: set up the objective function
+    obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits, trackSteps=trackSteps, overwriteSpikes=recovSpikes)[0];
     print('...now minimizing!'); 
     tomin = opt.minimize(obj, param_list, bounds=all_bounds);
     #tomin = opt.minimize(obj, param_list, method='TNC', bounds=all_bounds);
@@ -1158,4 +1169,4 @@ if __name__ == '__main__':
     initFromCurr = int(sys.argv[5]);
     trackSteps   = int(sys.argv[6]);
 
-    setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps);
+    setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps, modRecov=modRecov);

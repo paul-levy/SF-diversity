@@ -22,6 +22,8 @@ import warnings
 # exp_name_to_ind - given the name of an exp (e.g. sfMixLGN), return the expInd
 # get_exp_params  - given an index for a particular version of the sfMix experiments, return parameters of that experiment (i.e. #stimulus components)
 # get_exp_ind     - given a .npy for a given sfMix recording, determine the experiment index
+# fitType_suffix  - get the string corresponding to a fit (i.e. normalization) type
+# lossType_suffix - get the string corresponding to a loss type
 # fitList_name
 # phase_fit_name
 # descrFit_name
@@ -47,6 +49,7 @@ import warnings
 # get_all_fft - extract the amp/phase for a condition or set of conditions
 # get_rvc_model - return the lambda function describing the rvc model
 # get_phAdv_model - return the lambda function describing the responsePhase-as-function-of-respAmplitude model
+# get_recovInfo - get the model recovery parameters/spikes, if applicable
 # rvc_fit - fit response versus contrast with a model used in Movshon/Kiorpes/+ 2005
 # phase_advance - compute the phase advance (a la Movshon/Kiorpes/+ 2005)
 
@@ -235,23 +238,37 @@ def num_frames(expInd):
   nFrames    = dur*fps;
   return nFrames;
 
-def fitList_name(base, fitType, lossType):
-  ''' use this to get the proper name for the full model fits
+def fitType_suffix(fitType):
+  ''' Use this to get the string referring to a given normalization type
   '''
-  # first the fit type
   if fitType == 1:
     fitSuf = '_flat';
   elif fitType == 2:
     fitSuf = '_wght';
   elif fitType == 3:
     fitSuf = '_c50';
-  # then the loss type
+  return fitSuf;
+
+def lossType_suffix(lossType):
+  ''' Use this to get the string referring to a given loss function
+  '''
   if lossType == 1:
     lossSuf = '_sqrt.npy';
   elif lossType == 2:
     lossSuf = '_poiss.npy';
   elif lossType == 3:
     lossSuf = '_modPoiss.npy';
+  elif lossType == 4:
+    lossSuf = '_chiSq.npy';
+  return lossSuf;
+
+def fitList_name(base, fitType, lossType):
+  ''' use this to get the proper name for the full model fits
+  '''
+  # first the fit type
+  fitSuf = fitType_suffix(fitType);
+  # then the loss type
+  lossSuf = lossType_suffix(lossType);
   return str(base + fitSuf + lossSuf);
 
 def phase_fit_name(base, dir, byTrial=0):
@@ -638,6 +655,24 @@ def get_phAdv_model():
   phAdv_model = lambda phi0, slope, amp: numpy.mod(phi0 + numpy.multiply(slope, amp), 360);
   # must mod by 360! Otherwise, something like 340-355-005 will be fit poorly
   return phAdv_model;
+
+def get_recovInfo(cellStruct, normType):
+  ''' Given a cell structure and normalization type, return the (simulated) spikes and model recovery set parameters
+  '''
+  spks, prms = [], [];
+  try:
+    base = cellStruct['sfm']['mod']['recovery'];
+    if normType == 1: # i.e. flat
+      spks = base['respFlat'];
+      prms = base['paramsFlat'];
+    elif normType == 2: # i.e. weighted
+      spks = base['respWght'];
+      prms = base['paramsWght'];
+    else:
+      warnings.warn('You have not set up an access for model recovery with this normalization type');
+  except:
+    warnings.warn('You likely do not have a recovery set up for this cell/file');
+  return prms, spks;
 
 def rvc_fit(amps, cons, var = None):
    ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
@@ -1521,10 +1556,12 @@ def organize_resp(spikes, expStructure, expInd):
 
     return rateOr, rateCo, rateSfMix, allSfMix;  
 
-def get_spikes(data, rvcFits = None, expInd = None):
+def get_spikes(data, rvcFits = None, expInd = None, overwriteSpikes = None):
   ''' Given the data (S.sfm.exp.trial), if rvcFits is None, simply return saved spike count;
                                         else return the adjusted spike counts (e.g. LGN, expInd 3)
   '''
+  if overwriteSpikes is not None: # as of 19.05.02, used for fitting model recovery spikes
+    return overwriteSpikes;
   if rvcFits is None:
     spikes = data['spikeCount'];
   else:
@@ -1957,8 +1994,8 @@ def getConstraints(fitType):
     zero = (0.05, None);
     one = (0.1, None);
     two = (None, None);
-    three = (2.0, 2.0); # fix at 2
-    #three = (0.25, None); # trying, per conversation with Tony (03.01.19)
+    #three = (2.0, 2.0); # fix at 2
+    three = (0.25, None); # trying, per conversation with Tony (03.01.19)
     #three = (1, None);
     four = (1e-3, None);
     five = (0, 1); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)

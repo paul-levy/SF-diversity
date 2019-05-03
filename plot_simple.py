@@ -1,4 +1,5 @@
 # coding: utf-8
+# NOTE: Unlike plot_compare.py, this file is used to plot the data/model for just one type (i.e. just flat, or just weighted, etc)
 
 import os
 import sys
@@ -32,9 +33,11 @@ rcParams['font.style'] = 'oblique';
 
 cellNum  = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
-expDir   = sys.argv[3]; 
-if len(sys.argv) > 4:
-  respVar = int(sys.argv[4]);
+fitType  = int(sys.argv[3]);
+expDir   = sys.argv[4]; 
+modRecov = int(sys.argv[5]);
+if len(sys.argv) > 6:
+  respVar = int(sys.argv[6]);
 else:
   respVar = 1;
 
@@ -60,29 +63,22 @@ expName = 'dataList_mr.npy'
 #fitBase = 'fitList_190321c';
 fitBase = 'mr_fitList_190502cA';
 
-# first the fit type
-fitSuf_fl = '_flat';
-fitSuf_wg = '_wght';
-# then the loss type
+# the loss type
 if lossType == 1:
-  lossSuf = '_sqrt.npy';
   loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
 elif lossType == 2:
-  lossSuf = '_poiss.npy';
   loss = lambda resp, pred: poisson.logpmf(resp, pred);
 elif lossType == 3:
-  lossSuf = '_modPoiss.npy';
   loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p));
 elif lossType == 4:
-  lossSuf = '_chiSq.npy';
-  # LOSS HERE IS TEMPORARY
   loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
 
-fitName_fl = str(fitBase + fitSuf_fl + lossSuf);
-fitName_wg = str(fitBase + fitSuf_wg + lossSuf);
+fitName = hf.fitList_name(fitBase, fitType, lossType);
+fitSuf  = hf.fitType_suffix(fitType);
+lossSuf = hf.lossType_suffix(lossType);
 
 # set the save directory to save_loc, then create the save directory if needed
-compDir  = str(fitBase + '_comp' + lossSuf);
+compDir  = str(fitBase + ('%s' % fitSuf) + lossSuf);
 subDir   = compDir.replace('fitList', 'fits').replace('.npy', '');
 save_loc = str(save_loc + subDir + '/');
 if not os.path.exists(save_loc):
@@ -97,8 +93,7 @@ else:
 conDig = 3; # round contrast to the 3rd digit
 
 dataList = np.load(str(data_loc + expName), encoding='latin1').item();
-fitList_fl = hf.np_smart_load(data_loc + fitName_fl);
-fitList_wg = hf.np_smart_load(data_loc + fitName_wg);
+fitList= hf.np_smart_load(data_loc + fitName);
 
 cellName = dataList['unitName'][cellNum-1];
 try:
@@ -112,34 +107,47 @@ expInd   = hf.get_exp_ind(data_loc, cellName)[0];
 
 # #### Load model fits
 
-modFit_fl = fitList_fl[cellNum-1]['params']; # 
-modFit_wg = fitList_wg[cellNum-1]['params']; # 
-modFits = [modFit_fl, modFit_wg];
-normTypes = [1, 2]; # flat, then weighted
+modFit = fitList[cellNum-1]['params'];
+# now get normalization stuff
+normParams = hf.getNormParams(modFit, fitType);
+if fitType == 1:
+  inhAsym = normParams;
+elif fitType == 2:
+  gs_mean = normParams[0];
+  gs_std  = normParams[1];
+elif fitType == 3:
+  # sigma calculation
+  offset_sigma = normParams[0];  # c50 filter will range between [v_sigOffset, 1]
+  stdLeft      = normParams[1];  # std of the gaussian to the left of the peak
+  stdRight     = normParams[2]; # '' to the right '' 
+  sfPeak       = normParams[3]; # where is the gaussian peak?
+else:
+  inhAsym = normParams;
 
 # ### Organize data
 # #### determine contrasts, center spatial frequency, dispersions
 
-modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd) for fit, norm in zip(modFits, normTypes)];
-modResps = [x[1] for x in modResps]; # 1st return output (x[0]) is NLL (don't care about that here)
-gs_mean = modFit_wg[8]; 
-gs_std = modFit_wg[9];
+modResp = mod_resp.SFMGiveBof(modFit, expData, normType=fitType, lossType=lossType, expInd=expInd)[1];
 # now organize the responses
-orgs = [hf.organize_resp(mr, expData, expInd) for mr in modResps];
-oriModResps = [org[0] for org in orgs]; # only non-empty if expInd = 1
-conModResps = [org[1] for org in orgs]; # only non-empty if expInd = 1
-sfmixModResps = [org[2] for org in orgs];
-allSfMixs = [org[3] for org in orgs];
+orgs = hf.organize_resp(modResp, expData, expInd);
+oriModResp = orgs[0]; # only non-empty if expInd = 1
+conModResp = orgs[1]; # only non-empty if expInd = 1
+sfmixModResp = orgs[2];
+allSfMix = orgs[3];
 
-modLows = [np.nanmin(resp, axis=3) for resp in allSfMixs];
-modHighs = [np.nanmax(resp, axis=3) for resp in allSfMixs];
-modAvgs = [np.nanmean(resp, axis=3) for resp in allSfMixs];
-modSponRates = [fit[6] for fit in modFits];
+modLow = np.nanmin(allSfMix, axis=3);
+modHigh = np.nanmax(allSfMix, axis=3);
+modAvg = np.nanmean(allSfMix, axis=3);
+modSponRate = modFit[6];
 
 # more tabulation - stim vals, organize measured responses
+if modRecov == 1:
+  modParamGT, overwriteSpikes = hf.get_recovInfo(expData, fitType);
+else:
+  overwriteSpikes = None;
 _, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd);
 rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
-spikes  = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=rvcFits, expInd=expInd);
+spikes  = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=rvcFits, expInd=expInd, overwriteSpikes=overwriteSpikes);
 _, _, respOrg, respAll    = hf.organize_resp(spikes, expData, expInd);
 
 respMean = respOrg;
@@ -166,10 +174,11 @@ nDisps = len(all_disps);
 
 # ### Plots
 
-# set up model plot info
-# i.e. flat model is red, weighted model is green
-modColors = ['r', 'g']
-modLabels = ['flat', 'wght']
+# set up colors, labels
+modClr = 'r';
+modTxt = 'model';
+dataClr = 'k';
+dataTxt = 'data';
 
 # #### Plots by dispersion
 
@@ -192,15 +201,14 @@ for d in range(nDisps):
         c_plt_ind = len(v_cons) - c - 1;
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
 
-        # plot data
+        ## plot data
         dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                      respVar[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+                                         respVar[d, v_sfs, v_cons[c]], color=dataClr, fmt='o', clip_on=False, label=dataTxt);
+        dispAx[d][c_plt_ind, 0].axhline(blankMean, color=dataClr, linestyle='dashed', label='spon. rate');
 
-	# plot model fits
-        # plot model average for both models (flat + weighted)
-        [dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=False, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
-        sponRate = dispAx[d][c_plt_ind, 0].axhline(blankMean, color='b', linestyle='dashed', label='data spon. rate');
-        [dispAx[d][c_plt_ind, 0].axhline(sponRate, color=cc, linestyle='dashed') for sponRate,cc in zip(modSponRates, modColors)];
+	## plot model fit
+        dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], alpha=0.7, color=modClr, clip_on=False, label=modTxt);
+        dispAx[d][c_plt_ind, 0].axhline(modSponRate, color=modClr, linestyle='dashed')
 
         for i in range(2):
 
@@ -210,7 +218,7 @@ for d in range(nDisps):
           dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
           dispAx[d][c_plt_ind, i].set_title('D%02d: contrast: %.3f' % (d, all_cons[v_cons[c]]));
 
-	# Set ticks out, remove top/right axis, put ticks only on bottom/left
+	  # Set ticks out, remove top/right axis, put ticks only on bottom/left
           dispAx[d][c_plt_ind, i].tick_params(labelsize=15, width=1, length=8, direction='out');
           dispAx[d][c_plt_ind, i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
           sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
@@ -222,7 +230,7 @@ for d in range(nDisps):
         dispAx[d][c_plt_ind, 1].set_yscale('log');
         dispAx[d][c_plt_ind, 1].legend();
 
-    fCurr.suptitle('%s #%d, loss %.2f|%.2f' % (cellType, cellNum, fitList_fl[cellNum-1]['NLL'], fitList_wg[cellNum-1]['NLL']));
+    fCurr.suptitle('%s #%d, loss %.2f' % (cellType, cellNum, fitList[cellNum-1]['NLL']));
 
 saveName = "/cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
@@ -251,10 +259,10 @@ for d in range(nDisps):
 
     fCurr.suptitle('%s #%d' % (cellType, cellNum));
 
-    resps_curr = [modAvgs[0], respMean, modAvgs[1]];
-    labels     = [modLabels[0], 'data', modLabels[1]];
+    resps_curr = [modAvg, respMean];
+    labels     = ['model', 'data'];
 
-    for i in range(3):
+    for i in range(len(resps_curr)):
       curr_resps = resps_curr[i];
       maxResp = np.max(np.max(np.max(curr_resps[~np.isnan(curr_resps)])));  
 
@@ -319,10 +327,10 @@ for d in range(nDisps):
         
         # plot data
         sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                       respVar[d, v_sfs, v_cons[c]], fmt='o', clip_on=False);
+                                       respVar[d, v_sfs, v_cons[c]], fmt='o', clip_on=False, label=dataTxt);
 
-	# plot model fits
-        [sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=False, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
+	# plot model fit
+        sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=modClr, alpha=0.7, clip_on=False, label=modTxt)
 
         sfMixAx[c_plt_ind, d].set_xlim((np.min(all_sfs), np.max(all_sfs)));
         sfMixAx[c_plt_ind, d].set_ylim((0, 1.5*maxResp));
@@ -336,7 +344,7 @@ for d in range(nDisps):
         sns.despine(ax=sfMixAx[c_plt_ind, d], offset=10, trim=False);
 
 f.legend();
-f.suptitle('%s #%d (%s), loss %.2f|%.2f' % (cellType, cellNum, cellName, fitList_fl[cellNum-1]['NLL'], fitList_wg[cellNum-1]['NLL']));
+f.suptitle('%s #%d (%s), loss %.2f' % (cellType, cellNum, cellName, fitList[cellNum-1]['NLL']));
 	        
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc
@@ -346,19 +354,19 @@ fDetails = plt.figure();
 fDetails.set_size_inches(w=25,h=10)
 
 detailSize = (3, 5);
-if ~np.any([i is None for i in oriModResps]): # then we're using an experiment with ori curves
+if ~np.any([i is None for i in oriModResp]): # then we're using an experiment with ori curves
   # plot ori tuning
   curr_ax = plt.subplot2grid(detailSize, (0, 2));
-  [plt.plot(expData['sfm']['exp']['ori'], oriResp, '%so' % c, clip_on=False, label=s) for oriResp, c, s in zip(oriModResps, modColors, modLabels)]; # Model responses
+  plt.plot(expData['sfm']['exp']['ori'], oriModResp, '%so' % modClr, clip_on=False, label=modTxt); # Model response
   expPlt = plt.plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-', clip_on=False); # Exp responses
   plt.xlabel('Ori (deg)', fontsize=12);
   plt.ylabel('Response (ips)', fontsize=12);
-if ~np.any([i is None for i in conModResps]): # then we're using an experiment with RVC curves
+if ~np.any([i is None for i in conModResp]): # then we're using an experiment with RVC curves
   # CRF - with values from TF simulation and the broken down (i.e. numerator, denominator separately) values from resimulated conditions
   curr_ax = plt.subplot2grid(detailSize, (0, 1)); # default size is 1x1
   consUse = expData['sfm']['exp']['con'];
-  plt.semilogx(consUse, expData['sfm']['exp']['conRateMean'], 'o-', clip_on=False); # Measured responses
-  [plt.plot(consUse, conResp, '%so' % c, clip_on=False, label=s) for conResp, c, s in zip(conModResps, modColors, modLabels)]; # Model responses
+  plt.semilogx(consUse, expData['sfm']['exp']['conRateMean'], '%so-' % dataClr, clip_on=False); # Measured responses
+  plt.plot(consUse, conModResp, '%so' % modClr, clip_on=False, label=modTxt); # Model response
   plt.xlabel('Con (%)', fontsize=20);
   # Remove top/right axis, put ticks only on bottom/left
   sns.despine(ax=curr_ax, offset = 5);
@@ -372,8 +380,8 @@ plt.loglog(respMean[val_conds][gt0], np.square(respVar[val_conds][gt0]), 'o');
 # skeleton for plotting modulated poisson prediction
 if lossType == 3: # i.e. modPoiss
   mean_vals = np.logspace(-1, 2, 50);
-  varGains  = [x[7] for x in modFits];
-  [plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals)) for varGain in varGains];
+  varGain  = x[7];
+  plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals));
 plt.xlabel('Mean (sps)');
 plt.ylabel('Variance (sps^2)');
 plt.title('Super-poisson?');
@@ -387,41 +395,40 @@ val_cons = np.array(val_con_by_disp[disp_rvc]);
 v_sfs = ~np.isnan(respMean[disp_rvc, :, val_cons[0]]); # remember, for single gratings, all cons have same #/index of sfs
 sfToUse = np.int(np.floor(len(v_sfs)/2));
 plt.semilogx(all_cons[val_cons], respMean[disp_rvc, sfToUse, val_cons], 'o', clip_on=False); # Measured responses
-[plt.plot(all_cons[val_cons], modAvg[disp_rvc, sfToUse, val_cons], '%so-' % c, clip_on=False, label=s) for modAvg, c, s in zip(modAvgs, modColors, modLabels)]; # Model responses
+plt.plot(all_cons[val_cons], modAvg[disp_rvc, sfToUse, val_cons], '%so-' % modClr, clip_on=False, label=modTxt); # Model responses
 plt.xlabel('Con (%)', fontsize=20);
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset = 5);
 
 # plot model details - exc/suppressive components
 omega = np.logspace(-2, 2, 1000);
-sfExc = [];
-for i in modFits:
-  prefSf = i[0];
-  dOrder = i[1];
-  sfRel = omega/prefSf;
-  s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
-  sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
-  sfExcCurr = s/sMax;
-  sfExc.append(sfExcCurr);
+prefSf = modFit[0];
+dOrder = modFit[1];
+sfRel = omega/prefSf;
+s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
+sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
+sfExc = s/sMax;
 
 inhSfTuning = hf.getSuppressiveSFtuning();
 
-# Compute weights for suppressive signals
+## Compute weights for suppressive signals
 nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
 nTrials =  inhSfTuning.shape[0];
-inhWeight = hf.genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials, expInd);
-inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
-# first, tuned norm:
-sfNormTune = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
-sfNormTune = sfNormTune/np.amax(np.abs(sfNormTune));
-# then, untuned norm:
-inhAsym = 0;
-inhWeight = [];
-for iP in range(len(nInhChan)):
-    inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
-sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
-sfNorm = sfNorm/np.amax(np.abs(sfNorm));
-sfNorms = [sfNorm, sfNormTune];
+# first, normalization signal
+if fitType == 2: # tuned
+  inhWeight = hf.genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials, expInd);
+  inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
+  sfNormTune = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
+  sfNorm = sfNormTune/np.amax(np.abs(sfNormTune));
+else: # flat; and all else not yet written
+  if fitType != 1:
+    warnings.warn('yet to write the code for computing/plotting this normalization type in plot_simple.py; defaulting to flat');
+  inhAsym = 0;
+  inhWeight = [];
+  for iP in range(len(nInhChan)):
+      inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
+  sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
+  sfNorm = sfNorm/np.amax(np.abs(sfNorm));
 
 # just setting up lines
 curr_ax = plt.subplot2grid(detailSize, (1, 1));
@@ -432,8 +439,8 @@ plt.semilogx([1, 1], [-1.5, 1], 'k--')
 plt.semilogx([10, 10], [-1.5, 1], 'k--')
 plt.semilogx([100, 100], [-1.5, 1], 'k--')
 # now the real stuff
-[plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
-[plt.semilogx(omega, -norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNorms, modColors, modLabels)]
+plt.semilogx(omega, sfExc, '%s' % modClr, label=modTxt);
+plt.semilogx(omega, -sfNorm, '%s--' % modClr, label=modTxt);
 plt.xlim([omega[0], omega[-1]]);
 plt.ylim([-0.1, 1.1]);
 plt.xlabel('spatial frequency (c/deg)', fontsize=12);
@@ -450,13 +457,16 @@ plt.semilogx([1, 1], [-1.5, 1], 'k--')
 plt.semilogx([10, 10], [-1.5, 1], 'k--')
 plt.semilogx([100, 100], [-1.5, 1], 'k--')
 # now the real stuff
-unwt_weights = np.sqrt(hf.genNormWeightsSimple(omega, None, None));
-sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
-wt_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
-sfNormTuneSim = wt_weights/np.amax(np.abs(wt_weights));
-sfNormsSimple = [sfNormSim, sfNormTuneSim]
-[plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
-[plt.semilogx(omega, norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
+if fitType == 2:
+  wt_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
+  sfNormSim = wt_weights/np.amax(np.abs(wt_weights));
+else:
+  if fitType != 1:
+    warnings.warn('yet to write code for computing/plotting simple normalization signal for this type; default to flat');
+  unwt_weights = np.sqrt(hf.genNormWeightsSimple(omega, None, None));
+  sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
+plt.semilogx(omega, sfExc, '%s' % modClr, label=modTxt);
+plt.semilogx(omega, sfNormSim, '%s--' % modClr, label=modTxt);
 plt.xlim([omega[0], omega[-1]]);
 plt.ylim([-0.1, 1.1]);
 plt.xlabel('spatial frequency (c/deg)', fontsize=12);
@@ -464,24 +474,30 @@ plt.ylabel('Normalized response (a.u.)', fontsize=12);
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset=5);
 
+## organize the parameters for text output
+if modRecov == 1: # compare to model recovery params if they exist
+  modFits = [modFit, modParamGT];
+else: # otherwise we'll just print the same thing twice...
+  modFits = [modFit, modFit];
+
 # last but not least...and not last... response nonlinearity
 modExps = [x[3] for x in modFits];
 curr_ax = plt.subplot2grid(detailSize, (1, 2));
 plt.plot([-1, 1], [0, 0], 'k--')
 plt.plot([0, 0], [-.1, 1], 'k--')
-[plt.plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modExp), '%s-' % cc, label=s, linewidth=2) for modExp,cc,s in zip(modExps, modColors, modLabels)]
+plt.plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modExps[0]), '%s-' % modClr, label=modTxt, linewidth=2);
 plt.plot(np.linspace(-1,1,100), np.maximum(0, np.linspace(-1,1,100)), 'k--', linewidth=1)
 plt.xlim([-1, 1]);
 plt.ylim([-.1, 1]);
-plt.text(0.5, 1.1, 'respExp: %.2f, %.2f' % (modExps[0], modExps[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+plt.text(0.5, 1.1, 'respExp: %.2f , %.2f' % (modExps[0], modExps[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset=5);
 
 # print, in text, model parameters:
 curr_ax = plt.subplot2grid(detailSize, (0, 4));
-plt.text(0.5, 0.5, 'prefSf: %.3f, %.3f' % (modFits[0][0], modFits[1][0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-plt.text(0.5, 0.4, 'derivative order: %.3f, %.3f' % (modFits[0][1], modFits[1][1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-plt.text(0.5, 0.3, 'response scalar: %.3f, %.3f' % (modFits[0][4], modFits[1][4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+plt.text(0.5, 0.5, 'prefSf: %.3f|%.3f' % (modFits[0][0], modFits[1][0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+plt.text(0.5, 0.4, 'derivative order: %.3f|%.3f' % (modFits[0][1], modFits[1][1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+plt.text(0.5, 0.3, 'response scalar: %.3f|%.3f' % (modFits[0][4], modFits[1][4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, modFits[0][2]), np.power(10, modFits[1][2]), modFits[0][2], modFits[1][2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
 ### now save all figures (sfMix contrasts, details, normalization stuff)
@@ -535,11 +551,11 @@ for d in range(nDisps):
         resp_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
         respPlt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(resp_curr, 0.1), '-', clip_on=False, label='data');
 
- 	# RVC with full model fits (i.e. flat and weighted)
-        [rvcAx[plt_x][plt_y].fill_between(all_cons[v_cons], mLow[d,sf_ind,v_cons], mHigh[d,sf_ind,v_cons], color=cc, \
-          alpha=0.7, clip_on=False) for mLow, mHigh, cc in zip(modLows,modHighs, modColors)];
-        [rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(modAvg[d, sf_ind, v_cons], 0.1), color=cc, \
-          alpha=0.7, clip_on=False, label=s) for modAvg,cc,s in zip(modAvgs, modColors, modLabels)];
+ 	# RVC with full model fit  
+        rvcAx[plt_x][plt_y].fill_between(all_cons[v_cons], modLow[d,sf_ind,v_cons], modHigh[d,sf_ind,v_cons], color=modClr, \
+          alpha=0.7, clip_on=False);
+        rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(modAvg[d, sf_ind, v_cons], 0.1), color=modClr, \
+          alpha=0.7, clip_on=False, label=modTxt);
 
         # summary plots
         '''
@@ -591,13 +607,13 @@ for d in range(nDisps):
 
     fCurr.suptitle('%s #%d' % (cellType, cellNum));
 
-    resps_curr = [modAvgs[0], respMean, modAvgs[1]];
-    labels     = [modLabels[0], 'data', modLabels[1]];
+    resps_curr = [modAvg, respMean];
+    labels     = [modTxt, dataTxt];
 
     v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd);
     n_v_sfs = len(v_sf_inds);
 
-    for i in range(3):
+    for i in range(len(resps_curr)):
       curr_resps = resps_curr[i];
       maxResp = np.max(np.max(np.max(curr_resps[~np.isnan(curr_resps)])));
 
