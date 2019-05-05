@@ -8,22 +8,20 @@ from scipy.stats import sem, poisson
 import warnings
 import pdb
 
-# personal mac
-#basePath = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/';
-# prince cluster
-basePath = '/home/pl1465/SF_diversity/';
-# LCV/cns machines
-basePath = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/';
-
+basePath = os.getcwd() + '/';
 data_suff = 'structures/';
 
-expName = 'dataList.npy'
-dogName =  'descrFits_190129';
+expName = 'dataList_glx.npy'
+dogName =  'descrFits_190503';
 phAdvName = 'phaseAdvanceFitsTest'
 rvcName   = 'rvcFits'
+## model recovery???
+modelRecov = 0;
+normType = 1; # use if modelRecov == 1 :: 1 - flat; 2 - wght; ...
+#dogName =  'mr%s_descrFits_190503' % hf.fitType_suffix(normType);
 
-### TODO:
-# Redo all of (1) for more general use!
+# TODO:
+# - Redo all of (1) for more general use!
 
 ### 1: Recreate Movshon, Kiorpes, Hawken, Cavanaugh '05 figure 6 analyses
 ''' These plots show response versus contrast data (with model fit) AND
@@ -53,7 +51,7 @@ rvcName   = 'rvcFits'
     The Sach DoG curves should also be fit to this sum.
 '''
 
-def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save = 1, disp=0, dir=1):
+def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save = 1, disp=0, dir=1, expName=expName):
   ''' Given the FFT-derived response amplitude and phase, determine the response phase relative
       to the stimulus by taking into account the stimulus phase. 
       Then, make a simple linear model fit (line + constant offset) of the response phase as a function
@@ -66,7 +64,7 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save =
 
   assert disp==0, "In phase_advance_fit; we only fit ph-amp relationship for single gratings."
 
-  dataList = hf.np_smart_load(data_loc + 'dataList.npy');
+  dataList = hf.np_smart_load(data_loc + expName);
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
   phAdvName = hf.phase_fit_name(phAdvName, dir);
@@ -108,11 +106,11 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save =
 
   return phAdv_model, all_opts;
 
-def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, disp=0, dir=-1):
+def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, disp=0, dir=-1, expName=expName):
   ''' Piggy-backing off of phase_advance_fit above, get prepare to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
   '''
-  dataList = hf.np_smart_load(data_loc + 'dataList.npy');
+  dataList = hf.np_smart_load(data_loc + expName);
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
   rvcNameFinal = hf.phase_fit_name(rvcName, dir);
@@ -184,7 +182,8 @@ def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, disp=0, dir
 
   return rvc_model, all_opts, all_conGains, adjMeans;
 
-### 2: Difference of gaussian fit to (adjusted, if needed) responses
+### 2: Descriptive tuning fit to (adjusted, if needed) responses
+# previously, only difference of gaussian models; now (May 2019), we've also added the original flexible (i.e. two-halved) Gaussian model
 # this is meant to be general for all experiments, so responses can be F0 or F1, and the responses will be the adjusted ones if needed
 
 def invalid(params, bounds):
@@ -202,11 +201,14 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
              3 - poiss
              4 - Sach sum{[(exp-obs)^2]/[k+sigma^2]} where
                  k := 0.01*max(obs); sigma := measured variance of the response
-  DoGmodel: 1 - sach
+  DoGmodel: 0 - flexGauss (not DoG...)
+            1 - sach
             2 - tony
   '''
   # NOTE: See version in LGN/sach/ for how to fit trial-by-trial responses (rather than avg. resp)
-  if DoGmodel == 1:
+  if DoGmodel == 0:
+    pred_spikes = hf.flexible_Gauss(params, stim_sf=sfs);
+  elif DoGmodel == 1:
     pred_spikes, _ = hf.DoGsach(*params, stim_sf=sfs);
   elif DoGmodel == 2:
     pred_spikes, _ = hf.DiffOfGauss(*params, stim_sf=sfs);
@@ -234,14 +236,15 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
     loss = loss + np.sum((sq_err/(k+np.square(sigma)))) + gain_reg*(params[0] + params[2]); # regularize - want gains as low as possible
   return loss;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, dir=+1, gain_reg=0, fLname = dogName):
-  ''' 
-      NOTE: as of now, fLname is overwritten (we just use default from helper_fcns, meaning no date appending)
-  '''
-  nParam = 4;
+def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType):
+
+  if DoGmodel == 0:
+    nParam = 5;
+  else:
+    nParam = 4;
 
   # load cell information
-  dataList = hf.np_smart_load(data_loc + 'dataList.npy');
+  dataList = hf.np_smart_load(data_loc + dLname);
   assert dataList!=[], "data file not found!"
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
@@ -250,18 +253,25 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
   print('Making DoG fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num); # see default arguments in helper_fcns.py
 
-  if DoGmodel == 1:
+  if DoGmodel == 0:
+    modStr = 'flex';
+  elif DoGmodel == 1:
     modStr = 'sach';
   elif DoGmodel == 2:
     modStr = 'tony';
-  fLname  = hf.descrFit_name(loss_type, modelName=modStr);
+  fLname  = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr);
   if os.path.isfile(data_loc + fLname):
       descrFits = hf.np_smart_load(data_loc + fLname);
   else:
       descrFits = dict();
 
   # now, get the spikes (adjusted, if needed) and organize for fitting
-  spks = hf.get_spikes(data, rvcFits, expInd);
+  # TODO: Add recovery spikes...
+  if modelRecov == 1:
+    recovSpikes = hf.get_recovInfo(cellStruct, normType)[1];
+  else:
+    recovSpikes = None;
+  spks = hf.get_spikes(data, rvcFits, expInd, overwriteSpikes=recovSpikes);
   _, _, resps_mean, resps_all = hf.organize_resp(spks, cellStruct, expInd);
   resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
   
@@ -289,8 +299,19 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
     prefSf = np.ones((nDisps, nCons)) * np.nan;
     charFreq = np.ones((nDisps, nCons)) * np.nan;
 
+  # next, let's compute some measures abougt the responses
+  max_resp = np.amax(resps_all);
+  base_rate = hf.blankResp(cellStruct)[0];
+
   # set bounds
-  if DoGmodel == 1:
+  if DoGmodel == 0:
+    min_bw = 1/4; max_bw = 10; # ranges in octave bandwidth
+    bound_baseline = (0, max_resp);
+    bound_range = (0, 1.5*max_resp);
+    bound_mu = (0.01, 10);
+    bound_sig = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
+    allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
+  elif DoGmodel == 1:
     bound_gainCent = (1e-3, None);
     bound_radiusCent= (1e-3, None);
     bound_gainSurr = (1e-3, None);
@@ -319,13 +340,46 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
       freqAtMaxResp = all_sfs[np.argmax(resps_curr)];
 
       for n_try in range(n_repeats):
-        # pick initial params
-        if DoGmodel == 1:
+
+        ### pick initial params
+        if DoGmodel == 0:
+          # set initial parameters - a range from which we will pick!
+          if base_rate <= 3:
+              range_baseline = (0, 3);
+          else:
+              range_baseline = (0.5 * base_rate, 1.5 * base_rate);
+          range_amp = (0.5 * max_resp, 1.5);
+
+          max_sf_index = np.argmax(resps_curr); # what sf index gives peak response?
+          mu_init = valSfVals[max_sf_index];
+
+          if max_sf_index == 0: # i.e. smallest SF center gives max response...
+              range_mu = (mu_init/2, valSfVals[max_sf_index + 3]);
+          elif max_sf_index+1 == len(valSfVals): # i.e. highest SF center is max
+              range_mu = (valSfVals[max_sf_index-3], mu_init);
+          else:
+              range_mu = (valSfVals[max_sf_index-1], valSfVals[max_sf_index+1]); # go +-1 indices from center
+
+          log_bw_lo = 0.75; # 0.75 octave bandwidth...
+          log_bw_hi = 2; # 2 octave bandwidth...
+          denom_lo = hf.bw_log_to_lin(log_bw_lo, mu_init)[0]; # get linear bandwidth
+          denom_hi = hf.bw_log_to_lin(log_bw_hi, mu_init)[0]; # get lin. bw (cpd)
+          range_denom = (denom_lo, denom_hi); # don't want 0 in sigma 
+
+          init_base = hf.random_in_range(range_baseline);
+          init_amp = hf.random_in_range(range_amp);
+          init_mu = hf.random_in_range(range_mu);
+          init_sig_left = hf.random_in_range(range_denom);
+          init_sig_right = hf.random_in_range(range_denom);
+          init_params = [init_base, init_amp, init_mu, init_sig_left, init_sig_right];
+
+        elif DoGmodel == 1:
           init_gainCent = hf.random_in_range((maxResp, 5*maxResp))[0];
           init_radiusCent = hf.random_in_range((0.05, 2))[0];
           init_gainSurr = init_gainCent * hf.random_in_range((0.1, 0.8))[0];
           init_radiusSurr = hf.random_in_range((0.5, 4))[0];
           init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
+
         elif DoGmodel == 2:
           init_gainCent = maxResp * hf.random_in_range((0.9, 1.2))[0];
           init_freqCent = np.maximum(all_sfs[2], freqAtMaxResp * hf.random_in_range((1.2, 1.5))[0]); # don't pick all_sfs[0] -- that's zero (we're avoiding that)
@@ -349,8 +403,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
           bestNLL[d, con] = NLL;
           currParams[d, con, :] = params;
           varExpl[d, con] = hf.var_explained(resps_curr, params, valSfVals, DoGmodel);
-          prefSf[d, con] = hf.dog_prefSf(params, DoGmodel, valSfVals);
-          charFreq[d, con] = hf.dog_charFreq(params, DoGmodel);
+          prefSf[d, con] = hf.dog_prefSf(params, dog_model=DoGmodel, all_sfs=valSfVals);
+          charFreq[d, con] = hf.dog_charFreq(params, DoGmodel=DoGmodel);
 
     # update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(data_loc + fLname):
@@ -391,12 +445,12 @@ if __name__ == '__main__':
       gainReg = float(sys.argv[9]);
     else:
       gainReg = 0;
-    print('Running cell %d' % cell_num);
+    print('Running cell %d in %s' % (cell_num, expName));
 
     # get the full data directory
     dataPath = basePath + data_dir + data_suff;
     # get the expInd
-    dL = hf.np_smart_load(dataPath + 'dataList.npy');
+    dL = hf.np_smart_load(dataPath + expName);
     unitName = dL['unitName'][cell_num-1];
     expInd = hf.get_exp_ind(dataPath, unitName)[0];
 

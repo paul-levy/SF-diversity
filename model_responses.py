@@ -5,12 +5,25 @@ from numpy.matlib import repmat
 import scipy.optimize as opt
 import datetime
 import sys
+import warnings
 
 import pdb
 
 fft = numpy.fft
-dataListName = 'dataList_mr.npy'
-modRecov = 1;
+dataListName = 'dataList.npy'
+modRecov = 0;
+# now, get descrFit name (ask if modRecov, too)
+if modRecov == 1:
+  try:
+    fitType      = int(sys.argv[4]);
+    descrFitName = 'mr%s_descrFits_190503_poiss_flex.npy' % hf.fitType_suffix(fitType);
+  except:
+    warnings.warn('Could not load descrFits in model_responses');
+else:
+  try:
+    descrFitName = 'descrFits_190503_poiss_flex.npy'
+  except:
+    warnings.warn('Could not load descrFits in model_responses');
 
 # create global variables for use in saving each step of the iteration
 params_glob = [];
@@ -28,6 +41,8 @@ resp_glob = [];
 # setModel       - wrapper+ for optimization and saving optimization results
 
 # orientation filter used in plotting (only, I think?)
+###
+
 def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
     
     # returns a spatial filter which is dth-order derivate of 2-D Gaussian
@@ -968,18 +983,34 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy')); # why -1? 0 indexing...
     print('...finished loading');
     trial_inf = S['sfm']['exp']['trial'];
-    if expInd == 1:
-      prefOrEst = mode(trial_inf['ori'][1]).mode;
-      trialsToCheck = trial_inf['con'][0] == 0.01;
-      prefSfEst = mode(trial_inf['sf'][0][trialsToCheck==True]).mode;
-    else:
-      prefOrEst = 0;
-      allSfs    = np.unique(trial_inf['sf'][0]);
-      allSfs    = allSfs[~np.isnan(allSfs)]; # remove NaN...
-      prefSfEst = np.median(allSfs);
+
+    ## Is this a model recovery fit?
+    recovSpikes = None;
+    if modRecov is not None: # Not very clean, but it will have to do for now
+      if modRecov == 1:
+        if fitType == 1:
+          recovSpikes = S['sfm']['mod']['recovery']['respFlat'];
+        elif fitType == 2:
+          recovSpikes = S['sfm']['mod']['recovery']['respWght'];
+        else:
+          warnings.warn('You are not set up to run model recovery analysis with a norm type that is not flat (1) or wght (2)\nSetting recovery spikes to None');
+
+    # get prefSfEst
+    try: 
+      dfits = hf.np_smart_load(loc_data + descrFitName);
+      prefSfEst = dfits[cellNum-1]['prefSf'][0][0]; # get high contrast, single grating prefSf
+    except:
+      if expInd == 1:
+        prefOrEst = mode(trial_inf['ori'][1]).mode;
+        trialsToCheck = trial_inf['con'][0] == 0.01;
+        prefSfEst = mode(trial_inf['sf'][0][trialsToCheck==True]).mode;
+      else:
+        prefOrEst = 0;
+        allSfs    = np.unique(trial_inf['sf'][0]);
+        allSfs    = allSfs[~np.isnan(allSfs)]; # remove NaN...
+        prefSfEst = np.median(allSfs);
     
     ########
-
     # 00 = preferred spatial frequency   (cycles per degree)
     # 01 = derivative order in space
     # 02 = normalization constant        (log10 basis)
@@ -1092,15 +1123,6 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, sigOffset, stdLeft, stdRight, sigPeak);
     all_bounds = hf.getConstraints(fitType);
    
-    # now set up the optimization
-    recovSpikes = None;
-    if modRecov is not None: # Not very clean, but it will have to do for now
-      if fitType == 1:
-        recovSpikes = S['sfm']['mod']['recovery']['respFlat'];
-      elif fitType == 2:
-        recovSpikes = S['sfm']['mod']['recovery']['respWght'];
-      else:
-        warnings.warn('You are not set up to run model recovery analysis with a norm type that is not flat (1) or wght (2)\nSetting recovery spikes to None');
     ## NOW: set up the objective function
     obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits, trackSteps=trackSteps, overwriteSpikes=recovSpikes)[0];
     print('...now minimizing!'); 
