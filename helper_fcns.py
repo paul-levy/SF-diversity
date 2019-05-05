@@ -26,6 +26,7 @@ import warnings
 # lossType_suffix - get the string corresponding to a loss type
 # fitList_name
 # phase_fit_name
+# descrMod_name - returns string for descriptive model fit
 # descrFit_name
 # angle_xy
 # flatten_list
@@ -57,21 +58,29 @@ import warnings
 
 # DiffOfGauss - standard difference of gaussians
 # DoGsach - difference of gaussians as implemented in sach's thesis
+# var_explained - compute the variance explained for a given model fit/set of responses
+# chiSq
 # dog_prefSf - compute the prefSf for a given DoG model/parameter set
 # dog_prefSfMod - fit a simple model of prefSf as f'n of contrast
 # dog_charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
 # dog_charFreqMod - smooth characteristic frequency vs. contrast with a functional form/fit
-# var_explained - compute the variance explained for a given model fit/set of responses
-# chiSq
 
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
+# get_descrResp - get the SF descriptive response
+
 # blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
 # get_valid_trials - rutrn list of valid trials given disp/con/sf
 # get_valid_sfs - return list indices (into allSfs) of valid sfs for given disp/con
+
+# get_condition - trial-by-trial f0/f1 for given condition
+# get_condition_adj - as above, but adj responses
+# get_isolated_response - collect responses (mean/sem/trial) of comps of stimulus when presented in isolation
+# get_isolated_responseAdj - as above, but adj responses
+
 # tabulate_responses - Organizes measured and model responses for sfMixAlt experiment
 # organize_adj_responses - wrapper for organize_adj_responses within each experiment subfolder
 # organize_resp       -
@@ -285,6 +294,17 @@ def phase_fit_name(base, dir, byTrial=0):
   if dir == -1:
     base = base + byTr + '_neg.npy';
   return base;
+
+def descrMod_name(DoGmodel):
+  ''' returns the string for a given SF descriptive model fit
+  '''
+  if DoGmodel == 0:
+    modStr = 'flex';
+  elif DoGmodel == 1:
+    modStr = 'sach';
+  elif DoGmodel == 2:
+    modStr = 'tony';
+  return modStr;
 
 def descrFit_name(lossType, descrBase=None, modelName = None):
   ''' if modelName is none, then we assume we're fitting descriptive tuning curves to the data
@@ -803,6 +823,7 @@ def tf_to_ind(tfs, stimDur):
     return numpy.multiply(tfs, stimDur).astype(numpy.int16);
 
 ### descriptive fits to sf tuning/basic data analyses
+### Descriptive functions - fits to spatial frequency tuning, other related calculations
 
 def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
   ''' Difference of gaussians 
@@ -876,142 +897,6 @@ def chiSq(data_resps, model_resps, stimDur=1):
   chi = np.sum(np.divide(np.square(num[valid]), k + data_resp_recenter*rho/stimDur));
 
   return chi;
-
-##
-
-def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
-
-    prefSf = params[0];
-    dOrdSp = params[1];
-
-    sfRel = stimSf / prefSf;
-    s     = pow(stimSf, dOrdSp) * numpy.exp(-dOrdSp/2 * pow(sfRel, 2));
-    sMax  = pow(prefSf, dOrdSp) * numpy.exp(-dOrdSp/2);
-    sNl   = s/sMax;
-    selSf = sNl;
-
-    return selSf, stimSf;
-
-def get_prefSF(flexGauss_fit):
-   ''' Given a set of parameters for a flexible gaussian fit, return the preferred SF
-   '''
-   return flexGauss_fit[2];
-
-def compute_SF_BW(fit, height, sf_range):
-
-    # 1/16/17 - This was corrected in the lead up to SfN (sometime 11/16). I had been computing
-    # octaves not in log2 but rather in log10 - it is field convention to use
-    # log2!
-
-    # Height is defined RELATIVE to baseline
-    # i.e. baseline = 10, peak = 50, then half height is NOT 25 but 30
-    
-    bw_log = numpy.nan;
-    SF = numpy.empty((2, 1));
-    SF[:] = numpy.nan;
-
-    # left-half
-    left_full_bw = 2 * (fit[3] * sqrt(2*log(1/height)));
-    left_cpd = fit[2] * exp(-(fit[3] * sqrt(2*log(1/height))));
-
-    # right-half
-    right_full_bw = 2 * (fit[4] * sqrt(2*log(1/height)));
-    right_cpd = fit[2] * math.exp((fit[4] * sqrt(2*math.log(1/height))));
-
-    if left_cpd > sf_range[0] and right_cpd < sf_range[-1]:
-        SF = [left_cpd, right_cpd];
-        bw_log = log(right_cpd / left_cpd, 2);
-
-    # otherwise we don't have defined BW!
-    
-    return SF, bw_log
-
-def fix_params(params_in):
-
-    # simply makes all input arguments positive
- 
-    # R(Sf) = R0 + K_e * EXP(-(SF-mu)^2 / 2*(sig_e)^2) - K_i * EXP(-(SF-mu)^2 / 2*(sig_i)^2)
-
-    return [abs(x) for x in params_in] 
-
-def flexible_Gauss(params, stim_sf, minThresh=0.1):
-    # The descriptive model used to fit cell tuning curves - in this way, we
-    # can read off preferred SF, octave bandwidth, and response amplitude
-
-    respFloor       = params[0];
-    respRelFloor    = params[1];
-    sfPref          = params[2];
-    sigmaLow        = params[3];
-    sigmaHigh       = params[4];
-
-    # Tuning function
-    sf0   = [x/sfPref for x in stim_sf];
-
-    sigma = numpy.multiply(sigmaLow, [1]*len(sf0));
-
-    sigma[[x for x in range(len(sf0)) if sf0[x] > 1]] = sigmaHigh;
-
-    # hashtag:uglyPython
-    shape = [math.exp(-pow(math.log(x), 2) / (2*pow(y, 2))) for x, y in zip(sf0, sigma)];
-                
-    return [max(minThresh, respFloor + respRelFloor*x) for x in shape];
-
-def blankResp(cellStruct):
-    # as of 01.03.19, should check if this works for all experiment variants
-    if 'sfm' in cellStruct:
-      tr = cellStruct['sfm']['exp']['trial'];
-    else:
-      tr = cellStruct;
-    blank_tr = tr['spikeCount'][numpy.isnan(tr['con'][0])];
-    mu = numpy.mean(blank_tr);
-    sig = numpy.std(blank_tr);
-    
-    return mu, sig, blank_tr;
-    
-def get_valid_trials(data, disp, con, sf, expInd):
-  ''' Given a data and the disp/con/sf indices (i.e. integers into the list of all disps/cons/sfs
-      Determine which trials are valid (i.e. have those stimulus criteria)
-      RETURN list of valid trials, lists for all dispersion values, all contrast values, all sf values
-  '''
-  _, stimVals, _, validByStimVal, _ = tabulate_responses(data, expInd);
-
-  # gather the conditions we need so that we can index properly
-  valDisp = validByStimVal[0];
-  valCon = validByStimVal[1];
-  valSf = validByStimVal[2];
-
-  allDisps = stimVals[0];
-  allCons = stimVals[1];
-  allSfs = stimVals[2];
-
-  val_trials = numpy.where(valDisp[disp] & valCon[con] & valSf[sf]);
-
-  return val_trials, allDisps, allCons, allSfs;
-
-def get_valid_sfs(data, disp, con, expInd):
-  ''' Self explanatory, innit? Returns the indices (into allSfs) of valid sfs for the given condition
-  '''
-  _, stimVals, _, validByStimVal, _ = tabulate_responses(data, expInd);
-
-  # gather the conditions we need so that we can index properly
-  valDisp = validByStimVal[0];
-  valCon = validByStimVal[1];
-  valSf = validByStimVal[2];
-
-  allDisps = stimVals[0];
-  allCons = stimVals[1];
-  allSfs = stimVals[2];
-
-  val_sfs = [];
-  for i in range(len(allSfs)):
-    val_trials = numpy.where(valDisp[disp] & valCon[con] & valSf[i]);
-    if len(val_trials[0]) > 0:
-      val_sfs.append(i);
-
-  return val_sfs;
-
-###
-### Descriptive functions - fits to spatial frequency tuning, other related calculations
 
 def dog_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11)):
   ''' Compute the preferred SF given a set of DoG parameters
@@ -1117,6 +1002,151 @@ def dog_charFreqMod(descrFit, allCons, varThresh=70, DoGmodel=1, lowConCut = 0.1
   fcRatio = extrema[-1] / extrema[0]
 
   return fcRatio, fc_model, opt_params, charFreqs, conVals;
+
+##
+
+def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
+
+    prefSf = params[0];
+    dOrdSp = params[1];
+
+    sfRel = stimSf / prefSf;
+    s     = pow(stimSf, dOrdSp) * numpy.exp(-dOrdSp/2 * pow(sfRel, 2));
+    sMax  = pow(prefSf, dOrdSp) * numpy.exp(-dOrdSp/2);
+    sNl   = s/sMax;
+    selSf = sNl;
+
+    return selSf, stimSf;
+
+def get_prefSF(flexGauss_fit):
+   ''' Given a set of parameters for a flexible gaussian fit, return the preferred SF
+   '''
+   return flexGauss_fit[2];
+
+def compute_SF_BW(fit, height, sf_range):
+
+    # 1/16/17 - This was corrected in the lead up to SfN (sometime 11/16). I had been computing
+    # octaves not in log2 but rather in log10 - it is field convention to use
+    # log2!
+
+    # Height is defined RELATIVE to baseline
+    # i.e. baseline = 10, peak = 50, then half height is NOT 25 but 30
+    
+    bw_log = numpy.nan;
+    SF = numpy.empty((2, 1));
+    SF[:] = numpy.nan;
+
+    # left-half
+    left_full_bw = 2 * (fit[3] * sqrt(2*log(1/height)));
+    left_cpd = fit[2] * exp(-(fit[3] * sqrt(2*log(1/height))));
+
+    # right-half
+    right_full_bw = 2 * (fit[4] * sqrt(2*log(1/height)));
+    right_cpd = fit[2] * math.exp((fit[4] * sqrt(2*math.log(1/height))));
+
+    if left_cpd > sf_range[0] and right_cpd < sf_range[-1]:
+        SF = [left_cpd, right_cpd];
+        bw_log = log(right_cpd / left_cpd, 2);
+
+    # otherwise we don't have defined BW!
+    
+    return SF, bw_log
+
+def fix_params(params_in):
+
+    # simply makes all input arguments positive
+ 
+    # R(Sf) = R0 + K_e * EXP(-(SF-mu)^2 / 2*(sig_e)^2) - K_i * EXP(-(SF-mu)^2 / 2*(sig_i)^2)
+
+    return [abs(x) for x in params_in] 
+
+def flexible_Gauss(params, stim_sf, minThresh=0.1):
+    # The descriptive model used to fit cell tuning curves - in this way, we
+    # can read off preferred SF, octave bandwidth, and response amplitude
+
+    respFloor       = params[0];
+    respRelFloor    = params[1];
+    sfPref          = params[2];
+    sigmaLow        = params[3];
+    sigmaHigh       = params[4];
+
+    # Tuning function
+    sf0   = [x/sfPref for x in stim_sf];
+
+    sigma = numpy.multiply(sigmaLow, [1]*len(sf0));
+
+    sigma[[x for x in range(len(sf0)) if sf0[x] > 1]] = sigmaHigh;
+
+    # hashtag:uglyPython
+    shape = [math.exp(-pow(math.log(x), 2) / (2*pow(y, 2))) for x, y in zip(sf0, sigma)];
+                
+    return [max(minThresh, respFloor + respRelFloor*x) for x in shape];
+
+def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
+  # returns only pred_spikes
+ if DoGmodel == 0:
+    pred_spikes = flexible_Gauss(params, stim_sf=stim_sf);
+  elif DoGmodel == 1:
+    pred_spikes, _ = DoGsach(*params, stim_sf=stim_sf);
+  elif DoGmodel == 2:
+    pred_spikes, _ = DiffOfGauss(*params, stim_sf=stim_sf);
+  return pred_spikes;
+
+###
+
+def blankResp(cellStruct):
+    # as of 01.03.19, should check if this works for all experiment variants
+    if 'sfm' in cellStruct:
+      tr = cellStruct['sfm']['exp']['trial'];
+    else:
+      tr = cellStruct;
+    blank_tr = tr['spikeCount'][numpy.isnan(tr['con'][0])];
+    mu = numpy.mean(blank_tr);
+    sig = numpy.std(blank_tr);
+    
+    return mu, sig, blank_tr;
+    
+def get_valid_trials(data, disp, con, sf, expInd):
+  ''' Given a data and the disp/con/sf indices (i.e. integers into the list of all disps/cons/sfs
+      Determine which trials are valid (i.e. have those stimulus criteria)
+      RETURN list of valid trials, lists for all dispersion values, all contrast values, all sf values
+  '''
+  _, stimVals, _, validByStimVal, _ = tabulate_responses(data, expInd);
+
+  # gather the conditions we need so that we can index properly
+  valDisp = validByStimVal[0];
+  valCon = validByStimVal[1];
+  valSf = validByStimVal[2];
+
+  allDisps = stimVals[0];
+  allCons = stimVals[1];
+  allSfs = stimVals[2];
+
+  val_trials = numpy.where(valDisp[disp] & valCon[con] & valSf[sf]);
+
+  return val_trials, allDisps, allCons, allSfs;
+
+def get_valid_sfs(data, disp, con, expInd):
+  ''' Self explanatory, innit? Returns the indices (into allSfs) of valid sfs for the given condition
+  '''
+  _, stimVals, _, validByStimVal, _ = tabulate_responses(data, expInd);
+
+  # gather the conditions we need so that we can index properly
+  valDisp = validByStimVal[0];
+  valCon = validByStimVal[1];
+  valSf = validByStimVal[2];
+
+  allDisps = stimVals[0];
+  allCons = stimVals[1];
+  allSfs = stimVals[2];
+
+  val_sfs = [];
+  for i in range(len(allSfs)):
+    val_trials = numpy.where(valDisp[disp] & valCon[con] & valSf[i]);
+    if len(val_trials[0]) > 0:
+      val_sfs.append(i);
+
+  return val_sfs;
 
 ## 
 
@@ -1228,50 +1258,6 @@ def get_isolated_responseAdj(data, trials, adjByTrial):
      f1summary[i, :] = [np.nanmean(f1all[i]), sem(f1all[i])];
 
    return f1summary, f1all, cons, sfs;
-
-## 
-
-
-
-###
-
-def get_isolated_response(data, trials):
-   ''' Given a set of trials (assumed to be all from one unique disp-con-sf set), collect the responses to the components of the 
-       stimulus when presented in isolation - returns the mean/sem and individual trial responses
-       Assumed to be for mixture stimuli
-   '''
-   np = numpy; conDig = 3;
-   n_comps = np.unique(data['num_comps'][trials]);
-   if len(n_comps) > 1:
-     warnings.warn('must have only one level of dispersion for the requested trials');
-     return [], [], [], [];
-   n_comps = n_comps[0]; # get just the value so it's an integer rather than array
-
-   # assumption is that #trials of mixture stimulus will be >= the number of repetitions of the isolated presentations of that stimulus component
-   f0all = np.array(np.nan * np.zeros((n_comps, )), dtype='O'); # might have different number of responses for each component, so create object/flexible array
-   f1all = np.array(np.nan * np.zeros((n_comps, )), dtype='O');
-   f0summary = np.nan * np.zeros((n_comps, 2)); # mean/std in [:, 0 or 1], respectively
-   f1summary = np.nan * np.zeros((n_comps, 2));
-
-   cons = []; sfs = [];
-   for i in range(n_comps):
-
-     # now go through for each component and get the response to that stimulus component when presented alone
-     con = np.unique(data['con'][i][trials]); cons.append(np.round(con, conDig));
-     sf = np.unique(data['sf'][i][trials]); sfs.append(sf);
-
-     if len(con)>1 or len(sf)>1:
-       warnings.warn('the trials requested must have only one sf/con for a given stimulus component');
-       return [], [], [], [];
-     
-     f0curr, f1curr, _ = get_condition(data, 1, np.round(con, conDig), sf); # 1 is for #components - we're looking for single component trials/responses
-     f0all[i] = f0curr;
-     f1all[i] = f1curr;
-
-     f0summary[i, :] = [np.nanmean(f0all[i]), sem(f0all[i])]; # nanmean/std in case fewer presentations of individual component than mixture
-     f1summary[i, :] = [np.nanmean(f1all[i]), sem(f1all[i])];
-
-   return f0summary, f1summary, f0all, f1all, cons, sfs;
 
 ##
 

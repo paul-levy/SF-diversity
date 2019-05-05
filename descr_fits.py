@@ -206,12 +206,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
             2 - tony
   '''
   # NOTE: See version in LGN/sach/ for how to fit trial-by-trial responses (rather than avg. resp)
-  if DoGmodel == 0:
-    pred_spikes = hf.flexible_Gauss(params, stim_sf=sfs);
-  elif DoGmodel == 1:
-    pred_spikes, _ = hf.DoGsach(*params, stim_sf=sfs);
-  elif DoGmodel == 2:
-    pred_spikes, _ = hf.DiffOfGauss(*params, stim_sf=sfs);
+  pred_spikes = hf.get_descrResp(params, sfs, DoGmodel);
 
   loss = 0;
   if loss_type == 1: # lsq
@@ -253,12 +248,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
   print('Making DoG fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num); # see default arguments in helper_fcns.py
 
-  if DoGmodel == 0:
-    modStr = 'flex';
-  elif DoGmodel == 1:
-    modStr = 'sach';
-  elif DoGmodel == 2:
-    modStr = 'tony';
+  modStr  = hf.descrMod_name(DoGmodel)
   fLname  = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr);
   if os.path.isfile(data_loc + fLname):
       descrFits = hf.np_smart_load(data_loc + fLname);
