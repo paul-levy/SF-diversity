@@ -23,7 +23,7 @@ source activate lcv-python
 
 # NOTE: If running only SF descr fits, do not need to run separately for all disp
 
-for run in {1..17}
+for run in {1..10}
 do
   python descr_fits.py $run 0 V1/ 0 0 1 0 1 & 
   #python descr_fits.py $run 1 V1/ 0 0 1 0 1 & 
