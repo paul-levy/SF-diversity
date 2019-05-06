@@ -10,8 +10,10 @@ import warnings
 import pdb
 
 fft = numpy.fft
-dataListName = 'dataList.npy'
-modRecov = 0;
+#dataListName = 'dataList.npy';
+dataListName = 'dataList_glx_mr.npy'
+#dataListName = 'dataList_glx.npy'
+modRecov = 1;
 # now, get descrFit name (ask if modRecov, too)
 if modRecov == 1:
   try:
@@ -930,20 +932,18 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     ########
     # Load cell
     ########
-    #loc_base = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/'; # personal mac
-    #loc_base = '/home/pl1465/SF_diversity/'; # Prince cluster 
-    #loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/'; # CNS
-
     loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory
-
     loc_data = loc_base + expDir + 'structures/';
 
     if 'pl1465' in loc_base:
       loc_str = 'HPC';
     else:
       loc_str = '';
-    #fL_name = 'mr_fitList%s_190502cA' % loc_str
-    fL_name = 'fitList%s_190502cA' % loc_str
+    if modRecov == 1:
+      fL_name = 'mr_fitList%s_190502cA' % loc_str
+    else:
+      fL_name = 'fitList%s_190502cA' % loc_str
+      #fL_name = 'fitList%s_190321c' % loc_str
 
     np = numpy;
 
@@ -998,7 +998,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     # get prefSfEst
     try: 
       dfits = hf.np_smart_load(loc_data + descrFitName);
-      prefSfEst = dfits[cellNum-1]['prefSf'][0][0]; # get high contrast, single grating prefSf
+      prefSfEst = dfits[cellNum-1]['prefSf'][0][-1]; # get high contrast, single grating prefSf
     except:
       if expInd == 1:
         prefOrEst = mode(trial_inf['ori'][1]).mode;

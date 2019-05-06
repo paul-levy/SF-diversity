@@ -11,14 +11,15 @@ import pdb
 basePath = os.getcwd() + '/';
 data_suff = 'structures/';
 
-expName = 'dataList_glx.npy'
-dogName =  'descrFits_190503';
+expName = 'dataList_glx_mr.npy'
+dogName =  'mr_descrFits_190503';
 phAdvName = 'phaseAdvanceFitsTest'
 rvcName   = 'rvcFits'
 ## model recovery???
-modelRecov = 0;
-normType = 1; # use if modelRecov == 1 :: 1 - flat; 2 - wght; ...
-#dogName =  'mr%s_descrFits_190503' % hf.fitType_suffix(normType);
+modelRecov = 1;
+if modelRecov == 1:
+  normType = 1; # use if modelRecov == 1 :: 1 - flat; 2 - wght; ...
+  dogName =  'mr%s_descrFits_190503' % hf.fitType_suffix(normType);
 
 # TODO:
 # - Redo all of (1) for more general use!
@@ -290,7 +291,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
     charFreq = np.ones((nDisps, nCons)) * np.nan;
 
   # next, let's compute some measures abougt the responses
-  max_resp = np.amax(resps_all);
+  max_resp = np.nanmax(resps_all);
   base_rate = hf.blankResp(cellStruct)[0];
 
   # set bounds
@@ -314,7 +315,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
     bound_freqFracSurr = (1e-2, 1);
     allBounds = (bound_gainCent, bound_freqCent, bound_gainFracSurr, bound_freqFracSurr);
 
-  for d in range(nDisps): # TODO: check nDisps is ok (and not range(1))
+  for d in range(nDisps): # works for all disps
     for con in range(nCons):
       if con not in valConByDisp[d]:
         continue;

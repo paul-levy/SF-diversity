@@ -36,25 +36,21 @@ lossType = int(sys.argv[2]);
 fitType  = int(sys.argv[3]);
 expDir   = sys.argv[4]; 
 modRecov = int(sys.argv[5]);
-if len(sys.argv) > 6:
-  respVar = int(sys.argv[6]);
+descrMod = int(sys.argv[6]);
+if len(sys.argv) > 7:
+  respVar = int(sys.argv[7]);
 else:
   respVar = 1;
 
-# at CNS
-loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/';
-# personal mac
-#loc_base = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/';
-# prince cluster
-#loc_base = '/home/pl1465/SF_diversity/';
+loc_base = os.getcwd() + '/';
 
 data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
 ### DATALIST
 #expName = 'dataList.npy';
-#expName = 'dataList_glx.npy'
-expName = 'dataList_mr.npy'
+expName = 'dataList_glx_mr.npy'
+#expName = 'dataList_mr.npy'
 ### FITLIST
 #fitBase = 'fitList_190321c';
 #fitBase = 'fitListSPcns_181130c';
@@ -62,6 +58,22 @@ expName = 'dataList_mr.npy'
 #fitBase = 'fitList_190206c';
 #fitBase = 'fitList_190321c';
 fitBase = 'mr_fitList_190502cA';
+#fitBase = 'fitList_190502cA';
+
+### Descriptive fits?
+if descrMod > -1:
+  try:
+    if modRecov == 1:
+      fitStr = hf.fitType_suffix(fitType);
+      descrBase = 'mr%s_descrFits_190503_poiss_%s.npy' % (fitStr, hf.descrMod_name(descrMod)); 
+      descrFits = hf.np_smart_load(data_loc + descrBase);
+    else:
+      descrBase = 'descrFits_190503_poiss_%s.npy' % hf.descrMod_name(descrMod); 
+      descrFits = hf.np_smart_load(data_loc + descrBase);
+  except:
+    descrFits = None;
+else:
+  descrFits = None;
 
 # the loss type
 if lossType == 1:
@@ -124,6 +136,12 @@ elif fitType == 3:
 else:
   inhAsym = normParams;
 
+# descrFit, if exists
+if descrFits is not None:
+  descrParams = descrFits[cellNum-1]['params'];
+else:
+  descrParams = None;
+
 # ### Organize data
 # #### determine contrasts, center spatial frequency, dispersions
 
@@ -179,13 +197,13 @@ modClr = 'r';
 modTxt = 'model';
 dataClr = 'k';
 dataTxt = 'data';
+descrClr = 'b';
 
 # #### Plots by dispersion
 
 fDisp = []; dispAx = [];
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
-
 for d in range(nDisps):
     
     v_cons = val_con_by_disp[d];
@@ -209,6 +227,10 @@ for d in range(nDisps):
 	## plot model fit
         dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], alpha=0.7, color=modClr, clip_on=False, label=modTxt);
         dispAx[d][c_plt_ind, 0].axhline(modSponRate, color=modClr, linestyle='dashed')
+        if descrParams is not None:
+          prms_curr = descrParams[d, v_cons[c]];
+          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
+          dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=descrClr, label='descr. fit');
 
         for i in range(2):
 
@@ -246,8 +268,8 @@ pdfSv.close();
 
 fDisp = []; dispAx = [];
 
-sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
-
+sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
+  
 for d in range(nDisps):
     
     v_cons = val_con_by_disp[d];
@@ -329,8 +351,13 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
                                        respVar[d, v_sfs, v_cons[c]], fmt='o', clip_on=False, label=dataTxt);
 
-	# plot model fit
+        # plot model fit
         sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=modClr, alpha=0.7, clip_on=False, label=modTxt)
+        # plot descrFit, if there
+        if descrParams is not None:
+          prms_curr = descrParams[d, v_cons[c]];
+          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
+          sfMixAx[c_plt_ind, d].plot(sfs_plot, descrResp, label='descr. fit');
 
         sfMixAx[c_plt_ind, d].set_xlim((np.min(all_sfs), np.max(all_sfs)));
         sfMixAx[c_plt_ind, d].set_ylim((0, 1.5*maxResp));
@@ -354,14 +381,14 @@ fDetails = plt.figure();
 fDetails.set_size_inches(w=25,h=10)
 
 detailSize = (3, 5);
-if ~np.any([i is None for i in oriModResp]): # then we're using an experiment with ori curves
+if oriModResp is not None: # then we're using an experiment with ori curves
   # plot ori tuning
   curr_ax = plt.subplot2grid(detailSize, (0, 2));
   plt.plot(expData['sfm']['exp']['ori'], oriModResp, '%so' % modClr, clip_on=False, label=modTxt); # Model response
   expPlt = plt.plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-', clip_on=False); # Exp responses
   plt.xlabel('Ori (deg)', fontsize=12);
   plt.ylabel('Response (ips)', fontsize=12);
-if ~np.any([i is None for i in conModResp]): # then we're using an experiment with RVC curves
+if conModResp is not None: # then we're using an experiment with RVC curves
   # CRF - with values from TF simulation and the broken down (i.e. numerator, denominator separately) values from resimulated conditions
   curr_ax = plt.subplot2grid(detailSize, (0, 1)); # default size is 1x1
   consUse = expData['sfm']['exp']['con'];

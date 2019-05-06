@@ -38,27 +38,24 @@ if len(sys.argv) > 4:
 else:
   respVar = 1;
 
-# at CNS
-loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/';
-# personal mac
-#loc_base = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/';
-# prince cluster
-#loc_base = '/home/pl1465/SF_diversity/';
-
+loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
 ### DATALIST
 #expName = 'dataList.npy';
-#expName = 'dataList_glx.npy'
-expName = 'dataList_mr.npy'
+expName = 'dataList_glx.npy'
+#expName = 'dataList_mr.npy'
 ### FITLIST
 #fitBase = 'fitList_190321c';
 #fitBase = 'fitListSPcns_181130c';
 #fitBase = 'fitListSP_181202c';
 #fitBase = 'fitList_190206c';
 #fitBase = 'fitList_190321c';
-fitBase = 'mr_fitList_190502cA';
+
+#fitBase = 'mr_fitList_190502cA';
+fitBase = 'fitList_190502cA_glx';
+#fitBase = 'fitList_190502cA';
 
 # first the fit type
 fitSuf_fl = '_flat';

@@ -230,7 +230,10 @@ def get_exp_ind(filePath, fileName):
     if 'V1_orig' in filePath:
       return 1, 'sfMix'; # need to handle this case specially, since we don't have /recordings/ for this experiment
 
-    name_root = fileName.split('_')[0];
+    if fileName.startswith('mr'): # i.e. model recovery...
+      name_root = fileName.split('_')[1];
+    else:
+      name_root = fileName.split('_')[0];
     orig_files = os.listdir(filePath + '../recordings/');
     for f in orig_files:
       if f.startswith(name_root) and '.xml' in f and 'sfMix' in f: # make sure it's not a *_sfm.mat that is in .../recordings/, and that .xml and "sfMix" are in the file
@@ -1084,7 +1087,7 @@ def flexible_Gauss(params, stim_sf, minThresh=0.1):
 
 def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
   # returns only pred_spikes
- if DoGmodel == 0:
+  if DoGmodel == 0:
     pred_spikes = flexible_Gauss(params, stim_sf=stim_sf);
   elif DoGmodel == 1:
     pred_spikes, _ = DoGsach(*params, stim_sf=stim_sf);
