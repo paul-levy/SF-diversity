@@ -699,7 +699,7 @@ def get_recovInfo(cellStruct, normType):
     warnings.warn('You likely do not have a recovery set up for this cell/file');
   return prms, spks;
 
-def rvc_fit(amps, cons, var = None):
+def rvc_fit(amps, cons, var = None, n_repeats = 10):
    ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
        fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
@@ -731,31 +731,42 @@ def rvc_fit(amps, cons, var = None):
      else:
        loss_weights = np.ones_like(var[i]);
      obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - rvc_model(params[0], params[1], params[2], curr_cons))));
-     init_params = [0, np.max(curr_amps), 0.5]; 
-     b_bounds = (0, 0); # 9.14.18 - per Tony, set to be just 0 for now
-     k_bounds = (0, None);
-     c0_bounds = (1e-3, 1);
-     all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
-     # now optimize
-     to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
-     opt_params = to_opt['x'];
-     opt_loss = to_opt['fun'];
+     best_loss = 1e6; # start with high value
+     best_params = []; conGain = [];
 
-     # now determine the contrast gain
-     b = opt_params[0]; k = opt_params[1]; c0 = opt_params[2];
-     if b < 0: 
-       # find the contrast value at which the rvc_model crosses/reaches 0
-       obj_whenR0 = lambda con: np.square(0 - rvc_model(b, k, c0, con));
-       con_bound = (0, 1);
-       init_r0cross = 0;
-       r0_cross = opt.minimize(obj_whenR0, init_r0cross, bounds=(con_bound, ));
-       con_r0 = r0_cross['x'];
-       conGain = k/(c0*(1+con_r0/c0));
-     else:
-       conGain = k/c0;
+     for rpt in range(n_repeats):
 
-     all_opts.append(opt_params);
-     all_loss.append(opt_loss);
+       init_params = [0, np.max(curr_amps), random_in_range([0.05, 0.5])[0]]; 
+       b_bounds = (0, 0); # 9.14.18 - per Tony, set to be just 0 for now
+       k_bounds = (0, None);
+       c0_bounds = (1e-3, 1);
+       all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
+       # now optimize
+       to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
+       opt_params = to_opt['x'];
+       opt_loss = to_opt['fun'];
+
+       if opt_loss > best_loss:
+         continue;
+       else:
+         best_loss = opt_loss;
+         best_params = opt_params;
+
+       # now determine the contrast gain
+       b = opt_params[0]; k = opt_params[1]; c0 = opt_params[2];
+       if b < 0: 
+         # find the contrast value at which the rvc_model crosses/reaches 0
+         obj_whenR0 = lambda con: np.square(0 - rvc_model(b, k, c0, con));
+         con_bound = (0, 1);
+         init_r0cross = 0;
+         r0_cross = opt.minimize(obj_whenR0, init_r0cross, bounds=(con_bound, ));
+         con_r0 = r0_cross['x'];
+         conGain = k/(c0*(1+con_r0/c0));
+       else:
+         conGain = k/c0;
+
+     all_opts.append(best_params);
+     all_loss.append(best_loss);
      all_conGain.append(conGain);
 
    return rvc_model, all_opts, all_conGain, all_loss;
@@ -1131,6 +1142,7 @@ def get_valid_trials(data, disp, con, sf, expInd):
 
 def get_valid_sfs(data, disp, con, expInd):
   ''' Self explanatory, innit? Returns the indices (into allSfs) of valid sfs for the given condition
+      As input, disp/con should be indices into the valDisp/Con arrays (i.e. not values)
   '''
   _, stimVals, _, validByStimVal, _ = tabulate_responses(data, expInd);
 

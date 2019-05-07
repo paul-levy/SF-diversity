@@ -10,10 +10,14 @@ import warnings
 import pdb
 
 fft = numpy.fft
+
 #dataListName = 'dataList.npy';
-dataListName = 'dataList_glx_mr.npy'
-#dataListName = 'dataList_glx.npy'
-modRecov = 1;
+#dataListName = 'dataList_glx_mr.npy'
+dataListName = 'dataList_glx.npy'
+modRecov = 0;
+
+rvcBaseName = 'rvcFits_f0'; # a base set of RVC fits used for 
+
 # now, get descrFit name (ask if modRecov, too)
 if modRecov == 1:
   try:
@@ -21,11 +25,24 @@ if modRecov == 1:
     descrFitName = 'mr%s_descrFits_190503_poiss_flex.npy' % hf.fitType_suffix(fitType);
   except:
     warnings.warn('Could not load descrFits in model_responses');
+  # now try RVC base
+  try:
+    fitType      = int(sys.argv[4]);
+    rvcBase      = 'mr%s_%s.npy' % (hf.fitType_suffix(fitType), rvcBaseName);
+  except:
+    warnings.warn('Could not load base RVC in model_responses');
+    rvcBase = None;
 else:
   try:
     descrFitName = 'descrFits_190503_poiss_flex.npy'
   except:
     warnings.warn('Could not load descrFits in model_responses');
+  # now try RVC base
+  try:
+    rvcBase      = '%s.npy' % rvcBaseName;
+  except:
+    warnings.warn('Could not load base RVC in model_responses');
+    rvcBase = None;
 
 # create global variables for use in saving each step of the iteration
 params_glob = [];
@@ -912,7 +929,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
 
     return respModel, Linh, Lexc, normResp['normResp'], denominator;
 
-def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, trackSteps=False, holdOutCondition = None, modRecov = None):
+def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBase):
     # Given just a cell number, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
     #
     # lossType
@@ -947,25 +964,9 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
 
     np = numpy;
 
-    # fitType
-    if fitType == 1:
-      fL_suffix1 = '_flat';
-    elif fitType == 2:
-      fL_suffix1 = '_wght';
-    elif fitType == 3:
-      fL_suffix1 = '_c50';
-    # lossType
-    if lossType == 1:
-      fL_suffix2 = '_sqrt.npy';
-    elif lossType == 2:
-      fL_suffix2 = '_poiss.npy';
-    elif lossType == 3:
-      fL_suffix2 = '_modPoiss.npy';
-    elif lossType == 4:
-      fL_suffix2 = '_chiSq.npy';
-    fitListName = str(fL_name + fL_suffix1 + fL_suffix2);
+    fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType);
     # get the name for the stepList name, regardless of whether or not we run this now
-    stepListName = str(fL_name + fL_suffix1 + fL_suffix2.replace('.npy', '_details.npy'));
+    stepListName = str(fitListName.replace('.npy', '_details.npy'));
 
     if os.path.isfile(loc_data + fitListName):
       fitList = hf.np_smart_load(str(loc_data + fitListName));
@@ -998,7 +999,11 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     # get prefSfEst
     try: 
       dfits = hf.np_smart_load(loc_data + descrFitName);
-      prefSfEst = dfits[cellNum-1]['prefSf'][0][-1]; # get high contrast, single grating prefSf
+      if expInd == 1:
+        hiCon = 0; # holdover from hf.organize_resp (with expInd==1, sent to V1_orig/helper_fcns.organize_modResp
+      else:
+        hiCon = -1;
+      prefSfEst = dfits[cellNum-1]['prefSf'][0][hiCon]; # get high contrast, single grating prefSf
     except:
       if expInd == 1:
         prefOrEst = mode(trial_inf['ori'][1]).mode;
@@ -1009,7 +1014,22 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
         allSfs    = np.unique(trial_inf['sf'][0]);
         allSfs    = allSfs[~np.isnan(allSfs)]; # remove NaN...
         prefSfEst = np.median(allSfs);
-    
+    # get normConst estimate?
+    try: 
+      rvcBase = hf.np_smart_load(loc_data + rvcBase);
+      c50_ind = 2; # position in the current rvc Model for the c50 parameter
+      peakSf = prefSfEst; # just borrow from above
+      stimVals = hf.tabulate_responses(S, expInd)[1];
+      all_sfs = stimVals[2];
+      # now, get the index corresponding to that peak SF and get the c50 from the corresponding RVC fit
+      prefSfInd = np.argmin(np.abs(all_sfs - peakSf));
+      # get the c50, but take log10 (we optimize in that space rather than in contrast)
+      c50_est = np.log10(rvcBase[cellNum-1]['params'][0][prefSfInd][c50_ind]); # get high contrast, single grating prefSf
+      normConst = np.minimum(c50_est, np.log10(0.4)); # don't let a c50 value larger than 0.4 as the starting point
+    except:
+      # why -1? Talked with Tony, he suggests starting with lower sigma rather than higher/non-saturating one
+      normConst = -1.2;
+
     ########
     # 00 = preferred spatial frequency   (cycles per degree)
     # 01 = derivative order in space
@@ -1047,8 +1067,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
 
     pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
     dOrdSp = np.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
-    normConst = -0.8 if initFromCurr==0 else curr_params[2]; # why -0.8? Talked with Tony, he suggests starting with lower sigma rather than higher/non-saturating one
-    #normConst = np.random.uniform(-1, 0) if initFromCurr==0 else curr_params[2];
+    normConst = normConst if initFromCurr==0 else curr_params[2];
     respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
     respScalar = np.random.uniform(10, 1000) if initFromCurr==0 else curr_params[4];
     noiseEarly = np.random.uniform(0.001, 0.01) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
@@ -1057,7 +1076,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     if fitType == 1:
       inhAsym = 0; 
     if fitType == 2:
-      normMean = np.random.uniform(-1, 1) if initFromCurr==0 else curr_params[8];
+      normMean = np.log10(pref_sf) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
       #normStd = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[9];
       normStd = 1.5 if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
     if fitType == 3:
@@ -1065,6 +1084,22 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
       stdLeft = np.random.uniform(1, 5) if initFromCurr==0 else curr_params[9];
       stdRight = np.random.uniform(1, 5) if initFromCurr==0 else curr_params[10];
       sigPeak = float(prefSfEst) if initFromCurr==0 else curr_params[11];
+   
+    ### Now, if we want to initialize the core paramers with the other fit type...
+    if initFromCurr == -1 and (fitType==1 or fitType==2): # then initialize from the opposite case...
+      if fitType==1:
+        altType = 2;
+      elif fitType==2:
+        altType = 1;
+      altFL = hf.fitList_name(base=fL_name, fitType=altType, lossType=lossType);
+      try:
+        altFits = hf.np_smart_load(loc_data + altFL);
+        if cellNum-1 in altFits:
+          altParams = altFits[cellNum-1]['params'];
+          pref_sf,dOrdSp,normConst,respExp,respScalar,noiseEarly,noiseLate,varGain = altParams[0:8];
+      except:
+        warnings.warn('Could not initialize with alternate-fit parameters; defaulting to typical process');
+          
 
     print('Initial parameters:\n\tsf: ' + str(pref_sf)  + '\n\td.ord: ' + str(dOrdSp) + '\n\tnormConst: ' + str(normConst));
     print('\n\trespExp ' + str(respExp) + '\n\trespScalar ' + str(respScalar));
