@@ -11,15 +11,19 @@ import pdb
 basePath = os.getcwd() + '/';
 data_suff = 'structures/';
 
+#expName = 'dataList.npy'
 expName = 'dataList_glx_mr.npy'
-dogName =  'mr_descrFits_190503';
+dogName =  'descrFits_190503';
 phAdvName = 'phaseAdvanceFitsTest'
-rvcName   = 'rvcFits'
+rvcName   = 'rvcFits_f0.npy'
 ## model recovery???
 modelRecov = 1;
 if modelRecov == 1:
   normType = 1; # use if modelRecov == 1 :: 1 - flat; 2 - wght; ...
   dogName =  'mr%s_descrFits_190503' % hf.fitType_suffix(normType);
+  rvcName = 'mr%s_rvcFits_f0.npy' % hf.fitType_suffix(normType);
+else:
+  normType = 0;
 
 # TODO:
 # - Redo all of (1) for more general use!
@@ -107,7 +111,7 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save =
 
   return phAdv_model, all_opts;
 
-def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, disp=0, dir=-1, expName=expName):
+def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, dir=-1, expName=expName):
   ''' Piggy-backing off of phase_advance_fit above, get prepare to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
   '''
@@ -182,6 +186,85 @@ def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, disp=0, dir
     print('saving rvc fit for cell ' + str(cell_num));
 
   return rvc_model, all_opts, all_conGains, adjMeans;
+
+### 1.1 RVC fits without adjusted responses (organized like SF tuning)
+
+def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName, dLname=expName, modelRecov=modelRecov, normType=normType):
+  # NOTE: n_repeats not used (19.05.06)
+  # normType used iff modelRecv == 1
+
+  nParam = 3; # RVC model is 3 parameters only
+
+  # load cell information
+  dataList = hf.np_smart_load(data_loc + dLname);
+  assert dataList!=[], "data file not found!"
+  cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
+  data = cellStruct['sfm']['exp']['trial'];
+  # get expInd, load rvcFits [if existing]
+  expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1]);
+  print('Making RVC (F0) fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
+
+  rvcName = fLname + '.npy';
+  if os.path.isfile(data_loc + fLname):
+      rvcFits = hf.np_smart_load(data_loc + fLname);
+  else:
+      rvcFits = dict();
+
+  # now, get the spikes (recovery, if specified) and organize for fitting
+  if modelRecov == 1:
+    recovSpikes = hf.get_recovInfo(cellStruct, normType)[1];
+  else:
+    recovSpikes = None;
+  spks = hf.get_spikes(data, rvcFits=None, expInd=expInd, overwriteSpikes=recovSpikes); # we say None for rvc (F1) fits
+  _, _, resps_mean, resps_all = hf.organize_resp(spks, cellStruct, expInd);
+  resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
+  
+  print('Doing the work, now');
+
+  # first, get the set of stimulus values:
+  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd);
+  all_disps = stimVals[0];
+  all_cons = stimVals[1];
+  all_sfs = stimVals[2];
+  
+  nDisps = len(all_disps);
+  nSfs = len(all_sfs);
+
+  # Get existing fits
+  if cell_num-1 in rvcFits:
+    bestLoss = rvcFits[cell_num-1]['loss'];
+    currParams = rvcFits[cell_num-1]['params'];
+    conGains = rvcFits[cell_num-1]['conGain'];
+  else: # set values to NaN...
+    bestLoss = np.ones((nDisps, nSfs)) * np.nan;
+    currParams = np.ones((nDisps, nSfs, nParam)) * np.nan;
+    conGains = np.ones((nDisps, nSfs)) * np.nan;
+
+  for d in range(nDisps): # works for all disps
+    val_sfs = hf.get_valid_sfs(data, d, valConByDisp[d][0], expInd); # any valCon will have same sfs
+    for sf in val_sfs:
+      curr_conInd = valConByDisp[d];
+      curr_conVals = all_cons[curr_conInd];
+      curr_resps, curr_sem = resps_mean[d, sf, curr_conInd], resps_sem[d, sf, curr_conInd];
+      # wrap in arrays, since rvc_fit is written for multiple rvc fits at once (i.e. vectorized)
+      _, params, conGain, loss = hf.rvc_fit([curr_resps], [curr_conVals], [curr_sem], n_repeats=n_repeats);
+
+      if (np.isnan(bestLoss[d, sf]) or loss < bestLoss[d, sf]) and params[0] != []: # i.e. params is not empty
+        bestLoss[d, sf] = loss[0];
+        currParams[d, sf, :] = params[0][:]; # "unpack" the array
+        conGains[d, sf] = conGain[0];
+
+  # update stuff - load again in case some other run has saved/made changes
+  if os.path.isfile(data_loc + fLname):
+    print('reloading RVC (F0) fits...');
+    rvcFits = hf.np_smart_load(data_loc + fLname);
+  if cell_num-1 not in rvcFits:
+    rvcFits[cell_num-1] = dict();
+  rvcFits[cell_num-1]['loss'] = bestLoss;
+  rvcFits[cell_num-1]['params'] = currParams;
+  rvcFits[cell_num-1]['conGain'] = conGains;
+
+  np.save(data_loc + fLname, rvcFits);
 
 ### 2: Descriptive tuning fit to (adjusted, if needed) responses
 # previously, only difference of gaussian models; now (May 2019), we've also added the original flexible (i.e. two-halved) Gaussian model
@@ -426,14 +509,15 @@ if __name__ == '__main__':
     data_dir   = sys.argv[3];
     ph_fits    = int(sys.argv[4]);
     rvc_fits   = int(sys.argv[5]);
-    descr_fits = int(sys.argv[6]);
-    dog_model  = int(sys.argv[7]);
-    if len(sys.argv) > 8:
-      dir = float(sys.argv[8]);
+    rvcF0_fits   = int(sys.argv[6]);
+    descr_fits = int(sys.argv[7]);
+    dog_model  = int(sys.argv[8]);
+    if len(sys.argv) > 9:
+      dir = float(sys.argv[9]);
     else:
       dir = None;
-    if len(sys.argv) > 9:
-      gainReg = float(sys.argv[9]);
+    if len(sys.argv) > 10:
+      gainReg = float(sys.argv[10]);
     else:
       gainReg = 0;
     print('Running cell %d in %s' % (cell_num, expName));
@@ -460,3 +544,6 @@ if __name__ == '__main__':
         rvc_adjusted_fit(cell_num, data_loc=dataPath, disp=disp, dir=dir);
       if descr_fits == 1:
         fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model);
+
+    if rvcF0_fits == 1:
+      fit_RVC_f0(cell_num, data_loc=dataPath);
