@@ -12,6 +12,7 @@ import pdb
 fft = numpy.fft
 
 #dataListName = 'dataList.npy';
+#dataListName = 'dataList_mr.npy'
 #dataListName = 'dataList_glx_mr.npy'
 dataListName = 'dataList_glx.npy'
 modRecov = 0;
@@ -603,7 +604,7 @@ def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None, overwrite
 
     return M;
 
-def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None):
+def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None, normType=2):
   ''' A simplified version of the normalization response, in effect, without filters
     The contrast of each stimulus component will be squared and weighted with the same 
     weighting function typically applied (whether that be flat or tuned)
@@ -614,7 +615,7 @@ def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None):
   cons = np.vstack([comp for comp in trialInf['con']]);
   consSq = np.square(cons);
   # cons (and wghts) will be (nComps x nTrials)
-  wghts = hf.genNormWeightsSimple(S, gs_mean, gs_std);
+  wghts = hf.genNormWeightsSimple(S, gs_mean, gs_std, normType);
   resp = np.multiply(wghts, consSq);
   respPerTr = np.sqrt(resp.sum(0)); # i.e. sum over components, then sqrt
   nFrames = hf.num_frames(expInd);
@@ -653,6 +654,9 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     # 08 = offset of c50 tuning filter (filter bounded between [sigOffset, 1]
     # 09/10 = standard deviations to the left and right of the peak of the c50 filter
     # 11 = peak (in sf cpd) of c50 filter
+    # if fitType == 4
+    # 08 = mean of normalization weights gaussian
+    # 09/10 = std (left/right) of ...
 
     #print('ha!');
     
@@ -691,6 +695,9 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
       stdLeft      = normParams[1];  # std of the gaussian to the left of the peak
       stdRight     = normParams[2]; # '' to the right '' 
       sfPeak       = normParams[3]; # where is the gaussian peak?
+    elif normType == 4: # two-halved Gaussian...
+      gs_mean = normParams[0];
+      gs_std = normParams[1];
     else:
       inhAsym = normParams;
 
@@ -712,8 +719,8 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     else:
       sigmaFilt = numpy.square(sigma); # i.e. square the normalization constant
 
-    if normType == 2:
-      inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials, expInd);
+    if normType == 2 or normType == 4:
+      inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials, expInd, normType);
     else: # normType == 1 or anything else,
       gs_mean = None; gs_std = None;
       for iP in range(len(nInhChan)):
@@ -737,7 +744,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
 
         # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to bring everything in linear contrast scale again)
         #Linh = numpy.sqrt((inhWeightMat*T['mod']['normalization']['normResp']).sum(1)).transpose();
-        Linh = SimpleNormResp(structureSFM, expInd, gs_mean, gs_std);
+        Linh = SimpleNormResp(structureSFM, expInd, gs_mean, gs_std, normType);
  
         # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
         numerator     = noiseEarly + Lexc;
@@ -814,24 +821,6 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     # But differences are just in phase/TF, but for TF, drawn from same distribution, anyway...
     # 4/27/18: if unweighted = 1, then do the calculation/return normResp with weights applied; otherwise, just return the unweighted filter responses
 
-    # 00 = preferred spatial frequency   (cycles per degree)
-    # 01 = derivative order in space
-    # 02 = normalization constant        (log10 basis)
-    # 03 = response exponent
-    # 04 = response scalar
-    # 05 = early additive noise
-    # 06 = late additive noise
-    # 07 = variance of response gain    
-    # if fitType == 1
-    # 08 = asymmetry ("historically", bounded [-0.35, 0.35])
-    # if fitType == 2
-    # 08 = mean of normalization weights gaussian
-    # 09 = std of ...
-    # if fitType == 3
-    # 08 = offset of c50 tuning filter (filter bounded between [sigOffset, 1]
-    # 09/10 = standard deviations to the left and right of the peak of the c50 filter
-    # 11 = peak (in sf cpd) of c50 filter
-
     #print('simulate!');
     
     T = structureSFM['sfm'];
@@ -866,6 +855,8 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
       stdLeft      = normParams[1];  # std of the gaussian to the left of the peak
       stdRight     = normParams[2]; # '' to the right '' 
       sfPeak       = normParams[3]; # where is the gaussian peak?
+    elif normType == 4:
+      gs_mean, gs_std = normParams[0], normParams[1]
     else:
       inhAsym = normParams;
 
@@ -891,8 +882,8 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     else:
       sigmaFilt = numpy.square(sigma); # i.e. normalization constant squared
 
-    if normType == 2:
-      inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials, expInd);
+    if normType == 2 or normType == 4:
+      inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials, expInd, normType);
     else: # normType == 1 or anything else, we just go with 
       for iP in range(len(nInhChan)):
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
@@ -942,6 +933,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     #   1 := flat normalization
     #   2 := gaussian-weighted normalization responses
     #   3 := gaussian-weighted c50/norm "constant"
+    #   4 := gaussian-weighted (flexible/two-halved) normalization responses
     #
     # holdOutCondition - [d, c, sf] or None
     #   which condition should we hold out from the dataset
@@ -989,13 +981,10 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     recovSpikes = None;
     if modRecov is not None: # Not very clean, but it will have to do for now
       if modRecov == 1:
-        if fitType == 1:
-          recovSpikes = S['sfm']['mod']['recovery']['respFlat'];
-        elif fitType == 2:
-          recovSpikes = S['sfm']['mod']['recovery']['respWght'];
-        else:
-          warnings.warn('You are not set up to run model recovery analysis with a norm type that is not flat (1) or wght (2)\nSetting recovery spikes to None');
-
+        try:
+          recovSpikes = hf.get_recovInfo(S, normType)[1];
+        except:
+          warnings.warn('You are not set up to run model recovery analysis with this norm type!\nSetting recovery spikes to None');
     # get prefSfEst
     try: 
       dfits = hf.np_smart_load(loc_data + descrFitName);
@@ -1047,6 +1036,9 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     # 09 = standard deviation of the gaussian to the left of the peak || >0.1
     # 10 = "" to the right "" || >0.1
     # 11 = peak of offset curve
+    # if fitType == 4
+    # 08 = mean of (log)gaussian for normalization weights
+    # 09/10 = std of (log)gaussian (to left/right) for normalization weights
     
     if cellNum-1 in fitList:
       curr_params = fitList[cellNum-1]['params']; # load parameters from the fitList! this is what actually gets updated...
@@ -1069,7 +1061,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     dOrdSp = np.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
     normConst = normConst if initFromCurr==0 else curr_params[2];
     respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
-    respScalar = np.random.uniform(10, 1000) if initFromCurr==0 else curr_params[4];
+    respScalar = np.random.uniform(10, 200) if initFromCurr==0 else curr_params[4];
     noiseEarly = np.random.uniform(0.001, 0.01) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
     noiseLate = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[6];
     varGain = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
@@ -1077,19 +1069,22 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
       inhAsym = 0; 
     if fitType == 2:
       normMean = np.log10(pref_sf) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
-      #normStd = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[9];
       normStd = 1.5 if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
     if fitType == 3:
       sigOffset = np.random.uniform(0, 0.05) if initFromCurr==0 else curr_params[8];
       stdLeft = np.random.uniform(1, 5) if initFromCurr==0 else curr_params[9];
       stdRight = np.random.uniform(1, 5) if initFromCurr==0 else curr_params[10];
       sigPeak = float(prefSfEst) if initFromCurr==0 else curr_params[11];
+    if fitType == 4:
+      normMean = np.log10(pref_sf) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
+      normStdL = 1.5 if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
+      normStdR = 1.5 if initFromCurr==0 else curr_params[10]; # start at high value (i.e. broad)
    
     ### Now, if we want to initialize the core paramers with the other fit type...
-    if initFromCurr == -1 and (fitType==1 or fitType==2): # then initialize from the opposite case...
+    if initFromCurr == -1 and (fitType==1 or fitType==2 or fitType == 4): # then initialize from the opposite case...
       if fitType==1:
-        altType = 2;
-      elif fitType==2:
+        altType = 2; # TODO? Decide whether alt for flat is wght or flex?
+      elif fitType==2 or fitType == 4:
         altType = 1;
       altFL = hf.fitList_name(base=fL_name, fitType=altType, lossType=lossType);
       try:
@@ -1156,13 +1151,14 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd);
     elif fitType == 3:
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, sigOffset, stdLeft, stdRight, sigPeak);
+    elif fitType == 4:
+      param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStdL, normStdR);
     all_bounds = hf.getConstraints(fitType);
    
     ## NOW: set up the objective function
     obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits, trackSteps=trackSteps, overwriteSpikes=recovSpikes)[0];
     print('...now minimizing!'); 
     tomin = opt.minimize(obj, param_list, bounds=all_bounds);
-    #tomin = opt.minimize(obj, param_list, method='TNC', bounds=all_bounds);
 
     opt_params = tomin['x'];
     NLL = tomin['fun'];

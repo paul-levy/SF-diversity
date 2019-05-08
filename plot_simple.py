@@ -49,7 +49,8 @@ save_loc = loc_base + expDir + 'figures/';
 
 ### DATALIST
 #expName = 'dataList.npy';
-expName = 'dataList_glx_mr.npy'
+#expName = 'dataList_glx_mr.npy'
+expName = 'dataList_glx.npy'
 #expName = 'dataList_mr.npy'
 ### FITLIST
 #fitBase = 'fitList_190321c';
@@ -57,8 +58,8 @@ expName = 'dataList_glx_mr.npy'
 #fitBase = 'fitListSP_181202c';
 #fitBase = 'fitList_190206c';
 #fitBase = 'fitList_190321c';
-fitBase = 'mr_fitList_190502cA';
-#fitBase = 'fitList_190502cA';
+#fitBase = 'mr_fitList_190502cA';
+fitBase = 'fitList_190502cA';
 
 ### Descriptive fits?
 if descrMod > -1:
@@ -124,7 +125,7 @@ modFit = fitList[cellNum-1]['params'];
 normParams = hf.getNormParams(modFit, fitType);
 if fitType == 1:
   inhAsym = normParams;
-elif fitType == 2:
+elif fitType == 2 or fitType == 4:
   gs_mean = normParams[0];
   gs_std  = normParams[1];
 elif fitType == 3:
@@ -442,8 +443,8 @@ inhSfTuning = hf.getSuppressiveSFtuning();
 nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
 nTrials =  inhSfTuning.shape[0];
 # first, normalization signal
-if fitType == 2: # tuned
-  inhWeight = hf.genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials, expInd);
+if fitType == 2 or fitType == 4: # tuned
+  inhWeight = hf.genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials, expInd, fitType);
   inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
   sfNormTune = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
   sfNorm = sfNormTune/np.amax(np.abs(sfNormTune));
@@ -484,8 +485,8 @@ plt.semilogx([1, 1], [-1.5, 1], 'k--')
 plt.semilogx([10, 10], [-1.5, 1], 'k--')
 plt.semilogx([100, 100], [-1.5, 1], 'k--')
 # now the real stuff
-if fitType == 2:
-  wt_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
+if fitType == 2 or fitType == 4:
+  wt_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std, fitType));
   sfNormSim = wt_weights/np.amax(np.abs(wt_weights));
 else:
   if fitType != 1:
@@ -525,7 +526,7 @@ curr_ax = plt.subplot2grid(detailSize, (0, 4));
 plt.text(0.5, 0.5, 'prefSf: %.3f|%.3f' % (modFits[0][0], modFits[1][0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.text(0.5, 0.4, 'derivative order: %.3f|%.3f' % (modFits[0][1], modFits[1][1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.text(0.5, 0.3, 'response scalar: %.3f|%.3f' % (modFits[0][4], modFits[1][4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, modFits[0][2]), np.power(10, modFits[1][2]), modFits[0][2], modFits[1][2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, np.float(modFits[0][2])), np.power(10, np.float(modFits[1][2])), modFits[0][2], modFits[1][2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
 ### now save all figures (sfMix contrasts, details, normalization stuff)
 allFigs = [f, fDetails];

@@ -99,7 +99,7 @@ import warnings
 # genNormWeights - used to generate the weighting matrix for weighting normalization pool responses
 # setSigmaFilter - create the filter we use for determining c50 with SF
 # evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
-# setNormTypeArr - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters
+# setNormTypeArr - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters; DEPRECATED?
 # getConstraints - return the constraints used in model optimization
 
 def np_smart_load(file_path, encoding_str='latin1'):
@@ -259,6 +259,8 @@ def fitType_suffix(fitType):
     fitSuf = '_wght';
   elif fitType == 3:
     fitSuf = '_c50';
+  elif fitType == 4:
+    fitSuf = '_flex';
   return fitSuf;
 
 def lossType_suffix(lossType):
@@ -693,6 +695,9 @@ def get_recovInfo(cellStruct, normType):
     elif normType == 2: # i.e. weighted
       spks = base['respWght'];
       prms = base['paramsWght'];
+    elif normType == 4: # i.e. two-halved, weighted gaussian
+      spks = base['respFlex'];
+      prms = base['paramsFlex'];
     else:
       warnings.warn('You have not set up an access for model recovery with this normalization type');
   except:
@@ -932,7 +937,7 @@ def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65, dog_model=2):
   '''
   np = numpy;
   # the model
-  psf_model = lambda offset, slope, alpha, con: offset + slope*np.power(con-con[0], alpha);
+  psf_model = lambda offset, slope, alpha, con: np.maximum(0, offset + slope*np.power(con-con[0], alpha));
   # gather the values
   #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
   validInds = np.where(descrFit['varExpl'][disp, :] > varThresh)[0];
@@ -1514,12 +1519,12 @@ def naka_rushton(con, params):
 
     return base + gain*np.divide(np.power(con, expon), np.power(con, expon) + np.power(c50, expon));
 
-def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain, fit_type):
-	# fit_type (i.e. which loss function):
-		# 1 - least squares
-		# 2 - square root
-		# 3 - poisson
-		# 4 - modulated poisson
+def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain, loss_type):
+    # loss_type (i.e. which loss function):
+            # 1 - least squares
+            # 2 - square root
+            # 3 - poisson
+            # 4 - modulated poisson
     np = numpy;
 
     n_sfs = len(resps);
@@ -1534,7 +1539,7 @@ def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain, fit_type)
 	# evaluate the model
         pred = naka_rushton(cons[sf], nr_args); # ensure we don't have pred (lambda) = 0 --> log will "blow up"
         
-        if fit_type == 4:
+        if loss_type == 4:
 	    # Get predicted spike count distributions
           mu  = pred; # The predicted mean spike count; respModel[iR]
           var = mu + (v_varGain * np.power(mu, 2));                        # The corresponding variance of the spike count
@@ -1542,11 +1547,11 @@ def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain, fit_type)
           p   = r/(r + mu);
 	# no elif/else
 
-        if fit_type == 1 or fit_type == 2:
+        if loss_type == 1 or loss_type == 2:
           # error calculation
-          if fit_type == 1:
+          if loss_type == 1:
             loss = lambda resp, pred: np.sum(np.power(resp-pred, 2)); # least-squares, for now...
-          if fit_type == 2:
+          if loss_type == 2:
             loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
 
           curr_loss = loss(resps[sf], pred);
@@ -1554,10 +1559,10 @@ def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain, fit_type)
 
         else:
           # if likelihood calculation
-          if fit_type == 3:
+          if loss_type == 3:
             loss = lambda resp, pred: poisson.logpmf(resp, pred);
             curr_loss = loss(resps[sf], pred); # already log
-          if fit_type == 4:
+          if loss_type == 4:
             loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p)); # Likelihood for each pass under doubly stochastic model
             curr_loss = loss(resps[sf], r, p); # already log
           loss_by_sf[sf] = -np.sum(curr_loss); # negate if LLH
@@ -1727,11 +1732,15 @@ def getNormParams(params, normType):
     stdRight     = params[10]; # '' to the right '' 
     sfPeak       = params[11]; # where is the gaussian peak?
     return offset_sigma, stdLeft, stdRight, sfPeak;
+  elif normType == 4:
+    gs_mean = params[8];
+    gs_std  = [params[9], params[10]];
+    return gs_mean, gs_std;
   else:
     inhAsym = 0;
     return inhAsym;
 
-def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None):
+def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2):
   ''' simply evaluates the usual normalization weighting but at the frequencies of the stimuli directly
   i.e. in effect, we are eliminating the bank of filters in the norm. pool
   '''
@@ -1744,12 +1753,28 @@ def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None):
   if gs_mean is None or gs_std is None: # we assume inhAsym is 0
     inhAsym = 0;
     new_weights = 1 + inhAsym*(np.log(sfs) - np.nanmean(np.log(sfs)));
-  else:
+  elif normType == 2:
     log_sfs = np.log(sfs);
     new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
+  elif normType == 4:
+    log_sfs = np.log(sfs);
+    sfs_l = log_sfs[log_sfs<gs_mean];
+    wts_l = norm.pdf(sfs_l, gs_mean, gs_std[0]); # first gs_std entry is left-std
+    sfs_r = log_sfs[log_sfs>=gs_mean];
+    wts_r = norm.pdf(sfs_r, gs_mean, gs_std[1]); # and second is right-std
+    # now, set up masks
+    lt =  np.ma.masked_less(log_sfs, gs_mean);
+    gte = np.ma.masked_greater_equal(log_sfs, gs_mean);
+    new_weights = np.zeros_like(log_sfs);
+    new_weights[lt.mask]  = wts_l;
+    new_weights[gte.mask] = wts_r;
   return new_weights;
 
-def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials, expInd):
+def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials, expInd, normType = 2):
+  ''' Compute the weights for the normalization pool; default is standard log-gaussian
+      new (19.05.08) - normType = 4 will be two-halved Gaussian (i.e like flexibleGauss)
+        in that case, gs_std is actually a tuple/2-element array
+  '''
   np = numpy;
   # A: do the calculation here - more flexibility
   inhWeight = [];
@@ -1762,7 +1787,14 @@ def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials, expInd):
     # if asym, put where '0' is
     curr_chan = len(T['mod']['normalization']['pref']['sf'][iP]);
     log_sfs = np.log(T['mod']['normalization']['pref']['sf'][iP]);
-    new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
+    if normType == 2:
+      new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
+    elif normType == 4:
+      sfs_l = log_sfs[log_sfs<gs_mean];
+      wts_l = norm.pdf(sfs_l, gs_mean, gs_std[0]); # first gs_std entry is left-std
+      sfs_r = log_sfs[log_sfs>=gs_mean];
+      wts_r = norm.pdf(sfs_r, gs_mean, gs_std[1]); # and second is right-std
+      new_weights = np.hstack((wts_l, wts_r));
     inhWeight = np.append(inhWeight, new_weights);
     
   inhWeightT1 = np.reshape(inhWeight, (1, len(inhWeight)));
@@ -1805,6 +1837,7 @@ def evalSigmaFilter(filter, scale, offset, evalSfs):
 
 def setNormTypeArr(params, normTypeArr = []):
   '''
+  TODO: Deprecate or make normType == 4 case
   Used to create the normTypeArr array which is called in model_responses by SFMGiveBof and SFMsimulate to set
   the parameters/values used to compute the normalization signal for the full model
 
@@ -1881,22 +1914,25 @@ def setNormTypeArr(params, normTypeArr = []):
   return normTypeArr;
 
 def getConstraints(fitType):
-        # 00 = preferred spatial frequency   (cycles per degree) || [>0.05]
-        # 01 = derivative order in space || [>0.1]
-        # 02 = normalization constant (log10 basis) || unconstrained
-        # 03 = response exponent || >1
-        # 04 = response scalar || >1e-3
-        # 05 = early additive noise || [0, 1]; was [0.001, 1] - see commented out line below
-        # 06 = late additive noise || >0.01
-        # 07 = variance of response gain || >1e-3
+        #   00 = preferred spatial frequency   (cycles per degree) || [>0.05]
+        #   01 = derivative order in space || [>0.1]
+        #   02 = normalization constant (log10 basis) || unconstrained
+        #   03 = response exponent || >1
+        #   04 = response scalar || >1e-3
+        #   05 = early additive noise || [0, 1]; was [0.001, 1] - see commented out line below
+        #   06 = late additive noise || >0.01
+        #   07 = variance of response gain || >1e-3
         # if fitType == 2
-        # 08 = mean of normalization weights gaussian || [>-2]
-        # 09 = std of ... || >1e-3 or >5e-1
+        #   08 = mean of normalization weights gaussian || [>-2]
+        #   09 = std of ... || >1e-3 or >5e-1
         # if fitType == 3
-        # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 0.75]
-        # 09 = standard deviation of the gaussian to the left of the peak || >0.1
-        # 10 = "" to the right "" || >0.1
-        # 11 = peak (i.e. sf location) of c50 tuning curve 
+        #   08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 0.75]
+        #   09 = standard deviation of the gaussian to the left of the peak || >0.1
+        #   10 = "" to the right "" || >0.1
+        #   11 = peak (i.e. sf location) of c50 tuning curve 
+        # if fitType == 4
+        #   08 = mean of normalization weights gaussian || [>-2]
+        #   09, 10 = std left/right ... || >1e-3 or >5e-1
 
     zero = (0.05, None);
     one = (0.1, None);
@@ -1921,5 +1957,10 @@ def getConstraints(fitType):
       ten = (1e-1, None);
       eleven = (0.05, None);
       return (zero,one,two,three,four,five,six,seven,eight,nine,ten,eleven);
+    elif fitType == 4:
+      eight = (-2, None);
+      nine = (5e-1, None);
+      ten = (5e-1, None);
+      return (zero,one,two,three,four,five,six,seven,eight,nine,ten);
     else: # mistake!
       return [];

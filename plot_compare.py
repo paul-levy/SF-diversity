@@ -54,8 +54,8 @@ expName = 'dataList_glx.npy'
 #fitBase = 'fitList_190321c';
 
 #fitBase = 'mr_fitList_190502cA';
-fitBase = 'fitList_190502cA_glx';
-#fitBase = 'fitList_190502cA';
+#fitBase = 'fitList_190502cA_glx'; # mostly deprecated...(i.e. even for GLX fits, we just use fitList_*)
+fitBase = 'fitList_190502cA';
 
 # first the fit type
 fitSuf_fl = '_flat';
