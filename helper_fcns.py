@@ -931,13 +931,13 @@ def dog_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11)):
   optz = opt.minimize(obj, init_sf, bounds=(sf_bound, ))
   return optz['x'];
 
-def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65, dog_model=2):
+def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65, dog_model=2, prefMin=0.1):
   ''' Given a descrFit dict for a cell, compute a fit for the prefSf as a function of contrast
       Return ratio of prefSf at highest:lowest contrast, lambda of model, params
   '''
   np = numpy;
   # the model
-  psf_model = lambda offset, slope, alpha, con: np.maximum(0, offset + slope*np.power(con-con[0], alpha));
+  psf_model = lambda offset, slope, alpha, con: np.maximum(prefMin, offset + slope*np.power(con-con[0], alpha));
   # gather the values
   #   only include prefSf values derived from a descrFit whose variance explained is gt the thresh
   validInds = np.where(descrFit['varExpl'][disp, :] > varThresh)[0];
@@ -955,12 +955,12 @@ def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65, dog_model=2):
   # set up the optimization
   obj = lambda params: np.sum(np.multiply(weights,
         np.square(psf_model(params[0], params[1], params[2], conVals) - prefSfs)))
-  init_offset = prefSfs[0];
   conRange = conVals[-1] - conVals[0];
+  init_offset = prefSfs[0];
   init_slope = (prefSfs[-1] - prefSfs[0]) / conRange;
   init_alpha = 0.4; # most tend to be saturation (i.e. contrast exp < 1)
   # run
-  optz = opt.minimize(obj, [init_offset, init_slope, init_alpha], bounds=((0, None), (None, None), (0.25, 4)));
+  optz = opt.minimize(obj, [init_offset, init_slope, init_alpha], bounds=((None, None), (None, None), (0.1, 10)));
   opt_params = optz['x'];
   # ratio:
   extrema = psf_model(*opt_params, con=(conVals[0], conVals[-1]))

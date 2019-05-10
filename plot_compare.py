@@ -33,8 +33,9 @@ rcParams['font.style'] = 'oblique';
 cellNum  = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
 expDir   = sys.argv[3]; 
-if len(sys.argv) > 4:
-  respVar = int(sys.argv[4]);
+rvcAdj   = int(sys.argv[4]); # if 1, then let's load rvcFits to adjust responses to F1
+if len(sys.argv) > 5:
+  respVar = int(sys.argv[5]);
 else:
   respVar = 1;
 
@@ -43,8 +44,8 @@ data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
 ### DATALIST
-#expName = 'dataList.npy';
-expName = 'dataList_glx.npy'
+expName = 'dataList.npy';
+#expName = 'dataList_glx.npy'
 #expName = 'dataList_mr.npy'
 ### FITLIST
 #fitBase = 'fitList_190321c';
@@ -56,6 +57,8 @@ expName = 'dataList_glx.npy'
 #fitBase = 'mr_fitList_190502cA';
 #fitBase = 'fitList_190502cA_glx'; # mostly deprecated...(i.e. even for GLX fits, we just use fitList_*)
 fitBase = 'fitList_190502cA';
+### RVCFITS
+rvcBase = 'rvcFits'; # direc flag & '.npy' are added
 
 # first the fit type
 fitSuf_fl = '_flat';
@@ -135,7 +138,12 @@ modSponRates = [fit[6] for fit in modFits];
 
 # more tabulation - stim vals, organize measured responses
 _, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd);
-rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
+if rvcAdj == 1:
+  rvcFlag = '_f1';
+  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase);
+else:
+  rvcFlag = '';
+  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
 spikes  = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=rvcFits, expInd=expInd);
 _, _, respOrg, respAll    = hf.organize_resp(spikes, expData, expInd);
 
@@ -222,7 +230,7 @@ for d in range(nDisps):
     fCurr.suptitle('%s #%d, loss %.2f|%.2f' % (cellType, cellNum, fitList_fl[cellNum-1]['NLL'], fitList_wg[cellNum-1]['NLL']));
 
 saveName = "/cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'byDisp/'));
+full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -285,7 +293,7 @@ for d in range(nDisps):
       dispAx[d][i].legend(); 
 
 saveName = "/allCons_cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'byDisp/'));
+full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -484,7 +492,7 @@ plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, modFits[0][2
 ### now save all figures (sfMix contrasts, details, normalization stuff)
 allFigs = [f, fDetails];
 saveName = "/cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'sfMixOnly/'));
+full_save = os.path.dirname(str(save_loc + 'sfMixOnly%s/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -567,7 +575,7 @@ e);
         rvcAx[plt_x][plt_y].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
 
 saveName = "/cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'CRF/'));
+full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -633,7 +641,7 @@ for d in range(nDisps):
 saveName = "/allSfs_cell_%03d.pdf" % (cellNum)
 if not os.path.exists(full_save):
   os.makedirs(full_save);
-full_save = os.path.dirname(str(save_loc + 'CRF/'));
+full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
     pdfSv.savefig(f)

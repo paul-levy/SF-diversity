@@ -37,8 +37,9 @@ fitType  = int(sys.argv[3]);
 expDir   = sys.argv[4]; 
 modRecov = int(sys.argv[5]);
 descrMod = int(sys.argv[6]);
-if len(sys.argv) > 7:
-  respVar = int(sys.argv[7]);
+rvcAdj   = int(sys.argv[7]); # if 1, then let's load rvcFits to adjust responses to F1
+if len(sys.argv) > 8:
+  respVar = int(sys.argv[8]);
 else:
   respVar = 1;
 
@@ -60,6 +61,8 @@ expName = 'dataList_glx.npy'
 #fitBase = 'fitList_190321c';
 #fitBase = 'mr_fitList_190502cA';
 fitBase = 'fitList_190502cA';
+### RVCFITS
+rvcBase = 'rvcFits'; # direc flag & '.npy' are added
 
 ### Descriptive fits?
 if descrMod > -1:
@@ -165,9 +168,14 @@ if modRecov == 1:
 else:
   overwriteSpikes = None;
 _, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd);
-rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
-spikes  = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=rvcFits, expInd=expInd, overwriteSpikes=overwriteSpikes);
-_, _, respOrg, respAll    = hf.organize_resp(spikes, expData, expInd);
+if rvcAdj == 1:
+  rvcFlag = '_f1';
+  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase);
+else:
+  rvcFlag = '';
+  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
+spikes = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=rvcFits, expInd=expInd, overwriteSpikes=overwriteSpikes);
+_, _, respOrg, respAll = hf.organize_resp(spikes, expData, expInd);
 
 respMean = respOrg;
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
@@ -220,12 +228,13 @@ for d in range(nDisps):
         c_plt_ind = len(v_cons) - c - 1;
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
 
+        ### left side of plots
         ## plot data
         dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
                                          respVar[d, v_sfs, v_cons[c]], color=dataClr, fmt='o', clip_on=False, label=dataTxt);
         dispAx[d][c_plt_ind, 0].axhline(blankMean, color=dataClr, linestyle='dashed', label='spon. rate');
 
-	## plot model fit
+	## plot model fit 
         dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], alpha=0.7, color=modClr, clip_on=False, label=modTxt);
         dispAx[d][c_plt_ind, 0].axhline(modSponRate, color=modClr, linestyle='dashed')
         if descrParams is not None:
@@ -233,6 +242,69 @@ for d in range(nDisps):
           descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
           dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=descrClr, label='descr. fit');
 
+        ### right side of plots
+        if d == 0:
+          ## plot everything again on log-log coordinates...
+          # first data
+          dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
+                                                     respVar[d, v_sfs, v_cons[c]], fmt='o', color=dataClr, clip_on=False, label=dataTxt);
+
+          # then model fits
+          dispAx[d][c_plt_ind, 1].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=modClr, alpha=0.7, clip_on=False, label=modTxt);
+
+          # plot descriptive model fit -- and inferred characteristic frequency
+          if descrParams is not None: # i.e. descrFits isn't empty, then plot it
+            prms_curr = descrParams[d, v_cons[c]];
+            descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
+            dispAx[d][c_plt_ind, 1].plot(sfs_plot, descrResp, color=descrClr, label='descr. fit', clip_on=False)
+            # now plot characteristic frequency!  
+            char_freq = hf.dog_charFreq(prms_curr, descrMod);
+            if char_freq != np.nan:
+              dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k', label='char. freq');
+
+          dispAx[d][c_plt_ind, 1].set_title('log-log');
+          #dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % dfVarExpl[d, v_cons[c]]);
+          dispAx[d][c_plt_ind, 1].set_xscale('log');
+          dispAx[d][c_plt_ind, 1].set_yscale('log'); # double log
+
+        '''
+        ## Now, if dispersion: plot the individual comp. responses...
+        if d>0:
+          xticks = np.array([]); xticklabels = np.array([]);
+          for j in v_sfs:
+            comps = [];
+
+            curr_sup = respAll[d, j, v_cons[c]]; # get the component responses only at the relevant conditions
+            # todo: check if this is the right measure of variance you want...
+            curr_sup_var = respVar[d, v_sfs_inds[j], v_cons[c]];
+            # now get the individual responses
+            n_comps = all_disps[d];
+
+            val_trials, _, _, _ = hf.get_valid_trials(data, d, v_cons[c], j, expInd)
+            isolResp, _, _, _ = hf.get_isolated_responseAdj(data, val_trials, spikes);
+
+            # first, reset color cycle so that it's the same each time around
+            dispAx[d][c_plt_ind, 1].set_prop_cycle(None);
+            x_pos = [j-0.25, j+0.25];
+            xticks = np.append(xticks, x_pos);
+            xticklabels = np.append(xticklabels, ['mix', 'isol']);
+
+            for i in range(n_comps): # difficult to make pythonic/array, so just iterate over each component
+              # NOTE: for now, we will use the response-in-mixture std for both response stds...
+              curr_means = [curr_sup[i], isolResp[i][0]]; # isolResp[i] is [mean, std] --> just get mean ([0])
+              curr_stds = [curr_f1_std[i], curr_f1_std[i]];
+              curr_comp = dispAx[d][c_plt_ind, 1].errorbar(x_pos, curr_means, curr_stds, fmt='-o', clip_on=False);
+              comps.append(curr_comp[0]);
+
+            comp_str = [str(i) for i in range(n_comps)];
+            dispAx[d][c_plt_ind, 1].set_xticks(xticks);
+            dispAx[d][c_plt_ind, 1].set_xticklabels(xticklabels);
+            dispAx[d][c_plt_ind, 1].legend(comps, comp_str, loc=0);
+            #dispAx[d][c_plt_ind, 1].set_ylim((0, 1.5*maxPlotComp));
+            dispAx[d][c_plt_ind, 1].set_title('Component responses');
+        '''
+
+        ## Now, set things for both plots (formatting)
         for i in range(2):
 
           dispAx[d][c_plt_ind, i].set_xlim((min(all_sfs), max(all_sfs)));
@@ -248,15 +320,15 @@ for d in range(nDisps):
 
         dispAx[d][c_plt_ind, 0].set_ylim((0, 1.5*maxResp));
         dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
-        dispAx[d][c_plt_ind, 1].set_ylabel('ratio (pred:measure)');
-        dispAx[d][c_plt_ind, 1].set_ylim((1e-1, 1e3));
-        dispAx[d][c_plt_ind, 1].set_yscale('log');
-        dispAx[d][c_plt_ind, 1].legend();
+        #dispAx[d][c_plt_ind, 1].set_ylabel('ratio (pred:measure)');
+        #dispAx[d][c_plt_ind, 1].set_ylim((1e-1, 1e3));
+        #dispAx[d][c_plt_ind, 1].set_yscale('log');
+        #dispAx[d][c_plt_ind, 1].legend();
 
     fCurr.suptitle('%s #%d, loss %.2f' % (cellType, cellNum, fitList[cellNum-1]['NLL']));
 
 saveName = "/cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'byDisp/'));
+full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -319,7 +391,7 @@ for d in range(nDisps):
       dispAx[d][i].legend(); 
 
 saveName = "/allCons_cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'byDisp/'));
+full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -531,7 +603,7 @@ plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, np.float(mod
 ### now save all figures (sfMix contrasts, details, normalization stuff)
 allFigs = [f, fDetails];
 saveName = "/cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'sfMixOnly/'));
+full_save = os.path.dirname(str(save_loc + 'sfMixOnly%s/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -614,7 +686,7 @@ e);
         rvcAx[plt_x][plt_y].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
 
 saveName = "/cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'CRF/'));
+full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -678,9 +750,9 @@ for d in range(nDisps):
       crfAx[d][i].legend();
 
 saveName = "/allSfs_cell_%03d.pdf" % (cellNum)
+full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
-full_save = os.path.dirname(str(save_loc + 'CRF/'));
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
     pdfSv.savefig(f)

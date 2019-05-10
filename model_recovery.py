@@ -20,16 +20,18 @@ import pdb
 print('#########   1    #########');
 
 ### TO EDIT
-overwriteMR = 1; # 1 if you want to overwrite the existing MR files; 0 otherwise
+overwriteMR = 0; # 1 if you want to overwrite the existing MR files; 0 otherwise
 expDir = ['V1_orig/'];
 lossType = 4; # for fitting
 inhAsym  = [0]; # we always set inhAsym = 0 (i.e. truly flat normalization)
+# for V1/, use cell 5; for V1_orig/, use cell 29
 cellNum = [29]; # which cell within the dataList (access cellNum-1)
 # normType - we assume that we will fit both 
+
 # ASSUMPTIONS: Only one dataList out? need to fix that...
 dataList_in = ['dataList.npy'];
 dataList_mr = 'dataList_mr.npy'
-fitList_mr = 'mr_fitList190502cA';
+
 # Now, parameters
 # first, a recall of the parameters:
   # 00 = preferred spatial frequency   (cycles per degree) || [>0.05]
@@ -58,8 +60,15 @@ params_6 = [5, 3, -0.5, 2, 250, 0, 0.01, 0.1, -0.5, 1.5];
 params_7 = [0.5, 2, -0.200, 4, 250, 0, 0.01, 0.1, -0.1, 3.5];
 params_8 = [0.5, 2, -0.200, 1, 150, 0, 0.01, 0.1, -0.5, 3.5];
 params_9 = [0.5, 2, -0.200, 3, 250, 0, 0.01, 0.1, -0.1, 0.75];
-params_10 = [0.5, 2, -0.200, 1.5, 550, 0, 0.01, 0.1, -0.5, 5];
-params = [params_1, params_2, params_3, params_4, params_5, params_6, params_7, params_8, params_9, params_10];
+params_10 = [0.5, 2, -0.2, 1.5, 550, 0, 0.01, 0.1, -0.5, 5]
+# lower c50 (normConst)
+params_11 = [3, 2, -1.0, 3, 250, 0, 0.01, 0.1, 0, 0.75];
+params_12 = [3, 1.5, -1.0, 1.5, 550, 0, 0.01, 0.1, np.log10(2), 3];
+params_13 = [1, 2, -0.75, 3, 250, 0, 0.01, 0.1, -0.1, 0.75];
+params_14 = [3, 4, -1.2, 1.5, 550, 0, 0.01, 0.1, np.log10(2), 1];
+params_15 = [0.5, 2, -1.2, 1.5, 550, 0, 0.01, 0.1, np.log10(0.5), 2];
+## organize
+params = [params_1, params_2, params_3, params_4, params_5, params_6, params_7, params_8, params_9, params_10, params_11, params_12, params_13, params_14, params_15];
 nRecov = len(params);
 # name it?
 recovName = [];
@@ -133,6 +142,9 @@ dL_mr = hf.np_smart_load(loc_base + expDirs[0] + 'structures/' + dataList_mr);
 nCells = len(dL_mr['unitName']);
 for c in range(nCells):
   curr = hf.np_smart_load(loc_data + dL_mr['unitName'][c] + '_sfm.npy');
+  if 'respWght' in curr['sfm']['mod']['recovery'] and 'respFlat' in curr['sfm']['mod']['recovery'] and overwriteMR == 0:
+    print('\talready generated these model recovery responses; skipping');
+    continue;
   recov = curr['sfm']['mod']['recovery'];
   expInd = hf.exp_name_to_ind(dL_mr['expType'][c]);              
 
