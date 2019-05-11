@@ -14,17 +14,21 @@
 # third param is fit (normalization) type
         # 1 - flat
         # 2 - gaussian
+        # 3 - c50 adj
+        # 4 - flex gauss
 # fourth param is expDir (e.g. V1/ or LGN/)
 # fifth param is - are we plotting model recovery (1) or no (0)?
 # sixth param is descrFit model - <0 for skip; 0/1/2 (flex/sach/tony)
-# seventh param is std/sem as variance measure: (1 sem (default))
+# seventh param is f0/f1 (i.e. if 1, load rvcFits)
+# eigth param is std/sem as variance measure: (1 sem (default))
 
 source activate lcv-python
 
-for run in {1..10}
+for run in {1..17}
 do
-  python plot_simple.py $run 4 1 V1/ 1 0 1 &
-  python plot_simple.py $run 4 2 V1/ 1 0 1 &
+  python plot_simple.py $run 4 4 V1/ 0 0 0 1 &
+#  python plot_simple.py $run 4 1 V1/ 1 0 1 &
+#  python plot_simple.py $run 4 2 V1/ 1 0 1 &
 done
 
 # leave a blank line at the end

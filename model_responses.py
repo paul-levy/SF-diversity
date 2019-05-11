@@ -11,13 +11,13 @@ import pdb
 
 fft = numpy.fft
 
-#dataListName = 'dataList.npy';
+dataListName = 'dataList.npy';
+#dataListName = 'dataList_glx.npy'
 #dataListName = 'dataList_mr.npy'
 #dataListName = 'dataList_glx_mr.npy'
-dataListName = 'dataList_glx.npy'
 modRecov = 0;
 
-rvcBaseName = 'rvcFits_f0'; # a base set of RVC fits used for 
+rvcBaseName = 'rvcFits_f0'; # a base set of RVC fits used for initializing c50 in opt...
 
 # now, get descrFit name (ask if modRecov, too)
 if modRecov == 1:
@@ -800,11 +800,9 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           llh = nbinom.pmf(spikeCount[mask], r, p); # Likelihood for each pass under doubly stochastic model
           NLL = numpy.mean(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]
         elif lossType == 4: #chi squared
-          if trialSubset is not None:
-            warnings.warn('This loss type (chi squared) is not currently equipped to handle hold out subsets');
-          _, _, expByCond, expAll = hf.organize_resp(spikeCount, structureSFM['sfm']['exp']['trial'], expInd);
+          _, _, expByCond, expAll = hf.organize_resp(spikeCount, structureSFM['sfm']['exp']['trial'], expInd, mask);
           exp_responses = [expByCond.flatten(), numpy.nanvar(expAll, axis=3).flatten()];
-          _, _, modByCond, modAll = hf.organize_resp(respModel, structureSFM['sfm']['exp']['trial'], expInd);
+          _, _, modByCond, modAll = hf.organize_resp(respModel, structureSFM['sfm']['exp']['trial'], expInd, mask);
           mod_responses = [modByCond.flatten(), numpy.nanvar(modAll, axis=3).flatten()];
           NLL = hf.chiSq(exp_responses, mod_responses);
 
@@ -920,7 +918,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
 
     return respModel, Linh, Lexc, normResp['normResp'], denominator;
 
-def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBase):
+def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBase):
     # Given just a cell number, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
     #
     # lossType
@@ -935,9 +933,10 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
     #   3 := gaussian-weighted c50/norm "constant"
     #   4 := gaussian-weighted (flexible/two-halved) normalization responses
     #
-    # holdOutCondition - [d, c, sf] or None
+    # holdOutCondition - [[d, c, sf]*N] or None
     #   which condition should we hold out from the dataset
- 
+    #   note that it is passed in as list of lists  
+
     ########
     # Load cell
     ########
@@ -948,11 +947,12 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
       loc_str = 'HPC';
     else:
       loc_str = '';
-    if modRecov == 1:
-      fL_name = 'mr_fitList%s_190502cA' % loc_str
-    else:
-      fL_name = 'fitList%s_190502cA' % loc_str
-      #fL_name = 'fitList%s_190321c' % loc_str
+    if fL_name is None: # otherwise, it's already defined...
+      if modRecov == 1:
+        fL_name = 'mr_fitList%s_190502cB' % loc_str
+      else:
+        fL_name = 'fitList%s_190502cB' % loc_str
+        #fL_name = 'fitList%s_190321c' % loc_str
 
     np = numpy;
 
@@ -1014,10 +1014,10 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
       prefSfInd = np.argmin(np.abs(all_sfs - peakSf));
       # get the c50, but take log10 (we optimize in that space rather than in contrast)
       c50_est = np.log10(rvcBase[cellNum-1]['params'][0][prefSfInd][c50_ind]); # get high contrast, single grating prefSf
-      normConst = np.minimum(c50_est, np.log10(0.4)); # don't let a c50 value larger than 0.4 as the starting point
+      normConst = np.minimum(c50_est, np.log10(0.25)); # don't let a c50 value larger than X as the starting point
     except:
       # why -1? Talked with Tony, he suggests starting with lower sigma rather than higher/non-saturating one
-      normConst = -1.2;
+      normConst = -2; # i.e. c50 = 0.01 (1% contrast); yes, it's low...
 
     ########
     # 00 = preferred spatial frequency   (cycles per degree)
@@ -1132,17 +1132,11 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
 
     mask[oriInds.astype(np.int64)] = True; # as in, don't include those trials either!
     # hold out a condition if we have specified, and adjust the mask accordingly
+   
     if holdOutCondition is not None:
-      # dispInd: [1, 5]...conInd: [1, 2]...sfInd: [1, 11]
-      # first, get all of the conditions... - blockIDs by condition known from Robbe code
-      dispInd = holdOutCondition[0];
-      conInd = holdOutCondition[1];
-      sfInd = holdOutCondition[2];
-
-      StimBlockIDs  = np.arange(((dispInd-1)*(13*2)+1)+(conInd-1), ((dispInd)*(13*2)-5)+(conInd-1)+1, 2); # +1 to include the last block ID
-      currBlockID = StimBlockIDs[sfInd-1];
-      holdOutTr = np.where(trial_inf['blockID'] == currBlockID)[0];
-      mask[holdOutTr.astype(np.int64)] = True; # as in, don't include those trials either!
+      for cond in holdOutCondition: # i.e. we pass in as array of [disp, con, sf] combinations
+        val_trials = hf.get_valid_trials(S, cond[0], cond[1], cond[2], expInd)[0];
+        mask[val_trials] = True; # as in, don't include those trials either!
       
     # Set up model here - get the parameters and parameter bounds
     if fitType == 1:
@@ -1201,10 +1195,12 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, track
       stepList[cellNum-1]['resp']   = resp_glob;
       numpy.save(loc_data + stepListName, stepList);
 
-    if holdOutCondition is not None:
-      holdoutNLL, _, = SFMGiveBof(opt_params, structureSFM=S, normType=fitType, lossType=lossType, trialSubset=holdOutTr, expInd=expInd, rvcFits=rvcFits);
-    else:
-      holdoutNLL = [];
+   # TODO: make holdOutTr for these many-holdout conditions
+#    if holdOutCondition is not None:
+#      holdoutNLL, _, = SFMGiveBof(opt_params, structureSFM=S, normType=fitType, lossType=lossType, #trialSubset=holdOutTr, expInd=expInd, rvcFits=rvcFits);
+#    else:
+#      holdoutNLL = [];
+    holdoutNLL = [];
 
     return NLL, opt_params, holdoutNLL;
 
@@ -1222,4 +1218,4 @@ if __name__ == '__main__':
     initFromCurr = int(sys.argv[5]);
     trackSteps   = int(sys.argv[6]);
 
-    setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps, modRecov=modRecov);
+    setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov);
