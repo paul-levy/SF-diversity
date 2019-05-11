@@ -95,22 +95,25 @@ def get_num_comps(con):
 
   return num_comps
 
-def organize_modResp(modResp, expStructure):
+def organize_modResp(modResp, expStructure, mask=None):
     # 01.18.19 - changed order of SF & CON in arrays to match organize_resp from other experiments
     # the blockIDs are fixed...
     nFam = 5;
     nCon = 2;
     nCond = 11; # 11 sfCenters for sfMix
     nReps = 20; # never more than 20 reps per stim. condition
-    
+ 
+    if mask is None:
+      mask = len(data['blockID']); # i.e. look at all trials
+   
     # Analyze the stimulus-driven responses for the orientation tuning curve
     oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
 
     rateOr = numpy.empty((0,));
     for iB in oriBlockIDs:
-        indCond = numpy.where(expStructure['blockID'] == iB);
+        indCond = numpy.where(expStructure['blockID'][mask] == iB);
         if len(indCond[0]) > 0:
-            rateOr = numpy.append(rateOr, numpy.mean(modResp[indCond]));
+            rateOr = numpy.append(rateOr, numpy.mean(modResp[mask][indCond]));
         else:
             rateOr = numpy.append(rateOr, numpy.nan);
 
@@ -120,9 +123,9 @@ def organize_modResp(modResp, expStructure):
 
     rateCo = numpy.empty((0,));
     for iB in conBlockIDs:
-        indCond = numpy.where(expStructure['blockID'] == iB);   
+        indCond = numpy.where(expStructure['blockID'][mask] == iB);   
         if len(indCond[0]) > 0:
-            rateCo = numpy.append(rateCo, numpy.mean(modResp[indCond]));
+            rateCo = numpy.append(rateCo, numpy.mean(modResp[mask][indCond]));
         else:
             rateCo = numpy.append(rateCo, numpy.nan);
 
@@ -142,11 +145,11 @@ def organize_modResp(modResp, expStructure):
             iC = 0;
 
             for iB in StimBlockIDs:
-                indCond = numpy.where(expStructure['blockID'] == iB);   
+                indCond = numpy.where(expStructure['blockID'][mask] == iB);   
                 if len(indCond[0]) > 0:
                     #print('setting up ' + str((iE, iW, iC)) + ' with ' + str(len(indCond[0])) + 'trials');
-                    rateSfMix[iW, iC, conInd] = numpy.nanmean(modResp[indCond]);
-                    allSfMix[iW, iC, conInd, 0:len(indCond[0])] = modResp[indCond];
+                    rateSfMix[iW, iC, conInd] = numpy.nanmean(modResp[mask][indCond]);
+                    allSfMix[iW, iC, conInd, 0:len(indCond[0])] = modResp[mask][indCond];
                     iC = iC+1;
                  
     return rateOr, rateCo, rateSfMix, allSfMix;

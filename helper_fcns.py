@@ -1181,7 +1181,6 @@ def get_condition(data, n_comps, con, sf):
     val_con = np.round(data['total_con'], conDig) == con;
     val_sf = data['cent_sf'] == sf;
 
-    #val_trials = val_disp & val_con & val_sf;
     val_trials = np.where(val_disp & val_con & val_sf)[0]; # get as int array of indices rather than boolean array
  
     f0 = data['spikeCount'][val_trials];
@@ -1281,7 +1280,7 @@ def get_isolated_responseAdj(data, trials, adjByTrial):
 
 ##
 
-def tabulate_responses(cellStruct, expInd, modResp = []):
+def tabulate_responses(cellStruct, expInd, modResp = [], mask=None):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
         (ii) all_disps, all_cons, all_sfs - i.e. the stimulus conditions of the experiment
@@ -1315,6 +1314,9 @@ def tabulate_responses(cellStruct, expInd, modResp = []):
       inval    = np.in1d(blockIDs, invalidIDs)
     else:
       inval    = np.in1d(np.zeros_like(data['total_con']), 1); # i.e. all are valid, since there's only core sfMix trials
+
+    if mask is not None:
+      inval[~mask] = 1; # these ones are invalid, i.e. the mask tells us where we should ook
 
     all_cons = np.unique(np.round(data['total_con'][~inval], conDig));
     all_cons = all_cons[~np.isnan(all_cons)];
@@ -1415,7 +1417,7 @@ def organize_adj_responses(data, rvcFits, expInd):
     adjResps = None;
   return adjResps;
 
-def organize_resp(spikes, expStructure, expInd):
+def organize_resp(spikes, expStructure, expInd, mask=None):
     ''' organizes the responses by condition given spikes, experiment structure, and expInd
     '''
     # the blockIDs are fixed...
@@ -1433,12 +1435,14 @@ def organize_resp(spikes, expStructure, expInd):
       else:
         data = expStructure;
 
+      if mask is None:
+        mask = len(data['blockID']); # i.e. look at all trials
 
       rateOr = numpy.empty((0,));
       for iB in oriBlockIDs:
-          indCond = numpy.where(data['blockID'] == iB);
+          indCond = numpy.where(data['blockID'][mask] == iB);
           if len(indCond[0]) > 0:
-              rateOr = numpy.append(rateOr, numpy.mean(spikes[indCond]));
+              rateOr = numpy.append(rateOr, numpy.mean(spikes[mask][indCond]));
           else:
               rateOr = numpy.append(rateOr, numpy.nan);
 
@@ -1448,9 +1452,9 @@ def organize_resp(spikes, expStructure, expInd):
 
       rateCo = numpy.empty((0,));
       for iB in conBlockIDs:
-          indCond = numpy.where(data['blockID'] == iB);   
+          indCond = numpy.where(data['blockID'][mask] == iB);   
           if len(indCond[0]) > 0:
-              rateCo = numpy.append(rateCo, numpy.mean(spikes[indCond]));
+              rateCo = numpy.append(rateCo, numpy.mean(spikes[mask][indCond]));
           else:
               rateCo = numpy.append(rateCo, numpy.nan);
     else:
@@ -1459,11 +1463,12 @@ def organize_resp(spikes, expStructure, expInd):
 
     # Analyze the stimulus-driven responses for the spatial frequency mixtures
     if expInd == 1: # have to do separate work, since the original V1 experiment has tricker stimuli (i.e. not just sfMix, but also ori and rvc measurements done separately)
+      # TODO: handle non-"none" mask in v1_hf.organize_modResp!
       v1_dir = exper.dir.replace('/', '.');
       v1_hf = il.import_module(v1_dir + 'helper_fcns');
-      _, _, rateSfMix, allSfMix = v1_hf.organize_modResp(spikes, data);
+      _, _, rateSfMix, allSfMix = v1_hf.organize_modResp(spikes, data, mask);
     else:
-      allSfMix  = tabulate_responses(expStructure, expInd, spikes)[4];
+      allSfMix  = tabulate_responses(expStructure, expInd, spikes, mask)[4];
       rateSfMix = numpy.nanmean(allSfMix, -1);
 
     return rateOr, rateCo, rateSfMix, allSfMix;  
@@ -1937,8 +1942,8 @@ def getConstraints(fitType):
     zero = (0.05, None);
     one = (0.1, None);
     two = (None, None);
-    #three = (2.0, 2.0); # fix at 2
-    three = (0.25, None); # trying, per conversation with Tony (03.01.19)
+    three = (2.0, 2.0); # fix at 2
+    #three = (0.25, None); # trying, per conversation with Tony (03.01.19)
     #three = (1, None);
     four = (1e-3, None);
     five = (0, 1); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
