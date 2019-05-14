@@ -11,8 +11,8 @@ import pdb
 
 fft = numpy.fft
 
-dataListName = 'dataList.npy';
-#dataListName = 'dataList_glx.npy'
+#dataListName = 'dataList.npy';
+dataListName = 'dataList_glx.npy'
 #dataListName = 'dataList_mr.npy'
 #dataListName = 'dataList_glx_mr.npy'
 modRecov = 0;
@@ -94,7 +94,7 @@ def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
     return filt.real;
 
 # SFMSimpleResp - Used in Robbe V1 model - excitatory, linear filter response
-def SFMSimpleResp(S, channel, stimParams = [], expInd = 1):
+def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None):
     # returns object (class?) with simpleResp and other things
 
     # SFMSimpleResp       Computes response of simple cell for sfmix experiment
@@ -115,12 +115,14 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1):
             stimParams['repeats'] = 10; # why 10? To match experimental #repetitions
 
     # Load the data structure
-    T = S.get('sfm');
+    T = S['sfm'];
+    if trialInf is None: # otherwise, we've passed in explicit trial information!
+      trialInf = T['exp']['trial'];
 
     # Get preferred stimulus values
     prefSf = channel.get('pref').get('sf');                              # in cycles per degree
     # CHECK LINE BELOW
-    prefTf = round(numpy.nanmean(T.get('exp').get('trial').get('tf')[0]));     # in cycles per second
+    prefTf = round(numpy.nanmean(trialInf['tf'][0]));     # in cycles per second
 
     # Get directional selectivity - removed 7/18/17
 
@@ -149,14 +151,18 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1):
     M.setdefault('dord', dord);
     
     # Pre-allocate memory
-    z             = T.get('exp').get('trial');
+    z             = trialInf;
     nSf           = 1;
     nStimComp     = hf.get_exp_params(expInd).nStimComp;
     nFrames       = hf.num_frames(expInd);
     if make_own_stim == 1:
         nTrials = stimParams.get('repeats'); # to keep consistent with number of repetitions used for each stim. condition
     else: # CHECK THIS GUY BELOW
-        nTrials = len(z['num']);
+        try:
+          nTrials = len(z['num']);
+        except:
+          nTrials = len(z['con'][0]); 
+          # if we've defined our own stimuli, then we won't have "num"; just get number of trials from stim components
     
     # set it zero
     M['simpleResp'] = numpy.zeros((nFrames, nTrials));
@@ -567,7 +573,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1, overw
         
     return M;
 
-def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None, overwrite=0):
+def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None, overwrite=0, dataListName=dataListName):
     ''' GETNORMRESP    Runs the code that computes the response of the
      normalization pool for the recordings in the SfDiv project.
      Returns 'M', result from SFMNormResp
@@ -604,22 +610,32 @@ def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None, overwrite
 
     return M;
 
-def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None, normType=2):
+def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None, normType=2, trialArtificial = None):
   ''' A simplified version of the normalization response, in effect, without filters
     The contrast of each stimulus component will be squared and weighted with the same 
     weighting function typically applied (whether that be flat or tuned)
     This replace Linh, which is (nFrames x nTrials) matrix of responses
   '''
   np = numpy;
-  trialInf = S['sfm']['exp']['trial'];
+
+  if trialArtificial is not None:
+    trialInf = trialArtificial;
+  else:
+    trialInf = S['sfm']['exp']['trial'];
   cons = np.vstack([comp for comp in trialInf['con']]);
   consSq = np.square(cons);
-  # cons (and wghts) will be (nComps x nTrials)
-  wghts = hf.genNormWeightsSimple(S, gs_mean, gs_std, normType);
+  # cons (and wghts) will be (nComps x nTrials) 
+  if trialArtificial is not None:
+    wghts = hf.genNormWeightsSimple(S, gs_mean, gs_std, normType, trialInf);
+  else:
+    wghts = hf.genNormWeightsSimple(S, gs_mean, gs_std, normType);
+
+  # now put it all together
   resp = np.multiply(wghts, consSq);
   respPerTr = np.sqrt(resp.sum(0)); # i.e. sum over components, then sqrt
   nFrames = hf.num_frames(expInd);
   respByFr = np.array(nFrames * [respPerTr]); # broadcast - response will be same for every frame
+
   return respByFr;
 
 def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None, trackSteps=False, overwriteSpikes=None):
@@ -814,6 +830,107 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
 
     return NLL, respModel;
 
+def SFMsimulateNew(params, structureSFM, disp, con, sf_c, normType=1, expInd=1):
+  ''' New version of SFMsimulate...19.05.13
+      See helper_fcns/makeStimulusRef for details on input parameters
+  '''
+  T = structureSFM['sfm'];
+  # now we have stimuluated trials!
+  trialSim = hf.makeStimulusRef(T['exp']['trial'], disp, con, sf_c, expInd);
+
+  trialInf = trialSim;
+  stimDur = hf.get_exp_params(expInd).stimDur;
+
+  ### Get parameter values
+  # Excitatory channel
+  pref = {'sf': params[0]};
+  dord = {'sp': params[1], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
+  excChannel = {'pref': pref, 'dord': dord};
+
+  # Other (nonlinear) model components
+  sigma    = pow(10, params[2]); # normalization constant
+  respExp  = params[3]; # response exponent
+  scale    = params[4]; # response scalar
+
+  # Noise parameters
+  noiseEarly = params[5];   # early additive noise
+  noiseLate  = params[6];  # late additive noise
+  varGain    = params[7];  # multiplicative noise
+
+  ### Normalization parameters
+  normParams = hf.getNormParams(params, normType);
+  if normType == 1:
+    inhAsym = normParams;
+  elif normType == 2:
+    gs_mean = normParams[0];
+    gs_std  = normParams[1];
+  elif normType == 3:
+    # sigma calculation
+    offset_sigma = normParams[0];  # c50 filter will range between [v_sigOffset, 1]
+    stdLeft      = normParams[1];  # std of the gaussian to the left of the peak
+    stdRight     = normParams[2]; # '' to the right '' 
+    sfPeak       = normParams[3]; # where is the gaussian peak?
+  elif normType == 4:
+    gs_mean, gs_std = normParams[0], normParams[1]
+  else:
+    inhAsym = normParams;
+
+  ########################
+  #### the following is not used, since we use the simple normalization calculation...
+  #### (other than defining gs_mean/gs_std as None if flat normalization...
+  # Compute weights for suppressive signals
+  if normType == 3:
+    filter = hf.setSigmaFilter(sfPeak, stdLeft, stdRight);
+    scale_sigma = -(1-offset_sigma);
+    evalSfs = trialInf['sf'][0]; # the center SF of all stimuli
+    sigmaFilt = hf.evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
+  else:
+    sigmaFilt = numpy.square(sigma); # i.e. normalization constant squared
+
+  if normType == 2 or normType == 4:
+    inhWeightMat = [];
+    #inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials, expInd, normType);
+  else: # normType == 1 or anything else, we just go with 
+    gs_mean = None; gs_std = None;
+    for iP in range(len(nInhChan)):
+        inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
+                                            - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
+    # assumption (made by Robbe) - only two normalization pools
+    inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
+    inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
+    inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
+    inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
+  ########################
+
+  # Evaluate sfmix experiment
+  T = structureSFM['sfm']; # [iR]
+
+  # Get simple cell response for excitatory channel
+  E = SFMSimpleResp(structureSFM, excChannel, stimParams=[], expInd=expInd, trialInf=trialInf);
+
+  # Extract simple cell response (half-rectified linear filtering)
+  Lexc = E['simpleResp'];
+
+  # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to bring everything in linear contrast scale again)
+  # NOTE (19.05.13): GetNormResp is ignored, since we use the simple normalization response, now
+  Linh = SimpleNormResp(structureSFM, expInd, gs_mean, gs_std, normType, trialInf);
+  '''
+  normResp = GetNormResp(structureSFM, [], stimParams, expInd=expInd);
+  if unweighted == 1:
+    return [], [], Lexc, normResp['normResp'], [];
+  #Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
+  '''
+  # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
+  numerator     = noiseEarly + Lexc;
+  # taking square root of denominator (after summing squares...) to bring in line with computation in Carandini, Heeger, Movshon, '97
+  denominator   = pow(sigmaFilt + pow(Linh, 2), 0.5); # squaring Linh - edit 7/17
+  ratio         = pow(numerator/denominator, respExp);
+  meanRate      = ratio.mean(0);
+  respModel     = noiseLate + scale*meanRate; # respModel[iR]
+  rateModel     = respModel / stimDur;
+
+  return rateModel, Linh, Lexc, denominator;
+
 def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, normType=1, expInd=1):
     # Currently, will get slightly different stimuli for excitatory and inhibitory/normalization pools
     # But differences are just in phase/TF, but for TF, drawn from same distribution, anyway...
@@ -883,6 +1000,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     if normType == 2 or normType == 4:
       inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials, expInd, normType);
     else: # normType == 1 or anything else, we just go with 
+      gs_mean = None; gs_std = None;
       for iP in range(len(nInhChan)):
           inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                               - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
@@ -902,10 +1020,12 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     Lexc = E['simpleResp'];
 
     # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to bring everything in linear contrast scale again)
+    # NOTE (19.05.13): GetNormResp is ignored, since we use the simple normalization response, now
     normResp = GetNormResp(structureSFM, [], stimParams, expInd=expInd);
     if unweighted == 1:
       return [], [], Lexc, normResp['normResp'], [];
-    Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
+    #Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
+    Linh = SimpleNormResp(structureSFM, expInd, gs_mean, gs_std, normType);
 
     # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
     numerator     = noiseEarly + Lexc;
@@ -918,7 +1038,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
 
     return respModel, Linh, Lexc, normResp['normResp'], denominator;
 
-def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBase):
+def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBase, dataListName=dataListName):
     # Given just a cell number, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
     #
     # lossType
@@ -949,9 +1069,9 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       loc_str = '';
     if fL_name is None: # otherwise, it's already defined...
       if modRecov == 1:
-        fL_name = 'mr_fitList%s_190502cB' % loc_str
+        fL_name = 'mr_fitList%s_190502aA' % loc_str
       else:
-        fL_name = 'fitList%s_190502cB' % loc_str
+        fL_name = 'fitList%s_190502aA' % loc_str
         #fL_name = 'fitList%s_190321c' % loc_str
 
     np = numpy;

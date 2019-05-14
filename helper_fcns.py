@@ -905,7 +905,8 @@ def chiSq(data_resps, model_resps, stimDur=1):
   nan_rm = lambda x: x[~np.isnan(x)]
   neg_rm = lambda x: x[x>0]; # particularly for adjusted responses, a few values might be negative; remove these from the rho calculation
   rho = geomean(neg_rm(nan_rm(rats))); # only need neg_rm, but just being explicit
-  k   = 0.10 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
+  k   = 0.01 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
+  #k   = 0.10 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
 
   # some conditions might be blank (and therefore NaN) - remove them!
   num = data_resps[0] - model_resps[0];
@@ -1419,6 +1420,7 @@ def organize_adj_responses(data, rvcFits, expInd):
 
 def organize_resp(spikes, expStructure, expInd, mask=None):
     ''' organizes the responses by condition given spikes, experiment structure, and expInd
+        mask will be None OR list of trials to consider (i.e. trials not in mask/where mask is false are ignored)
     '''
     # the blockIDs are fixed...
     exper = get_exp_params(expInd);
@@ -1436,8 +1438,8 @@ def organize_resp(spikes, expStructure, expInd, mask=None):
         data = expStructure;
 
       if mask is None:
-        mask = len(data['blockID']); # i.e. look at all trials
-
+        mask = numpy.ones((len(data['blockID']), ), dtype=bool); # i.e. look at all trials
+   
       rateOr = numpy.empty((0,));
       for iB in oriBlockIDs:
           indCond = numpy.where(data['blockID'][mask] == iB);
@@ -1631,6 +1633,114 @@ def getSuppressiveSFtuning(sfs = numpy.logspace(-2, 2, 1000)):
 
     return numpy.hstack((selSf[0], selSf[1]));
 
+def makeStimulusRef(data, disp, con, sf, expInd):
+  ''' Created 19.05.13: hacky method for creating artificial stimuli
+      in: data structure (trialInf or whole is ok); disp index; con, sf; expInd
+        One of con or sf will be an array, rather than index
+      out: trial structure with new stimuli
+      In that case, we borrow from the existing stimuli but create new stimuli with the interpolated value
+
+      For contrast, we assume the con array contains total contrast levels; we will scale the contrast of each component accordingly
+      For SF, we assume the input is the center SF; we then scale a reference SF distribution accordingly
+  '''
+  np = numpy;
+
+  if 'sfm' in data:
+    trialInf = data['sfm']['exp']['trial'];
+  else:
+    trialInf = data; # i.e. we've passed in trial directly...
+
+  _, stimVals, val_con_by_disp, validByStimVal, _ = tabulate_responses(data, expInd);
+  all_cons, all_sfs = stimVals[1], stimVals[2];
+
+  if isinstance(con, numpy.ndarray):
+    # then, we are interpolating contrasts for a given disp/sf condition
+    conIndToUse = val_con_by_disp[disp][-1]; # let's use the highest contrast as our reference
+    refCon = all_cons[conIndToUse];
+    # first arg is validTr ([0]), then unpack array into indices ([0][0])
+    ref_trials = get_valid_trials(data, disp, conIndToUse, sf, expInd)[0][0];
+    interpSF = 0;
+  elif isinstance(sf, numpy.ndarray):
+    sfIndToUse = get_valid_sfs(data, disp, con, expInd)[0];
+    refSf = all_sfs[sfIndToUse];
+    # first arg is validTr ([0]), then unpack array into indices ([0][0])
+    ref_trials = get_valid_trials(data, disp, con, sfIndToUse, expInd)[0][0];
+    interpSF = 1;
+  else:
+    warnings.warn('Con or Sf must be array!; returning full, original experiment at trial level');
+    return trialInf;
+
+  if interpSF == 1:
+    interpVals = sf;
+  elif interpSF == 0:
+    interpVals = con;
+
+  all_trials = dict();
+  all_trCon = [];
+  all_trSf  = [];
+  # and the measures that we won't alter...
+  all_trPh  = [];
+  all_trOr  = [];
+  all_trTf  = [];
+
+  for vals in range(len(interpVals)):
+    # for every value in the interpolated dimension, get the N (usually 5 or 10) ref_trials
+    # then replace the interpolated dimension accordingly
+    valCurr = interpVals[vals];
+    if interpSF == 1:
+      sfMult = valCurr/refSf;
+    elif interpSF == 0:
+      conMult = valCurr/refCon; 
+
+    # remember, trialInf values are [nStimComp, ], where each stimComp is [nTrials]
+    conCurr = np.array([x[ref_trials] for x in trialInf['con']]);  
+    sfCurr = np.array([x[ref_trials] for x in trialInf['sf']]); 
+    phCurr = np.array([x[ref_trials] for x in trialInf['ph']]);  
+    tfCurr = np.array([x[ref_trials] for x in trialInf['tf']]); 
+    orCurr = np.array([x[ref_trials] for x in trialInf['ori']]); 
+
+    if interpSF == 1:
+      sfCurr = np.multiply(sfCurr, sfMult);
+    elif interpSF == 0:
+      conCurr = np.multiply(conCurr, conMult);
+
+    if all_trCon == []: # just overwrite the blank
+      all_trCon = conCurr;
+      all_trSf = sfCurr;
+      all_trPh = phCurr;
+      all_trTf = tfCurr;
+      all_trOr = orCurr;
+    else:
+      all_trCon = np.hstack((all_trCon, conCurr));
+      all_trSf = np.hstack((all_trSf, sfCurr));
+      all_trPh = np.hstack((all_trPh, phCurr));
+      all_trTf = np.hstack((all_trTf, tfCurr));
+      all_trOr = np.hstack((all_trOr, orCurr));
+
+  # but now, all_trSf/Con are [nStimpComp, nTrials] - need to reorganize as [nStimComp, ] with each entry as [nTrials]
+  nComps = all_trCon.shape[0];
+  
+  newCons = np.zeros((nComps, ), dtype='O');
+  newSf = np.zeros((nComps, ), dtype='O');
+  newPh = np.zeros((nComps, ), dtype='O');
+  newTf = np.zeros((nComps, ), dtype='O');
+  newOr = np.zeros((nComps, ), dtype='O');
+  # for each component, pack as array, which is the default/working method
+  for ci in range(nComps):
+    newCons[ci] = np.array(all_trCon[ci, :])
+    newSf[ci] = np.array(all_trSf[ci, :])
+    newPh[ci] = np.array(all_trPh[ci, :])
+    newTf[ci] = np.array(all_trTf[ci, :])
+    newOr[ci] = np.array(all_trOr[ci, :])
+
+  all_trials['con'] = newCons;
+  all_trials['sf'] = newSf;
+  all_trials['ph'] = newPh;
+  all_trials['tf'] = newTf;
+  all_trials['ori'] = newOr;
+
+  return all_trials;
+
 def makeStimulus(stimFamily, conLevel, sf_c, template, expInd=1):
 
 # returns [Or, Tf, Co, Ph, Sf, trial_used]
@@ -1652,8 +1762,12 @@ def makeStimulus(stimFamily, conLevel, sf_c, template, expInd=1):
     num_families = exper.nFamilies;
     comps        = exper.comps;
 
-    spreadVec = numpy.logspace(math.log10(.125), math.log10(1.25), num_families);
-    octSeries  = numpy.linspace(1.5, -1.5, num_gratings);
+    if expInd == 1:
+      spreadVec = numpy.logspace(math.log10(.125), math.log10(1.25), num_families);
+      octSeries  = numpy.linspace(1.5, -1.5, num_gratings);
+      spread     = spreadVec[stimFamily-1];
+      profTemp = norm.pdf(octSeries, 0, spread);
+      profile    = profTemp/sum(profTemp);
 
     # set contrast and spatial frequency
     if conLevel == 1:
@@ -1665,11 +1779,7 @@ def makeStimulus(stimFamily, conLevel, sf_c, template, expInd=1):
         conLevel = 1; # just set to 1 (i.e. get "high contrast" block IDs, used if expInd=1; see valid_blockIDs = ...)
     else:
         total_contrast = 1; # default to that
-        
-    spread     = spreadVec[stimFamily-1];
-    profTemp = norm.pdf(octSeries, 0, spread);
-    profile    = profTemp/sum(profTemp);
-
+     
     if stimFamily == 1: # do this for consistency with actual experiment - for stimFamily 1, only one grating is non-zero; round gives us this
         profile = numpy.round(profile);
 
@@ -1745,16 +1855,22 @@ def getNormParams(params, normType):
     inhAsym = 0;
     return inhAsym;
 
-def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2):
+def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2, trialInf = None):
   ''' simply evaluates the usual normalization weighting but at the frequencies of the stimuli directly
   i.e. in effect, we are eliminating the bank of filters in the norm. pool
   '''
   np = numpy;
-  try:
-    trialInf = cellStruct['sfm']['exp']['trial'];
+
+  if trialInf is not None:
+    trialInf = trialInf;
     sfs = np.vstack([comp for comp in trialInf['sf']]); # [nComps x nTrials]
-  except: # we allow cellStruct to simply be an array of sfs...
-    sfs = cellStruct;
+  else:
+    try:
+      trialInf = cellStruct['sfm']['exp']['trial'];
+      sfs = np.vstack([comp for comp in trialInf['sf']]); # [nComps x nTrials]
+    except: # we allow cellStruct to simply be an array of sfs...
+      sfs = cellStruct;
+
   if gs_mean is None or gs_std is None: # we assume inhAsym is 0
     inhAsym = 0;
     new_weights = 1 + inhAsym*(np.log(sfs) - np.nanmean(np.log(sfs)));
@@ -1773,6 +1889,7 @@ def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2):
     new_weights = np.zeros_like(log_sfs);
     new_weights[lt.mask]  = wts_l;
     new_weights[gte.mask] = wts_r;
+
   return new_weights;
 
 def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials, expInd, normType = 2):
@@ -1942,8 +2059,8 @@ def getConstraints(fitType):
     zero = (0.05, None);
     one = (0.1, None);
     two = (None, None);
-    three = (2.0, 2.0); # fix at 2
-    #three = (0.25, None); # trying, per conversation with Tony (03.01.19)
+    #three = (2.0, 2.0); # fix at 2
+    three = (0.25, None); # trying, per conversation with Tony (03.01.19)
     #three = (1, None);
     four = (1e-3, None);
     five = (0, 1); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
