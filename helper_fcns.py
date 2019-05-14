@@ -93,6 +93,7 @@ import warnings
 # nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
 
 # getSuppressiveSFtuning - returns the normalization pool response
+# makeStimulusRef - new way of making stimuli (19.05.13)
 # makeStimulus - was used last for sfMix experiment to generate arbitrary stimuli for use with evaluating model
 # getNormParams  - given the model params and fit type, return the relevant parameters for normalization
 # genNormWeightsSimple - for the simple version of the normalization model
@@ -1640,8 +1641,10 @@ def makeStimulusRef(data, disp, con, sf, expInd):
       out: trial structure with new stimuli
       In that case, we borrow from the existing stimuli but create new stimuli with the interpolated value
 
+      For both contrast and sf, we find the true stimulus with the closest con/sf (so that TF is close to as it was in the stimulus...)
+      Note that this approach is only coded to work when con/sf is simulated at one value, only
       For contrast, we assume the con array contains total contrast levels; we will scale the contrast of each component accordingly
-      For SF, we assume the input is the center SF; we then scale a reference SF distribution accordingly
+      For SF, 
   '''
   np = numpy;
 
@@ -1655,13 +1658,23 @@ def makeStimulusRef(data, disp, con, sf, expInd):
 
   if isinstance(con, numpy.ndarray):
     # then, we are interpolating contrasts for a given disp/sf condition
-    conIndToUse = val_con_by_disp[disp][-1]; # let's use the highest contrast as our reference
-    refCon = all_cons[conIndToUse];
+    if len(con) == 1:
+      curr_cons = all_cons[val_con_by_disp[disp]];
+      conIndToUse = np.argmin(np.square(curr_cons-con[0])); 
+      refCon = curr_cons[conIndToUse];
+    else:
+      conIndToUse = val_con_by_disp[disp][-1]; # let's use the highest contrast as our reference
+      refCon = all_cons[conIndToUse];
     # first arg is validTr ([0]), then unpack array into indices ([0][0])
     ref_trials = get_valid_trials(data, disp, conIndToUse, sf, expInd)[0][0];
     interpSF = 0;
   elif isinstance(sf, numpy.ndarray):
-    sfIndToUse = get_valid_sfs(data, disp, con, expInd)[0];
+    val_sfs = get_valid_sfs(data, disp, con, expInd)
+    if len(sf) == 1:
+      sfIndToUse = np.argmin(np.square(all_sfs[val_sfs] - sf[0]));
+      sfIndToUse = val_sfs[sfIndToUse];
+    else:
+      sfIndToUse = val_sfs[0];
     refSf = all_sfs[sfIndToUse];
     # first arg is validTr ([0]), then unpack array into indices ([0][0])
     ref_trials = get_valid_trials(data, disp, con, sfIndToUse, expInd)[0][0];

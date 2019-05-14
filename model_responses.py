@@ -892,6 +892,7 @@ def SFMsimulateNew(params, structureSFM, disp, con, sf_c, normType=1, expInd=1):
     #inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials, expInd, normType);
   else: # normType == 1 or anything else, we just go with 
     gs_mean = None; gs_std = None;
+    '''
     for iP in range(len(nInhChan)):
         inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
                                             - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
@@ -900,6 +901,7 @@ def SFMsimulateNew(params, structureSFM, disp, con, sf_c, normType=1, expInd=1):
     inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
     inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
     inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
+    '''
   ########################
 
   # Evaluate sfmix experiment
