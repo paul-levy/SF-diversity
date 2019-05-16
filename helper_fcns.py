@@ -906,8 +906,8 @@ def chiSq(data_resps, model_resps, stimDur=1):
   nan_rm = lambda x: x[~np.isnan(x)]
   neg_rm = lambda x: x[x>0]; # particularly for adjusted responses, a few values might be negative; remove these from the rho calculation
   rho = geomean(neg_rm(nan_rm(rats))); # only need neg_rm, but just being explicit
-  k   = 0.01 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
-  #k   = 0.10 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
+  #k   = 0.01 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
+  k   = 0.10 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
 
   # some conditions might be blank (and therefore NaN) - remove them!
   num = data_resps[0] - model_resps[0];
@@ -1634,10 +1634,12 @@ def getSuppressiveSFtuning(sfs = numpy.logspace(-2, 2, 1000)):
 
     return numpy.hstack((selSf[0], selSf[1]));
 
-def makeStimulusRef(data, disp, con, sf, expInd):
+def makeStimulusRef(data, disp, con, sf, expInd, nRepeats=None):
   ''' Created 19.05.13: hacky method for creating artificial stimuli
-      in: data structure (trialInf or whole is ok); disp index; con, sf; expInd
+      in: data structure (trialInf or whole is ok); disp index; con, sf; expInd; [nRepeats]
         One of con or sf will be an array, rather than index
+        If nRepeats is NOT none (should be integer), then we'll take repeat one example N times, but randomize the phase
+        This approach was borne out of phase-interaction issues for dispersions causing discontinuities in the simulated case
       out: trial structure with new stimuli
       In that case, we borrow from the existing stimuli but create new stimuli with the interpolated value
 
@@ -1660,8 +1662,9 @@ def makeStimulusRef(data, disp, con, sf, expInd):
     # then, we are interpolating contrasts for a given disp/sf condition
     if len(con) == 1:
       curr_cons = all_cons[val_con_by_disp[disp]];
-      conIndToUse = np.argmin(np.square(curr_cons-con[0])); 
-      refCon = curr_cons[conIndToUse];
+      conInd = np.argmin(np.square(curr_cons-con[0]));
+      conIndToUse = val_con_by_disp[disp][conInd];
+      refCon = all_cons[conIndToUse];
     else:
       conIndToUse = val_con_by_disp[disp][-1]; # let's use the highest contrast as our reference
       refCon = all_cons[conIndToUse];
@@ -1682,6 +1685,9 @@ def makeStimulusRef(data, disp, con, sf, expInd):
   else:
     warnings.warn('Con or Sf must be array!; returning full, original experiment at trial level');
     return trialInf;
+
+  if nRepeats is not None:
+    ref_trials = [ref_trials[0]] * nRepeats; # just pick one...
 
   if interpSF == 1:
     interpVals = sf;
@@ -1707,8 +1713,11 @@ def makeStimulusRef(data, disp, con, sf, expInd):
 
     # remember, trialInf values are [nStimComp, ], where each stimComp is [nTrials]
     conCurr = np.array([x[ref_trials] for x in trialInf['con']]);  
-    sfCurr = np.array([x[ref_trials] for x in trialInf['sf']]); 
-    phCurr = np.array([x[ref_trials] for x in trialInf['ph']]);  
+    sfCurr = np.array([x[ref_trials] for x in trialInf['sf']]);
+    if nRepeats is None:
+      phCurr = np.array([x[ref_trials] for x in trialInf['ph']]);  
+    else: # then we randomize phase...
+      phCurr = np.array([random_in_range((0,360), len(ref_trials)) for x in trialInf['ph']]);  
     tfCurr = np.array([x[ref_trials] for x in trialInf['tf']]); 
     orCurr = np.array([x[ref_trials] for x in trialInf['ori']]); 
 

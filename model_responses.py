@@ -11,8 +11,8 @@ import pdb
 
 fft = numpy.fft
 
-#dataListName = 'dataList.npy';
-dataListName = 'dataList_glx.npy'
+dataListName = 'dataList.npy';
+#dataListName = 'dataList_glx.npy'
 #dataListName = 'dataList_mr.npy'
 #dataListName = 'dataList_glx_mr.npy'
 modRecov = 0;
@@ -57,6 +57,7 @@ resp_glob = [];
 # GetNormResp    - wrapper for SFMNormResp
 # SimpleNormResp - a simplified normalization calculation per discussions with JAM
 # SFMGiveBof     - gathers simple and normalization responses to get full model response; optimization is here!
+# SFMSimulateNew - as in SFMGiveBof, but without optimization
 # SFMSimulate    - as in SFMGiveBof, but without optimization; can pass in arbitrary stimuli here
 # setModel       - wrapper+ for optimization and saving optimization results
 
@@ -99,7 +100,7 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None):
 
     # SFMSimpleResp       Computes response of simple cell for sfmix experiment
 
-    # SFMSimpleResp(varargin) returns a simple cell response for the
+    # SFMSimpleResp(varargin) returns a complex cell response for the
     # mixture stimuli used in sfMix. The cell's receptive field is the n-th
     # derivative of a 2-D Gaussian that need not be circularly symmetric.
 
@@ -199,7 +200,7 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None):
             continue;
                 
         # I. Orientation, spatial frequency and temporal frequency
-        # Compute orientation tuning - removed 7/18/17
+        # Compute orientation tuning - removed 17.18.7
 
         # Compute spatial frequency tuning
         sfRel = stimSf / prefSf;
@@ -208,12 +209,7 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None):
         sNl   = s/sMax;
         selSf = sNl;
 
-        # Compute temporal frequency tuning
-        tfRel = stimTf / prefTf;
-        t     = pow(stimTf, dOrdTi) * numpy.exp(-dOrdTi/2 * pow(tfRel, 2));
-        tMax  = pow(prefTf, dOrdTi) * numpy.exp(-dOrdTi/2);
-        tNl   = t/tMax;
-        selTf = tNl;
+        # Compute temporal frequency tuning - removed 19.05.13
 
         # II. Phase, space and time
         omegaX = stimSf * numpy.cos(stimOr); # the stimulus in frequency space
@@ -244,7 +240,7 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None):
             computeSum = 0; # important constant: if stimulus contrast or filter sensitivity equals zero there is no point in computing the response
 
             for c in range(nStimComp): # there are up to nine stimulus components
-                selSi = selSf[c]*selTf[c]; # filter sensitivity for the sinusoid in the frequency domain
+                selSi = selSf[c]; # filter sensitivity for the sinusoid in the frequency domain
 
                 if selSi != 0 and stimCo[c] != 0:
                     computeSum = 1;
@@ -271,20 +267,15 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None):
                     respSimple4 = numpy.maximum(0, linR4.sum(1));
 
                     # if channel is tuned, it is phase selective...
+                    # NOTE: 19.05.14 - made response always complex...(wow)! See git for previous version
                     if nSf == 1:
-                        if channel.get('dord').get('sp') != 0:
-                            respSimple = respSimple1;
-                        elif channel.get('dord').get('sp') == 0:
-                            respComplex = pow(respSimple1, 2) + pow(respSimple2, 2) \
-                                + pow(respSimple3, 2) + pow(respSimple4, 2); 
-                            respSimple = numpy.sqrt(respComplex);                         
-                    else:        
-                        if channel.get('dord').get('sp') != 0:
-                            respSimple[iF, :] = respSimple1;
-                        elif channel.get('dord').get('sp') == 0:
-                            respComplex = pow(respSimple1, 2) + pow(respSimple2, 2) \
-                                + pow(respSimple3, 2) + pow(respSimple4, 2); 
-                            respSimple[iF, :] = numpy.sqrt(respComplex);
+                          respComplex = pow(respSimple1, 2) + pow(respSimple2, 2) \
+                              + pow(respSimple3, 2) + pow(respSimple4, 2); 
+                          respSimple = numpy.sqrt(numpy.divide(respComplex, 4)); # div by 4 to avg across all filters
+                    else:
+                          respComplex = pow(respSimple1, 2) + pow(respSimple2, 2) \
+                              + pow(respSimple3, 2) + pow(respSimple4, 2);
+                          respSimple[iF, :] = numpy.sqrt(numpy.divide(respComplex, 4)); # div by 4 to avg across all filters
                         
         # Store response in desired format
         M['simpleResp'][:,p] = respSimple;
@@ -467,14 +458,9 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1, overw
         selOr = numpy.ones(nStimComp); 
         # all stimulus components of the spatial frequency mixtures were shown at the cell's preferred direction of motion
         
-        # Compute temporal frequency tuning
-        dOrdTi = 0.25; # derivative order in the temporal domain, d = 0.25 ensures broad tuning for temporal frequency
-        tfRel = stimTf / prefTf;
-        t     = pow(stimTf, dOrdTi) * numpy.exp(-dOrdTi/2 * pow(tfRel, 2));
-        tMax  = pow(prefTf, dOrdTi) * numpy.exp(-dOrdTi/2);
-        tNl   = t/tMax;
-        selTf = tNl;
-    
+        # Compute temporal frequency tuning - removed TF tuning 19.13.05
+        selTf = numpy.ones(nStimComp); 
+
         # II. Phase, space and time
         omegaX = stimSf * numpy.cos(stimOr); # the stimulus in frequency space
         omegaY = stimSf * numpy.sin(stimOr);
@@ -830,13 +816,13 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
 
     return NLL, respModel;
 
-def SFMsimulateNew(params, structureSFM, disp, con, sf_c, normType=1, expInd=1):
+def SFMsimulateNew(params, structureSFM, disp, con, sf_c, normType=1, expInd=1, nRpts=None):
   ''' New version of SFMsimulate...19.05.13
       See helper_fcns/makeStimulusRef for details on input parameters
   '''
   T = structureSFM['sfm'];
   # now we have stimuluated trials!
-  trialSim = hf.makeStimulusRef(T['exp']['trial'], disp, con, sf_c, expInd);
+  trialSim = hf.makeStimulusRef(T['exp']['trial'], disp, con, sf_c, expInd, nRpts);
 
   trialInf = trialSim;
   stimDur = hf.get_exp_params(expInd).stimDur;
@@ -1071,9 +1057,9 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       loc_str = '';
     if fL_name is None: # otherwise, it's already defined...
       if modRecov == 1:
-        fL_name = 'mr_fitList%s_190502aA' % loc_str
+        fL_name = 'mr_fitList%s_190513cA' % loc_str
       else:
-        fL_name = 'fitList%s_190502aA' % loc_str
+        fL_name = 'fitList%s_190513cA' % loc_str
         #fL_name = 'fitList%s_190321c' % loc_str
 
     np = numpy;
