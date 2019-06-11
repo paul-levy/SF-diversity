@@ -2,7 +2,7 @@
 # If you edit this, you must replace the file at: plevy/anaconda3/lib/python3.6/site-packages/matplotlib/mpl-data/stylelib
 
 ### Lines
-lines.markeredgewidth: 1     # the line width around the marker symbol
+lines.markeredgewidth: 2     # the line width around the marker symbol
 lines.markersize     : 5     # markersize, in points
 lines.linewidth      : 2.5
 
@@ -14,21 +14,21 @@ text.usetex          : False
 
 font.family          : serif
 font.serif           : Palatino Linotype
-font.size            : 20.0
+font.size            : 16.0
 font.style           : oblique
 
 ### TICKS
 xtick.top            : False   # draw ticks on the top side
 xtick.bottom         : True   # draw ticks on the bottom side
-xtick.major.size     : 4      # major tick size in points
-xtick.minor.size     : 2      # minor tick size in points
+xtick.major.size     : 12      # major tick size in points
+xtick.minor.size     : 8      # minor tick size in points
 xtick.minor.visible  : True
 xtick.labelsize      : medium # fontsize of the tick labels
 
-ytick.left           : True   # draw ticks on the left side
+ytick.left           : True    # draw ticks on the left side
 ytick.right          : False   # draw ticks on the right side
-ytick.major.size     : 4      # major tick size in points
-ytick.minor.size     : 2      # minor tick size in points
+ytick.major.size     : 12      # major tick size in points
+ytick.minor.size     : 8       # minor tick size in points
 ytick.minor.visible  : True
 ytick.labelsize      : medium # fontsize of the tick labels
 
@@ -39,7 +39,7 @@ axes.spines.top      : False
 axes.spines.right    : False
 axes.titlesize       : medium   # fontsize of the axes title
 axes.labelsize       : medium  # fontsize of the x any y labels
-axes.linewidth       : 1.5
+axes.linewidth       : 4
 
 ### PDF/saving
 pdf.fonttype         : 42 # ensures text is editable/saved properly
