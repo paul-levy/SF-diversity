@@ -971,8 +971,11 @@ def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65, dog_model=2, prefMin=
   return pSfRatio, psf_model, opt_params;
 
 def dog_charFreq(prms, DoGmodel=1):
+  ''' Compute the characteristic frequency given a set of DoG model parameters
+      Here, we use the Enroth-Cugell, Robson (1966) definition of charFreq (1/e fall off in the center mechanism strength)
+  '''
   if DoGmodel == 0:
-      f_c = numpy.nan; # TODO: compute char freq with flexGauss model?
+      f_c = numpy.nan; # Cannot compute charFreq without DoG model fit (see sandbox_careful.ipynb)
   elif DoGmodel == 1: # sach
       r_c = prms[1];
       f_c = 1/(numpy.pi*r_c)

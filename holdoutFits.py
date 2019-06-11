@@ -15,7 +15,7 @@ dataListName = 'dataList.npy';
 #dataListName = 'dataList_glx_mr.npy'
 
 rvcBaseName = 'rvcFits_f0'; # a base set of RVC fits used for initializing c50 in opt...
-fitListBase = lambda s: 'holdout_fitList%s_190510cB' % s
+fitListBase = lambda s: 'holdout_fitList%s_190513cA' % s
 modRecov = 0;
 
 # TODO: make a smart way of holding out a set of conditions
@@ -68,4 +68,4 @@ for d in range(len(dispVals)):
       holdoutCond.append(holdoutCurr); 
       
 ### NOW run it!
-mod_resp.setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=False, holdOutCondition=holdoutCond, modRecov=modRecov, rvcBase=rvcBaseName, fL_name=fitListBase(loc_str));
+mod_resp.setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=False, holdOutCondition=holdoutCond, modRecov=modRecov, rvcBase=rvcBaseName, fL_name=fitListBase(loc_str), dataListName=dataListName);

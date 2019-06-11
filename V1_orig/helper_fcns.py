@@ -104,7 +104,7 @@ def organize_modResp(modResp, expStructure, mask=None):
     nReps = 20; # never more than 20 reps per stim. condition
  
     if mask is None:
-      mask = len(data['blockID']); # i.e. look at all trials
+      mask = numpy.ones((len(data['blockID']), ), dtype=bool); # i.e. look at all trials
    
     # Analyze the stimulus-driven responses for the orientation tuning curve
     oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
