@@ -3,7 +3,8 @@
 
 ### Lines
 lines.markeredgewidth: 1     # the line width around the marker symbol
-lines.markersize     : 8            # markersize, in points
+lines.markersize     : 5     # markersize, in points
+lines.linewidth      : 2.5
 
 patch.force_edgecolor: True
 patch.edgecolor      : white
@@ -13,7 +14,8 @@ text.usetex          : False
 
 font.family          : serif
 font.serif           : Palatino Linotype
-font.size            : 16.0
+font.size            : 20.0
+font.style           : oblique
 
 ### TICKS
 xtick.top            : False   # draw ticks on the top side
@@ -37,7 +39,11 @@ axes.spines.top      : False
 axes.spines.right    : False
 axes.titlesize       : medium   # fontsize of the axes title
 axes.labelsize       : medium  # fontsize of the x any y labels
+axes.linewidth       : 1.5
 
+### PDF/saving
+pdf.fonttype         : 42 # ensures text is editable/saved properly
+ps.fonttype          : 42
 
 ### FIGURE
 figure.frameon       : False
