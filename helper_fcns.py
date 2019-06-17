@@ -17,6 +17,7 @@ import warnings
 ### basics
 
 # np_smart_load - be smart about using numpy load
+# nan_rm        - remove nan from array
 # bw_lin_to_log
 # bw_log_to_lin
 # exp_name_to_ind - given the name of an exp (e.g. sfMixLGN), return the expInd
@@ -24,10 +25,11 @@ import warnings
 # get_exp_ind     - given a .npy for a given sfMix recording, determine the experiment index
 # fitType_suffix  - get the string corresponding to a fit (i.e. normalization) type
 # lossType_suffix - get the string corresponding to a loss type
-# fitList_name
+# chiSq_suffix    - what suffix (e.g. 'a' or 'c') given the chiSq multiplier value
+# fitList_name    - put together the name for the fitlist
 # phase_fit_name
-# descrMod_name - returns string for descriptive model fit
-# descrFit_name
+# descrMod_name   - returns string for descriptive model fit
+# descrFit_name   - 
 # angle_xy
 # flatten_list
 # switch_inner_outer
@@ -118,6 +120,9 @@ def np_smart_load(file_path, encoding_str='latin1'):
        sleep(10); # i.e. wait for 10 seconds
 
    return loaded;
+
+def nan_rm(x):
+   return x[~numpy.isnan(x)];
 
 def bw_lin_to_log( lin_low, lin_high ):
     # Given the low/high sf in cpd, returns number of octaves separating the
@@ -276,6 +281,22 @@ def lossType_suffix(lossType):
   elif lossType == 4:
     lossSuf = '_chiSq.npy';
   return lossSuf;
+
+def chiSq_suffix(kMult):
+  ''' We need a multiplying constant when using the chiSquared loss (see chiSq within this file)
+      I denote this multiplier with a flag; this function returns that flag based on the value
+  '''
+  if kMult == 0.01:
+    return 'a';
+  elif kMult == 0.05:
+    return 'b';
+  elif kMult == 0.10:
+    return 'c';
+  else: # if it's not one of the default values, then add a special suffix
+    asStr = str(kMult);
+    afterDec = asStr.split('.')[1];
+    # why? don't want (e.g.) Z0.02, just Z02 - we know multiplier values are 0<x<<1
+    return 'z%f' % afterDec;
 
 def fitList_name(base, fitType, lossType):
   ''' use this to get the proper name for the full model fits
@@ -896,8 +917,9 @@ def var_explained(data_resps, modParams, sfVals, dog_model = 2):
 
   return var_expl(mod_resps, data_resps, data_mean);
 
-def chiSq(data_resps, model_resps, stimDur=1):
+def chiSq(data_resps, model_resps, stimDur=1, kMult = 0.10):
   ''' given a set of measured and model responses, compute the chi-squared (see Cavanaugh et al '02a)
+      Cavanaugh uses a multiplier of 0.01 for K, but our default is 0.1 (see modCompare.ipynb analysis)
       assumes: resps are mean/variance for each stimulus condition (e.g. like a tuning curve)
         with each condition a tuple (or 2-array) with [mean, var]
   '''
@@ -906,8 +928,8 @@ def chiSq(data_resps, model_resps, stimDur=1):
   nan_rm = lambda x: x[~np.isnan(x)]
   neg_rm = lambda x: x[x>0]; # particularly for adjusted responses, a few values might be negative; remove these from the rho calculation
   rho = geomean(neg_rm(nan_rm(rats))); # only need neg_rm, but just being explicit
-  #k   = 0.01 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
-  k   = 0.10 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
+  k   = kMult * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
+  #k   = 0.10 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
 
   # some conditions might be blank (and therefore NaN) - remove them!
   num = data_resps[0] - model_resps[0];
@@ -2084,7 +2106,7 @@ def getConstraints(fitType):
     zero = (0.05, None);
     one = (0.1, None);
     two = (None, None);
-    #three = (2.0, 2.0); # fix at 2
+    #three = (2.0, 2.0); # fix at 2 (addtl suffix B)
     three = (0.25, None); # trying, per conversation with Tony (03.01.19)
     #three = (1, None);
     four = (1e-3, None);
