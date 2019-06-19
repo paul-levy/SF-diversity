@@ -58,7 +58,10 @@ descrBase = 'descrFits_190503';
 ### RVCFITS
 rvcBase = 'rvcFits'; # direc flag & '.npy' are added
 
-### Descriptive fits?
+##################
+### Spatial frequency
+##################
+
 modStr  = hf.descrMod_name(descrMod)
 fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr);
 descrFits = hf.np_smart_load(data_loc + fLname);
@@ -226,7 +229,7 @@ for d in range(nDisps):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(1, 1, figsize=(35, 20));
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(35, 20));
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
 
@@ -238,34 +241,35 @@ for d in range(nDisps):
     for c in reversed(range(n_v_cons)):
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
 
-        # plot data
+        # plot data [0]
         col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
         plot_resp = respMean[d, v_sfs, v_cons[c]];
 
-        curr_line, = dispAx[d].plot(all_sfs[v_sfs][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', clip_on=False, \
+        curr_line, = dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', clip_on=False, \
                                        color=col, label=str(np.round(all_cons[v_cons[c]], 2)));
         lines.append(curr_line);
  
-        # plot descr fit
+        # plot descr fit [1]
         prms_curr = descrParams[d, v_cons[c]];
         descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
-        dispAx[d].plot(sfs_plot, descrResp, color=col);
+        dispAx[d][1].plot(sfs_plot, descrResp, color=col);
 
-    dispAx[d].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
-    dispAx[d].set_ylim((5e-2, 1.5*maxResp));
+    for i in range(len(dispCurr)):
+      dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
+      dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
 
-    dispAx[d].set_xscale('log');
-    #dispAx[d].set_yscale('log');
-    dispAx[d].set_xlabel('sf (c/deg)'); 
+      dispAx[d][i].set_xscale('log');
+      #dispAx[d][i].set_yscale('log');
+      dispAx[d][i].set_xlabel('sf (c/deg)'); 
 
-    # Set ticks out, remove top/right axis, put ticks only on bottom/left
-    dispAx[d].tick_params(labelsize=15, width=2, length=16, direction='out');
-    dispAx[d].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
-    sns.despine(ax=dispAx[d], offset=10, trim=False); 
+      # Set ticks out, remove top/right axis, put ticks only on bottom/left
+      dispAx[d][i].tick_params(labelsize=15, width=2, length=16, direction='out');
+      dispAx[d][i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+      sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
 
-    dispAx[d].set_ylabel('resp above baseline (sps)');
-    dispAx[d].set_title('D%02d - sf tuning');
-    dispAx[d].legend(); 
+      dispAx[d][i].set_ylabel('resp above baseline (sps)');
+      dispAx[d][i].set_title('D%02d - sf tuning');
+      dispAx[d][i].legend(); 
 
 saveName = "/allCons_cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
@@ -331,7 +335,9 @@ for fig in range(len(allFigs)):
     plt.close(allFigs[fig])
 pdfSv.close()
 
-#### Response versus contrast
+##################
+#### Response versus contrast (RVC; contrast response function, CRF)
+##################
 
 cons_plot = np.geomspace(np.min(all_cons), np.max(all_cons), 100);
 
@@ -377,6 +383,7 @@ for d in range(nDisps):
 
         rvcAx[plt_x][plt_y].set_xscale('log', basex=10); # was previously symlog, linthreshx=0.01
         if col_ind == 0:
+          rvcAx[plt_x][plt_y].set_xlim([0.01, 1]);
           rvcAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
           rvcAx[plt_x][plt_y].set_ylabel('response (spikes/s)', fontsize='medium');
           rvcAx[plt_x][plt_y].legend();
@@ -404,7 +411,7 @@ crfAx = []; fCRF = [];
 
 for d in range(nDisps):
     
-    fCurr, crfCurr = plt.subplots(1, 1, figsize=(35, 20), sharex = False, sharey = True);
+    fCurr, crfCurr = plt.subplots(1, 2, figsize=(35, 20), sharex = False, sharey = True);
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
 
@@ -422,29 +429,32 @@ for d in range(nDisps):
         n_cons = sum(v_cons);
 
         col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
+        con_str = str(np.round(all_sfs[sf_ind], 2));
         plot_resp = respMean[d, sf_ind, v_cons];
 
-        line_curr, = crfAx[d].plot(all_cons[v_cons][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', color=col, \
-                                      clip_on=False, label = str(np.round(all_sfs[sf_ind], 2)));
+        line_curr, = crfAx[d][0].plot(all_cons[v_cons][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', color=col, \
+                                      clip_on=False, label = con_str);
         lines_log.append(line_curr);
 
-        # now RVC model
+        # now RVC model [1]
         prms_curr = rvcFits['params'][d][sf_ind];
-        crfAx[d].plot(cons_plot, np.maximum(rvcModel(*prms_curr, cons_plot), 0.1), color=col, \
-          clip_on=False, label=modTxt);
+        crfAx[d][1].plot(cons_plot, np.maximum(rvcModel(*prms_curr, cons_plot), 0.1), color=col, \
+                         clip_on=False, label = con_str);
 
-    crfAx[d].set_xlim([-0.1, 1]);
-    crfAx[d].set_ylim([-0.1*maxResp, 1.1*maxResp]);
-    crfAx[d].set_xlabel('contrast');
+    for i in range(len(crfCurr)):
 
-    # Set ticks out, remove top/right axis, put ticks only on bottom/left
-    crfAx[d].tick_params(labelsize=15, width=1, length=8, direction='out');
-    crfAx[d].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
-    sns.despine(ax = crfAx[d], offset=10, trim=False);
+      crfAx[d][i].set_xlim([-0.1, 1]);
+      crfAx[d][i].set_ylim([-0.1*maxResp, 1.1*maxResp]);
+      crfAx[d][i].set_xlabel('contrast');
 
-    crfAx[d].set_ylabel('resp above baseline (sps)');
-    crfAx[d].set_title('D%d: sf:all - log resp' % d);
-    crfAx[d].legend();
+      # Set ticks out, remove top/right axis, put ticks only on bottom/left
+      crfAx[d][i].tick_params(labelsize=15, width=1, length=8, direction='out');
+      crfAx[d][i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
+      sns.despine(ax = crfAx[d][i], offset=10, trim=False);
+
+      crfAx[d][i].set_ylabel('resp above baseline (sps)');
+      crfAx[d][i].set_title('D%d: sf:all - log resp' % d);
+      crfAx[d][i].legend();
 
 saveName = "/allSfs_cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
