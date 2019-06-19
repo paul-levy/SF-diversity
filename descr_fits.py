@@ -11,13 +11,14 @@ import pdb
 basePath = os.getcwd() + '/';
 data_suff = 'structures/';
 
-#expName = 'dataList.npy'
-expName = 'dataList_glx_mr.npy'
+expName = 'dataList.npy'
+#expName = 'dataList_mr.npy'
+#expName = 'dataList_glx_mr.npy'
 dogName =  'descrFits_190503';
 phAdvName = 'phaseAdvanceFitsTest'
 rvcName   = 'rvcFits_f0.npy'
 ## model recovery???
-modelRecov = 1;
+modelRecov = 0;
 if modelRecov == 1:
   normType = 1; # use if modelRecov == 1 :: 1 - flat; 2 - wght; ...
   dogName =  'mr%s_descrFits_190503' % hf.fitType_suffix(normType);
@@ -416,13 +417,14 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
       for n_try in range(n_repeats):
 
         ### pick initial params
+        ## FLEX (not difference of gaussian)
         if DoGmodel == 0:
           # set initial parameters - a range from which we will pick!
           if base_rate <= 3:
               range_baseline = (0, 3);
           else:
               range_baseline = (0.5 * base_rate, 1.5 * base_rate);
-          range_amp = (0.5 * max_resp, 1.5);
+          range_amp = (0.5 * max_resp, 1.25 * max_resp);
 
           max_sf_index = np.argmax(resps_curr); # what sf index gives peak response?
           mu_init = valSfVals[max_sf_index];
@@ -446,14 +448,14 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
           init_sig_left = hf.random_in_range(range_denom);
           init_sig_right = hf.random_in_range(range_denom);
           init_params = [init_base, init_amp, init_mu, init_sig_left, init_sig_right];
-
+        ## SACH
         elif DoGmodel == 1:
           init_gainCent = hf.random_in_range((maxResp, 5*maxResp))[0];
           init_radiusCent = hf.random_in_range((0.05, 2))[0];
-          init_gainSurr = init_gainCent * hf.random_in_range((0.1, 0.8))[0];
-          init_radiusSurr = hf.random_in_range((0.5, 4))[0];
+          init_gainSurr = init_gainCent * hf.random_in_range((0.1, 0.95))[0];
+          init_radiusSurr = init_radiusCent * hf.random_in_range((1.5, 8))[0];
           init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
-
+        ## TONY
         elif DoGmodel == 2:
           init_gainCent = maxResp * hf.random_in_range((0.9, 1.2))[0];
           init_freqCent = np.maximum(all_sfs[2], freqAtMaxResp * hf.random_in_range((1.2, 1.5))[0]); # don't pick all_sfs[0] -- that's zero (we're avoiding that)
