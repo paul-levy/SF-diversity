@@ -14,19 +14,27 @@
 #   3 - data directory (e.g. LGN/ or V1/)
 #   4 - make phase advance fits
 #   5 - make RVC fits
-#   6 - make descriptive (DoG) fits (1 or 0)
-#   7 - DoG model (flexGauss [0; not DoG] or sach [1] or tony [2])
-#   [8 - phase direction (pos or neg)]; default is pos (check...)
-#   [9 - regularization for gain term (>0 means penalize for high gain)] default is 0
+#   6 - make RVC f0-only fits
+#   7 - make descriptive (DoG) fits (1 or 0)
+#   8 - DoG model (flexGauss [0; not DoG] or sach [1] or tony [2])
+#   [9 - phase direction (pos or neg)]; default is pos (check...)
+#   [10 - regularization for gain term (>0 means penalize for high gain)] default is 0
+
+### GUIDE (as of 19.05.04)
+# V1/ - use dataList_glx.npy, 17 cells
+# V1/ - model recovery (dataList_glx_mr; mr_fitList...), 10 cells
+# V1_orig/ - model recovery (dataList_mr; mr_fitList...), 10 cells
+# V1_orig/ - standard, 59 cells
+# altExp   - standard, 8 cells
 
 source activate lcv-python
 
-# NOTE: If running only SF descr fits, do not need to run separately for all disp
+# NOTE: If running only SF descr or RVC-f0 fits, do not need to run separately for all disp
 
-for run in {1..10}
+for run in {1..59}
 do
-  python descr_fits.py $run 0 V1/ 0 0 1 0 1 & 
-  #python descr_fits.py $run 1 V1/ 0 0 1 0 1 & 
-  #python descr_fits.py $run 2 V1/ 0 0 1 0 1 & 
-  #python descr_fits.py $run 3 V1/ 0 0 1 0 1 & 
+  python descr_fits.py $run 0 V1_orig/ 0 0 0 1 1 1 & # F0 DoG
+  #python descr_fits.py $run 0 V1_orig/ 0 0 1 1 0 1 & # F0 RVC and DoG
+  #python descr_fits.py $run 0 V1_orig/ 0 0 1 0 0 1 & # F0 RVC only
+  #python descr_fits.py $run 0 V1/ 0 0 0 1 0 1 & # DoG only
 done
