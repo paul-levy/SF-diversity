@@ -11,7 +11,8 @@ import pdb
 basePath = os.getcwd() + '/';
 data_suff = 'structures/';
 
-expName = 'dataList.npy'
+expName = hf.get_datalist(sys.argv[3]); # sys.argv[3] is experiment dir
+#expName = 'dataList.npy'
 #expName = 'dataList_mr.npy'
 #expName = 'dataList_glx_mr.npy'
 dogName =  'descrFits_190503';
@@ -298,7 +299,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
     loss = np.square(resps - pred_spikes);
     loss = loss + loss;
   elif loss_type == 2: # sqrt
-    loss = np.square(np.sqrt(resps) - np.sqrt(pred_spikes));
+    loss = np.sum(np.square(np.sqrt(resps) - np.sqrt(pred_spikes)));
     loss = loss + loss;
   elif loss_type == 3: # poisson model of spiking
     poiss = poisson.pmf(np.round(resps), pred_spikes); # round since the values are nearly but not quite integer values (Sach artifact?)...
@@ -416,7 +417,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
 
       for n_try in range(n_repeats):
 
+        ###########
         ### pick initial params
+        ###########
         ## FLEX (not difference of gaussian)
         if DoGmodel == 0:
           # set initial parameters - a range from which we will pick!
@@ -453,7 +456,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
           init_gainCent = hf.random_in_range((maxResp, 5*maxResp))[0];
           init_radiusCent = hf.random_in_range((0.05, 2))[0];
           init_gainSurr = init_gainCent * hf.random_in_range((0.1, 0.95))[0];
-          init_radiusSurr = init_radiusCent * hf.random_in_range((1.5, 8))[0];
+          init_radiusSurr = init_radiusCent * hf.random_in_range((1.25, 8))[0];
           init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
         ## TONY
         elif DoGmodel == 2:
@@ -514,12 +517,13 @@ if __name__ == '__main__':
     rvcF0_fits   = int(sys.argv[6]);
     descr_fits = int(sys.argv[7]);
     dog_model  = int(sys.argv[8]);
-    if len(sys.argv) > 9:
-      dir = float(sys.argv[9]);
+    loss_type  = int(sys.argv[9]);
+    if len(sys.argv) > 10:
+      dir = float(sys.argv[10]);
     else:
       dir = None;
-    if len(sys.argv) > 10:
-      gainReg = float(sys.argv[10]);
+    if len(sys.argv) > 11:
+      gainReg = float(sys.argv[11]);
     else:
       gainReg = 0;
     print('Running cell %d in %s' % (cell_num, expName));
@@ -538,14 +542,14 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, data_loc=dataPath, disp=disp);
       if descr_fits == 1:
-        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, DoGmodel=dog_model);
+        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, DoGmodel=dog_model, loss_type=loss_type);
     else:
       if ph_fits == 1:
         phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp, dir=dir);
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, data_loc=dataPath, disp=disp, dir=dir);
       if descr_fits == 1:
-        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model);
+        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type);
 
     if rvcF0_fits == 1:
       fit_RVC_f0(cell_num, data_loc=dataPath);

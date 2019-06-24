@@ -11,7 +11,8 @@ import pdb
 
 fft = numpy.fft
 
-dataListName = 'dataList.npy';
+dataListName = hf.get_datalist(sys.argv[2]); # argv[2] is expDir
+#dataListName = 'dataList.npy';
 #dataListName = 'dataList_glx.npy'
 #dataListName = 'dataList_mr.npy'
 #dataListName = 'dataList_glx_mr.npy'
@@ -624,7 +625,7 @@ def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None, normType=2, trialArtifi
 
   return respByFr;
 
-def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None, trackSteps=False, overwriteSpikes=None):
+def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None, trackSteps=False, overwriteSpikes=None, kMult = 0.10):
     '''
     Computes the negative log likelihood for the LN-LN model
        Optional arguments: //note: true means include in mask, false means exclude
@@ -806,9 +807,9 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           exp_responses = [expByCond.flatten(), numpy.nanvar(expAll, axis=3).flatten()];
           _, _, modByCond, modAll = hf.organize_resp(respModel, structureSFM['sfm']['exp']['trial'], expInd, mask);
           mod_responses = [modByCond.flatten(), numpy.nanvar(modAll, axis=3).flatten()];
-          NLL = hf.chiSq(exp_responses, mod_responses);
+          NLL = hf.chiSq(exp_responses, mod_responses, kMult = kMult);
 
-    if trackSteps:
+    if trackSteps == True:
       global params_glob, loss_glob, resp_glob;
       params_glob.append(params);
       loss_glob.append(NLL);
@@ -816,13 +817,13 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
 
     return NLL, respModel;
 
-def SFMsimulateNew(params, structureSFM, disp, con, sf_c, normType=1, expInd=1, nRpts=None):
+def SFMsimulateNew(params, structureSFM, disp, con, sf_c, normType=1, expInd=1, nRepeats=None):
   ''' New version of SFMsimulate...19.05.13
       See helper_fcns/makeStimulusRef for details on input parameters
   '''
   T = structureSFM['sfm'];
   # now we have stimuluated trials!
-  trialSim = hf.makeStimulusRef(T['exp']['trial'], disp, con, sf_c, expInd, nRpts);
+  trialSim = hf.makeStimulusRef(T['exp']['trial'], disp, con, sf_c, expInd, nRepeats);
 
   trialInf = trialSim;
   stimDur = hf.get_exp_params(expInd).stimDur;
@@ -1026,7 +1027,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
 
     return respModel, Linh, Lexc, normResp['normResp'], denominator;
 
-def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBase, dataListName=dataListName):
+def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBase, dataListName=dataListName, kMult=0.1):
     # Given just a cell number, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
     #
     # lossType
@@ -1057,9 +1058,9 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       loc_str = '';
     if fL_name is None: # otherwise, it's already defined...
       if modRecov == 1:
-        fL_name = 'mr_fitList%s_190513cA' % loc_str
+        fL_name = 'mr_fitList%s_190516cA' % loc_str
       else:
-        fL_name = 'fitList%s_190513cA' % loc_str
+        fL_name = 'fitList%s_190613%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_190321c' % loc_str
 
     np = numpy;
@@ -1219,28 +1220,29 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     mask = np.isnan(np.sum(stimOr, 0)); # sum over all stim components...if there are any nans in that trial, we know
     objWeight = np.ones((stimOr.shape[1]));    
 
-    # and get rid of orientation tuning curve trials
-    oriBlockIDs = np.hstack((np.arange(131, 155+1, 2), np.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
+    if expInd == 1:
+      # get rid of orientation tuning curve trials
+      oriBlockIDs = np.hstack((np.arange(131, 155+1, 2), np.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
 
-    oriInds = np.empty((0,));
-    for iB in oriBlockIDs:
-        indCond = np.where(trial_inf['blockID'] == iB);
-        if len(indCond[0]) > 0:
-            oriInds = np.append(oriInds, indCond);
+      oriInds = np.empty((0,));
+      for iB in oriBlockIDs:
+          indCond = np.where(trial_inf['blockID'] == iB);
+          if len(indCond[0]) > 0:
+              oriInds = np.append(oriInds, indCond);
 
-    # get rid of CRF trials, too? Not yet...
-    conBlockIDs = np.arange(138, 156+1, 2);
-    conInds = np.empty((0,));
-    for iB in conBlockIDs:
-       indCond = np.where(trial_inf['blockID'] == iB);
-       if len(indCond[0]) > 0:
-           conInds = np.append(conInds, indCond);
+      # get rid of CRF trials, too? Not yet...
+      conBlockIDs = np.arange(138, 156+1, 2);
+      conInds = np.empty((0,));
+      for iB in conBlockIDs:
+         indCond = np.where(trial_inf['blockID'] == iB);
+         if len(indCond[0]) > 0:
+             conInds = np.append(conInds, indCond);
 
-    objWeight[conInds.astype(np.int64)] = 1; # for now, yes it's a "magic number"    
+      objWeight[conInds.astype(np.int64)] = 1; # for now, yes it's a "magic number"    
 
-    mask[oriInds.astype(np.int64)] = True; # as in, don't include those trials either!
-    # hold out a condition if we have specified, and adjust the mask accordingly
-   
+      mask[oriInds.astype(np.int64)] = True; # as in, don't include those trials either!
+
+    # hold out a condition if we have specified, and adjust the mask accordingly  
     if holdOutCondition is not None:
       for cond in holdOutCondition: # i.e. we pass in as array of [disp, con, sf] combinations
         val_trials = hf.get_valid_trials(S, cond[0], cond[1], cond[2], expInd)[0];
@@ -1258,7 +1260,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     all_bounds = hf.getConstraints(fitType);
    
     ## NOW: set up the objective function
-    obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits, trackSteps=trackSteps, overwriteSpikes=recovSpikes)[0];
+    obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult)[0];
     print('...now minimizing!'); 
     tomin = opt.minimize(obj, param_list, bounds=all_bounds);
 
@@ -1326,4 +1328,9 @@ if __name__ == '__main__':
     initFromCurr = int(sys.argv[5]);
     trackSteps   = int(sys.argv[6]);
 
-    setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov);
+    if len(sys.argv) > 7:
+      kMult = float(sys.argv[7]);
+    else:
+      kMult = 0.10; # default (see modCompare.ipynb for details)
+
+    setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult);

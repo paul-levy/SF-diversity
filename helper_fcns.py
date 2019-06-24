@@ -20,6 +20,7 @@ import warnings
 # nan_rm        - remove nan from array
 # bw_lin_to_log
 # bw_log_to_lin
+# get_datalist    - given the experiment directory, get the data list name
 # exp_name_to_ind - given the name of an exp (e.g. sfMixLGN), return the expInd
 # get_exp_params  - given an index for a particular version of the sfMix experiments, return parameters of that experiment (i.e. #stimulus components)
 # get_exp_ind     - given a .npy for a given sfMix recording, determine the experiment index
@@ -141,6 +142,16 @@ def bw_log_to_lin(log_bw, pref_sf):
     lin_bw = more_half - less_half;
     
     return lin_bw, sf_range
+
+def get_datalist(expDir):
+  if expDir == 'V1_orig/':
+    return 'dataList.npy';
+  elif expDir == 'altExp/':
+    return 'dataList.npy';
+  elif expDir == 'LGN/':
+    return 'dataList.npy';
+  elif expDir == 'V1/':
+    return 'dataList_glx.npy';
 
 def exp_name_to_ind(expName):
     ''' static mapping from name of experiment to expInd

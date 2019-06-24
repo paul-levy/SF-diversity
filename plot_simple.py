@@ -49,9 +49,10 @@ data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
 ### DATALIST
+expName = hf.get_datalist(expDir);
 #expName = 'dataList.npy';
 #expName = 'dataList_glx_mr.npy'
-expName = 'dataList_glx.npy'
+#expName = 'dataList_glx.npy'
 #expName = 'dataList_mr.npy'
 ### FITLIST
 #fitBase = 'fitList_190321c';

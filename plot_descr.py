@@ -49,7 +49,8 @@ data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
 ### DATALIST
-expName = 'dataList.npy';
+expName = hf.get_datalist(expDir);
+#expName = 'dataList.npy';
 #expName = 'dataList_glx_mr.npy'
 #expName = 'dataList_glx.npy'
 #expName = 'dataList_mr.npy'
@@ -67,7 +68,7 @@ fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr);
 descrFits = hf.np_smart_load(data_loc + fLname);
 
 # set the save directory to save_loc, then create the save directory if needed
-subDir = fLname.replace('Fits', '');
+subDir = fLname.replace('Fits', '').replace('.npy', '');
 save_loc = str(save_loc + subDir + '/');
 if not os.path.exists(save_loc):
   os.makedirs(save_loc);
