@@ -30,6 +30,7 @@ import warnings
 # fitList_name    - put together the name for the fitlist
 # phase_fit_name
 # descrMod_name   - returns string for descriptive model fit
+# descrLoss_name   - returns string for descriptive model loss type
 # descrFit_name   - 
 # angle_xy
 # flatten_list
@@ -307,7 +308,7 @@ def chiSq_suffix(kMult):
     asStr = str(kMult);
     afterDec = asStr.split('.')[1];
     # why? don't want (e.g.) Z0.02, just Z02 - we know multiplier values are 0<x<<1
-    return 'z%f' % afterDec;
+    return 'z%s' % afterDec;
 
 def fitList_name(base, fitType, lossType):
   ''' use this to get the proper name for the full model fits
@@ -344,12 +345,9 @@ def descrMod_name(DoGmodel):
     modStr = 'tony';
   return modStr;
 
-def descrFit_name(lossType, descrBase=None, modelName = None):
-  ''' if modelName is none, then we assume we're fitting descriptive tuning curves to the data
-      otherwise, pass in the fitlist name in that argument, and we fit descriptive curves to the model
-      this simply returns the name
+def descrLoss_name(lossType):
+  ''' returns the string for a given SF descriptive loss type
   '''
-  # load descrFits
   if lossType == 1:
     floss_str = '_lsq';
   elif lossType == 2:
@@ -358,6 +356,17 @@ def descrFit_name(lossType, descrBase=None, modelName = None):
     floss_str = '_poiss';
   elif lossType == 4:
     floss_str = '_sach';
+  else:
+    floss_str = '';
+  return floss_str
+
+def descrFit_name(lossType, descrBase=None, modelName = None):
+  ''' if modelName is none, then we assume we're fitting descriptive tuning curves to the data
+      otherwise, pass in the fitlist name in that argument, and we fit descriptive curves to the model
+      this simply returns the name
+  '''
+  # load descrFits
+  floss_str = descrLoss_name(lossType);
   if descrBase is None:
     descrBase = 'descrFits';
   descrFitBase = '%s%s' % (descrBase, floss_str);
