@@ -20,6 +20,8 @@ import warnings
 # nan_rm        - remove nan from array
 # bw_lin_to_log
 # bw_log_to_lin
+# sf_com          - model-free calculation of the tuning curve's center-of-mass
+# sf_var          - model-free calculation of the variance in the measured responses
 # get_datalist    - given the experiment directory, get the data list name
 # exp_name_to_ind - given the name of an exp (e.g. sfMixLGN), return the expInd
 # get_exp_params  - given an index for a particular version of the sfMix experiments, return parameters of that experiment (i.e. #stimulus components)
@@ -127,14 +129,16 @@ def nan_rm(x):
    return x[~numpy.isnan(x)];
 
 def bw_lin_to_log( lin_low, lin_high ):
-    # Given the low/high sf in cpd, returns number of octaves separating the
-    # two values
+    ''' Given the low/high sf in cpd, returns number of octaves separating the
+        two values
+    '''
 
     return numpy.log2(lin_high/lin_low);
 
 def bw_log_to_lin(log_bw, pref_sf):
-    # given the preferred SF and octave bandwidth, returns the corresponding
-    # (linear) bounds in cpd
+    ''' given the preferred SF and octave bandwidth, returns the corresponding
+        (linear) bandwidth and bounds in cpd
+    '''
 
     less_half = numpy.power(2, numpy.log2(pref_sf) - log_bw/2);
     more_half = numpy.power(2, log_bw/2 + numpy.log2(pref_sf));
@@ -143,6 +147,24 @@ def bw_log_to_lin(log_bw, pref_sf):
     lin_bw = more_half - less_half;
     
     return lin_bw, sf_range
+
+def sf_com(resps, sfs):
+  ''' model-free calculation of the tuning curve's center-of-mass
+      input: resps, sfs (np arrays; sfs in linear cpd)
+      output: (in log2) center of mass of tuning curve
+  '''
+  np = numpy;
+  com = lambda resp, sf: np.dot(np.log2(sf), np.array(resp))/np.sum(resp);
+  return com(resps, sfs);
+
+def sf_var(resps, sfs, sf_cm):
+  ''' model-free calculation of the tuning curve's center-of-mass
+      input: resps, sfs (np arrays), and center of mass (sfs, com in linear cpd)
+      output: variance measure of tuning curve
+  '''
+  np = numpy;
+  sfVar = lambda cm, resp, sf: np.dot(resp, np.abs(np.log2(sf)-np.log2(cm)))/np.sum(resp);
+  return sfVar(sf_cm, resps, sfs);
 
 def get_datalist(expDir):
   if expDir == 'V1_orig/':
