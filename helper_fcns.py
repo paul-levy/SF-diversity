@@ -5,6 +5,7 @@ from numpy.matlib import repmat
 import scipy.optimize as opt
 import os
 import importlib as il
+import itertools
 from time import sleep
 sqrt = math.sqrt
 log = math.log
@@ -26,6 +27,7 @@ import warnings
 # exp_name_to_ind - given the name of an exp (e.g. sfMixLGN), return the expInd
 # get_exp_params  - given an index for a particular version of the sfMix experiments, return parameters of that experiment (i.e. #stimulus components)
 # get_exp_ind     - given a .npy for a given sfMix recording, determine the experiment index
+# num_frames      - compute/return the number of frames per stimulus condition given expInd
 # fitType_suffix  - get the string corresponding to a fit (i.e. normalization) type
 # lossType_suffix - get the string corresponding to a loss type
 # chiSq_suffix    - what suffix (e.g. 'a' or 'c') given the chiSq multiplier value
@@ -42,8 +44,6 @@ import warnings
 
 # make_psth - create a psth for a given spike train
 # spike_fft - compute the FFT for a given PSTH, extract the power at a given set of frequencies 
-# phase_advance
-# tf_to_ind - convert the given temporal frequency into an (integer) index into the fourier spectrum
 
 ### phase/more psth
 
@@ -59,13 +59,14 @@ import warnings
 # get_recovInfo - get the model recovery parameters/spikes, if applicable
 # rvc_fit - fit response versus contrast with a model used in Movshon/Kiorpes/+ 2005
 # phase_advance - compute the phase advance (a la Movshon/Kiorpes/+ 2005)
+# tf_to_ind - convert the given temporal frequency into an (integer) index into the fourier spectrum
 
 ### descriptive fits to sf tuning/basic data analyses
 
 # DiffOfGauss - standard difference of gaussians
 # DoGsach - difference of gaussians as implemented in sach's thesis
 # var_explained - compute the variance explained for a given model fit/set of responses
-# chiSq
+# chiSq      - compute modified chiSq loss value as described in Cavanaugh et al
 # dog_prefSf - compute the prefSf for a given DoG model/parameter set
 # dog_prefSfMod - fit a simple model of prefSf as f'n of contrast
 # dog_charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
@@ -77,6 +78,11 @@ import warnings
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
 # get_descrResp - get the SF descriptive response
+
+## jointList interlude
+
+# jl_create - create the jointList
+# jl_get_metric_byCon()
 
 # blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
 # get_valid_trials - rutrn list of valid trials given disp/con/sf
@@ -151,11 +157,14 @@ def bw_log_to_lin(log_bw, pref_sf):
 def sf_com(resps, sfs):
   ''' model-free calculation of the tuning curve's center-of-mass
       input: resps, sfs (np arrays; sfs in linear cpd)
-      output: (in log2) center of mass of tuning curve
+      output: center of mass of tuning curve (in linear cpd)
   '''
   np = numpy;
   com = lambda resp, sf: np.dot(np.log2(sf), np.array(resp))/np.sum(resp);
-  return com(resps, sfs);
+  try:
+    return np.power(2, com(resps, sfs));
+  except:
+    return np.nan
 
 def sf_var(resps, sfs, sf_cm):
   ''' model-free calculation of the tuning curve's center-of-mass
@@ -164,7 +173,10 @@ def sf_var(resps, sfs, sf_cm):
   '''
   np = numpy;
   sfVar = lambda cm, resp, sf: np.dot(resp, np.abs(np.log2(sf)-np.log2(cm)))/np.sum(resp);
-  return sfVar(sf_cm, resps, sfs);
+  try:
+    return sfVar(sf_cm, resps, sfs);
+  except:
+    return np.nan
 
 def get_datalist(expDir):
   if expDir == 'V1_orig/':
@@ -284,6 +296,7 @@ def get_exp_ind(filePath, fileName):
     return None, None; # uhoh...
 
 def num_frames(expInd):
+  ''' compute/return the number of frames per stimulus condition given expInd '''
   exper = get_exp_params(expInd);
   dur = exper.stimDur;
   fps = exper.fps;
@@ -463,6 +476,8 @@ def spike_fft(psth, tfs = None, stimDur = None):
       rel_power = [];
 
     return spectrum, rel_power, full_fourier;
+
+## phase/more psth
 
 def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None, allSfs=None):
   ''' Using our model fit of (expected) response phase as a function of response amplitude, we can
@@ -1180,6 +1195,339 @@ def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
     pred_spikes, _ = DiffOfGauss(*params, stim_sf=stim_sf);
   return pred_spikes;
 
+### joint list analyses (pref "jl_")
+
+def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, 
+              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, c50Loc=2, varExplThresh=75, dog_varExplThresh=60):
+  ''' create the "super structure" that we use to analyze data across multiple versions of the experiment
+      inputs:
+        baseDir      - what is the base directory?
+        expDirs      - what are the directories of the experiment directory
+        expNames     - names of the dataLists
+        fitNamesWght - names of the model fitList with weighted normalization
+        fitNamesFlat - as above
+        descrNames   - names of the non-DoG descriptive SF fits
+        dogNames     - names of the DoG descriptive SF fits
+        rvcNames     - names of the response-versus-contrast fits
+
+        [default inputs]
+        [conDig]     - how many decimal places to round contrast value when testing equality
+        [sf_range]   - what bounds to use when computing SF bandwidth
+        [rawInd]     - for accessing ratios/differences that we pass into diffsAtThirdCon
+        [mu/c50 loc] - what index into corresponding parameter array is the peak SF/c50 value?
+        [{dog_}vaExplThresh] - only fits with >= % variance explained have their paramter values added for consideration
+  '''
+
+  np = numpy;
+  jointList = [];
+
+  for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames,        rvcNames):
+    
+    # get the current directory, load data list
+    data_loc = base_dir + expDir + 'structures/';    
+    dataList = np_smart_load(data_loc + dL_nm);
+    fitListWght = np_smart_load(data_loc + fLW_nm);
+    fitListFlat = np_smart_load(data_loc + fLF_nm);
+    descrFits = np_smart_load(data_loc + dF_nm);
+    dogFits = np_smart_load(data_loc + dog_nm);
+    rvcFits = np_smart_load(data_loc + rv_nm);
+
+    # Now, go through for each cell in the dataList
+    nCells = len(dataList['unitName']);
+    for cell_ind in range(nCells):
+        
+      ###########
+      ### meta parameters      
+      ###########
+      # get experiment name, load cell
+      expName = dataList['unitName'][cell_ind];
+      expInd = get_exp_ind(data_loc, expName)[0];
+      cell = np_smart_load(data_loc + expName + '_sfm.npy');
+      # get stimlus values
+      resps, stimVals, val_con_by_disp, _, _ = tabulate_responses(cell, expInd);
+      # get SF responses (for model-free metrics)
+      tr = cell['sfm']['exp']['trial']
+      spks = get_spikes(tr, expInd=expInd, rvcFits=None); # just to be explicit - no RVC fits right now
+      sfTuning = organize_resp(spks, tr, expInd=expInd)[2]; # responses: nDisp x nSf x nCon
+
+      meta = dict([('fullPath', data_loc),
+                  ('cellNum', cell_ind+1),
+                  ('dataList', dL_nm),
+                  ('fitListWght', fLW_nm),
+                  ('fitListFlat', fLF_nm),
+                  ('descrFits', dF_nm),
+                  ('dogFits', dog_nm),
+                  ('rvcFits', rv_nm),
+                  ('expName', expName),
+                  ('expInd', expInd),
+                  ('stimVals', stimVals),
+                  ('val_con_by_disp', val_con_by_disp)]);
+
+      ###########
+      ### metrics (inferred data measures)
+      ###########
+      disps, cons, sfs = stimVals;
+      nDisps, nCons, nSfs = [len(x) for x in stimVals];
+
+      # compute the set of SF which appear at all dispersions: highest dispersion, pick a contrast (all same)
+      maxDisp = nDisps-1;
+      cut_sf = np.array(get_valid_sfs(tr, disp=maxDisp, con=val_con_by_disp[maxDisp][0], expInd=expInd))
+
+      ####
+      # set up the arrays we need to store analyses
+      ####
+      # first, model-free
+      sfVar = np.zeros((nDisps, nCons)) * np.nan; # variance calculation
+      sfCom = np.zeros((nDisps, nCons)) * np.nan; # center of mass
+      sfComCut = np.zeros((nDisps, nCons)) * np.nan; # center of mass, but with a restricted ("cut") set of SF
+      # then, inferred from descriptive fits
+      bwHalf = np.zeros((nDisps, nCons)) * np.nan;
+      bw34 = np.zeros((nDisps, nCons)) * np.nan;
+      pSf = np.zeros((nDisps, nCons)) * np.nan;
+      sfVarExpl = np.zeros((nDisps, nCons)) * np.nan;
+      c50 = np.zeros((nDisps, nSfs)) * np.nan;
+      # including from the DoG fits
+      dog_pSf = np.zeros((nDisps, nCons)) * np.nan;
+      dog_varExpl = np.zeros((nDisps, nCons)) * np.nan;
+      dog_charFreq = np.zeros((nDisps, nCons)) * np.nan;
+      # including the difference/ratio arrays; where present, extra dim of len=2 is for raw/normalized-to-con-change values
+      sfVarDiffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+      sfComRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+      bwHalfDiffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+      bw34Diffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+      pSfRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+      pSfModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see dog_prefSf)
+      c50Rats = np.zeros((nDisps, nSfs, nSfs)) * np.nan;
+      # bwHalf, bw34, pSf, sfVar, sfCom evaluated from data at 1:.33 contrast (only for single gratings)
+      diffsAtThirdCon = np.zeros((nDisps, 5, )) * np.nan;
+
+      ## first, get mean/median/maximum response over all conditions
+      respByCond = resps[0].flatten();
+      mn_med_max = np.array([np.nanmean(respByCond), np.nanmedian(respByCond), np.nanmax(respByCond)])
+
+      ## then, get the superposition ratio
+      ### WARNING: WARNING: resps is WITHOUT any rvcAdjustment (computed above)
+      if expInd != 1:
+        predResps = resps[2];
+        rvcFitsCurr = get_rvc_fits(data_loc, expInd, cell_ind+1, rvcName='None');
+        trialInf = cell['sfm']['exp']['trial'];
+        spikes  = get_spikes(trialInf, rvcFits=rvcFitsCurr, expInd=expInd);
+        _, _, respOrg, respAll = organize_resp(spikes, trialInf, expInd);
+
+        respMean = respOrg;
+        mixResp = respMean[1:nDisps, :, :].flatten();
+        sumResp = predResps[1:nDisps, :, :].flatten();
+
+        nan_rm = np.logical_and(np.isnan(mixResp), np.isnan(sumResp));
+        hmm = np.polyfit(sumResp[~nan_rm], mixResp[~nan_rm], deg=1) # returns [a, b] in ax + b
+        supr_ind = hmm[0];
+      else:
+        supr_ind = np.nan;
+
+      for d in range(nDisps):
+
+        #######
+        ## spatial frequency stuff
+        #######
+        for c in range(nCons):
+
+          # zeroth...model-free metrics
+          curr_sfInd = get_valid_sfs(tr, d, c, expInd=expInd)
+          curr_sfs   = stimVals[2][curr_sfInd];
+          curr_resps = sfTuning[d, curr_sfInd, c];
+          sfCom[d, c] = sf_com(curr_resps, curr_sfs)
+          sfVar[d, c] = sf_var(curr_resps, curr_sfs, sfCom[d, c]);
+          # get the c.o.m. based on the restricted set of SFs, only
+          cut_sfs, cut_resps = np.array(stimVals[2])[cut_sf], sfTuning[d, cut_sf, c];
+          sfComCut[d, c] = sf_com(cut_resps, cut_sfs)
+
+          # first, DoG fit
+          if cell_ind in dogFits:
+            try:
+              varExpl = dogFits[cell_ind]['varExpl'][d, c];
+              if varExpl > dog_varExplThresh:
+                # on data
+                dog_pSf[d, c] = dogFits[cell_ind]['prefSf'][d, c]
+                dog_charFreq[d, c] = dogFits[cell_ind]['charFreq'][d, c]
+                dog_varExpl[d, c] = varExpl;
+            except: # then this dispersion does not have that contrast value, but it's ok - we already have nan
+              pass 
+
+          # then, non-DoG descr fit
+          if cell_ind in descrFits:
+            try:
+              varExpl = descrFits[cell_ind]['varExpl'][d, c];
+              if varExpl > varExplThresh:
+                # on data
+                ignore, bwHalf[d, c] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.5, sf_range=sf_range)
+                ignore, bw34[d, c] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.75, sf_range=sf_range)
+                pSf[d, c] = descrFits[cell_ind]['params'][d, c, muLoc]
+                sfVarExpl[d, c] = varExpl;
+            except: # then this dispersion does not have that contrast value, but it's ok - we already have nan
+                pass 
+
+        try:
+          # Now, compute the derived pSf Ratio
+          _, psf_model, opt_params = dog_prefSfMod(descrFits[cell_ind], allCons=cons, disp=d, varThresh=varExplThresh, dog_model=descrMod)
+          valInds = np.where(descrFits[cell_ind]['varExpl'][d, :] > varExplThresh)[0];
+          if len(valInds) > 1:
+            extrema = [cons[valInds[0]], cons[valInds[-1]]];
+            logConRat = np.log2(extrema[1]/extrema[0]);
+            evalPsf = psf_model(*opt_params, con=extrema);
+            evalRatio = evalPsf[1]/evalPsf[0];
+            pSfModRat[d] = [np.log2(evalRatio), np.log2(evalRatio)/logConRat];
+        except: # then likely, no rvc/descr fits...
+          pass 
+
+        #######
+        ## RVC stuff
+        #######
+        for s in range(nSfs):
+          if cell_ind in rvcFits:
+            # on data
+            try:
+                c50[d, s] = rvcFits[cell_ind]['params'][d, s, c50Loc];
+            except: # then this dispersion does not have that SF value, but it's ok - we already have nan
+                pass
+
+        ## Now, after going through all cons/sfs, compute ratios/differences
+        # first, with contrast
+        for comb in itertools.combinations(range(nCons), 2):
+          # first, in raw values [0] and per log2 contrast change [1] (i.e. log2(highCon/lowCon))
+          conChange = np.log2(cons[comb[1]]/cons[comb[0]]);
+
+          diff = bwHalf[d,comb[1]] - bwHalf[d,comb[0]];
+          bwHalfDiffs[d,comb[0],comb[1]] = [diff, diff/conChange];
+
+          diff = bw34[d,comb[1]] - bw34[d,comb[0]];
+          bw34Diffs[d,comb[0],comb[1]] = [diff, diff/conChange];
+
+          # NOTE: For pSf, we will log2 the ratio, such that a ratio of 0 
+          # reflects the prefSf remaining constant (i.e. log2(1/1)-->0)
+          rat = pSf[d,comb[1]] / pSf[d,comb[0]];
+          pSfRats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange];
+
+          ## now, model-free metrics
+          sfVarDiffs[d,comb[0],comb[1]] = sfVar[d,comb[1]] - sfVar[d,comb[0]]
+          rat = sfCom[d, comb[1]] / sfCom[d, comb[0]];
+          sfComRats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
+
+        # then, as function of SF
+        for comb in itertools.permutations(range(nSfs), 2):
+          c50Rats[d,comb[0],comb[1]] = c50[d,comb[1]] / c50[d,comb[0]]
+
+        # finally, just get the straight-from-data ratio/diff evaluated from full to one-third contrast
+        conInd = np.where(np.round(cons[val_con_by_disp[d]], conDig) == 0.3)[0];
+        if not np.array_equal(conInd, []): # i.e. if there is a contrast for this dispersion/cell which is one-third, then get ratio
+          conInd = int(conInd); # cast to int
+          conToUse = val_con_by_disp[d][conInd];
+          hiInd = int(np.where(np.round(cons[val_con_by_disp[d]], conDig) >= 0.9)[0]);
+          hiInd = val_con_by_disp[d][hiInd];
+          diffsAtThirdCon[d, :] = np.array([bwHalfDiffs[d, conToUse, hiInd, rawInd],
+                                   bw34Diffs[d, conToUse, hiInd, rawInd],
+                                   pSfRats[d, conToUse, hiInd, rawInd],
+                                   sfVarDiffs[d, conToUse, hiInd, rawInd],
+                                   sfComRats[d, conToUse, hiInd, rawInd]]);
+
+      dataMetrics = dict([('sfCom', sfCom),
+                         ('sfComCut', sfComCut),            
+                         ('sfVar', sfVar),            
+                         ('bwHalf', bwHalf),
+                         ('bw34', bw34),
+                         ('pSf', pSf),
+                         ('c50', c50),
+                         ('dog_pSf', dog_pSf),
+                         ('dog_charFreq', dog_charFreq),
+                         ('dog_varExpl', dog_varExpl),
+                         ('bwHalfDiffs', bwHalfDiffs),
+                         ('bw34Diffs', bw34Diffs),
+                         ('pSfRats', pSfRats),
+                         ('pSfModRat', pSfModRat),
+                         ('sfVarDiffs', sfVarDiffs),
+                         ('sfComRats', sfComRats),
+                         ('sfVarExpl', sfVarExpl),
+                         ('c50Rats', c50Rats),
+                         ('suppressionIndex', supr_ind),
+                         ('diffsAtThirdCon', diffsAtThirdCon),
+                         ('mn_med_max', mn_med_max)
+                         ]);
+
+      ###########
+      ### model
+      ###########
+      try:
+        nllW, paramsW = [fitListWght[cell_ind]['NLL'], fitListWght[cell_ind]['params']];
+        nllF, paramsF = [fitListFlat[cell_ind]['NLL'], fitListFlat[cell_ind]['params']];
+        # and other other future measures?
+
+        model = dict([('NLL_wght', nllW),
+                     ('params_wght', paramsW),
+                     ('NLL_flat', nllF),
+                     ('params_flat', paramsF)
+                    ])
+      except: # then no model fit!
+        model = dict([('NLL_wght', np.nan),
+                     ('params_wght', []),
+                     ('NLL_flat', np.nan),
+                     ('params_flat', [])
+                    ])
+
+      ###########
+      ### now, gather all together in one dictionary
+      ###########
+      cellSummary = dict([('metadata', meta),
+                         ('metrics', dataMetrics),
+                         ('model', model)]);
+
+
+      jointList.append(cellSummary);
+
+  return jointList;
+
+def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02):
+  ''' given a "jointList" structure, get the specified metric (as string) for a given conVal & dispersion
+      returns: array of metric value for a given con X disp
+      inputs:
+        jointList - see above (jl_create)
+        metric    - as a string, which metric are you querying (e.g. 'pSf', 'sfCom', etc)
+        conVal    - what contrast (e.g. 33% or 99% or ...)
+        disp      - which dispersion (0, 1, ...)
+        [conTol]  - we consider the contrast to match conVal if within +/- 2% (given experiment, this is satisfactory to match con level across dispersions, versions)
+  '''
+  np = numpy;
+  nCells = len(jointList);
+  output = np.nan * np.zeros((nCells, ));
+
+  # how to handle contrast? for each cell, find the contrast that is valid for that dispersion and matches the con_lvl
+  # to within some tolerance (e.g. +/- 0.01, i.e. 1% contrast)
+
+  for i in range(nCells):
+      #######
+      # get structure, metadata, etc
+      #######
+      curr_cell = jointList[i]
+      curr_metr = curr_cell['metrics']['%s' % metric];
+      curr_meta = curr_cell['metadata'];
+      curr_cons = curr_meta['stimVals'][1]; # stimVals[1] is list of contrasts
+      curr_byDisp = curr_meta['val_con_by_disp'];
+      if disp < len(curr_byDisp):
+          curr_inds = curr_byDisp[disp];
+      else:
+          continue; # i.e. this dispersion isn't there...
+
+      #######
+      # get the specified contrast, package, and return
+      #######
+      curr_conVals = curr_cons[curr_inds];
+      match_ind = np.where(np.abs(curr_conVals-conVal)<=conTol)[0];
+      if np.array_equal(match_ind, []):
+        continue; # i.e. didn't find the right contrast match
+
+      full_con_ind = curr_byDisp[disp][match_ind[0]];
+      output[i] = curr_metr[disp][full_con_ind];
+
+  return output;
+
 ###
 
 def blankResp(cellStruct):
@@ -1661,7 +2009,7 @@ def nbinpdf_log(x, r, p):
     
     return numpy.real(noGamma + withGamma);
 
-# 
+## 
 
 def getSuppressiveSFtuning(sfs = numpy.logspace(-2, 2, 1000)): 
     # written when still new to python. Probably to matlab-y...
