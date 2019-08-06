@@ -491,10 +491,10 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3):
     full_fourier = [np.fft.fft(x) for x in psth];
     spectrum = fft_amplitude(full_fourier);
 
-    if tfs:
+    if tfs is not None:
       try:
         tf_as_ind = tf_to_ind(tfs, stimDur); # if 1s, then TF corresponds to index; if stimDur is 2 seconds, then we can resolve half-integer frequencies -- i.e. 0.5 Hz = 1st index, 1 Hz = 2nd index, ...; CAST to integer
-        rel_amp = [spectrum[i][tf_as_ind[i]] for i in range(len(tf_as_ind))];
+        rel_amp = np.array([spectrum[i][tf_as_ind[i]] for i in range(len(tf_as_ind))]);
       except:
         warnings.warn('In spike_fft: if accessing power at particular frequencies, you must also include the stimulation duration!');
         rel_amp = [];
