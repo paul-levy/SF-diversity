@@ -44,6 +44,7 @@ import warnings
 
 # make_psth - create a psth for a given spike train
 # spike_fft - compute the FFT for a given PSTH, extract the power at a given set of frequencies 
+# compute_f1f0 - compute the ratio of F1::F0 for the stimulus closest to optimal
 
 ### phase/more psth
 
@@ -455,27 +456,99 @@ def make_psth(spikeTimes, binWidth=1e-3, stimDur=1):
     bins = [x[1] for x in all];
     return psth, bins;
 
-def spike_fft(psth, tfs = None, stimDur = None):
+def fft_amplitude(fftSpectrum):
+    ''' given an fftSpectrum (and assuming all other normalization has taken place), we double the non-DC frequencies and return
+        only the DC and positive frequencies
+
+        normalization: since this code is vectorized, the length of each signal passed into np.fft.fft is 1
+        i.e. an array whose length is one, with the array[0] having length stimDur/binWidth
+        Thus, the DC amplitude is already correct, i.e. not in need of normalization by nSamples
+
+        But, remember that for a real signal like this, non-DC amplitudes need to be doubled - we take care of that here       
+    '''
+    nyquist = [numpy.int(len(x)/2) for x in fftSpectrum];
+    correctFFT = [];
+    for i, spect in enumerate(fftSpectrum):
+      currFFT = numpy.abs(spect[0:nyquist[i]+1]); # include nyquist
+      currFFT[1:nyquist[i]+1] = 2*currFFT[1:nyquist[i]+1];
+      correctFFT.append(currFFT);
+    
+    return correctFFT;   
+
+def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3):
     ''' given a psth (and optional list of component TFs), compute the fourier transform of the PSTH
         if the component TFs are given, return the FT power at the DC, and at all component TFs
+        
+        normalization: since this code is vectorized, the length of each signal passed into np.fft.fft is 1
+        i.e. an array whose length is one, with the array[0] having length stimDur/binWidth
+        Thus, the DC amplitude is already correct, i.e. not in need of normalization by nSamples
+        But, remember that for a real signal like this, non-DC amplitudes need to be doubled - we take care of that here       
+        
         note: if only one TF is given, also return the power at f2 (i.e. twice f1, the stimulus frequency)
     '''
     np = numpy;
 
     full_fourier = [np.fft.fft(x) for x in psth];
-    spectrum = [np.abs(np.fft.fft(x)) for x in psth];
+    spectrum = fft_amplitude(full_fourier);
 
     if tfs:
       try:
         tf_as_ind = tf_to_ind(tfs, stimDur); # if 1s, then TF corresponds to index; if stimDur is 2 seconds, then we can resolve half-integer frequencies -- i.e. 0.5 Hz = 1st index, 1 Hz = 2nd index, ...; CAST to integer
-        rel_power = [spectrum[i][tf_as_ind[i]] for i in range(len(tf_as_ind))];
+        rel_amp = [spectrum[i][tf_as_ind[i]] for i in range(len(tf_as_ind))];
       except:
         warnings.warn('In spike_fft: if accessing power at particular frequencies, you must also include the stimulation duration!');
-        rel_power = [];
+        rel_amp = [];
     else:
-      rel_power = [];
+      rel_amp = [];
 
-    return spectrum, rel_power, full_fourier;
+    return spectrum, rel_amp, full_fourier;
+
+def compute_f1f0(trial_inf, cellNum, expInd, descrFit, loc_data):
+  ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio
+      This will be used to determine simple versus complex
+  '''
+  np = numpy;
+ 
+  # get prefSfEst - NOTE: copied code from model_respsonses.set_model -- reconsider as a hf?
+  dfits = np_smart_load(loc_data + descrFit);
+  if expInd == 1:
+    hiCon = 0; # holdover from hf.organize_resp (with expInd==1, sent to V1_orig/helper_fcns.organize_modResp
+  else:
+    hiCon = -1;
+  prefSfEst = dfits[cellNum-1]['prefSf'][0][hiCon]; # get high contrast, single grating prefSf
+
+  '''
+  try:
+    dfits = np_smart_load(loc_data + descrFit);
+    if expInd == 1:
+      hiCon = 0; # holdover from hf.organize_resp (with expInd==1, sent to V1_orig/helper_fcns.organize_modResp
+    else:
+      hiCon = -1;
+    prefSfEst = dfits[cellNum-1]['prefSf'][0][hiCon]; # get high contrast, single grating prefSf
+  except:
+    if expInd == 1:
+      prefOrEst = mode(trial_inf['ori'][1]).mode;
+      trialsToCheck = trial_inf['con'][0] == 0.01;
+      prefSfEst = mode(trial_inf['sf'][0][trialsToCheck==True]).mode;
+    else:
+      allSfs    = np.unique(trial_inf['sf'][0]);
+      allSfs    = allSfs[~np.isnan(allSfs)]; # remove NaN...
+      prefSfEst = np.median(allSfs);
+  '''
+  # get stim info, responses
+  _, stimVals, val_con_by_disp, val_byTrial, _ = tabulate_responses(trial_inf, expInd);
+
+  all_sfs = stimVals[2];
+       
+  sf_match_ind = np.argmin(np.square(all_sfs - prefSfEst));
+  disp = 0; con = val_con_by_disp[disp][-1]; # i.e. highest con
+  val_tr = get_valid_trials(trial_inf, disp=disp, con=con, sf=sf_match_ind, expInd=expInd)[0];
+
+  f0 = trial_inf['spikeCount'];
+  f0rate = np.divide(f0[val_tr], get_exp_params(expInd).stimDur);
+  f1rate = np.abs(trial_inf['f1'])[val_tr]; # f1 is already a rate (i.e. spks [or power] / sec)
+
+  return np.mean(np.divide(f1rate, f0rate)), f0rate, f1rate, f0, np.abs(trial_inf['f1']);
 
 ## phase/more psth
 
@@ -615,11 +688,12 @@ def get_true_phase(data, val_trials, expInd, dir=-1, psth_binWidth=1e-3):
 
     # perform the fourier analysis we need
     psth_val, _ = make_psth(data['spikeTimes'][val_trials], psth_binWidth, stimDur)
-    _, rel_power, full_fourier = spike_fft(psth_val, all_tf, stimDur)
+    all_amp, rel_amp, full_fourier = spike_fft(psth_val, all_tf, stimDur)
     # and finally get the stimulus-relative phase of each response
     tf_as_ind  = tf_to_ind(all_tf, stimDur);
     resp_phase = [np.angle(full_fourier[x][tf_as_ind[x]], True) for x in range(len(full_fourier))]; # true --> in degrees
-    resp_amp = [np.abs(full_fourier[x][tf_as_ind[x]]) for x in range(len(full_fourier))];
+    resp_amp = [amps[tf_as_ind[ind]] for ind, amps in enumerate(all_amp)]; # after correction of amps (19.08.06)
+    #resp_amp = [np.abs(full_fourier[x][tf_as_ind[x]]) for x in range(len(full_fourier))]; # before correction of amps (19.08.06)
     phase_rel_stim = np.mod(np.multiply(dir, np.add(resp_phase, stim_phase)), 360);
 
     return phase_rel_stim, stim_phase, resp_phase, all_tf;
@@ -912,8 +986,8 @@ def phase_advance(amps, phis, cons, tfs):
 
 def tf_to_ind(tfs, stimDur):
   ''' simple conversion from temporal frequency to index into the fourier spectrum 
-      we simply cast the result to integer, since the exp design guarantees (as of 02.26.19) 
-      that tf*stimDur will be an integer (just kept as a float due to tf being a float
+      we simply cast the result to integer, though this is not quite right for older versions
+      of the experiment with non-integer number of stimulus cycles
   '''
   try: # if tfs is an array, then we do it this way...
     return [numpy.multiply(tf, stimDur).astype(numpy.int16) for tf in tfs];
