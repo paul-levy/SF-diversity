@@ -503,14 +503,14 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3):
 
     return spectrum, rel_amp, full_fourier;
 
-def compute_f1f0(trial_inf, cellNum, expInd, descrFit, loc_data):
+def compute_f1f0(trial_inf, cellNum, expInd, descrFitName, loc_data):
   ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio
       This will be used to determine simple versus complex
   '''
   np = numpy;
  
   # get prefSfEst - NOTE: copied code from model_respsonses.set_model -- reconsider as a hf?
-  dfits = np_smart_load(loc_data + descrFit);
+  dfits = np_smart_load(loc_data + descrFitName);
   if expInd == 1:
     hiCon = 0; # holdover from hf.organize_resp (with expInd==1, sent to V1_orig/helper_fcns.organize_modResp
   else:
@@ -519,7 +519,7 @@ def compute_f1f0(trial_inf, cellNum, expInd, descrFit, loc_data):
 
   '''
   try:
-    dfits = np_smart_load(loc_data + descrFit);
+    dfits = np_smart_load(loc_data + descrFitName);
     if expInd == 1:
       hiCon = 0; # holdover from hf.organize_resp (with expInd==1, sent to V1_orig/helper_fcns.organize_modResp
     else:
@@ -542,11 +542,18 @@ def compute_f1f0(trial_inf, cellNum, expInd, descrFit, loc_data):
        
   sf_match_ind = np.argmin(np.square(all_sfs - prefSfEst));
   disp = 0; con = val_con_by_disp[disp][-1]; # i.e. highest con
-  val_tr = get_valid_trials(trial_inf, disp=disp, con=con, sf=sf_match_ind, expInd=expInd)[0];
+  val_tr = get_valid_trials(trial_inf, disp=disp, con=con, sf=sf_match_ind, expInd=expInd)[0][0]; # unpack - first 0 for first output argument, 2nd to unpack into array rather than list of array(s)
+  stimDur = get_exp_params(expInd).stimDur;
 
   f0 = trial_inf['spikeCount'];
-  f0rate = np.divide(f0[val_tr], get_exp_params(expInd).stimDur);
-  f1rate = np.abs(trial_inf['f1'])[val_tr]; # f1 is already a rate (i.e. spks [or power] / sec)
+  f0rate = np.divide(f0[val_tr], stimDur);
+  # now compute the F1
+  spike_times = [trial_inf['spikeTimes'][x] for x in val_tr];
+  psth, bins = make_psth(spike_times, stimDur=stimDur)
+  all_tf = trial_inf['tf'][0][val_tr]; # just take first grating??? TODO: should make this clean
+  power, rel_power, full_ft = spike_fft(psth, tfs=all_tf, stimDur=stimDur);
+
+  f1rate = rel_power; # f1 is already a rate (i.e. spks [or power] / sec)
 
   return np.mean(np.divide(f1rate, f0rate)), f0rate, f1rate, f0, np.abs(trial_inf['f1']);
 
@@ -988,11 +995,14 @@ def tf_to_ind(tfs, stimDur):
   ''' simple conversion from temporal frequency to index into the fourier spectrum 
       we simply cast the result to integer, though this is not quite right for older versions
       of the experiment with non-integer number of stimulus cycles
+
+      Note that we multiply, then round, and finally cast - if we simply cast right after the multiply,
+      then decimals are just truncated; for older experiments, we want 5.8, e.g., to be treated as 6, not 5!
   '''
   try: # if tfs is an array, then we do it this way...
-    return [numpy.multiply(tf, stimDur).astype(numpy.int16) for tf in tfs];
+    return [numpy.round(numpy.multiply(tf, stimDur)).astype(numpy.int16) for tf in tfs];
   except: # otherwise, just the simple way
-    return numpy.multiply(tfs, stimDur).astype(numpy.int16);
+    return numpy.round(numpy.multiply(tfs, stimDur)).astype(numpy.int16);
 
 ### descriptive fits to sf tuning/basic data analyses
 ### Descriptive functions - fits to spatial frequency tuning, other related calculations
