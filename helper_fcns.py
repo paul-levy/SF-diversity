@@ -503,59 +503,71 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3):
 
     return spectrum, rel_amp, full_fourier;
 
-def compute_f1f0(trial_inf, cellNum, expInd, descrFitName, loc_data):
+def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0, descrFitName_f1=None):
   ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio
       This will be used to determine simple versus complex
+      Note that descrFitName_f1 is optional, i.e. we needn't pass this in
   '''
   np = numpy;
  
-  # get prefSfEst - NOTE: copied code from model_respsonses.set_model -- reconsider as a hf?
-  dfits = np_smart_load(loc_data + descrFitName);
-  if expInd == 1:
-    hiCon = 0; # holdover from hf.organize_resp (with expInd==1, sent to V1_orig/helper_fcns.organize_modResp
-  else:
-    hiCon = -1;
-  prefSfEst = dfits[cellNum-1]['prefSf'][0][hiCon]; # get high contrast, single grating prefSf
+  # get prefSfEst from f0 descrFits - NOTE: copied code from model_respsonses.set_model -- reconsider as a hf?
+  f0f1_dfits = [descrFitName_f0, descrFitName_f1];
+  prefSfEst = np.nan * np.zeros((len(f0f1_dfits), ));
+  for i, ft in enumerate(f0f1_dfits):
+    if ft is not None:
+      dfits = np_smart_load(loc_data + ft);
+      if expInd == 1:
+        hiCon = 0; # holdover from hf.organize_resp (with expInd==1, sent to V1_orig/helper_fcns.organize_modResp
+      else:
+        hiCon = -1;
+      prefSfEst[i] = dfits[cellNum-1]['prefSf'][0][hiCon]; # get high contrast, single grating prefSf
+  # now "trim" prefSfEst (i.e. remove the second entry if dfn_f1 is None)
+  prefSfEst = prefSfEst[~np.isnan(prefSfEst)];
 
-  '''
-  try:
-    dfits = np_smart_load(loc_data + descrFitName);
-    if expInd == 1:
-      hiCon = 0; # holdover from hf.organize_resp (with expInd==1, sent to V1_orig/helper_fcns.organize_modResp
-    else:
-      hiCon = -1;
-    prefSfEst = dfits[cellNum-1]['prefSf'][0][hiCon]; # get high contrast, single grating prefSf
-  except:
-    if expInd == 1:
-      prefOrEst = mode(trial_inf['ori'][1]).mode;
-      trialsToCheck = trial_inf['con'][0] == 0.01;
-      prefSfEst = mode(trial_inf['sf'][0][trialsToCheck==True]).mode;
-    else:
-      allSfs    = np.unique(trial_inf['sf'][0]);
-      allSfs    = allSfs[~np.isnan(allSfs)]; # remove NaN...
-      prefSfEst = np.median(allSfs);
-  '''
   # get stim info, responses
   _, stimVals, val_con_by_disp, val_byTrial, _ = tabulate_responses(trial_inf, expInd);
+  f0_blank = blankResp(trial_inf)[0]; # we'll subtract off the f0 blank mean response from f0 responses
 
   all_sfs = stimVals[2];
-       
-  sf_match_ind = np.argmin(np.square(all_sfs - prefSfEst));
-  disp = 0; con = val_con_by_disp[disp][-1]; # i.e. highest con
-  val_tr = get_valid_trials(trial_inf, disp=disp, con=con, sf=sf_match_ind, expInd=expInd)[0][0]; # unpack - first 0 for first output argument, 2nd to unpack into array rather than list of array(s)
+
+  sf_match_inds = [np.argmin(np.square(all_sfs - psfEst)) for psfEst in prefSfEst]; # matching inds
+  disp = 0; con = val_con_by_disp[disp][-1]; # i.e. highest con, single gratings
+  val_trs = [get_valid_trials(trial_inf, disp=disp, con=con, sf=match_ind, expInd=expInd)[0][0] for match_ind in sf_match_inds]; # unpack - first 0 for first output argument, 2nd to unpack into array rather than list of array(s)
   stimDur = get_exp_params(expInd).stimDur;
 
+  ######
+  # why are we keeping the trials with max response at F0 (always) and F1 (if present)? Per discussion with Tony, 
+  # we should evaluate F1/F0 at the SF  which has the highest response as determined by comparing F0 and F1, 
+  # i.e. F1 might be greater than F0 AND have a different than F0 - in the case, we ought to evalaute at the peak F1 frequency
+  ######
+
+  # first, get F0s
   f0 = trial_inf['spikeCount'];
-  f0rate = np.divide(f0[val_tr], stimDur);
-  # now compute the F1
-  spike_times = [trial_inf['spikeTimes'][x] for x in val_tr];
-  psth, bins = make_psth(spike_times, stimDur=stimDur)
-  all_tf = trial_inf['tf'][0][val_tr]; # just take first grating??? TODO: should make this clean
-  power, rel_power, full_ft = spike_fft(psth, tfs=all_tf, stimDur=stimDur);
+  f0rates = [np.divide(f0[val_tr] - f0_blank, stimDur) for val_tr in val_trs];
+  # now compute the F1s
+  spike_times = [[trial_inf['spikeTimes'][x] for x in val_tr] for val_tr in val_trs];
+  psth, bins = zip(*[make_psth(spk_tm, stimDur=stimDur) for spk_tm in spike_times]); # "reverse" zipping is possible!
+  all_tf = [trial_inf['tf'][0][val_tr] for val_tr in val_trs]; # just take first grating (only will ever analyze single gratings)
+  power, rel_power, full_ft = zip(*[spike_fft(psth_curr, tfs=tf_curr, stimDur=stimDur) for psth_curr, tf_curr in zip(psth, all_tf)]);
 
-  f1rate = rel_power; # f1 is already a rate (i.e. spks [or power] / sec)
+  f1rates = rel_power; # f1 is already a rate (i.e. spks [or power] / sec); just unpack
 
-  return np.mean(np.divide(f1rate, f0rate)), f0rate, f1rate, f0, np.abs(trial_inf['f1']);
+  f0f1_resps = [f0rates, f1rates]; # combine f0 and f1 into one list
+
+  ######
+  # make the comparisons (see above) ....
+  ######
+
+  # now, we'll find out which of F0 or F1 peak inds has highest response for F0 and F1 separately 
+  f0f1_max = [[numpy.nanmean(x) for x in resps] for resps in f0f1_resps]; # between f0 and f1 inds, which gives higher response?
+  f0f1_ind = [np.argmax(x) for x in f0f1_max]; # and get the corresponding index of that highest response
+  # finally, figure out which of the peakInd X F0/F1 combinations has the highest overall response
+  peakRespInd = np.argmax([np.nanmean(x[y]) for x,y in zip(f0f1_resps, f0f1_ind)]);
+  indToAnalyze = f0f1_ind[peakRespInd];
+  
+  f0rate, f1rate = [x[indToAnalyze] for x in f0f1_resps];
+
+  return np.nanmean(np.divide(f1rate, f0rate)), f0rate, f1rate, f0, np.abs(trial_inf['f1']);
 
 ## phase/more psth
 
@@ -1364,6 +1376,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       sfVar = np.zeros((nDisps, nCons)) * np.nan; # variance calculation
       sfCom = np.zeros((nDisps, nCons)) * np.nan; # center of mass
       sfComCut = np.zeros((nDisps, nCons)) * np.nan; # center of mass, but with a restricted ("cut") set of SF
+      f1f0_ratio = np.nan;
       # then, inferred from descriptive fits
       bwHalf = np.zeros((nDisps, nCons)) * np.nan;
       bw34 = np.zeros((nDisps, nCons)) * np.nan;
@@ -1407,6 +1420,9 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
         supr_ind = hmm[0];
       else:
         supr_ind = np.nan;
+
+      # let's figure out if simple or complex
+      f1f0_ratio = compute_f1f0(tr, cell_ind+1, expInd, dF_nm, data_loc)[0]; # f1f0 ratio is 0th output
 
       for d in range(nDisps):
 
@@ -1514,8 +1530,9 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
                                    sfComRats[d, conToUse, hiInd, rawInd]]);
 
       dataMetrics = dict([('sfCom', sfCom),
-                         ('sfComCut', sfComCut),            
-                         ('sfVar', sfVar),            
+                         ('sfComCut', sfComCut),
+                         ('sfVar', sfVar),
+                         ('f1f0_ratio', f1f0_ratio),
                          ('bwHalf', bwHalf),
                          ('bw34', bw34),
                          ('pSf', pSf),
@@ -1615,7 +1632,7 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02):
 ###
 
 def blankResp(cellStruct):
-    # as of 01.03.19, should check if this works for all experiment variants
+    # works for all experiment variants (checked 08.20.19)
     if 'sfm' in cellStruct:
       tr = cellStruct['sfm']['exp']['trial'];
     else:
