@@ -456,9 +456,9 @@ def make_psth(spikeTimes, binWidth=1e-3, stimDur=1):
     bins = [x[1] for x in all];
     return psth, bins;
 
-def fft_amplitude(fftSpectrum):
+def fft_amplitude(fftSpectrum, stimDur):
     ''' given an fftSpectrum (and assuming all other normalization has taken place), we double the non-DC frequencies and return
-        only the DC and positive frequencies
+        only the DC and positive frequencies; we also convert these values into rates (i.e. spikes or power per second)
 
         normalization: since this code is vectorized, the length of each signal passed into np.fft.fft is 1
         i.e. an array whose length is one, with the array[0] having length stimDur/binWidth
@@ -471,6 +471,10 @@ def fft_amplitude(fftSpectrum):
     for i, spect in enumerate(fftSpectrum):
       currFFT = numpy.abs(spect[0:nyquist[i]+1]); # include nyquist
       currFFT[1:nyquist[i]+1] = 2*currFFT[1:nyquist[i]+1];
+      # note the divison by stimDur; our packaging of the psth when we call np.fft.fft means that the baseline is each trial
+      # is one second; i.e. amplitudes are rates IFF stimDur = 1; here, we divide by stimDur to ensure all trials/psth
+      # are true rates
+      currFFT = numpy.divide(currFFT, stimDur);
       correctFFT.append(currFFT);
     
     return correctFFT;   
@@ -478,18 +482,20 @@ def fft_amplitude(fftSpectrum):
 def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3):
     ''' given a psth (and optional list of component TFs), compute the fourier transform of the PSTH
         if the component TFs are given, return the FT power at the DC, and at all component TFs
+        NOTE: spectrum, rel_amp are rates (spks/s)
+              full_fourier is unprocessed, in that regard
         
         normalization: since this code is vectorized, the length of each signal passed into np.fft.fft is 1
         i.e. an array whose length is one, with the array[0] having length stimDur/binWidth
         Thus, the DC amplitude is already correct, i.e. not in need of normalization by nSamples
-        But, remember that for a real signal like this, non-DC amplitudes need to be doubled - we take care of that here       
+        But, remember that for a real signal like this, non-DC amplitudes need to be doubled - we take care of that here 
         
-        note: if only one TF is given, also return the power at f2 (i.e. twice f1, the stimulus frequency)
+        todo (make this--> happen) note: if only one TF is given, also return the power at f2 (i.e. twice f1, the stimulus frequency)
     '''
     np = numpy;
 
     full_fourier = [np.fft.fft(x) for x in psth];
-    spectrum = fft_amplitude(full_fourier);
+    spectrum = fft_amplitude(full_fourier, stimDur);
 
     if tfs is not None:
       try:
@@ -1343,7 +1349,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       resps, stimVals, val_con_by_disp, _, _ = tabulate_responses(cell, expInd);
       # get SF responses (for model-free metrics)
       tr = cell['sfm']['exp']['trial']
-      spks = get_spikes(tr, expInd=expInd, rvcFits=None); # just to be explicit - no RVC fits right now
+      spks = get_spikes(tr, get_f0=1, expInd=expInd, rvcFits=None); # just to be explicit - no RVC fits right now
       sfTuning = organize_resp(spks, tr, expInd=expInd)[2]; # responses: nDisp x nSf x nCon
 
       meta = dict([('fullPath', data_loc),
@@ -1408,7 +1414,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
         predResps = resps[2];
         rvcFitsCurr = get_rvc_fits(data_loc, expInd, cell_ind+1, rvcName='None');
         trialInf = cell['sfm']['exp']['trial'];
-        spikes  = get_spikes(trialInf, rvcFits=rvcFitsCurr, expInd=expInd);
+        spikes  = get_spikes(trialInf, get_f0=1, rvcFits=rvcFitsCurr, expInd=expInd);
         _, _, respOrg, respAll = organize_resp(spikes, trialInf, expInd);
 
         respMean = respOrg;
@@ -1422,7 +1428,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
         supr_ind = np.nan;
 
       # let's figure out if simple or complex
-      f1f0_ratio = compute_f1f0(tr, cell_ind+1, expInd, dF_nm, data_loc)[0]; # f1f0 ratio is 0th output
+      f1f0_ratio = compute_f1f0(tr, cell_ind+1, expInd, data_loc, dF_nm)[0]; # f1f0 ratio is 0th output
 
       for d in range(nDisps):
 
@@ -1992,14 +1998,17 @@ def organize_resp(spikes, expStructure, expInd, mask=None):
 
     return rateOr, rateCo, rateSfMix, allSfMix;  
 
-def get_spikes(data, rvcFits = None, expInd = None, overwriteSpikes = None):
+def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes = None):
   ''' Given the data (S.sfm.exp.trial), if rvcFits is None, simply return saved spike count;
                                         else return the adjusted spike counts (e.g. LGN, expInd 3)
   '''
   if overwriteSpikes is not None: # as of 19.05.02, used for fitting model recovery spikes
     return overwriteSpikes;
   if rvcFits is None:
-    spikes = data['spikeCount'];
+    if get_f0 == 1:
+      spikes = data['spikeCount'];
+    elif get_f0 == 0:
+      spikes = data['f1']
   else:
     if expInd is None:
       warnings.warn('Should pass in expInd; defaulting to 3');
@@ -2019,7 +2028,7 @@ def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', direc=1):
     try:
       rvcFits = rvcFits[cellNum-1];
     except: # if the RVC fits haven't been done...
-      warnings.warn('This experiment type (expInd=3) usually has associated RVC fits for resposne adjustment');
+      warnings.warn('This experiment type (expInd=3) usually has associated RVC fits for response adjustment');
       rvcFits = None;
   else:
     rvcFits = None;
