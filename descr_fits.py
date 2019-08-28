@@ -16,8 +16,9 @@ expName = hf.get_datalist(sys.argv[3]); # sys.argv[3] is experiment dir
 #expName = 'dataList_mr.npy'
 #expName = 'dataList_glx_mr.npy'
 dogName =  'descrFits_190503';
-phAdvName = 'phaseAdvanceFitsTest'
-rvcName   = 'rvcFits_f0.npy'
+phAdvName = 'phaseAdvanceFits_190828'
+rvcName_f0   = 'rvcFits_f0.npy'
+rvcName_f1   = 'rvcFits_190828_f1.npy'
 ## model recovery???
 modelRecov = 0;
 if modelRecov == 1:
@@ -27,8 +28,23 @@ if modelRecov == 1:
 else:
   normType = 0;
 
-# TODO:
+##########
+### TODO:
+##########
+# - Fix rvc_adjusted_fit to still fit F1 without phase_advance_fit (i.e. for altExp)
 # - Redo all of (1) for more general use!
+
+##########
+### Table of contents
+##########
+
+## phase_advance_fit
+## rvc_adjusted_fit
+## fit_RVC_f0
+
+## invalid
+## DoG_loss
+## fit_descr_DoG
 
 ### 1: Recreate Movshon, Kiorpes, Hawken, Cavanaugh '05 figure 6 analyses
 ''' These plots show response versus contrast data (with model fit) AND
@@ -70,6 +86,8 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save =
   '''
 
   assert disp==0, "In phase_advance_fit; we only fit ph-amp relationship for single gratings."
+  assert expInd>2, "In phase_advance_fit; we can only fit ph-amp relationship for experiments with \
+                    careful component TF; expInd 1, 2 do not meet this requirement."
 
   dataList = hf.np_smart_load(data_loc + expName);
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
@@ -113,7 +131,7 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save =
 
   return phAdv_model, all_opts;
 
-def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, dir=-1, expName=expName):
+def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName_f1, to_save=1, disp=0, dir=-1, expName=expName):
   ''' Piggy-backing off of phase_advance_fit above, get prepare to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
   '''
@@ -191,7 +209,7 @@ def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName, to_save=1, dir=-1, exp
 
 ### 1.1 RVC fits without adjusted responses (organized like SF tuning)
 
-def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName, dLname=expName, modelRecov=modelRecov, normType=normType):
+def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName_f0, dLname=expName, modelRecov=modelRecov, normType=normType):
   # NOTE: n_repeats not used (19.05.06)
   # normType used iff modelRecv == 1
 
@@ -268,6 +286,8 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName, dLname=expNa
 
   np.save(data_loc + fLname, rvcFits);
 
+#####################################
+
 ### 2: Descriptive tuning fit to (adjusted, if needed) responses
 # previously, only difference of gaussian models; now (May 2019), we've also added the original flexible (i.e. two-halved) Gaussian model
 # this is meant to be general for all experiments, so responses can be F0 or F1, and the responses will be the adjusted ones if needed
@@ -317,7 +337,10 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
     loss = loss + np.sum((sq_err/(k+np.square(sigma)))) + gain_reg*(params[0] + params[2]); # regularize - want gains as low as possible
   return loss;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType):
+def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, is_f0=0, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType):
+  ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons
+    
+  '''
 
   if DoGmodel == 0:
     nParam = 5;
@@ -329,10 +352,13 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
   assert dataList!=[], "data file not found!"
   cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
-  # get expInd, load rvcFits [if existing]
+  # get expInd, load rvcFits [if existing, and specified]
   expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1]);
-  print('Making DoG fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
-  rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num); # see default arguments in helper_fcns.py
+  print('Making descriptive SF fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
+  if is_f0 == 0 and get_rvc == 1:
+    rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num); # see default arguments in helper_fcns.py
+  else:
+    rvcFits = None;
 
   modStr  = hf.descrMod_name(DoGmodel)
   fLname  = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr);
@@ -380,20 +406,20 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, d
   base_rate = hf.blankResp(cellStruct)[0];
 
   # set bounds
-  if DoGmodel == 0:
+  if DoGmodel == 0: # flexible gaussian (i.e. two halves)
     min_bw = 1/4; max_bw = 10; # ranges in octave bandwidth
     bound_baseline = (0, max_resp);
     bound_range = (0, 1.5*max_resp);
     bound_mu = (0.01, 10);
     bound_sig = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
     allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
-  elif DoGmodel == 1:
+  elif DoGmodel == 1: # SACH
     bound_gainCent = (1e-3, None);
     bound_radiusCent= (1e-3, None);
     bound_gainSurr = (1e-3, None);
     bound_radiusSurr= (1e-3, None);
     allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
-  elif DoGmodel == 2:
+  elif DoGmodel == 2: # TONY
     bound_gainCent = (1e-3, None);
     bound_gainFracSurr = (1e-2, 1);
     bound_freqCent = (1e-3, None);
