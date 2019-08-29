@@ -98,7 +98,7 @@ import warnings
 # tabulate_responses - Organizes measured and model responses for sfMixAlt experiment
 # organize_adj_responses - wrapper for organize_adj_responses within each experiment subfolder
 # organize_resp       -
-# get_spikes - get correct # spikes for a given cell (will get corrected spikes if needed)
+# get_spikes - get correct # spikes for a given cell (will get corrected spikes if needed) trial-by-trial
 # get_rvc_fits - return the rvc fits for a given cell (if applicable)
 # mod_poiss - computes "r", "p" for modulated poisson model (neg. binomial)
 # naka_rushton
@@ -438,11 +438,13 @@ def flatten_list(l):
   flatten = lambda l: [item for sublist in l for item in sublist];
   return flatten(l);
 
-def switch_inner_outer(x):
+def switch_inner_outer(x, asnp = False):
   ''' switch the inner and outer parts of a list '''
-  switch_inner_outer = lambda arr: [[x[i] for x in arr] for i in range(len(arr[0]))];
+  if asnp: # i.e. cast each as numpy array
+    switch_inner_outer = lambda arr: [numpy.array([x[i] for x in arr]) for i in range(len(arr[0]))];
+  else:
+    switch_inner_outer = lambda arr: [[x[i] for x in arr] for i in range(len(arr[0]))];
   return switch_inner_outer(x);
-
 
 ### fourier
 
@@ -591,7 +593,7 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
       vectorized: expects/returns lists of amplitudes/phis
   '''
   np = numpy;
-  sfDig = 2; # round SFs to the thousandth when comparing for equality
+  sfDig = 2; # round SFs to the hundredth  when comparing for equality
   all_proj = [];
 
   for i in range(len(amp)):
@@ -618,12 +620,13 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
           curr_phi = phi_resp[i][con_ind][comp_ind];
           # now, for that component, find out the SF and get the right phase advance fit
           # note: where is array, so unpack one level to get  
-          sf_ind = np.where(np.round(allSfs, sfDig) == np.round(allCompSf[i][con_ind][comp_ind], sfDig))[0][0];
+          #   adjusted on 19.08.29 to find difference l.t. 0.02 rather than equality (rounding issues; came up first with V1/, not in LGN/ data)
+          sf_ind = np.where(np.abs(np.round(allSfs, sfDig) - np.round(allCompSf[i][con_ind][comp_ind], sfDig))<0.02)[0][0];
           phi_true = phAdv_model(phAdv_params[sf_ind][0], phAdv_params[sf_ind][1], curr_amp);
           if isinstance(phi_true, np.ndarray): # i.e. array
             if isinstance(phi_true[0], np.ndarray): # i.e. nested array
             # flatten into array of numbers rather than array of arrays (of one number) 
-              phi_true = flatten(phi_true);
+              phi_true = phi_true.flatten(); # should be flatten_list? was previously flatten(x), but likely uncalled!
           # finally, project the response as usual
           proj = np.multiply(curr_amp, np.cos(np.deg2rad(curr_phi)-np.deg2rad(phi_true)));
           curr_proj_con.append(proj);
@@ -781,7 +784,7 @@ def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3,
   '''
   stimDur = get_exp_params(expInd).stimDur;
 
-  _, _, val_con_by_disp, validByStimVal, _ = tabulate_responses(data, expInd);
+  _, stimVals, val_con_by_disp, validByStimVal, _ = tabulate_responses(data, expInd);
 
   # gather the sf indices in case we need - this is a dictionary whose keys are the valid sf indices
   valSf = validByStimVal[2];
@@ -799,7 +802,7 @@ def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3,
     curr_r = []; curr_ph = []; curr_tf = [];
     curr_conComp = []; curr_sfComp = [];
     for c in cons:
-      val_trials, allDisps, allCons, allSfs = get_valid_trials(data, disp, c, s, expInd);
+      val_trials, allDisps, allCons, allSfs = get_valid_trials(data, disp, c, s, expInd, stimVals, validByStimVal);
 
       if not numpy.any(val_trials[0]): # val_trials[0] will be the array of valid trial indices --> if it's empty, leave!
         warnings.warn('this condition is not valid');
@@ -827,6 +830,8 @@ def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3,
         rel_amp_sem = [sem(x) for x in rel_amp];
         # call get_isolated_response just to get contrast/sf per component
         _, _, _, _, conByComp, sfByComp = get_isolated_response(data, val_trials);
+        if numpy.array_equal(sfByComp, []):
+          pdb.set_trace();
         # need to switch ph_rel_stim (and resp_phase) to be lists of phases by component (rather than list of phases by trial)
         ph_rel_stim = switch_inner_outer(ph_rel_stim);
         ph_rel_stim_sem = [sem(x) for x in ph_rel_stim];
@@ -1352,7 +1357,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       expInd = get_exp_ind(data_loc, expName)[0];
       cell = np_smart_load(data_loc + expName + '_sfm.npy');
       # get stimlus values
-      resps, stimVals, val_con_by_disp, _, _ = tabulate_responses(cell, expInd);
+      resps, stimVals, val_con_by_disp, validByStimVal, _ = tabulate_responses(cell, expInd);
       # get SF responses (for model-free metrics)
       tr = cell['sfm']['exp']['trial']
       spks = get_spikes(tr, get_f0=1, expInd=expInd, rvcFits=None); # just to be explicit - no RVC fits right now
@@ -1379,7 +1384,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
 
       # compute the set of SF which appear at all dispersions: highest dispersion, pick a contrast (all same)
       maxDisp = nDisps-1;
-      cut_sf = np.array(get_valid_sfs(tr, disp=maxDisp, con=val_con_by_disp[maxDisp][0], expInd=expInd))
+      cut_sf = np.array(get_valid_sfs(tr, disp=maxDisp, con=val_con_by_disp[maxDisp][0], expInd=expInd, stimVals=stimVals, validByStimVal=validByStimVal))
 
       ####
       # set up the arrays we need to store analyses
@@ -1444,7 +1449,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
         for c in range(nCons):
 
           # zeroth...model-free metrics
-          curr_sfInd = get_valid_sfs(tr, d, c, expInd=expInd)
+          curr_sfInd = get_valid_sfs(tr, d, c, expInd=expInd, stimVals=stimVals, validByStimVal=validByStimVal)
           curr_sfs   = stimVals[2][curr_sfInd];
           curr_resps = sfTuning[d, curr_sfInd, c];
           sfCom[d, c] = sf_com(curr_resps, curr_sfs)
@@ -1655,12 +1660,14 @@ def blankResp(cellStruct):
     
     return mu, sig, blank_tr;
     
-def get_valid_trials(data, disp, con, sf, expInd):
+def get_valid_trials(data, disp, con, sf, expInd, stimVals=None, validByStimVal=None):
   ''' Given a data and the disp/con/sf indices (i.e. integers into the list of all disps/cons/sfs
       Determine which trials are valid (i.e. have those stimulus criteria)
       RETURN list of valid trials, lists for all dispersion values, all contrast values, all sf values
   '''
-  _, stimVals, _, validByStimVal, _ = tabulate_responses(data, expInd);
+  if stimVals is None or validByStimVal is None:
+    _, stimVals, _, validByStimVal, _ = tabulate_responses(data, expInd);
+  # otherwise, we've passed this in, so no need to call tabulate_responses again!
 
   # gather the conditions we need so that we can index properly
   valDisp = validByStimVal[0];
@@ -1675,11 +1682,13 @@ def get_valid_trials(data, disp, con, sf, expInd):
 
   return val_trials, allDisps, allCons, allSfs;
 
-def get_valid_sfs(data, disp, con, expInd):
+def get_valid_sfs(data, disp, con, expInd, stimVals=None, validByStimVal=None):
   ''' Self explanatory, innit? Returns the indices (into allSfs) of valid sfs for the given condition
       As input, disp/con should be indices into the valDisp/Con arrays (i.e. not values)
   '''
-  _, stimVals, _, validByStimVal, _ = tabulate_responses(data, expInd);
+  if stimVals is None or validByStimVal is None:
+    _, stimVals, _, validByStimVal, _ = tabulate_responses(data, expInd);
+  # otherwise, we've passed this in, so no need to call tabulate_responses again!
 
   # gather the conditions we need so that we can index properly
   valDisp = validByStimVal[0];
@@ -1810,7 +1819,7 @@ def get_isolated_responseAdj(data, trials, adjByTrial):
 
 ##
 
-def tabulate_responses(cellStruct, expInd, modResp = [], mask=None):
+def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
         (ii) all_disps, all_cons, all_sfs - i.e. the stimulus conditions of the experiment
@@ -1819,6 +1828,13 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None):
         (v) modRespOrg - the model responses organized as in (i) - only if modResp argument passed in
         NOTE: We pass in the overall spike counts (modResp; either real or predicted), and compute 
           the spike *rates* (i.e. spikes/s)
+  
+        overwriteSpikes: optional argument - if None, simply use F0 as saved in cell (i.e. spikeCount)
+                         otherwise, pass in response by trial (i.e. not organized by condition; MUST be one value per trial, not per component)
+                           e.g. F1, or adjusted F1 responses
+        respsAsRates: optional argument - if False (or if overwriteSpikes is None), then divide response
+                         otherwise, pass in response by trial (i.e. not organized by condition)
+                           e.g. F1, or adjusted F1 responses
     '''
     np = numpy;
     conDig = 3; # round contrast to the thousandth
@@ -1829,6 +1845,17 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None):
       data = cellStruct['sfm']['exp']['trial'];
     else: # we've passed in sfm.exp.trial already
       data = cellStruct;
+
+    if overwriteSpikes is None:
+      respToUse = data['spikeCount'];
+      respsAsRates = False; # ensure that we divide by stimDur
+    else:
+      respToUse = overwriteSpikes;
+
+    if respsAsRates is True:
+      respDiv = 1; # i.e. we don't need to divide by stimDur, since values are already in spikes/sec
+    elif respsAsRates is False:
+      respDiv = stimDur; # responses are NOT rates, yet, so divide by stimDur
 
     if expInd == 1: # this exp structure only has 'con', 'sf'; perform some simple ops to get everything as in other exp structures
       v1_dir = exper.dir.replace('/', '.');
@@ -1897,8 +1924,10 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None):
                 if np.all(np.unique(valid_tr) == False):
                     continue;
 
-                respMean[d, sf, con] = np.mean(data['spikeCount'][valid_tr]/stimDur);
-                respStd[d, sf, con] = np.std((data['spikeCount'][valid_tr]/stimDur));
+                respMean[d, sf, con] = np.mean(respToUse[valid_tr]/respDiv);
+                respStd[d, sf, con] = np.std(respToUse[valid_tr]/respDiv);
+                #respMean[d, sf, con] = np.mean(data['spikeCount'][valid_tr]/stimDur);
+                #respStd[d, sf, con] = np.std((data['spikeCount'][valid_tr]/stimDur));
                 
                 curr_pred = 0;
                 curr_var = 0; # variance (std^2) adds
@@ -1916,13 +1945,16 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None):
                         #print('empty...');
                         continue;
                     
-                    curr_pred = curr_pred + np.mean(data['spikeCount'][val_tr]/stimDur);
-                    curr_var = curr_var + np.var(data['spikeCount'][val_tr]/stimDur);
+                    curr_pred = curr_pred + np.mean(respToUse[val_tr]/respDiv);
+                    curr_var = curr_var + np.var(respToUse[val_tr]/respDiv);
+                    #curr_pred = curr_pred + np.mean(data['spikeCount'][val_tr]/stimDur);
+                    #curr_var = curr_var + np.var(data['spikeCount'][val_tr]/stimDur);
                     
                 predMean[d, sf, con] = curr_pred;
                 predStd[d, sf, con] = np.sqrt(curr_var);
                 
                 if mod: # convert spike counts in each trial to spike rate (spks/s)
+                    # NOTE::TODO:: must check after 19.08.29 change - do we want to divide mod responses by stimDur always?
                     nTrCurr = sum(valid_tr); # how many trials are we getting?
                     modRespOrg[d, sf, con, 0:nTrCurr] = modResp[valid_tr]/stimDur;
 
@@ -1939,12 +1971,36 @@ def organize_adj_responses(data, rvcFits, expInd):
   '''
   dir = get_exp_params(expInd).dir;
   to_import = dir.replace('/', '.') + 'helper_fcns';
-  new_hf = il.import_module(to_import);
-  if hasattr(new_hf, 'organize_adj_responses'):
-    adjResps = new_hf.organize_adj_responses(data, rvcFits)[1]; # 2nd returned argument (pos 1) is responses by trial
-  else:
-    warnings.warn('this experiment (as given by ind) does not have an organize_adj_responses call!');
-    adjResps = None;
+
+  try: # i.e. we don't have an associated helper_fcns (TODO: HACKY? FIX?)
+    new_hf = il.import_module(to_import);
+    if hasattr(new_hf, 'organize_adj_responses'):
+      adjResps = new_hf.organize_adj_responses(data, rvcFits)[1]; # 2nd returned argument (pos 1) is responses by trial
+    else:
+      warnings.warn('this experiment (as given by ind) does not have an organize_adj_responses call!');
+      adjResps = None;
+  except: # a "simple" adj responses - TODO: should improve/fix later?
+    nTr = len(data['num']);
+    adjResps = numpy.nan * numpy.zeros((nTr, ), dtype='O');
+    # first, get all of the stimulus conds
+    _, conds, val_con_by_disp, val_by_stim_val, _ = tabulate_responses(data, expInd);
+    all_d = conds[0];
+
+    for d_ind, d in enumerate(all_d):
+      val_cons = val_con_by_disp[d_ind];
+      for c_ind_val, c_ind_total in enumerate(val_cons):
+        val_sfs = get_valid_sfs(data, d_ind, c_ind_total, expInd, stimVals=conds, validByStimVal=val_by_stim_val);
+        for s_ind_val, s_ind_total in enumerate(val_sfs):
+          val_trials = get_valid_trials(data, d_ind, c_ind_total, s_ind_total, expInd, stimVals=conds, validByStimVal=val_by_stim_val)[0];
+          # this is why we enumerate val_cons above - the index into val_cons is how we index into rvcFits
+          curr_resps = rvcFits[d_ind]['adjByTr'][s_ind_total][c_ind_val];
+          ## Now: we need to arrange curr_resps (which is generally a nComp list, each entry an nTr list
+          if d_ind == 0:
+            adjResps[val_trials] = curr_resps.flatten();
+          else:
+            curr_flipped = switch_inner_outer(curr_resps, asnp=True);
+            adjResps[val_trials] = curr_flipped;
+    
   return adjResps;
 
 def organize_resp(spikes, expStructure, expInd, mask=None):
@@ -2005,7 +2061,8 @@ def organize_resp(spikes, expStructure, expInd, mask=None):
     return rateOr, rateCo, rateSfMix, allSfMix;  
 
 def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes = None):
-  ''' Given the data (S.sfm.exp.trial), if rvcFits is None, simply return saved spike count;
+  ''' Get trial-by-trial spike count
+      Given the data (S.sfm.exp.trial), if rvcFits is None, simply return saved spike count;f
                                         else return the adjusted spike counts (e.g. LGN, expInd 3)
   '''
   if overwriteSpikes is not None: # as of 19.05.02, used for fitting model recovery spikes
@@ -2022,8 +2079,11 @@ def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes 
     try:
       spikes = organize_adj_responses(data, rvcFits, expInd);
     except: # in case this does not work...
-      warnings.warn('Tried to access f1/adjusted responses, defaulting to F0');
-      spikes = data['spikeCount'];
+      warnings.warn('Tried to access f1 adjusted responses, defaulting to F1/F0 request');
+      if get_f0 == 1:
+        spikes = data['spikeCount'];
+      elif get_f0 == 0:
+        spikes = data['f1']
   return spikes;
 
 def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', direc=1):
@@ -2200,10 +2260,10 @@ def makeStimulusRef(data, disp, con, sf, expInd, nRepeats=None):
       conIndToUse = val_con_by_disp[disp][-1]; # let's use the highest contrast as our reference
       refCon = all_cons[conIndToUse];
     # first arg is validTr ([0]), then unpack array into indices ([0][0])
-    ref_trials = get_valid_trials(data, disp, conIndToUse, sf, expInd)[0][0];
+    ref_trials = get_valid_trials(data, disp, conIndToUse, sf, expInd, stimVals, validByStimVal)[0][0];
     interpSF = 0;
   elif isinstance(sf, numpy.ndarray):
-    val_sfs = get_valid_sfs(data, disp, con, expInd)
+    val_sfs = get_valid_sfs(data, disp, con, expInd, stimVals, validByStimVal)
     if len(sf) == 1:
       sfIndToUse = np.argmin(np.square(all_sfs[val_sfs] - sf[0]));
       sfIndToUse = val_sfs[sfIndToUse];
@@ -2211,7 +2271,7 @@ def makeStimulusRef(data, disp, con, sf, expInd, nRepeats=None):
       sfIndToUse = val_sfs[0];
     refSf = all_sfs[sfIndToUse];
     # first arg is validTr ([0]), then unpack array into indices ([0][0])
-    ref_trials = get_valid_trials(data, disp, con, sfIndToUse, expInd)[0][0];
+    ref_trials = get_valid_trials(data, disp, con, sfIndToUse, expInd, stimVals, validByStimVal)[0][0];
     interpSF = 1;
   else:
     warnings.warn('Con or Sf must be array!; returning full, original experiment at trial level');
