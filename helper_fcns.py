@@ -43,6 +43,7 @@ import warnings
 ### fourier, and repsonse-phase adjustment
 
 # make_psth - create a psth for a given spike train
+# fft_amplitude - adjust the FFT amplitudes as needed for a real signal (i.e. double non-DC amplitudes)
 # spike_fft - compute the FFT for a given PSTH, extract the power at a given set of frequencies 
 # compute_f1f0 - compute the ratio of F1::F0 for the stimulus closest to optimal
 
@@ -572,8 +573,13 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0, descrFit
   indToAnalyze = f0f1_ind[peakRespInd];
   
   f0rate, f1rate = [x[indToAnalyze] for x in f0f1_resps];
+  # note: the below lines will help us avoid including trials for which the f0 is negative (after baseline subtraction!)
+  # i.e. we will not include trials with below-baseline f0 responses in our f1f0 calculation
+  f0rate_posInd = np.where(f0rate>0);
+  f0rate_pos = f0rate[f0rate_posInd];
+  f1rate_pos = f1rate[f0rate_posInd];
 
-  return np.nanmean(np.divide(f1rate, f0rate)), f0rate, f1rate, f0, np.abs(trial_inf['f1']);
+  return np.nanmean(np.divide(f1rate_pos, f0rate_pos)), f0rate, f1rate, f0, np.abs(trial_inf['f1']);
 
 ## phase/more psth
 
@@ -2023,7 +2029,7 @@ def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes 
 def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', direc=1):
   ''' simple function to return the rvc fits needed for adjusting responses
   '''
-  if expInd == 3: # for now, only the LGN experiment has the response adjustment
+  if expInd > 2: # no adjustment for V1, altExp as of now (19.08.28)
     rvcFits = np_smart_load(str(loc_data + phase_fit_name(rvcName, direc)));
     try:
       rvcFits = rvcFits[cellNum-1];

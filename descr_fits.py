@@ -12,13 +12,11 @@ basePath = os.getcwd() + '/';
 data_suff = 'structures/';
 
 expName = hf.get_datalist(sys.argv[3]); # sys.argv[3] is experiment dir
-#expName = 'dataList.npy'
-#expName = 'dataList_mr.npy'
 #expName = 'dataList_glx_mr.npy'
 dogName =  'descrFits_190503';
 phAdvName = 'phaseAdvanceFits_190828'
-rvcName_f0   = 'rvcFits_f0.npy'
-rvcName_f1   = 'rvcFits_190828_f1.npy'
+rvcName_f0   = 'rvcFits_f0'
+rvcName_f1   = 'rvcFits_190828_f1'
 ## model recovery???
 modelRecov = 0;
 if modelRecov == 1:
@@ -100,7 +98,8 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save =
   allSfs = stimVals[2];
 
   # for all con/sf values for this dispersion, compute the mean amplitude/phase per condition
-  allAmp, allPhi, allTf, _, _ = hf.get_all_fft(data, disp, expInd, dir=dir); 
+  allAmp, allPhi, allTf, _, _ = hf.get_all_fft(data, disp, expInd, dir=dir, all_trials=0); # all_trials=1 for debugging (0 is default)
+  #pdb.set_trace();
      
   # now, compute the phase advance
   conInds = valConByDisp[disp];
@@ -131,7 +130,7 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save =
 
   return phAdv_model, all_opts;
 
-def rvc_adjusted_fit(cell_num, data_loc, rvcName=rvcName_f1, to_save=1, disp=0, dir=-1, expName=expName):
+def rvc_adjusted_fit(cell_num, data_loc, expInd, rvcName=rvcName_f1, to_save=1, disp=0, dir=-1, expName=expName):
   ''' Piggy-backing off of phase_advance_fit above, get prepare to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
   '''
@@ -566,14 +565,14 @@ if __name__ == '__main__':
       if ph_fits == 1:
         phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp);
       if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, data_loc=dataPath, disp=disp);
+        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp);
       if descr_fits == 1:
         fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, DoGmodel=dog_model, loss_type=loss_type);
     else:
       if ph_fits == 1:
         phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp, dir=dir);
       if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, data_loc=dataPath, disp=disp, dir=dir);
+        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp, dir=dir);
       if descr_fits == 1:
         fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type);
 

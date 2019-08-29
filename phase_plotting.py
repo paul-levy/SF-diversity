@@ -40,6 +40,9 @@ loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/';
 
 expDir = sys.argv[3];
 
+######
+##settings
+######
 # temporary
 if len(sys.argv) > 6:
   dir = int(sys.argv[6]);
@@ -51,9 +54,17 @@ else:
 dataPath = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + saveDir;
 
-expName = 'dataList.npy'
-phAdvName = 'phaseAdvanceFitsTest';
-rvcName = 'rvcFitsTest';
+expName = hf.get_datalist(expDir);
+descrFit_f0 = 'descrFits_190503_sach_flex.npy';
+phAdvName = 'phaseAdvanceFits_190828';
+rvcName = 'rvcFits_190828_f1';
+
+######
+## contents
+######
+## phase_by_cond - condition-by-condition, show the amp/phase of each trial response
+## plot_phase_advance - summary plot w/ RVC, RVC on polar to show phase advance, & phase advance fit/model
+## batch_phase_by_cond - wrapper for plot_phase_advance
 
 def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=-1, cycle_fold=2, n_bins_fold=8, dp=dataPath, expName=expName):
   ''' Given a cell and the disp/con/sf indices, plot the spike raster for each trial, a folded PSTH,
@@ -67,7 +78,7 @@ def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=
   save_base = sv_loc + 'phasePlots/';
 
   val_trials, allDisps, allCons, allSfs = hf.get_valid_trials(data, disp, con, sf, expInd);
-
+ 
   if not np.any(val_trials[0]): # val_trials[0] will be the array of valid trial indices --> if it's empty, leave!
     warnings.warn('this condition is not valid');
     return;
@@ -88,7 +99,9 @@ def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=
     relSpikes = data['spikeTimes'][val_trials];
     colors = cm.rainbow(np.linspace(0, 1, len(val_trials[0])))
 
+    #####
     # plot spike raster - trial-by-trial
+    #####
     # only works for SINGLE GRATINGS
     # draw the beginning of each cycle for each trial
     ax = plt.subplot(3, 1, 1)
@@ -113,7 +126,9 @@ def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=
     ax.set_ylabel('repetition #');
     ax.set_title('Spike rasters');
 
+    #####
     # plot PSTH - per trial, but folded over N cycles
+    #####
     # only works for SINGLE GRATINGS
     ax = plt.subplot(3, 1, 2)
 
@@ -130,7 +145,9 @@ def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=
     ax.set_xlim([-stimPeriod[0]/4.0, (cycle_fold+0.25)*stimPeriod[0]]);
     ax.legend((cycStart, cycHalf), ('ph = 0', 'ph = 180'));
 
+    #####
     # plot response phase - without accounting for stimulus phase
+    #####
     ax = plt.subplot(3, 2, 5, projection='polar')
     ax.scatter(np.radians(resp_ph), rel_amp, s=60, color=colors, clip_on=False);
     ax.set_title('Stimulus-blind')
@@ -142,12 +159,16 @@ def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=
     avg_r = avg_r[0]; # just get it out of the array!
     avg_ph = avg_ph[0]; # just get it out of the array!
 
+    #####
     # plot response phase - relative to stimulus phase
+    #####
     ax = plt.subplot(3, 2, 6, projection='polar')
     ax.scatter(np.radians(ph_rel_stim), rel_amp, s=60, color=colors, clip_on=False);
     ax.plot([0, np.radians(avg_ph)], [0, avg_r], color='k', linestyle='--', clip_on=False);
     ax.set_ylim(polar_ylim);
     ax.set_title('Stimulus-accounted');
+
+    #pdb.set_trace();
 
   ### MIXTURE STIMULI
   elif disp>0:
@@ -212,11 +233,12 @@ def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=
 
   ## Common to all
   f.subplots_adjust(wspace=0.2, hspace=0.25);
+  f1f0_ratio = hf.compute_f1f0(data, which_cell, expInd, dp, descrFitName_f0=descrFit_f0)[0];
   try: # not always exists
     cell_label = dataList['unitType'][which_cell-1];
   except: # always works
     cell_label = dataList['unitArea'][which_cell-1];
-  f.suptitle('%s #%d: disp %d, con %.2f, sf %.2f' % (cell_label, which_cell, allDisps[disp], allCons[con], allSfs[sf]));
+  f.suptitle('%s (f1f0: %.2f) #%d: disp %d, con %.2f, sf %.2f' % (cell_label, f1f0_ratio, which_cell, allDisps[disp], allCons[con], allSfs[sf]));
 
   saveName = "/cell_%03d_d%dsf%dcon%d_phase.pdf" % (which_cell, disp, sf, con);
   save_loc = save_base + "cell_%03d/" % which_cell;
@@ -229,6 +251,11 @@ def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=
   pdfSv.close();
 
 def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, expName=expName, phAdvStr=phAdvName, rvcStr=rvcName):
+  ''' RVC, resp-X-phase, phase advance model split by SF within each cell/dispersion condition
+      1. response-versus-contrast; shows original and adjusted response
+      2. polar plot of response amplitude and phase with phase advance model fit
+      3. response amplitude (x) vs. phase (y) with the linear phase advance model fit
+  '''
 
   # basics
   dataList = hf.np_smart_load(str(dp + expName))
@@ -278,7 +305,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
         # get the relevant amplitudes (i.e. the amplitudes at the stimulus TF)
         stimDur = hf.get_exp_params(expInd).stimDur;
         psth_val, _ = hf.make_psth(data['spikeTimes'][val_trials], stimDur=stimDur)
-        _, rel_amp, _ = hf.spike_fft(psth_val, all_tf, stimDur)
+        _, rel_amp, _ = hf.spike_fft(psth_val, all_tf, stimDur = stimDur)
         amps.append(rel_amp);
 
     r, th, _, _ = hf.polar_vec_mean(amps, phis); # mean amp/phase (outputs 1/2); std/var for amp/phase (outputs 3/4)
@@ -301,7 +328,10 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     n_conds = len(r);
     colors = cm.viridis(np.linspace(0, 0.95, n_conds));
 
-    ## now for plotting: first, response amplitude (with linear contrast)
+
+    #####
+    ## 1. now for plotting: first, response amplitude (with linear contrast)
+    #####
     plot_cons = np.linspace(0, 1, 100);
     mod_fit = rvc_model(opt_params_rvc[0], opt_params_rvc[1], opt_params_rvc[2], plot_cons);
 
@@ -315,14 +345,16 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     ax.set_title('response versus contrast')
     ax.legend((plt_measured, plt_fit[0]), ('data', 'model fit'), loc='upper left')
 
-    ## also summarize the model fit on the plot
+    # also summarize the model fit on this plot
     ymax = np.maximum(np.max(r), np.max(mod_fit));
     plt.text(0.8, 0.30 * ymax, 'b: %.2f' % (opt_params_rvc[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
     plt.text(0.8, 0.20 * ymax, 'slope:%.2f' % (opt_params_rvc[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
     plt.text(0.8, 0.10 * ymax, 'c0: %.2f' % (opt_params_rvc[2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
     plt.text(0.8, 0.0 * ymax, 'con gain: %.2f' % (con_gain), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
-    ## 2. then the fit/plot of phase as a function of ampltude
+    #####
+    ## 3. then the fit/plot of phase as a function of ampltude
+    #####
     plot_amps = np.linspace(0, np.max(r), 100);
     mod_fit = phAdv_model(opt_params_phAdv[0], opt_params_phAdv[1], plot_amps);
 
@@ -345,7 +377,9 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
 
     #center_phi = lambda ph1, ph2: np.arcsin(np.sin(np.deg2rad(ph1) - np.deg2rad(ph2)));
 
-    ## now the polar plot of resp/phase together
+    #####
+    ## 2. now the polar plot of resp/phase together
+    #####
     ax = plt.subplot(2, 2, 2, projection='polar')
     th_center = np.rad2deg(np.radians(-90)+np.radians(th[np.argmax(r)])); # "anchor" to the phase at the highest amplitude response
     #data_centered = center_phi(th, th_center);
@@ -364,10 +398,11 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
 
     # overall title
     f.subplots_adjust(wspace=0.2, hspace=0.25);
+    f1f0_ratio = hf.compute_f1f0(data, which_cell, expInd, dp, descrFitName_f0=descrFit_f0)[0];
     try:
-      f.suptitle('%s #%d: disp %d, sf %.2f cpd' % (dataList['unitType'][which_cell-1], which_cell, allDisps[disp], allSfs[sf]));
+      f.suptitle('%s (%.2f) #%d: disp %d, sf %.2f cpd' % (dataList['unitType'][which_cell-1], f1f0_ratio, which_cell, allDisps[disp], allSfs[sf]));
     except:
-      f.suptitle('%s #%d: disp %d, sf %.2f cpd' % (dataList['unitArea'][which_cell-1], which_cell, allDisps[disp], allSfs[sf]));
+      f.suptitle('%s (%.2f) #%d: disp %d, sf %.2f cpd' % (dataList['unitArea'][which_cell-1], f1f0_ratio, which_cell, allDisps[disp], allSfs[sf]));
 
   saveName = "/cell_%03d_d%d_phaseAdv.pdf" % (which_cell, disp);
   save_loc = save_base + 'summary/';
