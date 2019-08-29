@@ -170,7 +170,7 @@ modAvgs = [np.nanmean(resp, axis=3) for resp in allSfMixs];
 modSponRates = [fit[6] for fit in modFits];
 
 # more tabulation - stim vals, organize measured responses
-_, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd);
+_, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData, expInd);
 if rvcAdj == 1:
   rvcFlag = '_f1';
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase);
@@ -605,7 +605,7 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
 
   for d in range(nDisps):
       # which sfs have at least one contrast presentation? within a dispersion, all cons have the same # of sfs
-      v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd);
+      v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd, stimVals, validByStimVal);
       n_v_sfs = len(v_sf_inds);
       n_rows = int(np.ceil(n_v_sfs/np.floor(np.sqrt(n_v_sfs)))); # make this close to a rectangle/square in arrangement (cycling through sfs)
       n_cols = int(np.ceil(n_v_sfs/n_rows));
@@ -719,7 +719,7 @@ if diffPlot != 1 or intpMod == 0:
       resps_curr = [modAvgs[0], respMean, modAvgs[1]];
       labels     = [modLabels[0], 'data', modLabels[1]];
 
-      v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd);
+      v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd, stimVals, validByStimVal);
       n_v_sfs = len(v_sf_inds);
 
       for i in range(3):

@@ -379,7 +379,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, i
   print('Doing the work, now');
 
   # first, get the set of stimulus values:
-  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd);
+  _, stimVals, valConByDisp, validByStimVal, _ = hf.tabulate_responses(data, expInd);
   all_disps = stimVals[0];
   all_cons = stimVals[1];
   all_sfs = stimVals[2];
@@ -430,7 +430,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, i
       if con not in valConByDisp[d]:
         continue;
 
-      valSfInds = hf.get_valid_sfs(data, d, con, expInd);
+      valSfInds = hf.get_valid_sfs(data, d, con, expInd, stimVals, validByStimVal);
       valSfVals = all_sfs[valSfInds];
 
       print('.');

@@ -70,10 +70,10 @@ if descrMod > -1:
   try:
     if modRecov == 1:
       fitStr = hf.fitType_suffix(fitType);
-      descrBase = 'mr%s_descrFits_190503_poiss_%s.npy' % (fitStr, hf.descrMod_name(descrMod)); 
+      descrBase = 'mr%s_descrFits_190503_sqrt_%s.npy' % (fitStr, hf.descrMod_name(descrMod)); 
       descrFits = hf.np_smart_load(data_loc + descrBase);
     else:
-      descrBase = 'descrFits_190503_poiss_%s.npy' % hf.descrMod_name(descrMod); 
+      descrBase = 'descrFits_190503_sqrt_%s.npy' % hf.descrMod_name(descrMod); 
       descrFits = hf.np_smart_load(data_loc + descrBase);
   except:
     descrFits = None;
@@ -147,7 +147,9 @@ if descrFits is not None:
 else:
   descrParams = None;
 
-# ### Organize data
+###########
+# Organize data
+###########
 # #### determine contrasts, center spatial frequency, dispersions
 
 modResp = mod_resp.SFMGiveBof(modFit, expData, normType=fitType, lossType=lossType, expInd=expInd)[1];
@@ -168,7 +170,7 @@ if modRecov == 1:
   modParamGT, overwriteSpikes = hf.get_recovInfo(expData, fitType);
 else:
   overwriteSpikes = None;
-_, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd);
+_, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData, expInd);
 if rvcAdj == 1:
   rvcFlag = '_f1';
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase);
@@ -200,7 +202,9 @@ nCons = len(all_cons);
 nSfs = len(all_sfs);
 nDisps = len(all_disps);
 
-# ### Plots
+#################################
+# Plots
+#################################
 
 # set up colors, labels
 modClr = 'r';
@@ -209,7 +213,9 @@ dataClr = 'k';
 dataTxt = 'data';
 descrClr = 'b';
 
-# #### Plots by dispersion
+###########
+# Plots by dispersion
+###########
 
 fDisp = []; dispAx = [];
 
@@ -229,9 +235,12 @@ for d in range(nDisps):
         c_plt_ind = len(v_cons) - c - 1;
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
 
+        curr_sfs  = all_sfs[v_sfs];
+        curr_resp = respMean[d, v_sfs, v_cons[c]]; # data response (not model, not descriptive fit)
+
         ### left side of plots
         ## plot data
-        dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
+        dispAx[d][c_plt_ind, 0].errorbar(curr_sfs, curr_resp, 
                                          respVar[d, v_sfs, v_cons[c]], color=dataClr, fmt='o', clip_on=False, label=dataTxt);
         dispAx[d][c_plt_ind, 0].axhline(blankMean, color=dataClr, linestyle='dashed', label='spon. rate');
 
@@ -247,7 +256,7 @@ for d in range(nDisps):
         if d == 0:
           ## plot everything again on log-log coordinates...
           # first data
-          dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
+          dispAx[d][c_plt_ind, 1].errorbar(curr_sfs, curr_resp, 
                                                      respVar[d, v_sfs, v_cons[c]], fmt='o', color=dataClr, clip_on=False, label=dataTxt);
 
           # then model fits
@@ -258,7 +267,7 @@ for d in range(nDisps):
             prms_curr = descrParams[d, v_cons[c]];
             descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
             dispAx[d][c_plt_ind, 1].plot(sfs_plot, descrResp, color=descrClr, label='descr. fit', clip_on=False)
-            # now plot characteristic frequency!  
+            # now plot characteristic frequency!
             char_freq = hf.dog_charFreq(prms_curr, descrMod);
             if char_freq != np.nan:
               dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k', label='char. freq');
@@ -267,6 +276,7 @@ for d in range(nDisps):
           #dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % dfVarExpl[d, v_cons[c]]);
           dispAx[d][c_plt_ind, 1].set_xscale('log');
           dispAx[d][c_plt_ind, 1].set_yscale('log'); # double log
+          dispAx[d][c_plt_ind, 1].legend(); # double log
 
         '''
         ## Now, if dispersion: plot the individual comp. responses...
@@ -338,7 +348,9 @@ for f in fDisp:
     plt.close(f)
 pdfSv.close();
 
-# #### All SF tuning on one graph, split by dispersion
+###########
+# All SF tuning on one graph, split by dispersion
+###########
 
 fDisp = []; dispAx = [];
 
@@ -401,7 +413,9 @@ for f in fDisp:
     plt.close(f)
 pdfSv.close()
 
-# #### Plot just sfMix contrasts
+###########
+# Plot just sfMix contrasts
+###########
 
 mixCons = hf.get_exp_params(expInd).nCons;
 maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
@@ -613,15 +627,21 @@ for fig in range(len(allFigs)):
     plt.close(allFigs[fig])
 pdfSv.close()
 
+######################
+###########
 #### Response versus contrast
+###########
+######################
 
-# #### Plot contrast response functions with (full) model predictions
+###########
+# Plot contrast response functions with (full) model predictions
+###########
 
 rvcAx = []; fRVC = [];
 
 for d in range(nDisps):
     # which sfs have at least one contrast presentation? within a dispersion, all cons have the same # of sfs
-    v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd);
+    v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd, stimVals, validByStimVal);
     n_v_sfs = len(v_sf_inds);
     n_rows = int(np.ceil(n_v_sfs/np.floor(np.sqrt(n_v_sfs)))); # make this close to a rectangle/square in arrangement (cycling through sfs)
     n_cols = int(np.ceil(n_v_sfs/n_rows));
@@ -696,7 +716,9 @@ for f in fRVC:
     plt.close(f)
 pdfSv.close()
 
-# #### Plot contrast response functions - all sfs on one axis (per dispersion)
+###########
+# Plot contrast response functions - all sfs on one axis (per dispersion)
+###########
 
 crfAx = []; fCRF = [];
 
@@ -711,7 +733,7 @@ for d in range(nDisps):
     resps_curr = [modAvg, respMean];
     labels     = [modTxt, dataTxt];
 
-    v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd);
+    v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd, stimVals, validByStimVal);
     n_v_sfs = len(v_sf_inds);
 
     for i in range(len(resps_curr)):

@@ -89,7 +89,7 @@ descrParams = descrFits[cellNum-1]['params'];
 
 # more tabulation - stim vals, organize measured responses
 overwriteSpikes = None;
-_, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd);
+_, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData, expInd);
 if rvcAdj == 1:
   rvcFlag = '_f1';
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase);
@@ -155,8 +155,10 @@ for d in range(nDisps):
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
 
         ### left side of plots
+        sfVals = all_sfs[v_sfs];
+        resps  = respMean[d, v_sfs, v_cons[c]];
         ## plot data
-        dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
+        dispAx[d][c_plt_ind, 0].errorbar(sfVals, resps,
                                          respVar[d, v_sfs, v_cons[c]], color=dataClr, fmt='o', clip_on=False, label=dataTxt);
         dispAx[d][c_plt_ind, 0].axhline(blankMean, color=dataClr, linestyle='dashed', label='spon. rate');
 
@@ -164,6 +166,13 @@ for d in range(nDisps):
         prms_curr = descrParams[d, v_cons[c]];
         descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
         dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=modClr, label='descr. fit');
+
+        ## plot peak & c.o.m.
+        ctr = hf.sf_com(resps, sfVals);
+        pSf = hf.dog_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
+        dispAx[d][c_plt_ind, 0].plot(ctr, 1, linestyle='None', marker='v', label='c.o.m.', color=dataClr); # plot at y=1
+        dispAx[d][c_plt_ind, 0].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr); # plot at y=1
+        dispAx[d][c_plt_ind, 0].legend();
 
         ### right side of plots
         if d == 0:
@@ -302,14 +311,23 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].set_title('con:' + str(np.round(all_cons[v_cons[c]], 2)))
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);
         
+        sfVals = all_sfs[v_sfs];
+        resps  = respMean[d, v_sfs, v_cons[c]];
+
         # plot data
-        sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
+        sfMixAx[c_plt_ind, d].errorbar(sfVals, resps,
                                        respVar[d, v_sfs, v_cons[c]], fmt='o', clip_on=False, label=dataTxt, color=dataClr);
 
-        # plot descrFit, if there
+        # plot descrFit
         prms_curr = descrParams[d, v_cons[c]];
         descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
         sfMixAx[c_plt_ind, d].plot(sfs_plot, descrResp, label=modTxt, color=modClr);
+
+        # plot prefSF, center of mass
+        ctr = hf.sf_com(resps, sfVals);
+        pSf = hf.dog_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
+        sfMixAx[c_plt_ind, d].plot(ctr, 1, linestyle='None', marker='v', label='c.o.m.', color=dataClr); # plot at y=1
+        sfMixAx[c_plt_ind, d].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr); # plot at y=1
 
         sfMixAx[c_plt_ind, d].set_xlim((np.min(all_sfs), np.max(all_sfs)));
         sfMixAx[c_plt_ind, d].set_ylim((0, 1.5*maxResp));
@@ -348,7 +366,7 @@ rvcAx = []; fRVC = [];
 
 for d in range(nDisps):
     # which sfs have at least one contrast presentation? within a dispersion, all cons have the same # of sfs
-    v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd);
+    v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd, stimVals, validByStimVal);
     n_v_sfs = len(v_sf_inds);
     n_rows = int(np.ceil(n_v_sfs/np.floor(np.sqrt(n_v_sfs)))); # make this close to a rectangle/square in arrangement (cycling through sfs)
     n_cols = int(np.ceil(n_v_sfs/n_rows));
@@ -418,7 +436,7 @@ for d in range(nDisps):
 
     fCurr.suptitle('%s #%d' % (cellType, cellNum));
 
-    v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd);
+    v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd, stimVals, validByStimVal);
     n_v_sfs = len(v_sf_inds);
 
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
