@@ -402,7 +402,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, i
 
   # next, let's compute some measures abougt the responses
   max_resp = np.nanmax(resps_all);
-  base_rate = hf.blankResp(cellStruct)[0];
+  base_rate = hf.blankResp(cellStruct, expInd)[0];
 
   # set bounds
   if DoGmodel == 0: # flexible gaussian (i.e. two halves)

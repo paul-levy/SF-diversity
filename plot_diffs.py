@@ -160,7 +160,7 @@ if respVar == 1:
 else:
   respVar = respStd;
 
-blankMean, blankStd, _ = hf.blankResp(expData); 
+blankMean, blankStd, _ = hf.blankResp(expData, expInd); 
 
 all_disps = stimVals[0];
 all_cons = stimVals[1];

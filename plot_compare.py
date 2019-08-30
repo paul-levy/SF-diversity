@@ -200,7 +200,7 @@ if diffPlot: # otherwise, nothing to do
   respMean = respsRecenter[0];
   modAvgs  = [respsRecenter[2], respsRecenter[1]];
 
-blankMean, blankStd, _ = hf.blankResp(expData); 
+blankMean, blankStd, _ = hf.blankResp(expData, expInd); 
 
 all_disps = stimVals[0];
 all_cons = stimVals[1];

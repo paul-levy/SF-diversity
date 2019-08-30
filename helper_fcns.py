@@ -535,7 +535,7 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0, descrFit
 
   # get stim info, responses
   _, stimVals, val_con_by_disp, val_byTrial, _ = tabulate_responses(trial_inf, expInd);
-  f0_blank = blankResp(trial_inf)[0]; # we'll subtract off the f0 blank mean response from f0 responses
+  f0_blank = blankResp(trial_inf, expInd)[0]; # we'll subtract off the f0 blank mean response from f0 responses
 
   all_sfs = stimVals[2];
 
@@ -1648,15 +1648,16 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02):
 
 ###
 
-def blankResp(cellStruct):
+def blankResp(cellStruct, expInd):
     # works for all experiment variants (checked 08.20.19)
     if 'sfm' in cellStruct:
       tr = cellStruct['sfm']['exp']['trial'];
     else:
       tr = cellStruct;
     blank_tr = tr['spikeCount'][numpy.isnan(tr['con'][0])];
-    mu = numpy.mean(blank_tr);
-    sig = numpy.std(blank_tr);
+    stimDur = get_exp_params(expInd).stimDur;
+    mu = numpy.mean(np.divide(blank_tr, stimDur));
+    sig = numpy.std(np.divide(blank_tr, stimDur));
     
     return mu, sig, blank_tr;
     
