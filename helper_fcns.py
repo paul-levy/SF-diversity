@@ -1656,8 +1656,8 @@ def blankResp(cellStruct, expInd):
       tr = cellStruct;
     blank_tr = tr['spikeCount'][numpy.isnan(tr['con'][0])];
     stimDur = get_exp_params(expInd).stimDur;
-    mu = numpy.mean(np.divide(blank_tr, stimDur));
-    sig = numpy.std(np.divide(blank_tr, stimDur));
+    mu = numpy.mean(numpy.divide(blank_tr, stimDur));
+    sig = numpy.std(numpy.divide(blank_tr, stimDur));
     
     return mu, sig, blank_tr;
     
@@ -2004,9 +2004,11 @@ def organize_adj_responses(data, rvcFits, expInd):
     
   return adjResps;
 
-def organize_resp(spikes, expStructure, expInd, mask=None):
+def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False):
     ''' organizes the responses by condition given spikes, experiment structure, and expInd
         mask will be None OR list of trials to consider (i.e. trials not in mask/where mask is false are ignored)
+
+    TODO: Ensure that values computed here are consistently rates!!!
     '''
     # the blockIDs are fixed...
     exper = get_exp_params(expInd);
