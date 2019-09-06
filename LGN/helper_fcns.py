@@ -849,7 +849,7 @@ def tabulate_responses(data, modResp = []):
                     f1SEM[d, sf, con] = np.asarray([sem([x[i] for x in data['power_f1'][valid_tr]]) for i in range(all_disps[d])]); # need to be careful, since sem cannot handle numpy array well
                   else:
                     f1SEM[d, sf, con] = sem(data['power_f1'][valid_tr]);
-                else:
+                except:
                   f1SEM[d, sf, con] = np.nan;
                 curr_pred = 0;
                 curr_var = 0; # variance (std^2) adds
