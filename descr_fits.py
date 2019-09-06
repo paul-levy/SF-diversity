@@ -13,10 +13,12 @@ data_suff = 'structures/';
 
 expName = hf.get_datalist(sys.argv[3]); # sys.argv[3] is experiment dir
 #expName = 'dataList_glx_mr.npy'
+df_f0 = 'descrFits_190503_sqrt_flex.npy';
+#df_f0 = 'descrFits_190503_sach_flex.npy';
 dogName =  'descrFits_190503';
-phAdvName = 'phaseAdvanceFits_190828'
+phAdvName = 'phaseAdvanceFits_190905'
 rvcName_f0   = 'rvcFits_f0'
-rvcName_f1   = 'rvcFits_190828_f1'
+rvcName_f1   = 'rvcFits_190905'
 ## model recovery???
 modelRecov = 0;
 if modelRecov == 1:
@@ -37,8 +39,8 @@ else:
 ##########
 
 ## phase_advance_fit
-## rvc_adjusted_fit
-## fit_RVC_f0
+## rvc_adjusted_fit  - fit RVC for each SF/disp condition, choosing F0 or F1 given simple/complex determination
+## fit_RVC_f0        - forces f0 spikes for RVC
 
 ## invalid
 ## DoG_loss
@@ -72,7 +74,7 @@ else:
     The Sach DoG curves should also be fit to this sum.
 '''
 
-def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save = 1, disp=0, dir=1, expName=expName):
+def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save=1, disp=0, dir=1, expName=expName):
   ''' Given the FFT-derived response amplitude and phase, determine the response phase relative
       to the stimulus by taking into account the stimulus phase. 
       Then, make a simple linear model fit (line + constant offset) of the response phase as a function
@@ -130,14 +132,19 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save =
 
   return phAdv_model, all_opts;
 
-def rvc_adjusted_fit(cell_num, data_loc, expInd, rvcName=rvcName_f1, to_save=1, disp=0, dir=-1, expName=expName):
-  ''' Piggy-backing off of phase_advance_fit above, get prepare to project the responses onto the proper phase to get the correct amplitude
+def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=-1, expName=expName, force_f1=False):
+  ''' Piggy-backing off of phase_advance_fit above, get prepared to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
   '''
   dataList = hf.np_smart_load(data_loc + expName);
-  cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
+  cellName = dataList['unitName'][cell_num-1];
+  cellStruct = hf.np_smart_load(data_loc + cellName + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
   rvcNameFinal = hf.phase_fit_name(rvcName, dir);
+  expInd = hf.get_exp_ind(data_loc, cellName)[0];
+
+  # before anything, let's get f1/f0 ratio
+  f1f0 = hf.compute_f1f0(data, cell_num, expInd, data_loc, descrFitName_f0, descrFitName_f1)[0];
 
   # first, get the set of stimulus values:
   _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd);
@@ -148,33 +155,58 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, rvcName=rvcName_f1, to_save=1, 
   except:
     warnings.warn('This experiment does not have dispersion level %d; returning empty arrays' % disp);
     return [], [], [], [];
-  # calling phase_advance fit, use the phAdv_model and optimized paramters to compute the true response amplitude
-  # given the measured/observed amplitude and phase of the response
-  # NOTE: We always call phase_advance_fit with disp=0 (default), since we don't make a fit
-  # for the mixtrue stimuli - instead, we use the fits made on single gratings to project the
-  # individual-component-in-mixture responses
-  phAdv_model, all_opts = phase_advance_fit(cell_num, data_loc=data_loc, expInd=expInd, dir=dir, to_save = 0); # don't save
-  allAmp, allPhi, _, allCompCon, allCompSf = hf.get_all_fft(data, disp, expInd, dir=dir, all_trials=1);
-  # get just the mean amp/phi and put into convenient lists
-  allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)
-  allAmpTrials = [[x[2] for x in sf] for sf in allAmp]; # trial-by-trial is third element 
+  #######
+  ### Now, we fit the RVC
+  #######
+  if f1f0 > 1 or force_f1 is True: # i.e. simple cell
+    # calling phase_advance fit, use the phAdv_model and optimized paramters to compute the true response amplitude
+    # given the measured/observed amplitude and phase of the response
+    # NOTE: We always call phase_advance_fit with disp=0 (default), since we don't make a fit
+    # for the mixtrue stimuli - instead, we use the fits made on single gratings to project the
+    # individual-component-in-mixture responses
+    phAdv_model, all_opts = phase_advance_fit(cell_num, data_loc=data_loc, expInd=expInd, dir=dir, to_save = 0); # don't save
+    allAmp, allPhi, _, allCompCon, allCompSf = hf.get_all_fft(data, disp, expInd, dir=dir, all_trials=1);
+    # get just the mean amp/phi and put into convenient lists
+    allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)
+    allAmpTrials = [[x[2] for x in sf] for sf in allAmp]; # trial-by-trial is third element 
 
-  allPhiMeans = [[x[0] for x in sf] for sf in allPhi]; # mean is in the first element; do that for each [mean, var] pair in each list (split by sf)
-  allPhiTrials = [[x[2] for x in sf] for sf in allPhi]; # trial-by-trial is third element 
+    allPhiMeans = [[x[0] for x in sf] for sf in allPhi]; # mean is in the first element; do that for each [mean, var] pair in each list (split by sf)
+    allPhiTrials = [[x[2] for x in sf] for sf in allPhi]; # trial-by-trial is third element 
 
-  adjMeans   = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
-  adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs);
-  consRepeat = [valCons] * len(adjMeans);
+    adjMeans   = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
+    adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs);
+    consRepeat = [valCons] * len(adjMeans);
 
-  if disp > 0: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)
-    adjSumResp  = [np.sum(x, 1) if x else [] for x in adjMeans];
-    adjSemTr    = [[sem(np.sum(hf.switch_inner_outer(x), 1)) for x in y] for y in adjByTrial]
-    adjSemCompTr  = [[sem(hf.switch_inner_outer(x)) for x in y] for y in adjByTrial];
-    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, adjSemTr);
-  elif disp == 0:
-    adjSemTr   = [[sem(x) for x in y] for y in adjByTrial];
-    adjSemCompTr = adjSemTr; # for single gratings, there is only one component!
+    if disp > 0: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)
+      adjSumResp  = [np.sum(x, 1) if x else [] for x in adjMeans];
+      adjSemTr    = [[sem(np.sum(hf.switch_inner_outer(x), 1)) for x in y] for y in adjByTrial]
+      adjSemCompTr  = [[sem(hf.switch_inner_outer(x)) for x in y] for y in adjByTrial];
+      rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, adjSemTr);
+    elif disp == 0:
+      adjSemTr   = [[sem(x) for x in y] for y in adjByTrial];
+      adjSemCompTr = adjSemTr; # for single gratings, there is only one component!
+      rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr);
+  else: ### FIT RVC TO baseline-subtracted F0
+    spikerate = hf.get_adjusted_spikerate(data, cell_num, expInd, data_loc, rvcName=None, descrFitName_f0=descrFitName_f0, descrFitName_f1=descrFitName_f1);
+    # recall: rvc_fit wants adjMeans/consRepeat/adjSemTr organized as nSfs lists of nCons elements each (nested)
+    respsOrg = hf.organize_resp(spikerate, data, expInd, respsAsRate=True)[3];
+    #  -- so now, we organize
+    adjMeans = []; adjSemTr = [];
+    curr_cons = valConByDisp[disp];
+    for sf_i, sf_val in enumerate(allSfs):
+      # each list we add here should be of length nCons
+      mnCurr = []; semCurr = [];
+      for con_i in curr_cons:
+        curr_resps = hf.nan_rm(respsOrg[disp, sf_i, con_i, :]);
+        if np.array_equal(np.nan, curr_resps):
+          mnCurr.append([]); semCurr.append([]);
+        else:
+          mnCurr.append(np.mean(curr_resps)); semCurr.append(sem(curr_resps));
+      adjMeans.append(mnCurr); adjSemTr.append(semCurr);
+    consRepeat = [allCons[curr_cons]] * len(adjMeans);
     rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr);
+    adjByTrial = spikerate;
+    adjSemCompTr = []; # we're getting f0 - therefore cannot get individual component responses!
 
   if os.path.isfile(data_loc + rvcNameFinal):
       rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
@@ -565,14 +597,14 @@ if __name__ == '__main__':
       if ph_fits == 1:
         phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp);
       if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp);
+        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp);
       if descr_fits == 1:
         fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, DoGmodel=dog_model, loss_type=loss_type);
     else:
       if ph_fits == 1:
         phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp, dir=dir);
       if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp, dir=dir);
+        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp, dir=dir);
       if descr_fits == 1:
         fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type);
 

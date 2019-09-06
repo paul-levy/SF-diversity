@@ -100,6 +100,7 @@ import warnings
 # organize_resp       -
 # get_spikes - get correct # spikes for a given cell (will get corrected spikes if needed) trial-by-trial
 # get_rvc_fits - return the rvc fits for a given cell (if applicable)
+# get_adjusted_spikerate - wrapper for get_spikes which gives us the correct/adjusted (if needed) spike rate (per second)
 # mod_poiss - computes "r", "p" for modulated poisson model (neg. binomial)
 # naka_rushton
 # fit_CRF
@@ -893,7 +894,7 @@ def get_recovInfo(cellStruct, normType):
     warnings.warn('You likely do not have a recovery set up for this cell/file');
   return prms, spks;
 
-def rvc_fit(amps, cons, var = None, n_repeats = 10):
+def rvc_fit(amps, cons, var = None, n_repeats = 1000):
    ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
        fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
@@ -930,10 +931,12 @@ def rvc_fit(amps, cons, var = None, n_repeats = 10):
 
      for rpt in range(n_repeats):
 
-       init_params = [0, np.max(curr_amps), random_in_range([0.05, 0.5])[0]]; 
-       b_bounds = (0, 0); # 9.14.18 - per Tony, set to be just 0 for now
+       b_rat = random_in_range([0.0, 0.2])[0];
+       init_params = [b_rat*np.max(curr_amps), (2+3*b_rat)*np.max(curr_amps), random_in_range([0.05, 0.5])[0]]; 
+       b_bounds = (None, 0); # 9.14.18 - per Tony, set to be just 0 for now
+       #b_bounds = (0, 0); # 9.14.18 - per Tony, set to be just 0 for now
        k_bounds = (0, None);
-       c0_bounds = (1e-3, 1);
+       c0_bounds = (3e-2, 1);
        all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
        # now optimize
        to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
@@ -1313,6 +1316,7 @@ def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
 def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, 
               conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, c50Loc=2, varExplThresh=75, dog_varExplThresh=60):
   ''' create the "super structure" that we use to analyze data across multiple versions of the experiment
+      TODO: update this to get proper spikes/tuning measures based on f1/f0 ratio (REQUIRES descrFits to be like rvcFits, i.e. fit F1 or F0 responses, accordingly)
       inputs:
         baseDir      - what is the base directory?
         expDirs      - what are the directories of the experiment directory
@@ -1334,7 +1338,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
   np = numpy;
   jointList = [];
 
-  for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames,        rvcNames):
+  for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames):
     
     # get the current directory, load data list
     data_loc = base_dir + expDir + 'structures/';    
@@ -1504,8 +1508,12 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
             # on data
             try:
                 c50[d, s] = rvcFits[cell_ind]['params'][d, s, c50Loc];
-            except: # then this dispersion does not have that SF value, but it's ok - we already have nan
-                pass
+            except: # might just be arranged differently...
+                try: # TODO: investigate why c50 param is saving for nan fits in hf.fit_rvc...
+                  if ~np.isnan(rvcFits[cell_ind][d]['loss'][s]): # only add it if it's a non-NaN loss value...
+                    c50[d, s] = rvcFits[cell_ind][d]['params'][s][c50Loc];
+                except: # then this dispersion does not have that SF value, but it's ok - we already have nan
+                  pass;
 
         ## Now, after going through all cons/sfs, compute ratios/differences
         # first, with contrast
@@ -1820,7 +1828,7 @@ def get_isolated_responseAdj(data, trials, adjByTrial):
 
 ##
 
-def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False):
+def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False, modsAsRate=False):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
         (ii) all_disps, all_cons, all_sfs - i.e. the stimulus conditions of the experiment
@@ -1954,10 +1962,13 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                 predMean[d, sf, con] = curr_pred;
                 predStd[d, sf, con] = np.sqrt(curr_var);
                 
-                if mod: # convert spike counts in each trial to spike rate (spks/s)
-                    # NOTE::TODO:: must check after 19.08.29 change - do we want to divide mod responses by stimDur always?
+                if mod: # if needed, convert spike counts in each trial to spike rate (spks/s)
                     nTrCurr = sum(valid_tr); # how many trials are we getting?
-                    modRespOrg[d, sf, con, 0:nTrCurr] = modResp[valid_tr]/stimDur;
+                    if modsAsRate == True: # i.e. we passed on the model repsonses as rates already!
+                      divFactor = 1;
+                    else: # default behavior
+                      divFactor = stimDur;
+                    modRespOrg[d, sf, con, 0:nTrCurr] = np.divide(modResp[valid_tr], divFactor);
 
             if np.any(~np.isnan(respMean[d, :, con])):
                 if ~np.isnan(np.nanmean(respMean[d, :, con])):
@@ -2008,7 +2019,6 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False):
     ''' organizes the responses by condition given spikes, experiment structure, and expInd
         mask will be None OR list of trials to consider (i.e. trials not in mask/where mask is false are ignored)
 
-    TODO: Ensure that values computed here are consistently rates!!!
     '''
     # the blockIDs are fixed...
     exper = get_exp_params(expInd);
@@ -2058,7 +2068,8 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False):
       v1_hf = il.import_module(v1_dir + 'helper_fcns');
       _, _, rateSfMix, allSfMix = v1_hf.organize_modResp(spikes, data, mask);
     else:
-      allSfMix  = tabulate_responses(expStructure, expInd, spikes, mask)[4];
+      # NOTE: we are getting the modRespOrg output of tabulate_responses, and ensuring the spikes are treated as rates (or raw counts) based on how they are passed in here
+      allSfMix  = tabulate_responses(expStructure, expInd, spikes, mask, modsAsRate = respsAsRate)[4];
       rateSfMix = numpy.nanmean(allSfMix, -1);
 
     return rateOr, rateCo, rateSfMix, allSfMix;  
@@ -2103,6 +2114,39 @@ def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', direc=1):
     rvcFits = None;
 
   return rvcFits;
+
+def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, descrFitName_f0, descrFitName_f1=None, force_dc=False):
+  ''' wrapper function which will call needed subfunctions to return dc-subtracted spikes by trial
+      OUTPUT: SPIKES (as rate, per s), baseline subtracted
+        note: user can override f1f0 calculation to force return of DC values only (set force_dc = TRUE)
+  '''
+  f1f0_rat = compute_f1f0(expData, which_cell, expInd, dataPath, descrFitName_f0=descrFitName_f0, descrFitName_f1=descrFitName_f1)[0];
+  stimDur = get_exp_params(expInd).stimDur; # may need this value
+
+  ### i.e. if we're looking at a simple cell, then let's get F1
+  if f1f0_rat > 1 and force_dc is False:
+      if rvcName is not None:
+          rvcFits = get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName);
+      else:
+          rvcFits = None
+      spikes_byComp = get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
+      spikes = np.array([np.sum(x) for x in spikes_byComp]);
+      rates = True; # when we get the spikes from rvcFits, they've already been converted into rates (in get_all_fft)
+      baseline = None; # f1 has no "DC", yadig? 
+  ### then complex cell, so let's get F0
+  else:
+      spikes = get_spikes(expData, get_f0=1, rvcFits=None, expInd=expInd);
+      rates = False; # get_spikes without rvcFits is directly from spikeCount, which is counts, not rates!
+      baseline = blankResp(expData, expInd)[0]; # we'll plot the spontaneous rate
+      # why mult by stimDur? well, spikes are not rates but baseline is, so we convert baseline to count (i.e. not rate, too)
+      spikes = spikes - baseline*stimDur;
+  # now, convert to rate (could be just done in above if/else, but cleaner to have it explicit here)
+  if rates == False:
+    spikerate = numpy.divide(spikes, stimDur);
+  else:
+    spikerate = spikes;
+
+  return spikerate;
 
 def mod_poiss(mu, varGain):
     np = numpy;
