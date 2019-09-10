@@ -6,8 +6,8 @@ baseDir = pwd;
 baseDir = strrep(baseDir, '/matlab', '/');
 disp(baseDir);
 expDir  = 'V1/recordings';
-expName = 'm676p3l06#13/';
-progName = 'sfMixHalfInt';
+expName = 'm676l01#109/';
+progName = 'sfMixLGN';
 
 msFolder = [baseDir expDir '/sorted/' expName];
 filename = 'sfMixHalfInt.dat';
@@ -22,5 +22,6 @@ glx.firingsName = firingsName;
 glx.metricsName = metricsName;
 
 %%
-% sfMixLoad(strrep(expName, '#13/', ''), 'loadPath', [baseDir expDir], 'savePath', [baseDir strrep(expDir, 'recordings', 'structures')], 'spkOffset', spkOffset, 'prog', progName);
-sfMixLoad(strrep(expName, '#13/', ''), 'loadPath', [baseDir expDir], 'savePath', [baseDir strrep(expDir, 'recordings', 'structures')], 'spkOffset', spkOffset, 'glxStruct', glx, 'prog', progName);
+sfMixLoad(strrep(expName, '/', ''), 'loadPath', [baseDir expDir], 'savePath', [baseDir strrep(expDir, 'recordings', 'structuresTest')], 'prog', progName);
+%sfMixLoad(strrep(expName, '#95/', ''), 'loadPath', [baseDir expDir], 'savePath', [baseDir strrep(expDir, 'recordings', 'structuresTest')], 'prog', progName);
+% sfMixLoad(strrep(expName, '#13/', ''), 'loadPath', [baseDir expDir], 'savePath', [baseDir strrep(expDir, 'recordings', 'structures')], 'spkOffset', spkOffset, 'glxStruct', glx, 'prog', progName);

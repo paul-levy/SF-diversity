@@ -110,7 +110,7 @@ for iU = 1:nUnits
     end
     
     % Get some information about the experiments run for this cell
-    xmlList = dir([loadPath, '/', unitLabels{iU}, '#*xml']);
+    xmlList = dir([loadPath, '/', unitLabels{iU}, '*xml']); % '#*xml'
     nFiles  = size(xmlList,1);
     
     if nFiles>0
@@ -235,7 +235,6 @@ else
     fullWaves = [];
 end
 % get sorted spike times, if present
-sortPath = [glxStruct.msFolder, fileName];
 if isa(glxStruct, 'struct')
   fprintf('Getting mountainsort spike times\n');
   [clusid, spikes_by_clus, classification] = alignExpoGLX(DIS, glxStruct.msFolder, [glxStruct.msFolder glxStruct.filename], glxStruct.expoName, glxStruct.firingsName, glxStruct.metricsName);
@@ -253,7 +252,9 @@ trial.duration      = duration;
 trial.spikeTimes    = spikeTimes;
 trial.spikeCount    = GetSpikeCounts(spikeTimes, 0, duration, 'sec', 'impulses');                               % spikeCounts for valid trials
 trial.fullWaves     = fullWaves;
-trial.spikeTimesGLX = spks_GLX;
+if isa(glxStruct, 'struct')
+  trial.spikeTimesGLX = spks_GLX;
+end
 trial.f1            = SpikeTrainFT(spikeTimes, tfPass, trial.duration);                                         % response modulation at fundamental Fourier component
 trial.f1(BlankNDXs) = NaN;
 
