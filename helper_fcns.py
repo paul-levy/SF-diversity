@@ -513,13 +513,32 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3):
 
     return spectrum, rel_amp, full_fourier;
 
-def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0, descrFitName_f1=None):
+def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, descrFitName_f1=None):
   ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio
       This will be used to determine simple versus complex
       Note that descrFitName_f1 is optional, i.e. we needn't pass this in
+      
+      As of 19.09.24, we can avoid passing in descrFitName at all, since we also manually calculate peak f0 and f1 SF, too
   '''
   np = numpy;
- 
+
+
+  ######
+  # why are we keeping the trials with max response at F0 (always) and F1 (if present)? Per discussion with Tony, 
+  # we should evaluate F1/F0 at the SF  which has the highest response as determined by comparing F0 and F1, 
+  # i.e. F1 might be greater than F0 AND have a different than F0 - in the case, we ought to evalaute at the peak F1 frequency
+  ######
+  ## first, get F0 responses
+  f0_counts = get_spikes(trial_inf, get_f0=1);
+  f0_blank = blankResp(trial_inf, expInd)[0]; # we'll subtract off the f0 blank mean response from f0 responses
+  stimDur = get_exp_params(expInd).stimDur;
+  f0rates = np.divide(f0_counts - f0_blank, stimDur);
+  f0rates_org = organize_resp(f0rates, trial_inf, expInd, respsAsRate=True)[2];
+  ## then, get F1
+  f1rates = np.array([np.sum(x) for x in get_spikes(trial_inf, get_f0=0)]);
+  f1rates_org = organize_resp(f1rates, trial_inf, expInd, respsAsRate=True)[2];  
+  rates_org = [f0rates_org, f1rates_org];
+
   # get prefSfEst from f0 descrFits - NOTE: copied code from model_respsonses.set_model -- reconsider as a hf?
   f0f1_dfits = [descrFitName_f0, descrFitName_f1];
   prefSfEst = np.nan * np.zeros((len(f0f1_dfits), ));
@@ -533,41 +552,24 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0, descrFit
       prefSfEst[i] = dfits[cellNum-1]['prefSf'][0][hiCon]; # get high contrast, single grating prefSf
   # now "trim" prefSfEst (i.e. remove the second entry if dfn_f1 is None)
   prefSfEst = prefSfEst[~np.isnan(prefSfEst)];
-
-  # get stim info, responses
+  man_prefSfEst = np.array([np.argmax(resps[0, :, -1]) for resps in rates_org]); # get peak resp for f0 and f1
   _, stimVals, val_con_by_disp, val_byTrial, _ = tabulate_responses(trial_inf, expInd);
-  f0_blank = blankResp(trial_inf, expInd)[0]; # we'll subtract off the f0 blank mean response from f0 responses
-
   all_sfs = stimVals[2];
+  man_prefSfEst = all_sfs[man_prefSfEst];
+  prefSfEst = np.hstack((prefSfEst, man_prefSfEst));
 
+  ### now, figure out which SF value to evaluate at, get corresponding trials
   sf_match_inds = [np.argmin(np.square(all_sfs - psfEst)) for psfEst in prefSfEst]; # matching inds
   disp = 0; con = val_con_by_disp[disp][-1]; # i.e. highest con, single gratings
   val_trs = [get_valid_trials(trial_inf, disp=disp, con=con, sf=match_ind, expInd=expInd)[0][0] for match_ind in sf_match_inds]; # unpack - first 0 for first output argument, 2nd to unpack into array rather than list of array(s)
   stimDur = get_exp_params(expInd).stimDur;
 
   ######
-  # why are we keeping the trials with max response at F0 (always) and F1 (if present)? Per discussion with Tony, 
-  # we should evaluate F1/F0 at the SF  which has the highest response as determined by comparing F0 and F1, 
-  # i.e. F1 might be greater than F0 AND have a different than F0 - in the case, we ought to evalaute at the peak F1 frequency
+  # make the comparisons 
   ######
-
-  # first, get F0s
-  f0 = trial_inf['spikeCount'];
-  f0rates = [np.divide(f0[val_tr] - f0_blank, stimDur) for val_tr in val_trs];
-  # now compute the F1s
-  spike_times = [[trial_inf['spikeTimes'][x] for x in val_tr] for val_tr in val_trs];
-  psth, bins = zip(*[make_psth(spk_tm, stimDur=stimDur) for spk_tm in spike_times]); # "reverse" zipping is possible!
-  all_tf = [trial_inf['tf'][0][val_tr] for val_tr in val_trs]; # just take first grating (only will ever analyze single gratings)
-  power, rel_power, full_ft = zip(*[spike_fft(psth_curr, tfs=tf_curr, stimDur=stimDur) for psth_curr, tf_curr in zip(psth, all_tf)]);
-
-  f1rates = rel_power; # f1 is already a rate (i.e. spks [or power] / sec); just unpack
-
-  f0f1_resps = [f0rates, f1rates]; # combine f0 and f1 into one list
-
-  ######
-  # make the comparisons (see above) ....
-  ######
-
+  f0_subset = [f0rates[val_tr] for val_tr in val_trs];
+  f1_subset = [f1rates[val_tr] for val_tr in val_trs];
+  f0f1_resps = [f0_subset, f1_subset];
   # now, we'll find out which of F0 or F1 peak inds has highest response for F0 and F1 separately 
   f0f1_max = [[numpy.nanmean(x) for x in resps] for resps in f0f1_resps]; # between f0 and f1 inds, which gives higher response?
   f0f1_ind = [np.argmax(x) for x in f0f1_max]; # and get the corresponding index of that highest response
@@ -582,7 +584,7 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0, descrFit
   f0rate_pos = f0rate[f0rate_posInd];
   f1rate_pos = f1rate[f0rate_posInd];
 
-  return np.nanmean(np.divide(f1rate_pos, f0rate_pos)), f0rate, f1rate, f0, np.abs(trial_inf['f1']);
+  return np.nanmean(np.divide(f1rate_pos, f0rate_pos)), f0rate, f1rate, f0_counts, f1rates;
 
 ## phase/more psth
 
@@ -1304,7 +1306,7 @@ def flexible_Gauss(params, stim_sf, minThresh=0.1):
 def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
   # returns only pred_spikes
   if DoGmodel == 0:
-    pred_spikes = flexible_Gauss(params, stim_sf=stim_sf);
+    pred_spikes = flexible_Gauss(params, stim_sf=stim_sf, minThresh=minThresh);
   elif DoGmodel == 1:
     pred_spikes, _ = DoGsach(*params, stim_sf=stim_sf);
   elif DoGmodel == 2:
@@ -1656,16 +1658,25 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02):
 
 ###
 
-def blankResp(cellStruct, expInd):
+def blankResp(cellStruct, expInd, spikes=None, spksAsRate=False):
+    ''' optionally, pass in array of spikes (by trial) and flag for whether those spikes are rates or counts over the whole trial
+    '''
     # works for all experiment variants (checked 08.20.19)
     if 'sfm' in cellStruct:
       tr = cellStruct['sfm']['exp']['trial'];
     else:
       tr = cellStruct;
-    blank_tr = tr['spikeCount'][numpy.isnan(tr['con'][0])];
-    stimDur = get_exp_params(expInd).stimDur;
-    mu = numpy.mean(numpy.divide(blank_tr, stimDur));
-    sig = numpy.std(numpy.divide(blank_tr, stimDur));
+    if spikes is None: # else, we could've passed in adjusted spikes
+      spikes = tr['spikeCount']; 
+      spksAsRate = False; # NOTE: these are f0, only...
+    if spksAsRate is True:
+      divFactor = 1;
+    else:
+      divFactor = get_exp_params(expInd).stimDur;
+
+    blank_tr = spikes[numpy.isnan(tr['con'][0])];
+    mu = numpy.mean(numpy.divide(blank_tr, divFactor));
+    sig = numpy.std(numpy.divide(blank_tr, divFactor));
     
     return mu, sig, blank_tr;
     
@@ -1978,40 +1989,42 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
 
 def organize_adj_responses(data, rvcFits, expInd):
   ''' Used as a wrapper to call the organize_adj_responses function for a given experiment
+      BUT, also has organize_adj_responses for newer experiments ( see "except" assoc. with main try)
       We set the organize_adj_responses separately for each experiment since some versions don't have adjusted responses
         and for those that do, some aspects of the calculation may differ
   '''
+  ### First, we'll see if there is a direct helper_fcns method for this
   dir = get_exp_params(expInd).dir;
   to_import = dir.replace('/', '.') + 'helper_fcns';
-
-  try: # i.e. we don't have an associated helper_fcns (TODO: HACKY? FIX?)
+  if os.path.isfile(dir + 'helper_fcns'): # i.e. what if we don't have an associated helper_fcns? then do "except"
     new_hf = il.import_module(to_import);
     if hasattr(new_hf, 'organize_adj_responses'):
-      adjResps = new_hf.organize_adj_responses(data, rvcFits)[1]; # 2nd returned argument (pos 1) is responses by trial
-    else:
-      warnings.warn('this experiment (as given by ind) does not have an organize_adj_responses call!');
-      adjResps = None;
-  except: # a "simple" adj responses - TODO: should improve/fix later?
-    nTr = len(data['num']);
-    adjResps = numpy.nan * numpy.zeros((nTr, ), dtype='O');
-    # first, get all of the stimulus conds
-    _, conds, val_con_by_disp, val_by_stim_val, _ = tabulate_responses(data, expInd);
-    all_d = conds[0];
+      return new_hf.organize_adj_responses(data, rvcFits)[1]; # 2nd returned argument (pos 1) is responses by trial
 
-    for d_ind, d in enumerate(all_d):
-      val_cons = val_con_by_disp[d_ind];
-      for c_ind_val, c_ind_total in enumerate(val_cons):
-        val_sfs = get_valid_sfs(data, d_ind, c_ind_total, expInd, stimVals=conds, validByStimVal=val_by_stim_val);
-        for s_ind_val, s_ind_total in enumerate(val_sfs):
-          val_trials = get_valid_trials(data, d_ind, c_ind_total, s_ind_total, expInd, stimVals=conds, validByStimVal=val_by_stim_val)[0];
-          # this is why we enumerate val_cons above - the index into val_cons is how we index into rvcFits
-          curr_resps = rvcFits[d_ind]['adjByTr'][s_ind_total][c_ind_val];
-          ## Now: we need to arrange curr_resps (which is generally a nComp list, each entry an nTr list
-          if d_ind == 0:
-            adjResps[val_trials] = curr_resps.flatten();
-          else:
+  ### otherwise...
+  # a "simple" adj responses
+  nTr = len(data['num']);
+  adjResps = numpy.nan * numpy.zeros((nTr, ), dtype='O');
+  # first, get all of the stimulus conds
+  _, conds, val_con_by_disp, val_by_stim_val, _ = tabulate_responses(data, expInd);
+  all_d = conds[0];
+
+  for d_ind, d in enumerate(all_d):
+    val_cons = val_con_by_disp[d_ind];
+    for c_ind_val, c_ind_total in enumerate(val_cons):
+      val_sfs = get_valid_sfs(data, d_ind, c_ind_total, expInd, stimVals=conds, validByStimVal=val_by_stim_val);
+      for s_ind_val, s_ind_total in enumerate(val_sfs):
+        val_trials = get_valid_trials(data, d_ind, c_ind_total, s_ind_total, expInd, stimVals=conds, validByStimVal=val_by_stim_val)[0];
+        # this is why we enumerate val_cons above - the index into val_cons is how we index into rvcFits
+        curr_resps = rvcFits[d_ind]['adjByTr'][s_ind_total][c_ind_val];
+        if d_ind > 0:
+          try: # well, if the cell is simple & this is mixture stimulus, then we need to do this
             curr_flipped = switch_inner_outer(curr_resps, asnp=True);
             adjResps[val_trials] = curr_flipped;
+          except: # otherwise, we "flatten" the incoming list
+            adjResps[val_trials] = curr_resps.flatten();
+        if d_ind == 0:
+            adjResps[val_trials] = curr_resps.flatten();
     
   return adjResps;
 
@@ -2115,22 +2128,22 @@ def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', direc=1):
 
   return rvcFits;
 
-def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, descrFitName_f0, descrFitName_f1=None, force_dc=False):
+def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, descrFitName_f0=None, descrFitName_f1=None, force_dc=False, force_f1=False):
   ''' wrapper function which will call needed subfunctions to return dc-subtracted spikes by trial
-      OUTPUT: SPIKES (as rate, per s), baseline subtracted
-        note: user can override f1f0 calculation to force return of DC values only (set force_dc = TRUE)
+      OUTPUT: SPIKES (as rate, per s), baseline subtracted (if DC); responses are per stimulus, not per component
+        note: user can override f1f0 calculation to force return of DC values only (set force_dc=TRUE) or F! values only (force_f1=TRUE)
   '''
   f1f0_rat = compute_f1f0(expData, which_cell, expInd, dataPath, descrFitName_f0=descrFitName_f0, descrFitName_f1=descrFitName_f1)[0];
   stimDur = get_exp_params(expInd).stimDur; # may need this value
 
   ### i.e. if we're looking at a simple cell, then let's get F1
-  if f1f0_rat > 1 and force_dc is False:
+  if (f1f0_rat > 1 and force_dc is False) or force_f1 is True:
       if rvcName is not None:
           rvcFits = get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName);
       else:
           rvcFits = None
       spikes_byComp = get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
-      spikes = np.array([np.sum(x) for x in spikes_byComp]);
+      spikes = numpy.array([numpy.sum(x) for x in spikes_byComp]);
       rates = True; # when we get the spikes from rvcFits, they've already been converted into rates (in get_all_fft)
       baseline = None; # f1 has no "DC", yadig? 
   ### then complex cell, so let's get F0

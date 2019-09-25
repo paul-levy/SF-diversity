@@ -13,12 +13,12 @@ data_suff = 'structures/';
 
 expName = hf.get_datalist(sys.argv[3]); # sys.argv[3] is experiment dir
 #expName = 'dataList_glx_mr.npy'
-df_f0 = 'descrFits_190503_sqrt_flex.npy';
+df_f0 = 'descrFits_190916_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName =  'descrFits_190503';
-phAdvName = 'phaseAdvanceFits_190905'
-rvcName_f0   = 'rvcFits_f0'
-rvcName_f1   = 'rvcFits_190905'
+dogName =  'descrFits_190916';
+phAdvName = 'phaseAdvanceFits_190916'
+rvcName_f0   = 'rvcFits_190916_f0.npy'
+rvcName_f1   = 'rvcFits_190916_f1' # _pos.npy will be added later
 ## model recovery???
 modelRecov = 0;
 if modelRecov == 1:
@@ -101,7 +101,6 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save=1
 
   # for all con/sf values for this dispersion, compute the mean amplitude/phase per condition
   allAmp, allPhi, allTf, _, _ = hf.get_all_fft(data, disp, expInd, dir=dir, all_trials=0); # all_trials=1 for debugging (0 is default)
-  #pdb.set_trace();
      
   # now, compute the phase advance
   conInds = valConByDisp[disp];
@@ -144,10 +143,11 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcNam
   expInd = hf.get_exp_ind(data_loc, cellName)[0];
 
   # before anything, let's get f1/f0 ratio
-  f1f0 = hf.compute_f1f0(data, cell_num, expInd, data_loc, descrFitName_f0, descrFitName_f1)[0];
+  # note: we are now using "none" for the compute_f1f0 in rvc_adj_fit - this ensures we don't rely on already existing descrFits to get this calculation
+  f1f0 = hf.compute_f1f0(data, cell_num, expInd, data_loc, descrFitName_f0=None, descrFitName_f1=None)[0];
 
   # first, get the set of stimulus values:
-  _, stimVals, valConByDisp, _, _ = hf.tabulate_responses(data, expInd);
+  _, stimVals, valConByDisp, valByStimVal, _ = hf.tabulate_responses(data, expInd);
   allCons = stimVals[1];
   allSfs = stimVals[2];
   try:
@@ -187,25 +187,31 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcNam
       adjSemCompTr = adjSemTr; # for single gratings, there is only one component!
       rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr);
   else: ### FIT RVC TO baseline-subtracted F0
-    spikerate = hf.get_adjusted_spikerate(data, cell_num, expInd, data_loc, rvcName=None, descrFitName_f0=descrFitName_f0, descrFitName_f1=descrFitName_f1);
+    # as above, we pass in None for descrFitNames to ensure no dependence on existing descrFits in rvcFits
+    spikerate = hf.get_adjusted_spikerate(data, cell_num, expInd, data_loc, rvcName=None, descrFitName_f0=None, descrFitName_f1=None);
     # recall: rvc_fit wants adjMeans/consRepeat/adjSemTr organized as nSfs lists of nCons elements each (nested)
     respsOrg = hf.organize_resp(spikerate, data, expInd, respsAsRate=True)[3];
     #  -- so now, we organize
-    adjMeans = []; adjSemTr = [];
+    adjMeans = []; adjSemTr = []; adjByTrial = [];
     curr_cons = valConByDisp[disp];
     for sf_i, sf_val in enumerate(allSfs):
       # each list we add here should be of length nCons
-      mnCurr = []; semCurr = [];
+      mnCurr = []; semCurr = []; adjCurr = [];
       for con_i in curr_cons:
         curr_resps = hf.nan_rm(respsOrg[disp, sf_i, con_i, :]);
-        if np.array_equal(np.nan, curr_resps):
-          mnCurr.append([]); semCurr.append([]);
+        if np.array_equal([], curr_resps) or np.array_equal(np.nan, curr_resps):
+        #if np.array_equal(np.nan, curr_resps):
+          mnCurr.append(np.nan); semCurr.append(np.nan); adjCurr.append(np.nan);
+          continue;
         else:
           mnCurr.append(np.mean(curr_resps)); semCurr.append(sem(curr_resps));
+          val_tr = hf.get_valid_trials(data, disp, con_i, sf_i, expInd, stimVals=stimVals, validByStimVal=valByStimVal)[0];
+          adjCurr.append(np.array(spikerate[val_tr]));
       adjMeans.append(mnCurr); adjSemTr.append(semCurr);
+      adjByTrial.append(adjCurr); # put adjByTrial in same format as adjMeans/adjSemTr!!!
     consRepeat = [allCons[curr_cons]] * len(adjMeans);
     rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr);
-    adjByTrial = spikerate;
+    # adjByTrial = spikerate;
     adjSemCompTr = []; # we're getting f0 - therefore cannot get individual component responses!
 
   if os.path.isfile(data_loc + rvcNameFinal):
@@ -234,13 +240,14 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcNam
 
   if to_save:
     np.save(data_loc + rvcNameFinal, rvcFits);
-    print('saving rvc fit for cell ' + str(cell_num));
+    print('saving rvc fit for cell %d, disp %d' % (cell_num, disp));
 
   return rvc_model, all_opts, all_conGains, adjMeans;
 
 ### 1.1 RVC fits without adjusted responses (organized like SF tuning)
 
 def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName_f0, dLname=expName, modelRecov=modelRecov, normType=normType):
+  # TODO: Should replace spikes with baseline subtracted spikes?
   # NOTE: n_repeats not used (19.05.06)
   # normType used iff modelRecv == 1
 
@@ -255,19 +262,19 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName_f0, dLname=ex
   expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1]);
   print('Making RVC (F0) fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
 
-  rvcName = fLname + '.npy';
   if os.path.isfile(data_loc + fLname):
-      rvcFits = hf.np_smart_load(data_loc + fLname);
+    rvcFits = hf.np_smart_load(data_loc + fLname);
   else:
-      rvcFits = dict();
+    rvcFits = dict();
 
   # now, get the spikes (recovery, if specified) and organize for fitting
   if modelRecov == 1:
     recovSpikes = hf.get_recovInfo(cellStruct, normType)[1];
   else:
     recovSpikes = None;
-  spks = hf.get_spikes(data, rvcFits=None, expInd=expInd, overwriteSpikes=recovSpikes); # we say None for rvc (F1) fits
-  _, _, resps_mean, resps_all = hf.organize_resp(spks, cellStruct, expInd);
+  ### Note: should replace with get_adjusted_spikerate? can do if passing in None for descrFits
+  spks = hf.get_spikes(data, get_f0=1, rvcFits=None, expInd=expInd, overwriteSpikes=recovSpikes); # we say None for rvc (F1) fits
+  _, _, resps_mean, resps_all = hf.organize_resp(spks, cellStruct, expInd, respsAsRate=False); # spks is spike count, not rate
   resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
   
   print('Doing the work, now');
@@ -330,7 +337,7 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, gain_reg = 0):
+def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, gain_reg = 0, minThresh=0.1):
   '''Given the model params (i.e. sach or tony formulation)), the responses, sf values
   return the loss
   loss_type: 1 - lsq
@@ -343,7 +350,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
             2 - tony
   '''
   # NOTE: See version in LGN/sach/ for how to fit trial-by-trial responses (rather than avg. resp)
-  pred_spikes = hf.get_descrResp(params, sfs, DoGmodel);
+  pred_spikes = hf.get_descrResp(params, sfs, DoGmodel, minThresh);
 
   loss = 0;
   if loss_type == 1: # lsq
@@ -368,11 +375,10 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
     loss = loss + np.sum((sq_err/(k+np.square(sigma)))) + gain_reg*(params[0] + params[2]); # regularize - want gains as low as possible
   return loss;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, is_f0=0, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType):
-  ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons
-    
+def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is_f0=0, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1):
+  ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
+      note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
   '''
-
   if DoGmodel == 0:
     nParam = 5;
   else:
@@ -386,8 +392,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, i
   # get expInd, load rvcFits [if existing, and specified]
   expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1]);
   print('Making descriptive SF fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
-  if is_f0 == 0 and get_rvc == 1:
-    rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num); # see default arguments in helper_fcns.py
+  if is_f0 == 0 and get_rvc == 1: # NOTE: as of 19.09.16 (well, earlier, actually), rvcFits are on F0 or F1, depending on simple/complex designation - in either case, they are both already as rates!
+    rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num, rvcName=rvcName); # see default arguments in helper_fcns.py
   else:
     rvcFits = None;
 
@@ -404,8 +410,20 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, i
     recovSpikes = hf.get_recovInfo(cellStruct, normType)[1];
   else:
     recovSpikes = None;
-  spks = hf.get_spikes(data, rvcFits, expInd, overwriteSpikes=recovSpikes);
-  _, _, resps_mean, resps_all = hf.organize_resp(spks, cellStruct, expInd);
+  ### Note: cannot replace with get_adjusted_spikerate, since we need descrFits for that - not necessarily guaranteed to exist here
+  spks = hf.get_spikes(data, get_f0 = is_f0, rvcFits=rvcFits, expInd=expInd, overwriteSpikes=recovSpikes);
+  # Note that if rvcFits is not None, then spks will be rates already
+  # ensure the spikes array is a vector of overall response, not split by component 
+  spks_sum = np.array([np.sum(x) for x in spks]);
+  min_resp = np.nanmin(spks_sum);
+  minThresh = 0.1; # TODO: ensure this value is standardized across here and helper_fcns
+  if min_resp < 0:
+    spks_sum = spks_sum - min_resp + minThresh;
+  if rvcFits is None:
+    _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=False);
+  else: # then, rvcFits values are already rates
+    _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True);
+
   resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
   
   print('Doing the work, now');
@@ -434,7 +452,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, i
 
   # next, let's compute some measures abougt the responses
   max_resp = np.nanmax(resps_all);
-  base_rate = hf.blankResp(cellStruct, expInd)[0];
+  base_rate = hf.blankResp(cellStruct, expInd, spks_sum, spksAsRate=True)[0];
 
   # set bounds
   if DoGmodel == 0: # flexible gaussian (i.e. two halves)
@@ -458,7 +476,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, i
     allBounds = (bound_gainCent, bound_freqCent, bound_gainFracSurr, bound_freqFracSurr);
 
   for d in range(nDisps): # works for all disps
-    for con in range(nCons):
+    for con in reversed(range(nCons)):
       if con not in valConByDisp[d]:
         continue;
 
@@ -480,7 +498,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, i
         ## FLEX (not difference of gaussian)
         if DoGmodel == 0:
           # set initial parameters - a range from which we will pick!
-          if base_rate <= 3:
+          if base_rate <= 3 or np.isnan(base_rate): # will be NaN if getting f1 responses
               range_baseline = (0, 3);
           else:
               range_baseline = (0.5 * base_rate, 1.5 * base_rate);
@@ -502,11 +520,11 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, i
           denom_hi = hf.bw_log_to_lin(log_bw_hi, mu_init)[0]; # get lin. bw (cpd)
           range_denom = (denom_lo, denom_hi); # don't want 0 in sigma 
 
-          init_base = hf.random_in_range(range_baseline);
-          init_amp = hf.random_in_range(range_amp);
-          init_mu = hf.random_in_range(range_mu);
-          init_sig_left = hf.random_in_range(range_denom);
-          init_sig_right = hf.random_in_range(range_denom);
+          init_base = hf.random_in_range(range_baseline)[0]; # NOTE addition of [0] to "unwrap" random_in_range value
+          init_amp = hf.random_in_range(range_amp)[0];
+          init_mu = hf.random_in_range(range_mu)[0];
+          init_sig_left = hf.random_in_range(range_denom)[0];
+          init_sig_right = hf.random_in_range(range_denom)[0];
           init_params = [init_base, init_amp, init_mu, init_sig_left, init_sig_right];
         ## SACH
         elif DoGmodel == 1:
@@ -528,6 +546,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1000, loss_type=3, DoGmodel=1, i
             methodStr = 'L-BFGS-B';
         else:
             methodStr = 'TNC';
+
         obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg);
         wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
 
