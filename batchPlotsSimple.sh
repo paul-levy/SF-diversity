@@ -6,14 +6,14 @@
 # have you set the descrFits base name?
 ### see plot_simple.py for changes/details
 
-# second param is loss_type:
+# second param is loss_type (full model):
 	# 1 - square root
 	# 2 - poisson
 	# 3 - modulated poission
 	# 4 - chi squared
-# third param is fit (normalization) type
+# third param is fit (normalization) type (full model)
         # 1 - flat
-        # 2 - gaussian
+        # 2 - gaussian (wght)
         # 3 - c50 adj
         # 4 - flex gauss
 # fourth param is expDir (e.g. V1/ or LGN/)
@@ -24,10 +24,10 @@
 
 source activate lcv-python
 
-for run in {1..17}
+for run in {1..16}
 do
-  python plot_simple.py $run 4 4 V1/ 0 0 0 1 &
-#  python plot_simple.py $run 4 1 V1/ 1 0 1 &
+  #python plot_simple.py $run 4 2 V1_orig/ 0 0 0 1 &
+  python plot_simple.py $run 4 1 V1/ 1 0 1 &
 #  python plot_simple.py $run 4 2 V1/ 1 0 1 &
 done
 

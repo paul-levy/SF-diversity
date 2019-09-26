@@ -21,10 +21,13 @@
 
 source activate lcv-python
 
-for run in {1..59}
+### TODO: Fix here and in helper_fcns (and thus in all plotting...) to access correct rvcFits
+###       ALSO must make rvcFits (or get_spikes - make the choice) access F0/F1 depending on 
+
+for run in {1..16}
 do
-  python plot_descr.py $run V1_orig/ 0 3 0 1 &
-  python plot_descr.py $run V1_orig/ 1 3 0 1 &
+  python plot_descr.py $run V1/ 0 2 1 1 &
+  python plot_descr.py $run V1/ 0 3 1 1 &
 done
 
 # leave a blank line at the end

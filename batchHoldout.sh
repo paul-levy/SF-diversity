@@ -24,4 +24,8 @@ source activate lcv-python
 for run in {1..8}; do
   python holdoutFits.py $run altExp/ 4 1 0 0 &
   python holdoutFits.py $run altExp/ 4 2 0 0 &
+
+  python holdoutFits.py $run altExp/ 4 1 1 0 &
+  python holdoutFits.py $run altExp/ 4 2 1 0 &
+
 done
