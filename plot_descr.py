@@ -37,7 +37,7 @@ cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
 descrMod  = int(sys.argv[3]);
 descrLoss = int(sys.argv[4]);
-rvcAdj    = int(sys.argv[5]); # if 1, then let's load rvcFits to adjust responses to F1
+rvcAdj    = int(sys.argv[5]); # if 1, then let's load rvcFits to adjust F1, as needed
 if len(sys.argv) > 6:
   respVar = int(sys.argv[6]);
 else:
@@ -55,9 +55,10 @@ expName = hf.get_datalist(expDir);
 #expName = 'dataList_glx.npy'
 #expName = 'dataList_mr.npy'
 ### DESCRLIST
-descrBase = 'descrFits_190503';
+descrBase = 'descrFits_190916';
+#descrBase = 'descrFits_190503';
 ### RVCFITS
-rvcBase = 'rvcFits'; # direc flag & '.npy' are added
+rvcBase = 'rvcFits_190916'; # direc flag & '.npy' are added
 
 ##################
 ### Spatial frequency
@@ -66,6 +67,11 @@ rvcBase = 'rvcFits'; # direc flag & '.npy' are added
 modStr  = hf.descrMod_name(descrMod)
 fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr);
 descrFits = hf.np_smart_load(data_loc + fLname);
+if rvcAdj == 1:
+  rvcFits = hf.np_smart_load(data_loc + hf.phase_fit_name(rvcBase + '_f1', dir=1)); # i.e. positive
+else:
+  rvcFits = hf.np_smart_load(data_loc + rvcBase + '_f0.npy');
+rvcFits = rvcFits[cellNum-1];
 
 # set the save directory to save_loc, then create the save directory if needed
 subDir = fLname.replace('Fits', '').replace('.npy', '');
@@ -73,7 +79,7 @@ save_loc = str(save_loc + subDir + '/');
 if not os.path.exists(save_loc):
   os.makedirs(save_loc);
 
-dataList = np.load(str(data_loc + expName), encoding='latin1').item();
+dataList = hf.np_smart_load(data_loc + expName);
 
 cellName = dataList['unitName'][cellNum-1];
 try:
@@ -82,27 +88,39 @@ except:
   # TODO: note, this is dangerous; thus far, only V1 cells don't have 'unitType' field in dataList, so we can safely do this
   cellType = 'V1'; 
 
-expData  = np.load(str(data_loc + cellName + '_sfm.npy'), encoding='latin1').item();
+expData  = hf.np_smart_load(str(data_loc + cellName + '_sfm.npy'));
+trialInf = expData['sfm']['exp']['trial'];
 expInd   = hf.get_exp_ind(data_loc, cellName)[0];
 
 descrParams = descrFits[cellNum-1]['params'];
+f1f0rat = hf.compute_f1f0(trialInf, cellNum, expInd, data_loc, descrFitName_f0=fLname)[0];
 
 # more tabulation - stim vals, organize measured responses
 overwriteSpikes = None;
 _, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData, expInd);
-if rvcAdj == 1:
+rvcModel = hf.get_rvc_model();
+if rvcAdj == 0:
+  rvcBase = None;
+  rvcFlag = '_noAdj';
+else:
   rvcFlag = '_f1';
-  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase);
-  spikes = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=rvcFits, expInd=expInd, overwriteSpikes=overwriteSpikes);
-else: # THIS IS PLOT_DESCR - we will still plot RVC, just f0 (i.e. not used for response adjustment)
-  rvcFlag = '_f0';
-  rvcModel = hf.get_rvc_model();
-  rvcFits = hf.np_smart_load(data_loc + rvcBase + rvcFlag + '.npy');
-  rvcFits = rvcFits[cellNum-1];
-  # let's get spikes, but pass in None (i.e. we don't want adjusted responses...)
-  spikes = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=None, expInd=expInd, overwriteSpikes=overwriteSpikes);
-
-_, _, respOrg, respAll = hf.organize_resp(spikes, expData, expInd);
+  rvcBase = '%s%s' % (rvcBase, rvcFlag);
+spikes_rate = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcBase, descrFitName_f0 = fLname);
+###
+# now, we take into account that we fit the responses re-centered such that they are non-negative
+# i.e. if the adjusted responses (in particular, baseline-subtracted F0 responses) were negative,
+#   we previuosly added the lowest value (i.e. most negative response) plus an additional scalar (0.1)
+#   thus making the lowest response 0.1 - the descriptive fits were made on this transformed data
+#   and thus we apply the reverse of that transformation here, to those fits, before plotting
+###
+min_resp = np.nanmin(spikes_rate);
+minThresh = 0.1;
+if min_resp < 0:
+  modAdj_add = - min_resp + minThresh;
+else:
+  modAdj_add = np.array(0);
+# now get the measured responses
+_, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
 
 respMean = respOrg;
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
@@ -115,8 +133,6 @@ if respVar == 1:
   respVar = respSem;
 else:
   respVar = respStd;
-
-blankMean, blankStd, _ = hf.blankResp(expData, expInd); 
 
 all_disps = stimVals[0];
 all_cons = stimVals[1];
@@ -148,6 +164,7 @@ for d in range(nDisps):
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
     
+    minResp = np.min(np.min(respMean[d, ~np.isnan(respMean[d, :, :])]));
     maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
     
     for c in reversed(range(n_v_cons)):
@@ -160,11 +177,11 @@ for d in range(nDisps):
         ## plot data
         dispAx[d][c_plt_ind, 0].errorbar(sfVals, resps,
                                          respVar[d, v_sfs, v_cons[c]], color=dataClr, fmt='o', clip_on=False, label=dataTxt);
-        dispAx[d][c_plt_ind, 0].axhline(blankMean, color=dataClr, linestyle='dashed', label='spon. rate');
+        # dispAx[d][c_plt_ind, 0].axhline(blankMean, color=dataClr, linestyle='dashed', label='spon. rate'); # blank is deprecated, since either f1 or f0 as baseline subtracted
 
         ## plot descr fit
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
         dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=modClr, label='descr. fit');
 
         ## plot peak & c.o.m.
@@ -183,7 +200,7 @@ for d in range(nDisps):
 
           # plot descriptive model fit -- and inferred characteristic frequency (or peak...)
           prms_curr = descrParams[d, v_cons[c]];
-          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
+          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
           dispAx[d][c_plt_ind, 1].plot(sfs_plot, descrResp, color=modClr, label='descr. fit', clip_on=False)
           if descrMod == 0:
             psf = hf.dog_prefSf(prms_curr, dog_model=descrMod);
@@ -213,10 +230,10 @@ for d in range(nDisps):
           dispAx[d][c_plt_ind, i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
           sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
 
-        dispAx[d][c_plt_ind, 0].set_ylim((0, 1.5*maxResp));
+        dispAx[d][c_plt_ind, 0].set_ylim((minResp-5, 1.5*maxResp));
         dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
 
-    fCurr.suptitle('%s #%d, varExpl %.2f%%' % (cellType, cellNum, descrFits[cellNum-1]['varExpl'][d, v_cons[c]]));
+    fCurr.suptitle('%s #%d (f1f0: %.2f), varExpl %.2f%%' % (cellType, cellNum, f1f0rat, descrFits[cellNum-1]['varExpl'][d, v_cons[c]]));
 
 saveName = "/cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
@@ -243,7 +260,7 @@ for d in range(nDisps):
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
 
-    fCurr.suptitle('%s #%d' % (cellType, cellNum));
+    fCurr.suptitle('%s #%d (f1f0 %.2f)' % (cellType, cellNum, f1f0rat));
 
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));  
 
@@ -261,7 +278,7 @@ for d in range(nDisps):
  
         # plot descr fit [1]
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
         dispAx[d][1].plot(sfs_plot, descrResp, color=col);
 
     for i in range(len(dispCurr)):
@@ -294,6 +311,7 @@ pdfSv.close()
 # #### Plot just sfMix contrasts
 
 mixCons = hf.get_exp_params(expInd).nCons;
+minResp = np.min(np.min(np.min(respMean[~np.isnan(respMean)])));
 maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
 
 f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(20, 15));
@@ -320,7 +338,7 @@ for d in range(nDisps):
 
         # plot descrFit
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
         sfMixAx[c_plt_ind, d].plot(sfs_plot, descrResp, label=modTxt, color=modClr);
 
         # plot prefSF, center of mass
@@ -330,7 +348,7 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr); # plot at y=1
 
         sfMixAx[c_plt_ind, d].set_xlim((np.min(all_sfs), np.max(all_sfs)));
-        sfMixAx[c_plt_ind, d].set_ylim((0, 1.5*maxResp));
+        sfMixAx[c_plt_ind, d].set_ylim((minResp-5, 1.5*maxResp));
         sfMixAx[c_plt_ind, d].set_xscale('log');
         sfMixAx[c_plt_ind, d].set_xlabel('sf (c/deg)');
         sfMixAx[c_plt_ind, d].set_ylabel('resp (sps)');
@@ -341,7 +359,7 @@ for d in range(nDisps):
         sns.despine(ax=sfMixAx[c_plt_ind, d], offset=10, trim=False);
 
 f.legend();
-f.suptitle('%s #%d (%s)' % (cellType, cellNum, cellName));
+f.suptitle('%s #%d (%s; f1f0 %.2f)' % (cellType, cellNum, cellName, f1f0rat));
 	        
 allFigs = [f]; 
 saveName = "/cell_%03d.pdf" % (cellNum)
@@ -374,7 +392,7 @@ for d in range(nDisps):
     fRVC.append(fCurr);
     rvcAx.append(rvcCurr);
     
-    fCurr.suptitle('%s #%d' % (cellType, cellNum-1));
+    fCurr.suptitle('%s #%d (f1f0 %.2f)' % (cellType, cellNum-1, f1f0rat));
 
     for sf in range(n_v_sfs):
         row_ind = int(sf/n_cols);
@@ -393,8 +411,11 @@ for d in range(nDisps):
         resp_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
         respPlt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(resp_curr, 0.1), '-', clip_on=False, label='data');
 
- 	# RVC descr model
-        prms_curr = rvcFits['params'][d][sf_ind];
+ 	# RVC descr model - TODO: Fix this discrepancy between f0 and f1 rvc structure? make both like descrFits?
+        if rvcAdj == 1: # i.e. _f1 or non-"_f0" flag on rvcFits
+          prms_curr = rvcFits[d]['params'][sf_ind];
+        else:
+          prms_curr = rvcFits['params'][d][sf_ind]; 
         rvcAx[plt_x][plt_y].plot(cons_plot, np.maximum(rvcModel(*prms_curr, cons_plot), 0.1), color=modClr, \
           alpha=0.7, clip_on=False, label=modTxt);
         c50 = prms_curr[-1]; # last entry is c50
@@ -434,7 +455,7 @@ for d in range(nDisps):
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
 
-    fCurr.suptitle('%s #%d' % (cellType, cellNum));
+    fCurr.suptitle('%s #%d (f1f0 %.2f)' % (cellType, cellNum, f1f0rat));
 
     v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd, stimVals, validByStimVal);
     n_v_sfs = len(v_sf_inds);
@@ -456,7 +477,11 @@ for d in range(nDisps):
         lines_log.append(line_curr);
 
         # now RVC model [1]
-        prms_curr = rvcFits['params'][d][sf_ind];
+ 	# RVC descr model - TODO: Fix this discrepancy between f0 and f1 rvc structure? make both like descrFits?
+        if rvcAdj == 1: # i.e. _f1 or non-"_f0" flag on rvcFits
+          prms_curr = rvcFits[d]['params'][sf_ind];
+        else:
+          prms_curr = rvcFits['params'][d][sf_ind]; 
         crfAx[d][1].plot(cons_plot, np.maximum(rvcModel(*prms_curr, cons_plot), 0.1), color=col, \
                          clip_on=False, label = con_str);
 

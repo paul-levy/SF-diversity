@@ -272,7 +272,7 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName_f0, dLname=ex
     recovSpikes = hf.get_recovInfo(cellStruct, normType)[1];
   else:
     recovSpikes = None;
-  ### Note: should replace with get_adjusted_spikerate? can do if passing in None for descrFits
+  ### Note: should replace with get_adjusted_spikerate? can do if passing in None for descrFits (TODO?)
   spks = hf.get_spikes(data, get_f0=1, rvcFits=None, expInd=expInd, overwriteSpikes=recovSpikes); # we say None for rvc (F1) fits
   _, _, resps_mean, resps_all = hf.organize_resp(spks, cellStruct, expInd, respsAsRate=False); # spks is spike count, not rate
   resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
@@ -410,7 +410,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is
     recovSpikes = hf.get_recovInfo(cellStruct, normType)[1];
   else:
     recovSpikes = None;
-  ### Note: cannot replace with get_adjusted_spikerate, since we need descrFits for that - not necessarily guaranteed to exist here
+  ### Note: can replace with get_adjusted_spikerate, since we do not need descrFits for that anymore (TODO?)
   spks = hf.get_spikes(data, get_f0 = is_f0, rvcFits=rvcFits, expInd=expInd, overwriteSpikes=recovSpikes);
   # Note that if rvcFits is not None, then spks will be rates already
   # ensure the spikes array is a vector of overall response, not split by component 

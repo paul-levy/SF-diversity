@@ -529,14 +529,19 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, des
   # i.e. F1 might be greater than F0 AND have a different than F0 - in the case, we ought to evalaute at the peak F1 frequency
   ######
   ## first, get F0 responses
-  f0_counts = get_spikes(trial_inf, get_f0=1);
+  f0_counts = get_spikes(trial_inf, get_f0=1, expInd=expInd);
   f0_blank = blankResp(trial_inf, expInd)[0]; # we'll subtract off the f0 blank mean response from f0 responses
   stimDur = get_exp_params(expInd).stimDur;
   f0rates = np.divide(f0_counts - f0_blank, stimDur);
   f0rates_org = organize_resp(f0rates, trial_inf, expInd, respsAsRate=True)[2];
-  ## then, get F1
-  f1rates = np.array([np.sum(x) for x in get_spikes(trial_inf, get_f0=0)]);
-  f1rates_org = organize_resp(f1rates, trial_inf, expInd, respsAsRate=True)[2];  
+  ## then, get F1 - TODO: why cannot use get_spikes? what is saved in F1 of each structure? seems to be half of true F1 value
+  all_trs = np.arange(trial_inf['num'][-1]); # i.e. all the trials
+  spike_times = np.array([trial_inf['spikeTimes'][x] for x in all_trs]);
+  psth, bins = make_psth(spike_times, stimDur=stimDur);
+  all_tf = np.array([trial_inf['tf'][0][val_tr] for val_tr in all_trs]); # just take first grating (only will ever analyze single gratings)
+  power, rel_power, full_ft = spike_fft(np.array(psth), tfs=all_tf, stimDur=stimDur);
+  f1rates = rel_power; # f1 is already a rate (i.e. spks [or power] / sec); just unpack
+  f1rates_org = organize_resp(f1rates, trial_inf, expInd, respsAsRate=True)[2];
   rates_org = [f0rates_org, f1rates_org];
 
   # get prefSfEst from f0 descrFits - NOTE: copied code from model_respsonses.set_model -- reconsider as a hf?
@@ -576,7 +581,7 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, des
   # finally, figure out which of the peakInd X F0/F1 combinations has the highest overall response
   peakRespInd = np.argmax([np.nanmean(x[y]) for x,y in zip(f0f1_resps, f0f1_ind)]);
   indToAnalyze = f0f1_ind[peakRespInd];
-  
+
   f0rate, f1rate = [x[indToAnalyze] for x in f0f1_resps];
   # note: the below lines will help us avoid including trials for which the f0 is negative (after baseline subtraction!)
   # i.e. we will not include trials with below-baseline f0 responses in our f1f0 calculation
