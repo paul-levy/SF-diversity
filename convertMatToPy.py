@@ -1,3 +1,11 @@
+#### This file is a more streamlined process than convertMatToPy.ipynb if you are
+#### planning to convert a .mat to .npy file, particularly if spikeTimesGLX was created
+#### - that is, if you used mountainsort to get spikes from the neuropixel, this function
+####   will take the .mat file, convert to .npy file, AND overwrite spikeCount/Times with the 
+####   values from GLX 
+#### - note that you still must use converMatToPy.ipynb to create/regenerate the dataList
+
+
 import numpy as np
 import helper_fcns as hf
 import makeStimulus

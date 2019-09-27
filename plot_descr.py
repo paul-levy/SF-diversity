@@ -55,10 +55,10 @@ expName = hf.get_datalist(expDir);
 #expName = 'dataList_glx.npy'
 #expName = 'dataList_mr.npy'
 ### DESCRLIST
-descrBase = 'descrFits_190916';
+descrBase = 'descrFits_190926';
 #descrBase = 'descrFits_190503';
 ### RVCFITS
-rvcBase = 'rvcFits_190916'; # direc flag & '.npy' are added
+rvcBase = 'rvcFits_190926'; # direc flag & '.npy' are added
 
 ##################
 ### Spatial frequency
@@ -286,7 +286,8 @@ for d in range(nDisps):
       dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
 
       dispAx[d][i].set_xscale('log');
-      #dispAx[d][i].set_yscale('log');
+      if expDir == 'LGN/' # we want double-log if it's the LGN!
+        dispAx[d][i].set_yscale('log');
       dispAx[d][i].set_xlabel('sf (c/deg)'); 
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
