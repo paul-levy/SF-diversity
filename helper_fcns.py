@@ -102,7 +102,7 @@ import warnings
 # get_rvc_fits - return the rvc fits for a given cell (if applicable)
 # get_adjusted_spikerate - wrapper for get_spikes which gives us the correct/adjusted (if needed) spike rate (per second)
 # mod_poiss - computes "r", "p" for modulated poisson model (neg. binomial)
-# naka_rushton
+# naka_rushton - naka-rushton form of the response-versus-contrast, with flexibility to evaluate super-saturating RVCs (Peirce 2007)
 # fit_CRF
 # random_in_range - random real-valued number between A and B
 # nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
@@ -906,7 +906,7 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0):
        fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
        Optionally, can include a measure of variability in each response to perform weighted least squares
-       Optionally, can include mod = 0 (as above) or 1 (Naka-Rushton)
+       Optionally, can include mod = 0 (as above) or 1 (Naka-Rushton) or 2 (Peirce 2007 modification of Naka-Rushton)
        RETURNS: rvc_model (the model equation), list of the optimal parameters, and the contrast gain measure
        Vectorized - i.e. accepts arrays of amp/con arrays
    '''
@@ -935,7 +935,7 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0):
        loss_weights = np.ones_like(var[i]);
      if mod == 0:
        obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - rvc_model(params[0], params[1], params[2], curr_cons))));
-     elif mod == 1:
+     elif mod == 1 or mod == 2:
        obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params))));
      best_loss = 1e6; # start with high value
      best_params = []; conGain = [];
@@ -950,17 +950,22 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0):
          k_bounds = (0, None);
          c0_bounds = (3e-2, 1);
          all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
-       elif mod == 1: # bad initialization as of now...
+       elif mod == 1 or mod == 2: # bad initialization as of now...
          i_base = np.min(curr_amps) + random_in_range([-2.5, 2.5])[0];
          i_gain = random_in_range([2, 8])[0] * np.max(curr_amps);
          i_expon = 2;
          i_c50 = 0.1;
-         init_params = [i_base, i_gain, i_expon, i_c50];
+         i_sExp = 1;
+         init_params = [i_base, i_gain, i_expon, i_c50, i_sExp];
          b_bounds = (None, None);
          g_bounds = (0, None);
          e_bounds = (0.75, None);
          c_bounds = (0.01, 1);
-         all_bounds = (b_bounds, g_bounds, e_bounds, c_bounds);
+         if mod == 1:
+           s_bounds = (1, 1);
+         elif mod == 2:
+           s_bounds = (1, 2); # for now, but can adjust as needed (TODO)
+         all_bounds = (b_bounds, g_bounds, e_bounds, c_bounds, s_bounds);
        # now optimize
        to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
        opt_params = to_opt['x'];
@@ -2200,8 +2205,12 @@ def naka_rushton(con, params):
     gain = params[1];
     expon = params[2];
     c50 = params[3];
+    if len(params) > 4: # optionally, include "s" - the super-saturating parameter from Peirce, JoV (2007)
+      sExp = params[4];
+    else:
+      sExp = 1; # otherwise, it's just 1
 
-    return base + gain*np.divide(np.power(con, expon), np.power(con, expon) + np.power(c50, expon));
+    return base + gain*np.divide(np.power(con, expon), np.power(con, expon*sExp) + np.power(c50, expon*sExp));
 
 def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain, loss_type):
     # loss_type (i.e. which loss function):

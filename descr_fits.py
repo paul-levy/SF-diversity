@@ -15,11 +15,10 @@ expName = hf.get_datalist(sys.argv[3]); # sys.argv[3] is experiment dir
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_191003_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName =  'descrFits_191003';
-phAdvName = 'phaseAdvanceFits_191003'
-rvcName_f0   = 'rvcFits_191003_f0.npy'
-rvcName_f1   = 'rvcFits_191003_NR_f1' # _pos.npy will be added later
-modNum = 1; # i.e. 0 (mov-style) or 1 (naka-rushton)
+dogName =  'descrFits_191023';
+phAdvName = 'phaseAdvanceFits_191023'
+rvcName_f0   = 'rvcFits_191023_f0.npy'
+rvcName_f1   = 'rvcFits_191023_f1' # _pos.npy will be added later
 ## model recovery???
 modelRecov = 0;
 if modelRecov == 1:
@@ -132,7 +131,7 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save=1
 
   return phAdv_model, all_opts;
 
-def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=-1, expName=expName, force_f1=False, modNum=0):
+def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=1, expName=expName, force_f1=False, modNum=0):
   ''' Piggy-backing off of phase_advance_fit above, get prepared to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
   '''
@@ -591,16 +590,17 @@ if __name__ == '__main__':
     data_dir   = sys.argv[3];
     ph_fits    = int(sys.argv[4]);
     rvc_fits   = int(sys.argv[5]);
-    rvcF0_fits   = int(sys.argv[6]);
-    descr_fits = int(sys.argv[7]);
-    dog_model  = int(sys.argv[8]);
-    loss_type  = int(sys.argv[9]);
-    if len(sys.argv) > 10:
-      dir = float(sys.argv[10]);
+    rvcF0_fits = int(sys.argv[6]);
+    rvc_model  = int(sys.argv[7]);
+    descr_fits = int(sys.argv[8]);
+    dog_model  = int(sys.argv[9]);
+    loss_type  = int(sys.argv[10]);
+    if len(sys.argv) > 11:
+      dir = float(sys.argv[11]);
     else:
       dir = None;
-    if len(sys.argv) > 11:
-      gainReg = float(sys.argv[11]);
+    if len(sys.argv) > 12:
+      gainReg = float(sys.argv[12]);
     else:
       gainReg = 0;
     print('Running cell %d in %s' % (cell_num, expName));
@@ -612,19 +612,24 @@ if __name__ == '__main__':
     unitName = dL['unitName'][cell_num-1];
     expInd = hf.get_exp_ind(dataPath, unitName)[0];
 
+    if data_dir == 'LGN/':
+      force_f1 = True; # must be F1!
+    else:
+      force_f1 = False; # let simple/complex be the determing factor!
+
     # then, put what to run here...
     if dir == None:
       if ph_fits == 1:
         phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp);
       if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp, modNum=modNum);
+        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp, force_f1=force_f1, modNum=rvc_model);
       if descr_fits == 1:
         fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, DoGmodel=dog_model, loss_type=loss_type);
     else:
       if ph_fits == 1:
         phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp, dir=dir);
       if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp, dir=dir, modNum=modNum);
+        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, modNum=rvc_model);
       if descr_fits == 1:
         fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type);
 
