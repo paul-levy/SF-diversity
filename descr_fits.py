@@ -13,12 +13,13 @@ data_suff = 'structures/';
 
 expName = hf.get_datalist(sys.argv[3]); # sys.argv[3] is experiment dir
 #expName = 'dataList_glx_mr.npy'
-df_f0 = 'descrFits_190916_sqrt_flex.npy';
+df_f0 = 'descrFits_191003_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName =  'descrFits_190916';
-phAdvName = 'phaseAdvanceFits_190916'
-rvcName_f0   = 'rvcFits_190916_f0.npy'
-rvcName_f1   = 'rvcFits_190916_f1' # _pos.npy will be added later
+dogName =  'descrFits_191003';
+phAdvName = 'phaseAdvanceFits_191003'
+rvcName_f0   = 'rvcFits_191003_f0.npy'
+rvcName_f1   = 'rvcFits_191003_NR_f1' # _pos.npy will be added later
+modNum = 1; # i.e. 0 (mov-style) or 1 (naka-rushton)
 ## model recovery???
 modelRecov = 0;
 if modelRecov == 1:
@@ -131,7 +132,7 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save=1
 
   return phAdv_model, all_opts;
 
-def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=-1, expName=expName, force_f1=False):
+def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=-1, expName=expName, force_f1=False, modNum=0):
   ''' Piggy-backing off of phase_advance_fit above, get prepared to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
   '''
@@ -181,11 +182,11 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcNam
       adjSumResp  = [np.sum(x, 1) if x else [] for x in adjMeans];
       adjSemTr    = [[sem(np.sum(hf.switch_inner_outer(x), 1)) for x in y] for y in adjByTrial]
       adjSemCompTr  = [[sem(hf.switch_inner_outer(x)) for x in y] for y in adjByTrial];
-      rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, adjSemTr);
+      rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, adjSemTr, mod=modNum);
     elif disp == 0:
       adjSemTr   = [[sem(x) for x in y] for y in adjByTrial];
       adjSemCompTr = adjSemTr; # for single gratings, there is only one component!
-      rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr);
+      rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr, mod=modNum);
   else: ### FIT RVC TO baseline-subtracted F0
     # as above, we pass in None for descrFitNames to ensure no dependence on existing descrFits in rvcFits
     spikerate = hf.get_adjusted_spikerate(data, cell_num, expInd, data_loc, rvcName=None, descrFitName_f0=None, descrFitName_f1=None);
@@ -210,7 +211,7 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcNam
       adjMeans.append(mnCurr); adjSemTr.append(semCurr);
       adjByTrial.append(adjCurr); # put adjByTrial in same format as adjMeans/adjSemTr!!!
     consRepeat = [allCons[curr_cons]] * len(adjMeans);
-    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr);
+    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr, mod=modNum);
     # adjByTrial = spikerate;
     adjSemCompTr = []; # we're getting f0 - therefore cannot get individual component responses!
 
@@ -616,14 +617,14 @@ if __name__ == '__main__':
       if ph_fits == 1:
         phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp);
       if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp);
+        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp, modNum=modNum);
       if descr_fits == 1:
         fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, DoGmodel=dog_model, loss_type=loss_type);
     else:
       if ph_fits == 1:
         phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp, dir=dir);
       if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp, dir=dir);
+        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp, dir=dir, modNum=modNum);
       if descr_fits == 1:
         fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type);
 

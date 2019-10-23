@@ -16,18 +16,19 @@ loc_pyData = loc_matData;
 moveGLXspikes = 1; # move the spikeTimesGLX info to usual spikeTimes/Count loc
 
 # name files specifically
-#matFiles = ['m678p5l06_glx174_sfm.mat'];
+matFiles = ['m678p6l18_c45_sfm.mat', 'm678p6l18_c59_sfm.mat', 'm678p6l18_c17_sfm.mat', 'm678p6l18_c69_sfm.mat', 
+            'm678p7r03_c72_sfm.mat', 'm678p7r03_c32_sfm.mat', 'm678p7r03_c36_sfm.mat', 'm678p7r03_c27_sfm.mat', 'm678p7r03_c39_sfm.mat', 'm678p7r03_c69_sfm.mat'];
 # or generate the list 
-matFiles = None;
-if matFiles is None: # then, let's build a list of files that we need
-  allFiles = os.listdir(loc_matData);
-  matFiles = [];
-  for f in allFiles:
-    if f.startswith('m') and f.endswith('_sfm.mat'):
-      if os.path.exists(loc_pyData + f.replace('.mat', '.npy')):
-        continue;
-      else:
-        matFiles.append(f);
+#matFiles = None;
+#if matFiles is None: # then, let's build a list of files that we need
+#  allFiles = os.listdir(loc_matData);
+#  matFiles = [];
+#  for f in allFiles:
+#    if f.startswith('m') and f.endswith('_sfm.mat'):
+#      if os.path.exists(loc_pyData + f.replace('.mat', '.npy')):
+#        continue;
+#      else:
+#        matFiles.append(f);
 
 for f in matFiles:
   matData = makeStimulus.loadmat(loc_matData + f);

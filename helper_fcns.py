@@ -204,6 +204,8 @@ def exp_name_to_ind(expName):
       expInd = 4;
     elif expName == 'sfMixHalfInt':
       expInd = 5;
+    elif expName == 'sfMixLGNhalfInt':
+      expInd = 6;
     return expInd;
 
 def get_exp_params(expInd, forceDir=None):
@@ -237,7 +239,8 @@ def get_exp_params(expInd, forceDir=None):
           self.dir       = 'altExp/'
           self.stimDur   = 1; # in seconds
           self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
-        elif expInd == 3: # (original) LGN experiment - m675; two recordings from V1 exp. m676 (in V1/)
+        ### LGN versions
+        elif expInd == 3 or expInd == 6: 
           self.nStimComp = 5;
           self.nFamilies = 2;
           self.comps     = [1, 5];
@@ -245,9 +248,13 @@ def get_exp_params(expInd, forceDir=None):
           self.nSfs      = 11;
           self.nCells    = 34;
           self.dir       = 'LGN/'
-          self.stimDur   = 1; # in seconds
           self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
-        elif expInd == 4: # V1 "Int" - same as expInd = 2, but with integer TFs (keeping separate to track # cells)
+          if expInd == 3: # (original) LGN experiment - m675 and beyond; two recordings from V1 exp. m676 (in V1/)
+            self.stimDur   = 1; # in seconds
+          elif expInd == 6: # (updated "halfInt") LGN experiment - m680 and beyond
+            self.stimDur   = 1; # in seconds
+        ### full (V1) versions
+        elif expInd == 4 or expInd == 5:
           self.nStimComp = 7;
           self.nFamilies = 4;
           self.comps     = [1, 3, 5, 7]
@@ -255,18 +262,11 @@ def get_exp_params(expInd, forceDir=None):
           self.nSfs      = 11;
           self.nCells    = 1;
           self.dir       = 'V1/'
-          self.stimDur   = 1; # in seconds
           self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
-        elif expInd == 5: # V1 "halfInt" - same as expInd = 4, but with stimDur = 2
-          self.nStimComp = 7;
-          self.nFamilies = 4;
-          self.comps     = [1, 3, 5, 7]
-          self.nCons     = 4;
-          self.nSfs      = 11;
-          self.nCells    = 4;
-          self.dir       = 'V1/'
-          self.stimDur   = 2; # in seconds
-          self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
+          if expInd == 4: # V1 "Int" - same as expInd = 2, but with integer TFs (keeping separate to track # cells)
+            self.stimDur   = 1; # in seconds
+          elif expInd == 5: # V1 "halfInt" - same as expInd = 4, but with halfinteger TFs
+            self.stimDur   = 1; # in seconds
 
         if forceDir is not None:
           self.dir       = forceDir;
@@ -901,17 +901,18 @@ def get_recovInfo(cellStruct, normType):
     warnings.warn('You likely do not have a recovery set up for this cell/file');
   return prms, spks;
 
-def rvc_fit(amps, cons, var = None, n_repeats = 1000):
+def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0):
    ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
        fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
        Optionally, can include a measure of variability in each response to perform weighted least squares
+       Optionally, can include mod = 0 (as above) or 1 (Naka-Rushton)
        RETURNS: rvc_model (the model equation), list of the optimal parameters, and the contrast gain measure
        Vectorized - i.e. accepts arrays of amp/con arrays
    '''
    np = numpy;
 
-   rvc_model = get_rvc_model();
+   rvc_model = get_rvc_model(); # only used if mod == 0
    
    all_opts = []; all_loss = [];
    all_conGain = [];
@@ -932,19 +933,34 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000):
        loss_weights = np.divide(1, var[i]);
      else:
        loss_weights = np.ones_like(var[i]);
-     obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - rvc_model(params[0], params[1], params[2], curr_cons))));
+     if mod == 0:
+       obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - rvc_model(params[0], params[1], params[2], curr_cons))));
+     elif mod == 1:
+       obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params))));
      best_loss = 1e6; # start with high value
      best_params = []; conGain = [];
 
      for rpt in range(n_repeats):
 
-       b_rat = random_in_range([0.0, 0.2])[0];
-       init_params = [b_rat*np.max(curr_amps), (2+3*b_rat)*np.max(curr_amps), random_in_range([0.05, 0.5])[0]]; 
-       b_bounds = (None, 0); # 9.14.18 - per Tony, set to be just 0 for now
-       #b_bounds = (0, 0); # 9.14.18 - per Tony, set to be just 0 for now
-       k_bounds = (0, None);
-       c0_bounds = (3e-2, 1);
-       all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
+       if mod == 0:
+         b_rat = random_in_range([0.0, 0.2])[0];
+         init_params = [b_rat*np.max(curr_amps), (2+3*b_rat)*np.max(curr_amps), random_in_range([0.05, 0.5])[0]]; 
+         b_bounds = (None, 0); # 9.14.18 - per Tony, set to be just 0 for now
+         #b_bounds = (0, 0); # 9.14.18 - per Tony, set to be just 0 for now
+         k_bounds = (0, None);
+         c0_bounds = (3e-2, 1);
+         all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
+       elif mod == 1: # bad initialization as of now...
+         i_base = np.min(curr_amps) + random_in_range([-2.5, 2.5])[0];
+         i_gain = random_in_range([2, 8])[0] * np.max(curr_amps);
+         i_expon = 2;
+         i_c50 = 0.1;
+         init_params = [i_base, i_gain, i_expon, i_c50];
+         b_bounds = (None, None);
+         g_bounds = (0, None);
+         e_bounds = (0.75, None);
+         c_bounds = (0.01, 1);
+         all_bounds = (b_bounds, g_bounds, e_bounds, c_bounds);
        # now optimize
        to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
        opt_params = to_opt['x'];
@@ -957,6 +973,7 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000):
          best_params = opt_params;
 
        # now determine the contrast gain
+       '''
        b = opt_params[0]; k = opt_params[1]; c0 = opt_params[2];
        if b < 0: 
          # find the contrast value at which the rvc_model crosses/reaches 0
@@ -968,6 +985,8 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000):
          conGain = k/(c0*(1+con_r0/c0));
        else:
          conGain = k/c0;
+       '''
+       conGain = -100;
 
      all_opts.append(best_params);
      all_loss.append(best_loss);
@@ -1923,6 +1942,7 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
         mod = 0;
     else:
         nRepsMax = 20; # assume we'll never have more than 20 reps for any given condition...
+        # WHY BREAK SOMETIMES?
         modRespOrg = np.nan * np.empty((nDisps, nSfs, nCons, nRepsMax));
         mod = 1;
         
