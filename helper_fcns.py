@@ -252,7 +252,7 @@ def get_exp_params(expInd, forceDir=None):
           if expInd == 3: # (original) LGN experiment - m675 and beyond; two recordings from V1 exp. m676 (in V1/)
             self.stimDur   = 1; # in seconds
           elif expInd == 6: # (updated "halfInt") LGN experiment - m680 and beyond
-            self.stimDur   = 1; # in seconds
+            self.stimDur   = 2; # in seconds
         ### full (V1) versions
         elif expInd == 4 or expInd == 5:
           self.nStimComp = 7;
@@ -266,7 +266,7 @@ def get_exp_params(expInd, forceDir=None):
           if expInd == 4: # V1 "Int" - same as expInd = 2, but with integer TFs (keeping separate to track # cells)
             self.stimDur   = 1; # in seconds
           elif expInd == 5: # V1 "halfInt" - same as expInd = 4, but with halfinteger TFs
-            self.stimDur   = 1; # in seconds
+            self.stimDur   = 2; # in seconds
 
         if forceDir is not None:
           self.dir       = forceDir;
