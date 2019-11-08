@@ -15,7 +15,7 @@ import warnings
 
 # Functions:
 
-### basics
+### I. basics
 
 # np_smart_load - be smart about using numpy load
 # nan_rm        - remove nan from array
@@ -40,14 +40,14 @@ import warnings
 # flatten_list
 # switch_inner_outer
 
-### fourier, and repsonse-phase adjustment
+### II. fourier, and repsonse-phase adjustment
 
 # make_psth - create a psth for a given spike train
 # fft_amplitude - adjust the FFT amplitudes as needed for a real signal (i.e. double non-DC amplitudes)
 # spike_fft - compute the FFT for a given PSTH, extract the power at a given set of frequencies 
 # compute_f1f0 - compute the ratio of F1::F0 for the stimulus closest to optimal
 
-### phase/more psth
+### III. phase/more psth
 
 # project_resp - project the measured response onto the true/predicted phase and determine the "true" response amplitude
 # project_resp_cond - project the individual responses for a given condition
@@ -56,14 +56,16 @@ import warnings
 # get_true_phase - compute the response phase relative to the stimulus phase given a response phase (rel. to trial time window) and a stimulus phase (rel. to trial start)
 # polar_vec_mean - compute the vector mean given a set of amplitude/phase pairs for responses on individual trials
 # get_all_fft - extract the amp/phase for a condition or set of conditions
-# get_rvc_model - return the lambda function describing the rvc model
 # get_phAdv_model - return the lambda function describing the responsePhase-as-function-of-respAmplitude model
 # get_recovInfo - get the model recovery parameters/spikes, if applicable
-# rvc_fit - fit response versus contrast with a model used in Movshon/Kiorpes/+ 2005
 # phase_advance - compute the phase advance (a la Movshon/Kiorpes/+ 2005)
 # tf_to_ind - convert the given temporal frequency into an (integer) index into the fourier spectrum
 
-### descriptive fits to sf tuning/basic data analyses
+### IV. descriptive fits to sf tuning/basic data analyses
+
+# get_rvc_model - return the lambda function describing the rvc model
+# naka_rushton - naka-rushton form of the response-versus-contrast, with flexibility to evaluate super-saturating RVCs (Peirce 2007)
+# rvc_fit - fit response versus contrast with a model used in Movshon/Kiorpes/+ 2005
 
 # DiffOfGauss - standard difference of gaussians
 # DoGsach - difference of gaussians as implemented in sach's thesis
@@ -81,12 +83,18 @@ import warnings
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
 # get_descrResp - get the SF descriptive response
 
-## jointList interlude
+#######
+## V. jointList interlude
+#######
 
 # jl_create - create the jointList
 # jl_get_metric_byCon()
 
-# blankResp - return mean/std of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
+######
+## IV. return to fits/analysis
+######
+
+# blankResp - return mean/sem of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
 # get_valid_trials - rutrn list of valid trials given disp/con/sf
 # get_valid_sfs - return list indices (into allSfs) of valid sfs for given disp/con
 
@@ -102,7 +110,6 @@ import warnings
 # get_rvc_fits - return the rvc fits for a given cell (if applicable)
 # get_adjusted_spikerate - wrapper for get_spikes which gives us the correct/adjusted (if needed) spike rate (per second)
 # mod_poiss - computes "r", "p" for modulated poisson model (neg. binomial)
-# naka_rushton - naka-rushton form of the response-versus-contrast, with flexibility to evaluate super-saturating RVCs (Peirce 2007)
 # fit_CRF
 # random_in_range - random real-valued number between A and B
 # nbinpdf_log - was used with sfMix optimization to compute the negative binomial probability (likelihood) for a predicted rate given the measured spike count
@@ -117,6 +124,15 @@ import warnings
 # evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
 # setNormTypeArr - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters; DEPRECATED?
 # getConstraints - return the constraints used in model optimization
+
+##################################################################
+##################################################################
+##################################################################
+### I. BASICS
+##################################################################
+##################################################################
+##################################################################
+
 
 def np_smart_load(file_path, encoding_str='latin1'):
 
@@ -416,6 +432,20 @@ def descrFit_name(lossType, descrBase=None, modelName = None):
     
   return descrName;
 
+def rvc_fit_name(rvcBase, modNum, dir):
+   ''' returns the correct suffix for the given RVC model number and direction (pos/neg)
+   '''
+   if modNum == 0:
+     suff = '';
+   elif modNum == 1:
+     suff = '_NR';
+   elif modNum == 2:
+     suff = '_peirce';
+
+   base = rvcBase + suff;
+
+   return phase_fit_name(base, dir);
+
 def angle_xy(x_coord, y_coord):
    ''' return list of angles (in deg) given list of x/y coordinates (i.e. polar coordinates)
    ''' 
@@ -447,7 +477,13 @@ def switch_inner_outer(x, asnp = False):
     switch_inner_outer = lambda arr: [[x[i] for x in arr] for i in range(len(arr[0]))];
   return switch_inner_outer(x);
 
-### fourier
+##################################################################
+##################################################################
+##################################################################
+### II. FOURIER
+##################################################################
+##################################################################
+##################################################################
 
 def make_psth(spikeTimes, binWidth=1e-3, stimDur=1):
     # given an array of arrays of spike times, create the PSTH for a given bin width and stimulus duration
@@ -591,7 +627,13 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, des
 
   return np.nanmean(np.divide(f1rate_pos, f0rate_pos)), f0rate, f1rate, f0_counts, f1rates;
 
-## phase/more psth
+##################################################################
+##################################################################
+##################################################################
+## III. PHASE/MORE PSTH
+##################################################################
+##################################################################
+##################################################################
 
 def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None, allSfs=None):
   ''' Using our model fit of (expected) response phase as a function of response amplitude, we can
@@ -865,13 +907,6 @@ def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3,
 
   return all_r, all_ph, all_tf, all_conComp, all_sfComp;
 
-def get_rvc_model():
-  ''' simply return the rvc model used in the fits
-  '''
-  rvc_model = lambda b, k, c0, cons: b + k*numpy.log(1+numpy.divide(cons, c0));
-
-  return rvc_model  
-
 def get_phAdv_model():
   ''' simply return the phase advance model used in the fits
   '''
@@ -900,104 +935,6 @@ def get_recovInfo(cellStruct, normType):
   except:
     warnings.warn('You likely do not have a recovery set up for this cell/file');
   return prms, spks;
-
-def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0):
-   ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
-       fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
-       Movshon, Kiorpes, Hawken, Cavanaugh; 2005
-       Optionally, can include a measure of variability in each response to perform weighted least squares
-       Optionally, can include mod = 0 (as above) or 1 (Naka-Rushton) or 2 (Peirce 2007 modification of Naka-Rushton)
-       RETURNS: rvc_model (the model equation), list of the optimal parameters, and the contrast gain measure
-       Vectorized - i.e. accepts arrays of amp/con arrays
-   '''
-   np = numpy;
-
-   rvc_model = get_rvc_model(); # only used if mod == 0
-   
-   all_opts = []; all_loss = [];
-   all_conGain = [];
-   n_amps = len(amps);
-
-   for i in range(n_amps):
-     curr_amps = amps[i];
-     curr_cons = cons[i];
-     
-     if curr_amps == [] or curr_cons == []:
-       # nothing to do - set to blank and move on
-       all_opts.append([]);
-       all_loss.append([]);
-       all_conGain.append([]);
-       continue;
-
-     if var:
-       loss_weights = np.divide(1, var[i]);
-     else:
-       loss_weights = np.ones_like(var[i]);
-     if mod == 0:
-       obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - rvc_model(params[0], params[1], params[2], curr_cons))));
-     elif mod == 1 or mod == 2:
-       obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params))));
-     best_loss = 1e6; # start with high value
-     best_params = []; conGain = [];
-
-     for rpt in range(n_repeats):
-
-       if mod == 0:
-         b_rat = random_in_range([0.0, 0.2])[0];
-         init_params = [b_rat*np.max(curr_amps), (2+3*b_rat)*np.max(curr_amps), random_in_range([0.05, 0.5])[0]]; 
-         b_bounds = (None, 0); # 9.14.18 - per Tony, set to be just 0 for now
-         #b_bounds = (0, 0); # 9.14.18 - per Tony, set to be just 0 for now
-         k_bounds = (0, None);
-         c0_bounds = (3e-2, 1);
-         all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
-       elif mod == 1 or mod == 2: # bad initialization as of now...
-         i_base = np.min(curr_amps) + random_in_range([-2.5, 2.5])[0];
-         i_gain = random_in_range([2, 8])[0] * np.max(curr_amps);
-         i_expon = 2;
-         i_c50 = 0.1;
-         i_sExp = 1;
-         init_params = [i_base, i_gain, i_expon, i_c50, i_sExp];
-         b_bounds = (None, None);
-         g_bounds = (0, None);
-         e_bounds = (0.75, None);
-         c_bounds = (0.01, 1);
-         if mod == 1:
-           s_bounds = (1, 1);
-         elif mod == 2:
-           s_bounds = (1, 2); # for now, but can adjust as needed (TODO)
-         all_bounds = (b_bounds, g_bounds, e_bounds, c_bounds, s_bounds);
-       # now optimize
-       to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
-       opt_params = to_opt['x'];
-       opt_loss = to_opt['fun'];
-
-       if opt_loss > best_loss:
-         continue;
-       else:
-         best_loss = opt_loss;
-         best_params = opt_params;
-
-       # now determine the contrast gain
-       '''
-       b = opt_params[0]; k = opt_params[1]; c0 = opt_params[2];
-       if b < 0: 
-         # find the contrast value at which the rvc_model crosses/reaches 0
-         obj_whenR0 = lambda con: np.square(0 - rvc_model(b, k, c0, con));
-         con_bound = (0, 1);
-         init_r0cross = 0;
-         r0_cross = opt.minimize(obj_whenR0, init_r0cross, bounds=(con_bound, ));
-         con_r0 = r0_cross['x'];
-         conGain = k/(c0*(1+con_r0/c0));
-       else:
-         conGain = k/c0;
-       '''
-       conGain = -100;
-
-     all_opts.append(best_params);
-     all_loss.append(best_loss);
-     all_conGain.append(conGain);
-
-   return rvc_model, all_opts, all_conGain, all_loss;
 
 def phase_advance(amps, phis, cons, tfs):
    ''' Given the mean amplitude/phase of responses over a range of contrasts, compute the linear model
@@ -1067,8 +1004,151 @@ def tf_to_ind(tfs, stimDur):
   except: # otherwise, just the simple way
     return numpy.round(numpy.multiply(tfs, stimDur)).astype(numpy.int16);
 
+
+##################################################################
+##################################################################
+##################################################################
 ### descriptive fits to sf tuning/basic data analyses
-### Descriptive functions - fits to spatial frequency tuning, other related calculations
+### IV. Descriptive functions - fits to spatial frequency tuning, other related calculations
+##################################################################
+##################################################################
+##################################################################
+
+def get_rvc_model():
+  ''' simply return the rvc model used in the fits (type 0; should be used only for LGN)
+      --- from Eq. 3 of Movshon, Kiorpes, Hawken, Cavanaugh; 2005
+  '''
+  rvc_model = lambda b, k, c0, cons: b + k*numpy.log(1+numpy.divide(cons, c0));
+
+  return rvc_model  
+
+def naka_rushton(con, params):
+    ''' this is the classic naka rushton form of RVC - 
+        but, if including optional 5th parameter "s", this is the 2007 Perice super-saturating RVC
+    '''
+    np = numpy;
+    base = params[0];
+    gain = params[1];
+    expon = params[2];
+    c50 = params[3];
+    if len(params) > 4: # optionally, include "s" - the super-saturating parameter from Peirce, JoV (2007)
+      sExp = params[4];
+    else:
+      sExp = 1; # otherwise, it's just 1
+
+    return base + gain*np.divide(np.power(con, expon), np.power(con, expon*sExp) + np.power(c50, expon*sExp));
+
+def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False):
+   ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
+       fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
+       Movshon, Kiorpes, Hawken, Cavanaugh; 2005
+       Optionally, can include a measure of variability in each response to perform weighted least squares
+       Optionally, can include mod = 0 (as above) or 1 (Naka-Rushton) or 2 (Peirce 2007 modification of Naka-Rushton)
+       RETURNS: rvc_model (the model equation), list of the optimal parameters, and the contrast gain measure
+       Vectorized - i.e. accepts arrays of amp/con arrays
+   '''
+   ### TODO: set bounds for baseline in all rvc models - base on whether response is F1 (fixed at 0) or F0 (can be non-negative)
+   ### TODO: per discussion with TM, we should fit non-baseline subtracted (!!!!) responses for RVC
+
+   np = numpy;
+
+   rvc_model = get_rvc_model(); # only used if mod == 0
+   
+   all_opts = []; all_loss = [];
+   all_conGain = [];
+   n_amps = len(amps);
+
+   for i in range(n_amps):
+     curr_amps = amps[i];
+     curr_cons = cons[i];
+     
+     if curr_amps == [] or curr_cons == []:
+       # nothing to do - set to blank and move on
+       all_opts.append([]);
+       all_loss.append([]);
+       all_conGain.append([]);
+       continue;
+
+     if var:
+       loss_weights = np.divide(1, var[i]);
+     else:
+       loss_weights = np.ones_like(var[i]);
+     if mod == 0:
+       obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - rvc_model(params[0], params[1], params[2], curr_cons))));
+     elif mod == 1 or mod == 2:
+       obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params))));
+     best_loss = 1e6; # start with high value
+     best_params = []; conGain = [];
+
+     for rpt in range(n_repeats):
+
+       if mod == 0:
+         if fix_baseline:
+           b_rat = 0;
+         else:
+           b_rat = random_in_range([0.0, 0.2])[0];
+         init_params = [b_rat*np.max(curr_amps), (2+3*b_rat)*np.max(curr_amps), random_in_range([0.05, 0.5])[0]]; 
+         if fix_baseline:
+           b_bounds = (0, 0);
+         else:
+           b_bounds = (None, 0);
+         k_bounds = (0, None);
+         c0_bounds = (3e-2, 1);
+         all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
+       elif mod == 1 or mod == 2: # bad initialization as of now...
+         if fix_baseline: # correct if we're fixing the baseline at 0
+           i_base = 0;
+         else:
+           i_base = np.min(curr_amps) + random_in_range([-2.5, 2.5])[0];
+         i_gain = random_in_range([2, 8])[0] * np.max(curr_amps);
+         i_expon = 2;
+         i_c50 = 0.1;
+         i_sExp = 1;
+         init_params = [i_base, i_gain, i_expon, i_c50, i_sExp];
+         if fix_baseline:
+           b_bounds = (0, 0);
+         else:
+           b_bounds = (None, None);
+         g_bounds = (0, None);
+         e_bounds = (0.75, None);
+         c_bounds = (0.01, 1);
+         if mod == 1:
+           s_bounds = (1, 1);
+         elif mod == 2:
+           s_bounds = (1, 2); # for now, but can adjust as needed (TODO)
+         all_bounds = (b_bounds, g_bounds, e_bounds, c_bounds, s_bounds);
+       # now optimize
+       to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
+       opt_params = to_opt['x'];
+       opt_loss = to_opt['fun'];
+
+       if opt_loss > best_loss:
+         continue;
+       else:
+         best_loss = opt_loss;
+         best_params = opt_params;
+
+       # now determine the contrast gain
+       '''
+       b = opt_params[0]; k = opt_params[1]; c0 = opt_params[2];
+       if b < 0: 
+         # find the contrast value at which the rvc_model crosses/reaches 0
+         obj_whenR0 = lambda con: np.square(0 - rvc_model(b, k, c0, con));
+         con_bound = (0, 1);
+         init_r0cross = 0;
+         r0_cross = opt.minimize(obj_whenR0, init_r0cross, bounds=(con_bound, ));
+         con_r0 = r0_cross['x'];
+         conGain = k/(c0*(1+con_r0/c0));
+       else:
+         conGain = k/c0;
+       '''
+       conGain = -100;
+
+     all_opts.append(best_params);
+     all_loss.append(best_loss);
+     all_conGain.append(conGain);
+
+   return rvc_model, all_opts, all_conGain, all_loss;
 
 def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
   ''' Difference of gaussians 
@@ -1342,7 +1422,13 @@ def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
     pred_spikes, _ = DiffOfGauss(*params, stim_sf=stim_sf);
   return pred_spikes;
 
-### joint list analyses (pref "jl_")
+##################################################################
+##################################################################
+##################################################################
+### V. JOINT LIST ANALYSES (pref "jl_")
+##################################################################
+##################################################################
+##################################################################
 
 def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, 
               conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, c50Loc=2, varExplThresh=75, dog_varExplThresh=60):
@@ -1685,9 +1771,15 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02):
 
   return output;
 
-###
+##################################################################
+##################################################################
+##################################################################
+### IV. RETURN TO DESCRIPTIVE FITS/ANALYSES
+##################################################################
+##################################################################
+##################################################################
 
-def blankResp(cellStruct, expInd, spikes=None, spksAsRate=False):
+def blankResp(cellStruct, expInd, spikes=None, spksAsRate=False, returnRates=False):
     ''' optionally, pass in array of spikes (by trial) and flag for whether those spikes are rates or counts over the whole trial
     '''
     # works for all experiment variants (checked 08.20.19)
@@ -1705,9 +1797,11 @@ def blankResp(cellStruct, expInd, spikes=None, spksAsRate=False):
 
     blank_tr = spikes[numpy.isnan(tr['con'][0])];
     mu = numpy.mean(numpy.divide(blank_tr, divFactor));
-    sig = numpy.std(numpy.divide(blank_tr, divFactor));
+    std_err = sem(numpy.divide(blank_tr, divFactor));
+    if returnRates:
+      blank_tr = numpy.divide(blank_tr, divFactor);
     
-    return mu, sig, blank_tr;
+    return mu, std_err, blank_tr;
     
 def get_valid_trials(data, disp, con, sf, expInd, stimVals=None, validByStimVal=None):
   ''' Given a data and the disp/con/sf indices (i.e. integers into the list of all disps/cons/sfs
@@ -2119,7 +2213,7 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False):
 
 def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes = None):
   ''' Get trial-by-trial spike count
-      Given the data (S.sfm.exp.trial), if rvcFits is None, simply return saved spike count;f
+      Given the data (S.sfm.exp.trial), if rvcFits is None, simply return saved spike count;
                                         else return the adjusted spike counts (e.g. LGN, expInd 3)
   '''
   if overwriteSpikes is not None: # as of 19.05.02, used for fitting model recovery spikes
@@ -2143,11 +2237,11 @@ def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes 
         spikes = data['f1']
   return spikes;
 
-def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', direc=1):
+def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', rvcMod=0, direc=1):
   ''' simple function to return the rvc fits needed for adjusting responses
   '''
   if expInd > 2: # no adjustment for V1, altExp as of now (19.08.28)
-    rvcFits = np_smart_load(str(loc_data + phase_fit_name(rvcName, direc)));
+    rvcFits = np_smart_load(str(loc_data + rvc_fit_name(rvcName, rvcMod, direc)));
     try:
       rvcFits = rvcFits[cellNum-1];
     except: # if the RVC fits haven't been done...
@@ -2158,9 +2252,9 @@ def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', direc=1):
 
   return rvcFits;
 
-def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, descrFitName_f0=None, descrFitName_f1=None, force_dc=False, force_f1=False):
+def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMod=0, descrFitName_f0=None, descrFitName_f1=None, force_dc=False, force_f1=False, baseline_sub=True):
   ''' wrapper function which will call needed subfunctions to return dc-subtracted spikes by trial
-      OUTPUT: SPIKES (as rate, per s), baseline subtracted (if DC); responses are per stimulus, not per component
+      OUTPUT: SPIKES (as rate, per s), baseline subtracted (default, if DC); responses are per stimulus, not per component
         note: user can override f1f0 calculation to force return of DC values only (set force_dc=TRUE) or F! values only (force_f1=TRUE)
   '''
   f1f0_rat = compute_f1f0(expData, which_cell, expInd, dataPath, descrFitName_f0=descrFitName_f0, descrFitName_f1=descrFitName_f1)[0];
@@ -2169,7 +2263,7 @@ def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, descr
   ### i.e. if we're looking at a simple cell, then let's get F1
   if (f1f0_rat > 1 and force_dc is False) or force_f1 is True:
       if rvcName is not None:
-          rvcFits = get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName);
+          rvcFits = get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, modNum=rvcMod);
       else:
           rvcFits = None
       spikes_byComp = get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
@@ -2180,9 +2274,10 @@ def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, descr
   else:
       spikes = get_spikes(expData, get_f0=1, rvcFits=None, expInd=expInd);
       rates = False; # get_spikes without rvcFits is directly from spikeCount, which is counts, not rates!
-      baseline = blankResp(expData, expInd)[0]; # we'll plot the spontaneous rate
-      # why mult by stimDur? well, spikes are not rates but baseline is, so we convert baseline to count (i.e. not rate, too)
-      spikes = spikes - baseline*stimDur;
+      if baseline_sub: # as of 19.11.07, this is optional, but default
+        baseline = blankResp(expData, expInd)[0]; # we'll plot the spontaneous rate
+        # why mult by stimDur? well, spikes are not rates but baseline is, so we convert baseline to count (i.e. not rate, too)
+        spikes = spikes - baseline*stimDur;
   # now, convert to rate (could be just done in above if/else, but cleaner to have it explicit here)
   if rates == False:
     spikerate = numpy.divide(spikes, stimDur);
@@ -2198,19 +2293,6 @@ def mod_poiss(mu, varGain):
     p   = r/(r + mu)
 
     return r, p
-
-def naka_rushton(con, params):
-    np = numpy;
-    base = params[0];
-    gain = params[1];
-    expon = params[2];
-    c50 = params[3];
-    if len(params) > 4: # optionally, include "s" - the super-saturating parameter from Peirce, JoV (2007)
-      sExp = params[4];
-    else:
-      sExp = 1; # otherwise, it's just 1
-
-    return base + gain*np.divide(np.power(con, expon), np.power(con, expon*sExp) + np.power(c50, expon*sExp));
 
 def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain, loss_type):
     # loss_type (i.e. which loss function):
