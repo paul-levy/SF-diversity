@@ -32,10 +32,11 @@ import warnings
 # lossType_suffix - get the string corresponding to a loss type
 # chiSq_suffix    - what suffix (e.g. 'a' or 'c') given the chiSq multiplier value
 # fitList_name    - put together the name for the fitlist
-# phase_fit_name
+# phase_fit_name  
 # descrMod_name   - returns string for descriptive model fit
-# descrLoss_name   - returns string for descriptive model loss type
-# descrFit_name   - 
+# descrLoss_name  - returns string for descriptive model loss type
+# descrFit_name   - name for descriptive fits
+# rvc_fit_name    - name for rvcFits
 # angle_xy
 # flatten_list
 # switch_inner_outer
@@ -1023,8 +1024,8 @@ def get_rvc_model():
   return rvc_model  
 
 def naka_rushton(con, params):
-    ''' this is the classic naka rushton form of RVC - 
-        but, if including optional 5th parameter "s", this is the 2007 Perice super-saturating RVC
+    ''' this is the classic naka rushton form of RVC - type 1
+        but, if incl. optional 5th param "s", this is the 2007 Peirce super-saturating RVC (type 2)
     '''
     np = numpy;
     base = params[0];
@@ -2263,7 +2264,7 @@ def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMo
   ### i.e. if we're looking at a simple cell, then let's get F1
   if (f1f0_rat > 1 and force_dc is False) or force_f1 is True:
       if rvcName is not None:
-          rvcFits = get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, modNum=rvcMod);
+          rvcFits = get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod);
       else:
           rvcFits = None
       spikes_byComp = get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
