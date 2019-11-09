@@ -38,8 +38,9 @@ expDir   = sys.argv[4];
 modRecov = int(sys.argv[5]);
 descrMod = int(sys.argv[6]);
 rvcAdj   = int(sys.argv[7]); # if 1, then let's load rvcFits to adjust responses to F1
-if len(sys.argv) > 8:
-  respVar = int(sys.argv[8]);
+rvcMod   = int(sys.argv[8]);
+if len(sys.argv) > 9:
+  respVar = int(sys.argv[9]);
 else:
   respVar = 1;
 
@@ -63,7 +64,7 @@ expName = hf.get_datalist(expDir);
 #fitBase = 'mr_fitList_190502cA';
 fitBase = 'fitList_190502cA';
 ### RVCFITS
-rvcBase = 'rvcFits'; # direc flag & '.npy' are added
+rvcBase = 'rvcFits'; # model tag, direc flag & '.npy' are added
 
 ### Descriptive fits?
 if descrMod > -1:
@@ -172,10 +173,10 @@ else:
   overwriteSpikes = None;
 _, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData, expInd);
 if rvcAdj == 1:
-  rvcFlag = '_f1';
-  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase);
-else:
   rvcFlag = '';
+  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
+else:
+  rvcFlag = '_f0';
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
 spikes = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=rvcFits, expInd=expInd, overwriteSpikes=overwriteSpikes);
 _, _, respOrg, respAll = hf.organize_resp(spikes, expData, expInd);

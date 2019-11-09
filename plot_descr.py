@@ -1,7 +1,7 @@
 # coding: utf-8
 # NOTE: Unlike plot_simple.py, this file is used to plot 
 # - descriptive SF tuning fit ONLY
-# - (TODO) RVC with Naka-Rushton fit
+# - RVC with Naka-Rushton fit
 
 import os
 import sys
@@ -38,8 +38,9 @@ expDir    = sys.argv[2];
 descrMod  = int(sys.argv[3]);
 descrLoss = int(sys.argv[4]);
 rvcAdj    = int(sys.argv[5]); # if 1, then let's load rvcFits to adjust F1, as needed
-if len(sys.argv) > 6:
-  respVar = int(sys.argv[6]);
+rvcMod    = int(sys.argv[6]);
+if len(sys.argv) > 7:
+  respVar = int(sys.argv[7]);
 else:
   respVar = 1;
 
@@ -50,15 +51,12 @@ save_loc = loc_base + expDir + 'figures/';
 
 ### DATALIST
 expName = hf.get_datalist(expDir);
-#expName = 'dataList.npy';
-#expName = 'dataList_glx_mr.npy'
-#expName = 'dataList_glx.npy'
-#expName = 'dataList_mr.npy'
 ### DESCRLIST
-descrBase = 'descrFits_190926';
-#descrBase = 'descrFits_190503';
+#descrBase = 'descrFits_191003';
+descrBase = 'descrFits_191023';
 ### RVCFITS
-rvcBase = 'rvcFits_190926'; # direc flag & '.npy' are added
+#rvcBase = 'rvcFits_191003'; # direc flag & '.npy' are added
+rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
 
 ##################
 ### Spatial frequency
@@ -68,7 +66,7 @@ modStr  = hf.descrMod_name(descrMod)
 fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr);
 descrFits = hf.np_smart_load(data_loc + fLname);
 if rvcAdj == 1:
-  rvcFits = hf.np_smart_load(data_loc + hf.phase_fit_name(rvcBase + '_f1', dir=1)); # i.e. positive
+  rvcFits = hf.np_smart_load(data_loc + hf.rvc_fit_name(rvcBase, modNum=rvcMod, dir=1)); # i.e. positive
 else:
   rvcFits = hf.np_smart_load(data_loc + rvcBase + '_f0.npy');
 rvcFits = rvcFits[cellNum-1];
@@ -100,12 +98,12 @@ overwriteSpikes = None;
 _, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData, expInd);
 rvcModel = hf.get_rvc_model();
 if rvcAdj == 0:
-  rvcBase = None;
-  rvcFlag = '_noAdj';
+  rvcFlag = '_f0';
 else:
-  rvcFlag = '_f1';
-  rvcBase = '%s%s' % (rvcBase, rvcFlag);
+  rvcFlag = '';
+rvcBase = '%s%s' % (rvcBase, rvcFlag);
 spikes_rate = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcBase, descrFitName_f0 = fLname);
+
 ###
 # now, we take into account that we fit the responses re-centered such that they are non-negative
 # i.e. if the adjusted responses (in particular, baseline-subtracted F0 responses) were negative,
@@ -286,7 +284,7 @@ for d in range(nDisps):
       dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
 
       dispAx[d][i].set_xscale('log');
-      if expDir == 'LGN/' # we want double-log if it's the LGN!
+      if expDir == 'LGN/': # we want double-log if it's the LGN!
         dispAx[d][i].set_yscale('log');
       dispAx[d][i].set_xlabel('sf (c/deg)'); 
 
@@ -417,7 +415,12 @@ for d in range(nDisps):
           prms_curr = rvcFits[d]['params'][sf_ind];
         else:
           prms_curr = rvcFits['params'][d][sf_ind]; 
-        rvcAx[plt_x][plt_y].plot(cons_plot, np.maximum(rvcModel(*prms_curr, cons_plot), 0.1), color=modClr, \
+        if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
+          rvcResps = hf.naka_rushton(cons_plot, prms_curr)
+        elif rvcMod == 0: # i.e. movshon form
+          rvcResps = rvcModel(*prms_curr, cons_plot);
+        # TODO: do you want to do the max(x, 0.1)???
+        rvcAx[plt_x][plt_y].plot(cons_plot, np.maximum(rvcResps, 0.1), color=modClr, \
           alpha=0.7, clip_on=False, label=modTxt);
         c50 = prms_curr[-1]; # last entry is c50
         rvcAx[plt_x][plt_y].plot(c50, 0.1, 'v', label='c50', color=modClr);
@@ -471,6 +474,7 @@ for d in range(nDisps):
 
         col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
         con_str = str(np.round(all_sfs[sf_ind], 2));
+        # plot data
         plot_resp = respMean[d, sf_ind, v_cons];
 
         line_curr, = crfAx[d][0].plot(all_cons[v_cons][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', color=col, \
@@ -479,11 +483,15 @@ for d in range(nDisps):
 
         # now RVC model [1]
  	# RVC descr model - TODO: Fix this discrepancy between f0 and f1 rvc structure? make both like descrFits?
-        if rvcAdj == 1: # i.e. _f1 or non-"_f0" flag on rvcFits
+        if rvcAdj == 1:
           prms_curr = rvcFits[d]['params'][sf_ind];
-        else:
+        else: # i.e. f0 flag on the rvc fits...
           prms_curr = rvcFits['params'][d][sf_ind]; 
-        crfAx[d][1].plot(cons_plot, np.maximum(rvcModel(*prms_curr, cons_plot), 0.1), color=col, \
+        if rvcMod == 0: # i.e. movshon form
+          rvcResps = rvcModel(*prms_curr, cons_plot);
+        elif rvcMod == 1 or rvcMod == 2: # naka-rushton (or modified version)
+          rvcResps = hf.naka_rushton(cons_plot, prms_curr)
+        crfAx[d][1].plot(cons_plot, np.maximum(rvcResps, 0.1), color=col, \
                          clip_on=False, label = con_str);
 
     for i in range(len(crfCurr)):

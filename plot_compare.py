@@ -49,10 +49,11 @@ cellNum  = int(sys.argv[1]);
 lossType = int(sys.argv[2]);
 expDir   = sys.argv[3]; 
 rvcAdj   = int(sys.argv[4]); # if 1, then let's load rvcFits to adjust responses to F1
-diffPlot = int(sys.argv[5]);
-intpMod  = int(sys.argv[6]);
-if len(sys.argv) > 7:
-  respVar = int(sys.argv[7]);
+rvcMod   = int(sys.argv[5]); # 0/1/2 (see hf.rvc_fit_name)
+diffPlot = int(sys.argv[6]);
+intpMod  = int(sys.argv[7]);
+if len(sys.argv) > 8:
+  respVar = int(sys.argv[8]);
 else:
   respVar = 1;
 
@@ -172,10 +173,10 @@ modSponRates = [fit[6] for fit in modFits];
 # more tabulation - stim vals, organize measured responses
 _, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData, expInd);
 if rvcAdj == 1:
-  rvcFlag = '_f1';
-  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase);
-else:
   rvcFlag = '';
+  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
+else:
+  rvcFlag = '_f0';
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
 spikes  = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=rvcFits, expInd=expInd);
 _, _, respOrg, respAll    = hf.organize_resp(spikes, expData, expInd);

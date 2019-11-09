@@ -20,15 +20,15 @@
 # fifth param is - are we plotting model recovery (1) or no (0)?
 # sixth param is descrFit model - <0 for skip; 0/1/2 (flex/sach/tony)
 # seventh param is f0/f1 (i.e. if 1, load rvcFits)
-# eigth param is std/sem as variance measure: (1 sem (default))
+# eigth param is which RVC model (0/1/2 for tony/naka/peirce)
+# ninth param is std/sem as variance measure: (1 sem (default))
 
 source activate lcv-python
 
 for run in {1..16}
 do
-  #python plot_simple.py $run 4 2 V1_orig/ 0 0 0 1 &
-  python plot_simple.py $run 4 1 V1/ 1 0 1 &
-#  python plot_simple.py $run 4 2 V1/ 1 0 1 &
+  python plot_simple.py $run 4 1 V1/ 0 0 1 2 &
+  #python plot_simple.py $run 4 1 V1/ 1 0 1 2 &
 done
 
 # leave a blank line at the end
