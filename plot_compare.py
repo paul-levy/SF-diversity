@@ -178,8 +178,8 @@ if rvcAdj == 1:
 else:
   rvcFlag = '_f0';
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
-spikes  = hf.get_spikes(expData['sfm']['exp']['trial'], rvcFits=rvcFits, expInd=expInd);
-_, _, respOrg, respAll    = hf.organize_resp(spikes, expData, expInd);
+spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcBase, rvcMod=rvcMod, descrFitName_f0 = fLname, baseline_sub=False);
+_, _, respOrg, respAll    = hf.organize_resp(spikes_rate, expData, expInd);
 
 respMean = respOrg;
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition

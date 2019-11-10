@@ -102,11 +102,11 @@ if rvcAdj == 0:
 else:
   rvcFlag = '';
 rvcBase = '%s%s' % (rvcBase, rvcFlag);
-spikes_rate = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcBase, descrFitName_f0 = fLname);
+spikes_rate = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcBase, rvcMod=rvcMod, descrFitName_f0 = fLname, baseline_sub=False);
 
 ###
 # now, we take into account that we fit the responses re-centered such that they are non-negative
-# i.e. if the adjusted responses (in particular, baseline-subtracted F0 responses) were negative,
+# i.e. if the adjusted responses were negative,
 #   we previuosly added the lowest value (i.e. most negative response) plus an additional scalar (0.1)
 #   thus making the lowest response 0.1 - the descriptive fits were made on this transformed data
 #   and thus we apply the reverse of that transformation here, to those fits, before plotting
