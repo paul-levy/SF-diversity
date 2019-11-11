@@ -168,6 +168,15 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcNam
   #########
   ### Now, we fit the RVC
   #########
+  # first, load the file if it already exists
+  if os.path.isfile(data_loc + rvcNameFinal):
+      rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
+      try:
+        rvcFits_curr = rvcFits[cell_num-1][disp];
+      except:
+        rvcFits_curr = None;
+  else:
+      rvcFits_curr = None;
 
   ######
   # simple cell
@@ -199,7 +208,7 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcNam
     elif disp == 0:
       adjSemTr   = [[sem(x) for x in y] for y in adjByTrial];
       adjSemCompTr = adjSemTr; # for single gratings, there is only one component!
-      rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True);
+      rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True, prevFits=rvcFits_curr);
   ######
   # complex cell
   ######

@@ -1039,7 +1039,7 @@ def naka_rushton(con, params):
 
     return base + gain*np.divide(np.power(con, expon), np.power(con, expon*sExp) + np.power(c50, expon*sExp));
 
-def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False):
+def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False, prevFits=None):
    ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
        fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
@@ -1048,8 +1048,6 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False)
        RETURNS: rvc_model (the model equation), list of the optimal parameters, and the contrast gain measure
        Vectorized - i.e. accepts arrays of amp/con arrays
    '''
-   ### TODO: set bounds for baseline in all rvc models - base on whether response is F1 (fixed at 0) or F0 (can be non-negative)
-   ### TODO: per discussion with TM, we should fit non-baseline subtracted (!!!!) responses for RVC
 
    np = numpy;
 
@@ -1076,10 +1074,18 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False)
        loss_weights = np.ones_like(var[i]);
      if mod == 0:
        obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - rvc_model(params[0], params[1], params[2], curr_cons))));
-     elif mod == 1 or mod == 2:
+     elif mod == 1:
        obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params))));
-     best_loss = 1e6; # start with high value
-     best_params = []; conGain = [];
+     elif mod == 2: # we also want a regularization term for the "s" term
+       lam1 = 1; # lambda parameter for regularization
+       obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params)))) + lam1*params[-1]; # params[-1] is "sExp"
+
+     if prevFits is None:
+       best_loss = 1e6; # start with high value
+       best_params = []; conGain = [];
+     else: # load the previous best_loss/params
+       best_loss = prevFits['loss'][i];
+       best_params = prevFits['params'][i];
 
      for rpt in range(n_repeats):
 
