@@ -204,7 +204,7 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcNam
       adjSumResp  = [np.sum(x, 1) if x else [] for x in adjMeans];
       adjSemTr    = [[sem(np.sum(hf.switch_inner_outer(x), 1)) for x in y] for y in adjByTrial]
       adjSemCompTr  = [[sem(hf.switch_inner_outer(x)) for x in y] for y in adjByTrial];
-      rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True);
+      rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True, prevFits=rvcFits_curr);
     elif disp == 0:
       adjSemTr   = [[sem(x) for x in y] for y in adjByTrial];
       adjSemCompTr = adjSemTr; # for single gratings, there is only one component!
@@ -245,7 +245,7 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcNam
       adjByTrial.append(adjCurr); # put adjByTrial in same format as adjMeans/adjSemTr!!!
     # to ensure correct mapping of response to contrast, let's add "0" to the front of the list of contrasts
     consRepeat = [np.hstack((0, allCons[curr_cons]))] * len(adjMeans);
-    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr, mod=rvcMod);
+    rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr, mod=rvcMod, prevFits=rvcFits_curr);
     # adjByTrial = spikerate;
     adjSemCompTr = []; # we're getting f0 - therefore cannot get individual component responses!
 
