@@ -1077,15 +1077,16 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False,
      elif mod == 1:
        obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params))));
      elif mod == 2: # we also want a regularization term for the "s" term
-       lam1 = 1; # lambda parameter for regularization
-       obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params)))) + lam1*params[-1]; # params[-1] is "sExp"
+       lam1 = 5; # lambda parameter for regularization
+       obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params)))) + lam1*(params[-1]-1); # params[-1] is "sExp"
 
      if prevFits is None:
        best_loss = 1e6; # start with high value
        best_params = []; conGain = [];
-     else: # load the previous best_loss/params
+     else: # load the previous best_loss/params/conGain
        best_loss = prevFits['loss'][i];
        best_params = prevFits['params'][i];
+       conGain = prevFits['conGain'][i];
 
      for rpt in range(n_repeats):
 
@@ -1233,7 +1234,7 @@ def chiSq(data_resps, model_resps, stimDur=1, kMult = 0.10):
   return chi;
 
 def dog_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11)):
-  ''' Compute the preferred SF given a set of DoG parameters
+  ''' Compute the preferred SF given a set of DoG [or in the case of dog_model==0, not DoG...) parameters
   '''
   sf_bound = (numpy.min(all_sfs), numpy.max(all_sfs));
   if dog_model == 0:
@@ -1611,9 +1612,9 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
             except: # then this dispersion does not have that contrast value, but it's ok - we already have nan
                 pass 
 
+        # Now, compute the derived pSf Ratio
         try:
-          # Now, compute the derived pSf Ratio
-          _, psf_model, opt_params = dog_prefSfMod(descrFits[cell_ind], allCons=cons, disp=d, varThresh=varExplThresh, dog_model=descrMod)
+          _, psf_model, opt_params = dog_prefSfMod(descrFits[cell_ind], allCons=cons, disp=d, varThresh=varExplThresh)
           valInds = np.where(descrFits[cell_ind]['varExpl'][d, :] > varExplThresh)[0];
           if len(valInds) > 1:
             extrema = [cons[valInds[0]], cons[valInds[-1]]];
