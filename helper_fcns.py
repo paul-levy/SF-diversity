@@ -72,6 +72,7 @@ import warnings
 # DoGsach - difference of gaussians as implemented in sach's thesis
 # var_explained - compute the variance explained for a given model fit/set of responses
 # chiSq      - compute modified chiSq loss value as described in Cavanaugh et al
+# c50_empirical - compute the effective/emperical c50 by optimization
 # dog_prefSf - compute the prefSf for a given DoG model/parameter set
 # dog_prefSfMod - fit a simple model of prefSf as f'n of contrast
 # dog_charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
@@ -433,15 +434,21 @@ def descrFit_name(lossType, descrBase=None, modelName = None):
     
   return descrName;
 
-def rvc_fit_name(rvcBase, modNum, dir):
-   ''' returns the correct suffix for the given RVC model number and direction (pos/neg)
-   '''
+def rvc_mod_suff(modNum):
+   ''' returns the suffix for a given rvcModel number'''
    if modNum == 0:
      suff = '';
    elif modNum == 1:
      suff = '_NR';
    elif modNum == 2:
      suff = '_peirce';
+   
+   return suff;
+
+def rvc_fit_name(rvcBase, modNum, dir):
+   ''' returns the correct suffix for the given RVC model number and direction (pos/neg)
+   '''
+   suff = rvc_mod_suff(modNum);
 
    base = rvcBase + suff;
 
@@ -1101,7 +1108,7 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False,
          else:
            b_bounds = (None, 0);
          k_bounds = (0, None);
-         c0_bounds = (3e-2, 1);
+         c0_bounds = (1e-2, 1);
          all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
        elif mod == 1 or mod == 2: # bad initialization as of now...
          if fix_baseline: # correct if we're fixing the baseline at 0
@@ -1137,20 +1144,20 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False,
          best_params = opt_params;
 
        # now determine the contrast gain
-       '''
-       b = opt_params[0]; k = opt_params[1]; c0 = opt_params[2];
-       if b < 0: 
-         # find the contrast value at which the rvc_model crosses/reaches 0
-         obj_whenR0 = lambda con: np.square(0 - rvc_model(b, k, c0, con));
-         con_bound = (0, 1);
-         init_r0cross = 0;
-         r0_cross = opt.minimize(obj_whenR0, init_r0cross, bounds=(con_bound, ));
-         con_r0 = r0_cross['x'];
-         conGain = k/(c0*(1+con_r0/c0));
+       if mod == 0:
+         b = opt_params[0]; k = opt_params[1]; c0 = opt_params[2];
+         if b < 0: 
+           # find the contrast value at which the rvc_model crosses/reaches 0
+           obj_whenR0 = lambda con: np.square(0 - rvc_model(b, k, c0, con));
+           con_bound = (0, 1);
+           init_r0cross = 0;
+           r0_cross = opt.minimize(obj_whenR0, init_r0cross, bounds=(con_bound, ));
+           con_r0 = r0_cross['x'];
+           conGain = k/(c0*(1+con_r0/c0));
+         else:
+           conGain = k/c0;
        else:
-         conGain = k/c0;
-       '''
-       conGain = -100;
+         conGain = -100;
 
      all_opts.append(best_params);
      all_loss.append(best_loss);
@@ -1232,6 +1239,30 @@ def chiSq(data_resps, model_resps, stimDur=1, kMult = 0.10):
   chi = np.sum(np.divide(np.square(num[valid]), k + data_resp_recenter*rho/stimDur));
 
   return chi;
+
+def c50_empirical(rvcMod, params):
+  ''' given a response-versus-contrast model and associated parameters, find the empirical c50
+        i.e. what is the contrast at which is the response 50% of the maximum
+             evaluted over contrast [0, 1]
+  '''
+  con_bound = (0, 1);
+  # first, find the maximum response
+  if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
+    obj = lambda con: -naka_rushton(con, params)
+  elif rvcMod == 0: # i.e. movshon form
+    rvcModel = get_rvc_model();
+    obj = lambda con: -rvcModel(*params, con);
+  max_opt = opt.minimize(obj, 0.8, bounds=(con_bound, ));
+  max_response = -max_opt['fun'];
+  max_con = max_opt['x'];
+
+  # now, find out the contrast with 50% of max response
+  con_bound = (0, max_con); # i.e. ensure the c50_emp contrast is less than the max (relevant for super-saturating curves)
+  c50_obj = lambda con: numpy.square(max_response/2 + obj(con));
+  c50_opt = opt.minimize(c50_obj, max_con/2, bounds=(con_bound, ));
+  c50_con = c50_opt['x'];
+  
+  return c50_con;
 
 def dog_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11)):
   ''' Compute the preferred SF given a set of DoG [or in the case of dog_model==0, not DoG...) parameters
@@ -1789,6 +1820,7 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02):
 
 def blankResp(cellStruct, expInd, spikes=None, spksAsRate=False, returnRates=False):
     ''' optionally, pass in array of spikes (by trial) and flag for whether those spikes are rates or counts over the whole trial
+        mu/std_err are ALWAYS rates
     '''
     # works for all experiment variants (checked 08.20.19)
     if 'sfm' in cellStruct:

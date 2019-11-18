@@ -101,10 +101,16 @@ if rvcAdj == 0:
   rvcFlag = '_f0';
 else:
   rvcFlag = '';
+rvcSuff = hf.rvc_mod_suff(rvcMod);
 rvcBase = '%s%s' % (rvcBase, rvcFlag);
 spikes_rate = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcBase, rvcMod=rvcMod, descrFitName_f0 = fLname, baseline_sub=False);
+# let's also get the baseline
+if f1f0rat < 1:
+  baseline_resp = hf.blankResp(trialInf, expInd, spikes=spikes_rate, spksAsRate=True)[0];
+else:
+  baseline_resp = None;
 
-###
+### DEPRECATE???
 # now, we take into account that we fit the responses re-centered such that they are non-negative
 # i.e. if the adjusted responses were negative,
 #   we previuosly added the lowest value (i.e. most negative response) plus an additional scalar (0.1)
@@ -294,7 +300,7 @@ for d in range(nDisps):
       sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
 
       dispAx[d][i].set_ylabel('resp above baseline (sps)');
-      dispAx[d][i].set_title('D%02d - sf tuning');
+      dispAx[d][i].set_title('D%02d - sf tuning' % (d+1));
       dispAx[d][i].legend(); 
 
 saveName = "/allCons_cell_%03d.pdf" % (cellNum)
@@ -391,7 +397,7 @@ for d in range(nDisps):
     fRVC.append(fCurr);
     rvcAx.append(rvcCurr);
     
-    fCurr.suptitle('%s #%d (f1f0 %.2f)' % (cellType, cellNum-1, f1f0rat));
+    fCurr.suptitle('%s #%d (f1f0 %.2f)' % (cellType, cellNum, f1f0rat));
 
     for sf in range(n_v_sfs):
         row_ind = int(sf/n_cols);
@@ -408,7 +414,7 @@ for d in range(nDisps):
 
 	# organize (measured) responses
         resp_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
-        respPlt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(resp_curr, 0.1), '-', clip_on=False, label='data');
+        respPlt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(resp_curr, 0.1), '-', clip_on=False, label='data', color=dataClr);
 
  	# RVC descr model - TODO: Fix this discrepancy between f0 and f1 rvc structure? make both like descrFits?
         if rvcAdj == 1: # i.e. _f1 or non-"_f0" flag on rvcFits
@@ -417,13 +423,17 @@ for d in range(nDisps):
           prms_curr = rvcFits['params'][d][sf_ind]; 
         if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
           rvcResps = hf.naka_rushton(cons_plot, prms_curr)
+          c50 = prms_curr[-2]; # second to last entry
         elif rvcMod == 0: # i.e. movshon form
           rvcResps = rvcModel(*prms_curr, cons_plot);
+          c50 = prms_curr[-1]; # last entry is c50
         # TODO: do you want to do the max(x, 0.1)???
         rvcAx[plt_x][plt_y].plot(cons_plot, np.maximum(rvcResps, 0.1), color=modClr, \
           alpha=0.7, clip_on=False, label=modTxt);
-        c50 = prms_curr[-1]; # last entry is c50
         rvcAx[plt_x][plt_y].plot(c50, 0.1, 'v', label='c50', color=modClr);
+        # now, let's also plot the baseline, if complex cell
+        if baseline_resp is not None: # i.e. complex cell
+          rvcAx[plt_x][plt_y].axhline(baseline_resp, color='k', linestyle='dashed');
 
         rvcAx[plt_x][plt_y].set_xscale('log', basex=10); # was previously symlog, linthreshx=0.01
         if col_ind == 0:
@@ -440,7 +450,7 @@ for d in range(nDisps):
         rvcAx[plt_x][plt_y].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
 
 saveName = "/cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
+full_save = os.path.dirname(str(save_loc + 'CRF%s%s/' % (rvcSuff, rvcFlag)));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -478,7 +488,7 @@ for d in range(nDisps):
         plot_resp = respMean[d, sf_ind, v_cons];
 
         line_curr, = crfAx[d][0].plot(all_cons[v_cons][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', color=col, \
-                                      clip_on=False, label = con_str);
+                                      clip_on=False, label=con_str);
         lines_log.append(line_curr);
 
         # now RVC model [1]
@@ -510,7 +520,7 @@ for d in range(nDisps):
       crfAx[d][i].legend();
 
 saveName = "/allSfs_cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
+full_save = os.path.dirname(str(save_loc + 'CRF%s%s/' % (rvcSuff, rvcFlag)));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
