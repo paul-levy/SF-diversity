@@ -105,7 +105,7 @@ rvcSuff = hf.rvc_mod_suff(rvcMod);
 rvcBase = '%s%s' % (rvcBase, rvcFlag);
 spikes_rate = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcBase, rvcMod=rvcMod, descrFitName_f0 = fLname, baseline_sub=False);
 # let's also get the baseline
-if f1f0rat < 1:
+if f1f0rat < 1 and expDir != 'LGN/': # i.e. if we're in LGN, DON'T get baseline, even if f1f0 < 1 (shouldn't happen)
   baseline_resp = hf.blankResp(trialInf, expInd, spikes=spikes_rate, spksAsRate=True)[0];
 else:
   baseline_resp = None;
@@ -181,7 +181,10 @@ for d in range(nDisps):
         ## plot data
         dispAx[d][c_plt_ind, 0].errorbar(sfVals, resps,
                                          respVar[d, v_sfs, v_cons[c]], color=dataClr, fmt='o', clip_on=False, label=dataTxt);
-        # dispAx[d][c_plt_ind, 0].axhline(blankMean, color=dataClr, linestyle='dashed', label='spon. rate'); # blank is deprecated, since either f1 or f0 as baseline subtracted
+
+        # now, let's also plot the baseline, if complex cell
+        if baseline_resp is not None: # i.e. complex cell
+          dispAx[d][c_plt_ind, 0].axhline(baseline_resp, color=dataClr, linestyle='dashed');
 
         ## plot descr fit
         prms_curr = descrParams[d, v_cons[c]];
@@ -195,26 +198,30 @@ for d in range(nDisps):
         dispAx[d][c_plt_ind, 0].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr); # plot at y=1
         dispAx[d][c_plt_ind, 0].legend();
 
-        ### right side of plots
+        ### right side of plots - BASELINE SUBTRACTED IF COMPLEX CELL
         if d == 0:
           ## plot everything again on log-log coordinates...
           # first data
-          dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
+          if baseline_resp is not None:
+            to_sub = baseline_resp;
+          else:
+            to_sub = np.array(0);
+          dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]] - to_sub, 
                                                      respVar[d, v_sfs, v_cons[c]], fmt='o', color=dataClr, clip_on=False, label=dataTxt);
 
           # plot descriptive model fit -- and inferred characteristic frequency (or peak...)
           prms_curr = descrParams[d, v_cons[c]];
           descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
-          dispAx[d][c_plt_ind, 1].plot(sfs_plot, descrResp, color=modClr, label='descr. fit', clip_on=False)
+          dispAx[d][c_plt_ind, 1].plot(sfs_plot, descrResp - to_sub, color=modClr, label='descr. fit', clip_on=False)
           if descrMod == 0:
             psf = hf.dog_prefSf(prms_curr, dog_model=descrMod);
             if psf != np.nan:
-              dispAx[d][c_plt_ind, 1].plot(psf, 1, 'v', color='k', label='peak freq');
+              dispAx[d][c_plt_ind, 1].plot(psf, 1, 'v', color='k', label='peak freq', clip_on=False);
           elif descrMod == 1 or descrMod == 2: # diff-of-gauss
             # now plot characteristic frequency!  
             char_freq = hf.dog_charFreq(prms_curr, descrMod);
             if char_freq != np.nan:
-              dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k', label='char. freq');
+              dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k', label='char. freq', clip_on=False);
 
           dispAx[d][c_plt_ind, 1].set_title('log-log');
           dispAx[d][c_plt_ind, 1].set_xscale('log');
@@ -227,14 +234,14 @@ for d in range(nDisps):
         
           dispAx[d][c_plt_ind, i].set_xscale('log');
           dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
-          dispAx[d][c_plt_ind, i].set_title('D%02d: contrast: %.3f' % (d, all_cons[v_cons[c]]));
+          dispAx[d][c_plt_ind, i].set_title('D%02d: contrast: %.3f' % (d+1, all_cons[v_cons[c]]));
 
 	  # Set ticks out, remove top/right axis, put ticks only on bottom/left
           dispAx[d][c_plt_ind, i].tick_params(labelsize=15, width=1, length=8, direction='out');
           dispAx[d][c_plt_ind, i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
           sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
 
-        dispAx[d][c_plt_ind, 0].set_ylim((minResp-5, 1.5*maxResp));
+        dispAx[d][c_plt_ind, 0].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
         dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
 
     fCurr.suptitle('%s #%d (f1f0: %.2f), varExpl %.2f%%' % (cellType, cellNum, f1f0rat, descrFits[cellNum-1]['varExpl'][d, v_cons[c]]));
@@ -287,11 +294,14 @@ for d in range(nDisps):
 
     for i in range(len(dispCurr)):
       dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
-      dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
 
       dispAx[d][i].set_xscale('log');
       if expDir == 'LGN/': # we want double-log if it's the LGN!
         dispAx[d][i].set_yscale('log');
+        dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
+      else:
+        dispAx[d][i].set_ylim((np.minimum(-5, min_resp-5), 1.5*maxResp));
+
       dispAx[d][i].set_xlabel('sf (c/deg)'); 
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
@@ -341,6 +351,10 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].errorbar(sfVals, resps,
                                        respVar[d, v_sfs, v_cons[c]], fmt='o', clip_on=False, label=dataTxt, color=dataClr);
 
+        # now, let's also plot the baseline, if complex cell
+        if baseline_resp is not None: # i.e. complex cell
+          sfMixAx[c_plt_ind, d].axhline(baseline_resp, color=dataClr, linestyle='dashed');
+
         # plot descrFit
         prms_curr = descrParams[d, v_cons[c]];
         descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
@@ -349,11 +363,11 @@ for d in range(nDisps):
         # plot prefSF, center of mass
         ctr = hf.sf_com(resps, sfVals);
         pSf = hf.dog_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
-        sfMixAx[c_plt_ind, d].plot(ctr, 1, linestyle='None', marker='v', label='c.o.m.', color=dataClr); # plot at y=1
-        sfMixAx[c_plt_ind, d].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr); # plot at y=1
+        sfMixAx[c_plt_ind, d].plot(ctr, 1, linestyle='None', marker='v', label='c.o.m.', color=dataClr, clip_on=False); # plot at y=1
+        sfMixAx[c_plt_ind, d].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr, clip_on=False); # plot at y=1
 
         sfMixAx[c_plt_ind, d].set_xlim((np.min(all_sfs), np.max(all_sfs)));
-        sfMixAx[c_plt_ind, d].set_ylim((minResp-5, 1.5*maxResp));
+        sfMixAx[c_plt_ind, d].set_ylim((np.minimum(-5, minResp-5), 1.25*maxResp)); # ensure that 0 is included in the range of the plot!
         sfMixAx[c_plt_ind, d].set_xscale('log');
         sfMixAx[c_plt_ind, d].set_xlabel('sf (c/deg)');
         sfMixAx[c_plt_ind, d].set_ylabel('resp (sps)');
@@ -430,7 +444,7 @@ for d in range(nDisps):
         # TODO: do you want to do the max(x, 0.1)???
         rvcAx[plt_x][plt_y].plot(cons_plot, np.maximum(rvcResps, 0.1), color=modClr, \
           alpha=0.7, clip_on=False, label=modTxt);
-        rvcAx[plt_x][plt_y].plot(c50, 0.1, 'v', label='c50', color=modClr);
+        rvcAx[plt_x][plt_y].plot(c50, 0.1, 'v', label='c50', color=modClr, clip_on=False);
         # now, let's also plot the baseline, if complex cell
         if baseline_resp is not None: # i.e. complex cell
           rvcAx[plt_x][plt_y].axhline(baseline_resp, color='k', linestyle='dashed');
@@ -516,7 +530,7 @@ for d in range(nDisps):
       sns.despine(ax = crfAx[d][i], offset=10, trim=False);
 
       crfAx[d][i].set_ylabel('resp above baseline (sps)');
-      crfAx[d][i].set_title('D%d: sf:all - log resp' % d);
+      crfAx[d][i].set_title('D%d: sf:all - log resp' % (d+1));
       crfAx[d][i].legend();
 
 saveName = "/allSfs_cell_%03d.pdf" % (cellNum)
