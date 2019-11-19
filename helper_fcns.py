@@ -1183,10 +1183,10 @@ def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
 
 def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
   ''' Difference of gaussians as described in Sach's thesis
-  gain_c    - gain of the center mechanism
-  r_c       - radius of the center
-  gain_s    - gain of surround mechanism
-  r_s       - radius of surround
+  [0] gain_c    - gain of the center mechanism
+  [1] r_c       - radius of the center
+  [2] gain_s    - gain of surround mechanism
+  [3] r_s       - radius of surround
   '''
   np = numpy;
   dog = lambda f: np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(f*np.pi*r_s)));
@@ -1260,7 +1260,7 @@ def c50_empirical(rvcMod, params):
   con_bound = (0, max_con); # i.e. ensure the c50_emp contrast is less than the max (relevant for super-saturating curves)
   c50_obj = lambda con: numpy.square(max_response/2 + obj(con));
   c50_opt = opt.minimize(c50_obj, max_con/2, bounds=(con_bound, ));
-  c50_con = c50_opt['x'];
+  c50_con = c50_opt['x'][0]; # not as array, instead unpack
   
   return c50_con;
 
@@ -1323,7 +1323,7 @@ def dog_charFreq(prms, DoGmodel=1):
       f_c = numpy.nan; # Cannot compute charFreq without DoG model fit (see sandbox_careful.ipynb)
   elif DoGmodel == 1: # sach
       r_c = prms[1];
-      f_c = 1/(numpy.pi*r_c)
+      f_c = 1/(2*numpy.pi*r_c)
   elif DoGmodel == 2: # tony
       f_c = prms[1];
 
