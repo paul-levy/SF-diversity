@@ -1,5 +1,6 @@
 # plotting style
 # If you edit this, you must replace the file at: plevy/anaconda3/lib/python3.6/site-packages/matplotlib/mpl-data/stylelib
+# To be used on the Unix machines (e.g. LCV)
 
 ### Lines
 lines.markeredgewidth: 2     # the line width around the marker symbol
@@ -12,8 +13,7 @@ patch.edgecolor      : white
 ### FONT
 text.usetex          : False
 
-font.family          : serif
-font.serif           : Palatino Linotype
+font.family          : FreeSans
 font.size            : 16.0
 font.style           : oblique
 
