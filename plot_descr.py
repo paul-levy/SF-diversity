@@ -123,6 +123,13 @@ if min_resp < 0:
   modAdj_add = - min_resp + minThresh;
 else:
   modAdj_add = np.array(0);
+#############
+### TEMPORARY
+#############
+#modAdj_add = np.array(0);
+#############
+### TEMPORARY
+#############
 # now get the measured responses
 _, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
 
@@ -153,6 +160,10 @@ modClr = 'b';
 modTxt = 'descr';
 dataClr = 'k';
 dataTxt = 'data';
+diffClr ='r';
+diffTxt = 'diff';
+refClr = 'm'
+refTxt ='ref';
 
 # #### Plots by dispersion
 
@@ -191,12 +202,20 @@ for d in range(nDisps):
         descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
         dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=modClr, label='descr. fit');
 
-        ## plot peak & c.o.m.
-        ctr = hf.sf_com(resps, sfVals);
-        pSf = hf.dog_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
-        dispAx[d][c_plt_ind, 0].plot(ctr, 1, linestyle='None', marker='v', label='c.o.m.', color=dataClr); # plot at y=1
-        dispAx[d][c_plt_ind, 0].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr); # plot at y=1
-        dispAx[d][c_plt_ind, 0].legend();
+        ## if flexGauss plot peak & c.o.m.
+        if descrMod == 0:
+          ctr = hf.sf_com(resps, sfVals);
+          pSf = hf.dog_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
+          dispAx[d][c_plt_ind, 0].plot(ctr, 1, linestyle='None', marker='v', label='c.o.m.', color=dataClr); # plot at y=1
+          dispAx[d][c_plt_ind, 0].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr); # plot at y=1
+          dispAx[d][c_plt_ind, 0].legend();
+        ## otherwise, let's plot the char freq.
+        elif descrMod == 1 or descrMod == 2:
+          char_freq = hf.dog_charFreq(prms_curr, descrMod);
+          dispAx[d][c_plt_ind, 0].plot(char_freq, 1, linestyle='None', marker='v', label='$f_c$', color=dataClr); # plot at y=1
+          dispAx[d][c_plt_ind, 0].legend();
+
+        dispAx[d][c_plt_ind, 0].set_title('D%02d: contrast: %.3f' % (d+1, all_cons[v_cons[c]]));
 
         ### right side of plots - BASELINE SUBTRACTED IF COMPLEX CELL
         if d == 0:
@@ -216,16 +235,17 @@ for d in range(nDisps):
           if descrMod == 0:
             psf = hf.dog_prefSf(prms_curr, dog_model=descrMod);
             if psf != np.nan:
-              dispAx[d][c_plt_ind, 1].plot(psf, 1, 'v', color='k', label='peak freq', clip_on=False);
+              dispAx[d][c_plt_ind, 1].plot(psf, 1, 'b', color='k', label='peak freq', clip_on=False);
           elif descrMod == 1 or descrMod == 2: # diff-of-gauss
             # now plot characteristic frequency!  
             char_freq = hf.dog_charFreq(prms_curr, descrMod);
             if char_freq != np.nan:
               dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k', label='char. freq', clip_on=False);
 
-          dispAx[d][c_plt_ind, 1].set_title('log-log');
+          dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % descrFits[cellNum-1]['varExpl'][d, v_cons[c]]);
           dispAx[d][c_plt_ind, 1].set_xscale('log');
           dispAx[d][c_plt_ind, 1].set_yscale('log'); # double log
+          dispAx[d][c_plt_ind, 1].legend();
 
         ## Now, set things for both plots (formatting)
         for i in range(2):
@@ -234,7 +254,6 @@ for d in range(nDisps):
         
           dispAx[d][c_plt_ind, i].set_xscale('log');
           dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
-          dispAx[d][c_plt_ind, i].set_title('D%02d: contrast: %.3f' % (d+1, all_cons[v_cons[c]]));
 
 	  # Set ticks out, remove top/right axis, put ticks only on bottom/left
           dispAx[d][c_plt_ind, i].tick_params(labelsize=15, width=1, length=8, direction='out');
@@ -244,7 +263,7 @@ for d in range(nDisps):
         dispAx[d][c_plt_ind, 0].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
         dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
 
-    fCurr.suptitle('%s #%d (f1f0: %.2f), varExpl %.2f%%' % (cellType, cellNum, f1f0rat, descrFits[cellNum-1]['varExpl'][d, v_cons[c]]));
+    fCurr.suptitle('%s #%d (f1f0: %.2f)' % (cellType, cellNum, f1f0rat));
 
 saveName = "/cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
@@ -539,6 +558,247 @@ if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
+    pdfSv.savefig(f)
+    plt.close(f)
+pdfSv.close()
+
+####################################
+##### difference plots #############
+####################################
+
+# #### DIFFERENCE: Plots by dispersion
+# for each cell, we will plot the high contrast SF tuning curve (for that dispersion; the "reference"), and then plot the
+# difference of the given contrast relative to that reference
+
+fDisp = []; dispAx = [];
+
+sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
+for d in range(nDisps):
+    
+    v_cons = val_con_by_disp[d];
+    n_v_cons = len(v_cons)-1; # "-1" since we don't need to plot the highest (refernce) contrast
+    
+    if n_v_cons == 1:
+      continue; # TODO: this is temporary hack to avoid plotting disps with just two contrasts--causes issue in indexing
+
+    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(nDisps*8, n_v_cons*8), sharey=False);
+    fDisp.append(fCurr)
+    dispAx.append(dispCurr);
+    
+    minResp = np.min(np.min(respMean[d, ~np.isnan(respMean[d, :, :])]));
+    maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
+
+    #########
+    ### get the reference tuning
+    #########
+    v_sfs = ~np.isnan(respMean[d, :, v_cons[-1]]); # i.e. the highest valid contrast for this dispersion
+    sfRefmn  = respMean[d, v_sfs, v_cons[-1]];
+    sfRefvar = respVar[d, v_sfs, v_cons[-1]]
+    
+    for c in reversed(range(n_v_cons)):
+        c_plt_ind = n_v_cons - c - 1;
+        v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);
+
+        sfVals = all_sfs[v_sfs];
+        resps_curr  = respMean[d, v_sfs, v_cons[c]];
+        vars_curr   = respVar[d, v_sfs, v_cons[c]];
+
+        #########
+        ### left side of plots -- NOTE: for now, including lines here, since I'm avoiding descrFits
+        #########
+        ## plot reference tuning
+        dispAx[d][c_plt_ind, 0].errorbar(sfVals, sfRefmn, sfRefvar, color=refClr, fmt='o', clip_on=False, label=refTxt, linestyle='dashed');
+        # plot 'no difference' line
+        dispAx[d][c_plt_ind, 0].axhline(np.array(0), linestyle='dashed', color=diffClr);
+        ## then the current response...
+        dispAx[d][c_plt_ind, 0].errorbar(sfVals, resps_curr,
+                                         vars_curr, color=dataClr, fmt='o', clip_on=False, label=dataTxt, linestyle='dashed');
+        ## now, plot the difference!
+        #  note: for now, just plotting the variance for this contrast (not any difference between vars...)
+        dispAx[d][c_plt_ind, 0].errorbar(sfVals, resps_curr - sfRefmn,
+                                         vars_curr, color=diffClr, fmt='o', clip_on=False, label=diffTxt, linestyle='dashed');
+
+        # now, let's also plot the baseline, if complex cell
+        if baseline_resp is not None: # i.e. complex cell
+          dispAx[d][c_plt_ind, 0].axhline(baseline_resp, color=dataClr, linestyle='dashed');
+
+        '''
+        ## plot descr fit
+        prms_curr = descrParams[d, v_cons[c]];
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
+        dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=modClr, label='descr. fit');
+
+        ## if flexGauss plot peak & c.o.m.
+        if descrMod == 0:
+          ctr = hf.sf_com(resps, sfVals);
+          pSf = hf.dog_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
+          dispAx[d][c_plt_ind, 0].plot(ctr, 1, linestyle='None', marker='v', label='c.o.m.', color=dataClr); # plot at y=1
+          dispAx[d][c_plt_ind, 0].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr); # plot at y=1
+        ## otherwise, let's plot the char freq.
+        elif descrMod == 1 or descrMod == 2:
+          char_freq = hf.dog_charFreq(prms_curr, descrMod);
+          dispAx[d][c_plt_ind, 0].plot(char_freq, 1, linestyle='None', marker='v', label='$f_c$', color=dataClr); # plot at y=1
+        '''
+
+        dispAx[d][c_plt_ind, 0].legend();
+        dispAx[d][c_plt_ind, 0].set_title('D%02d: contrast: %.3f' % (d+1, all_cons[v_cons[c]]));
+
+        ### right side of plots - BASELINE SUBTRACTED IF COMPLEX CELL
+        if d == 0:
+          ## plot everything again on log-log coordinates...
+          # first data
+          if baseline_resp is not None:
+            to_sub = baseline_resp;
+          else:
+            to_sub = np.array(0);
+
+          ## plot reference tuning
+          dispAx[d][c_plt_ind, 1].errorbar(sfVals, sfRefmn-to_sub, sfRefvar, color=refClr, fmt='o', clip_on=False, label=refTxt, linestyle='dashed');
+          # and 'no effect' line (i.e. vertical "0")
+          dispAx[d][c_plt_ind, 1].axhline(np.array(0), linestyle='dashed', color=diffClr);
+          ## then the current response...
+          dispAx[d][c_plt_ind, 1].errorbar(sfVals, resps_curr,
+                                           vars_curr, color=dataClr, fmt='o', clip_on=False, label=dataTxt, linestyle='dashed');
+          ## now, plot the difference!
+          #  note: for now, just plotting the variance for this contrast (not any difference between vars...)
+          dispAx[d][c_plt_ind, 1].errorbar(sfVals, (resps_curr-to_sub) - (sfRefmn-to_sub),
+                                           vars_curr, color=diffClr, fmt='o', clip_on=False, label=diffTxt, linestyle='dashed');
+
+          '''
+          # plot descriptive model fit -- and inferred characteristic frequency (or peak...)
+          prms_curr = descrParams[d, v_cons[c]];
+          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
+          dispAx[d][c_plt_ind, 1].plot(sfs_plot, descrResp - to_sub, color=modClr, label='descr. fit', clip_on=False)
+          if descrMod == 0:
+            psf = hf.dog_prefSf(prms_curr, dog_model=descrMod);
+            if psf != np.nan:
+              dispAx[d][c_plt_ind, 1].plot(psf, 1, 'b', color='k', label='peak freq', clip_on=False);
+          elif descrMod == 1 or descrMod == 2: # diff-of-gauss
+            # now plot characteristic frequency!  
+            char_freq = hf.dog_charFreq(prms_curr, descrMod);
+            if char_freq != np.nan:
+              dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k', label='char. freq', clip_on=False);
+          '''
+
+          dispAx[d][c_plt_ind, 1].set_title('log-log');
+          #dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % descrFits[cellNum-1]['varExpl'][d, v_cons[c]]);
+          dispAx[d][c_plt_ind, 1].set_xscale('log');
+          dispAx[d][c_plt_ind, 1].set_yscale('symlog', linthreshy=1); # double log
+          dispAx[d][c_plt_ind, 1].legend();
+
+        ## Now, set things for both plots (formatting)
+        for i in range(2):
+
+          dispAx[d][c_plt_ind, i].set_xlim((min(all_sfs), max(all_sfs)));
+        
+          dispAx[d][c_plt_ind, i].set_xscale('log');
+          dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
+
+	  # Set ticks out, remove top/right axis, put ticks only on bottom/left
+          dispAx[d][c_plt_ind, i].tick_params(labelsize=15, width=1, length=8, direction='out');
+          dispAx[d][c_plt_ind, i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
+          sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
+
+        #dispAx[d][c_plt_ind, 0].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
+        dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
+
+    fCurr.suptitle('%s #%d (f1f0: %.2f)' % (cellType, cellNum, f1f0rat));
+
+saveName = "/cell_%03d.pdf" % (cellNum)
+full_save = os.path.dirname(str(save_loc + 'diff/byDisp%s/' % rvcFlag));
+if not os.path.exists(full_save):
+  os.makedirs(full_save);
+pdfSv = pltSave.PdfPages(full_save + saveName);
+for f in fDisp:
+    pdfSv.savefig(f)
+    plt.close(f)
+pdfSv.close();
+
+# #### DIFFERENCE: All SF tuning on one graph, split by dispersion
+fDisp = []; dispAx = [];
+
+sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
+  
+for d in range(nDisps):
+    
+    v_cons = val_con_by_disp[d];
+    n_v_cons = len(v_cons);
+    
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(35, 20));
+    fDisp.append(fCurr)
+    dispAx.append(dispCurr);
+
+    fCurr.suptitle('%s #%d (f1f0 %.2f)' % (cellType, cellNum, f1f0rat));
+
+    maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));  
+  
+    # reference data
+    v_sfs = ~np.isnan(respMean[d, :, v_cons[-1]]);
+    refSf = respMean[d, v_sfs, v_cons[-1]];
+    # reference descriptive fits
+    prms_curr = descrParams[d, v_cons[-1]];
+    refDescr = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
+    # plot 'no difference' line
+    dispAx[d][0].axhline(np.array(0), linestyle='dashed', color=diffClr);
+    dispAx[d][1].axhline(np.array(0), linestyle='dashed', color=diffClr);
+
+    lines = [];
+    for c in reversed(range(n_v_cons)):
+        v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
+
+        # plot data [0a]
+        col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
+        plot_resp = respMean[d, v_sfs, v_cons[c]];
+        
+        curr_line, = dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', clip_on=False, \
+                                       color=col, label=str(np.round(all_cons[v_cons[c]], 2)));
+        lines.append(curr_line);
+
+        # plot differences [0b]
+        if c < (n_v_cons-1):
+          col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
+          plot_resp = respMean[d, v_sfs, v_cons[c]];
+
+          curr_line, = dispAx[d][0].plot(all_sfs[v_sfs], plot_resp - refSf, '--o', clip_on=False, \
+                                         color=col, label=str(np.round(all_cons[v_cons[c]], 2)));
+
+ 
+        # plot descr fit [1a]
+        prms_curr = descrParams[d, v_cons[c]];
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
+        dispAx[d][1].plot(sfs_plot, descrResp, color=col);
+
+        # plot descr fit differences [1b]
+        if c < (n_v_cons-1):
+          dispAx[d][1].plot(sfs_plot, descrResp-refDescr, color=col, linestyle='--');
+
+    for i in range(len(dispCurr)):
+      dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
+
+      dispAx[d][i].set_xscale('log');
+      if expDir == 'LGN/': # we want double-log if it's the LGN!
+        dispAx[d][i].set_yscale('symlog', linthresh=1);
+        #dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
+      #else:
+        #dispAx[d][i].set_ylim((np.minimum(-5, min_resp-5), 1.5*maxResp));
+
+      dispAx[d][i].set_xlabel('sf (c/deg)'); 
+
+      # Set ticks out, remove top/right axis, put ticks only on bottom/left
+      dispAx[d][i].tick_params(labelsize=15, width=2, length=16, direction='out');
+      dispAx[d][i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+      sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
+
+      dispAx[d][i].set_ylabel('resp above baseline (sps)');
+      dispAx[d][i].set_title('D%02d - sf tuning' % (d+1));
+      dispAx[d][i].legend(); 
+
+saveName = "/allCons_cell_%03d.pdf" % (cellNum)
+full_save = os.path.dirname(str(save_loc + 'diff/byDisp%s/' % rvcFlag));
+if not os.path.exists(full_save):
+  os.makedirs(full_save);
+pdfSv = pltSave.PdfPages(full_save + saveName);
+for f in fDisp:
     pdfSv.savefig(f)
     plt.close(f)
 pdfSv.close()

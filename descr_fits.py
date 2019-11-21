@@ -389,7 +389,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
 
   loss = 0;
   if loss_type == 1: # lsq
-    loss = np.square(resps - pred_spikes);
+    loss = np.sum(np.square(resps - pred_spikes));
     loss = loss + loss;
   elif loss_type == 2: # sqrt
     loss = np.sum(np.square(np.sqrt(resps) - np.sqrt(pred_spikes)));
@@ -454,8 +454,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is
   spks_sum = np.array([np.sum(x) for x in spks]);
   min_resp = np.nanmin(spks_sum);
   minThresh = 0.1; # TODO: ensure this value is standardized across here and helper_fcns
-  if min_resp < 0:
-    spks_sum = spks_sum - min_resp + minThresh;
+  #if min_resp < 0:
+  #  spks_sum = spks_sum - min_resp + minThresh;
 
   _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True);  
   ''' can remove and replace with above one line if keeping spks = hf.get_adjusted_spikerate
@@ -567,14 +567,18 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is
           init_sig_left = hf.random_in_range(range_denom)[0];
           init_sig_right = hf.random_in_range(range_denom)[0];
           init_params = [init_base, init_amp, init_mu, init_sig_left, init_sig_right];
+        ############
         ## SACH
+        ############
         elif DoGmodel == 1:
           init_gainCent = hf.random_in_range((maxResp, 5*maxResp))[0];
           init_radiusCent = hf.random_in_range((0.05, 2))[0];
           init_gainSurr = init_gainCent * hf.random_in_range((0.1, 0.95))[0];
-          init_radiusSurr = init_radiusCent * hf.random_in_range((1.25, 8))[0];
+          init_radiusSurr = init_radiusCent * hf.random_in_range((0.5, 8))[0];
           init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
+        ############
         ## TONY
+        ############
         elif DoGmodel == 2:
           init_gainCent = maxResp * hf.random_in_range((0.9, 1.2))[0];
           init_freqCent = np.maximum(all_sfs[2], freqAtMaxResp * hf.random_in_range((1.2, 1.5))[0]); # don't pick all_sfs[0] -- that's zero (we're avoiding that)

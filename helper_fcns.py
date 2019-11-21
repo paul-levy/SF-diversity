@@ -146,9 +146,11 @@ def np_smart_load(file_path, encoding_str='latin1'):
          loaded = numpy.load(file_path, encoding=encoding_str).item();
          break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-         sleep(10); # i.e. wait for 10 seconds
+       sleep_time = random_in_range(5, 15)[0];
+       sleep(sleep_time); # i.e. wait for 10 seconds
      except EOFError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-       sleep(10); # i.e. wait for 10 seconds
+        sleep_time = random_in_range(5, 15)[0];
+        sleep(sleep_time); # i.e. wait for 10 seconds
 
    return loaded;
 
