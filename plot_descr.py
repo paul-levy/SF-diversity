@@ -7,6 +7,7 @@ import os
 import sys
 import numpy as np
 import matplotlib
+import matplotlib.cm as cm
 matplotlib.use('Agg') # to avoid GUI/cluster issues...
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
@@ -126,7 +127,7 @@ else:
 #############
 ### TEMPORARY
 #############
-#modAdj_add = np.array(0);
+modAdj_add = np.array(0);
 #############
 ### TEMPORARY
 #############
@@ -802,4 +803,96 @@ for f in fDisp:
     pdfSv.savefig(f)
     plt.close(f)
 pdfSv.close()
+
+####################################
+##### joint tuning plots ###########
+####################################
+
+fDisp = []; dispAx = [];
+# NOTE: for now, only plotting single gratings
+for d in range(1): #nDisps
+
+  nr, nc = 1, 3; # 3 for: data, pred-from-rvc, pred-from-sfs
+  f, ax = plt.subplots(nrows=nr, ncols=nc, figsize=(nc*15, nr*10))
+  fDisp.append(f); dispAx.append(ax);
+    
+  ### "zeroth", get the stimulus values and labels
+  val_cons = val_con_by_disp[d];
+  val_sfs = hf.get_valid_sfs(expData, d, val_cons[d], expInd, stimVals, validByStimVal); # just take any contrast
+
+  xlabels = ['%.2f' % x for x in all_sfs[val_sfs]]
+  ylabels = ['%.2f' % x for x in all_cons[val_cons]]
+
+  #########
+  ### first, get the data and model predictions
+  #########
+  ## first, the data
+  #   [X, Y] is X: increasing CON ||| Y: increasing SF
+  #   "fancy" indexing (must turn dispersion into array for this to work)
+  #   note that we also transpose so that SF will be on the x, contrast on the y
+  curr_resps = respOrg[np.ix_([d], val_sfs, val_cons)].squeeze().transpose();
+  ## now, RVC model - here, each set of parameters is for a given SF
+  rvcCurr = rvcFits[d]['params']
+  con_steps = 100;
+  plt_cons = np.geomspace(all_cons[val_cons][0], all_cons[val_cons][-1], con_steps);
+  rvcResps = np.zeros((con_steps, len(val_sfs)));
+#     rvcResps = np.zeros_like(curr_resps);
+  for s_itr, s in enumerate(val_sfs):
+    curr_params = rvcCurr[s];
+    curr_cons = plt_cons;
+    if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
+      rsp = hf.naka_rushton(curr_cons, curr_params)
+    elif rvcMod == 0: # i.e. movshon form
+      rvc_mov = hf.get_rvc_model()
+      rsp = rvc_mov(*curr_params, curr_cons);
+    rvcResps[range(len(curr_cons)), s_itr] = rsp;
+  ## finally, descriptive SF model - here, each set of parameters is for a given contrast
+  descrCurr = descrParams[d];
+  sf_steps = 100;
+  plt_sfs = np.geomspace(all_sfs[0], all_sfs[-1], sf_steps);
+  descrResps = np.zeros((len(val_cons), sf_steps));
+  for c_itr, c in enumerate(val_cons):
+    curr_params = descrCurr[c];
+    curr_sfs = plt_sfs;
+    descrResps[c_itr, range(len(curr_sfs))] = hf.get_descrResp(curr_params, curr_sfs, descrMod);
+
+  ovr_min = np.minimum(np.min(curr_resps), np.minimum(np.min(rvcResps), np.min(descrResps)))
+  ovr_max = np.maximum(np.max(curr_resps), np.maximum(np.max(rvcResps), np.max(descrResps)))
+
+  #########
+  ### now, plot!
+  #########
+  # first, data
+  sns.heatmap(curr_resps, vmin=ovr_min, vmax=ovr_max, xticklabels=xlabels, yticklabels=ylabels, cmap=cm.gray, ax=ax[0])
+  ax[0].set_title('data')
+  # then, from RVC model
+  sns.heatmap(rvcResps, vmin=ovr_min, vmax=ovr_max, xticklabels=xlabels, cmap=cm.gray, ax=ax[1])
+  ax[1].set_yticks(ticks=[])
+  ax[1].set_title('rvc model')
+  # then, from descr model
+  ### third, plot predictions as given from the descriptive fits
+  sns.heatmap(descrResps, vmin=ovr_min, vmax=ovr_max, yticklabels=ylabels, cmap=cm.gray, ax=ax[2])
+  ax[2].set_xticks(ticks=[])
+  ax[2].set_title('sf model')
+  ### fourth, hacky hacky: matmul the two model matrices together
+#     ooh = ovr_max*np.matmul(np.divide(rvcResps, np.max(rvcResps.flatten())), np.divide(descrResps, np.max(descrResps.flatten())))
+#     sns.heatmap(ooh, vmin=ovr_min, vmax=ovr_max, yticklabels=ylabels, cmap=cm.gray, ax=ax[3])
+#     ax[3].set_xticks(ticks=[]); ax[3].set_yticks(ticks=[])
+#     ax[3].set_title('mult?')
+
+  ### finally, just set some labels
+  f.suptitle('Cell #%d [%s]: Joint tuning w/SF and contrast [disp %d]' % (cellNum, dataList['unitType'][cellNum-1], d+1))
+  for i in range(nc):
+    ax[i].set_xlabel('sf (c/deg)');
+    ax[i].set_ylabel('con (%)')
+
+saveName = "/cell_%03d.pdf" % (cellNum)
+full_save = os.path.dirname(str(save_loc + 'joint%s/' % rvcFlag));
+if not os.path.exists(full_save):
+  os.makedirs(full_save);
+pdfSv = pltSave.PdfPages(full_save + saveName);
+for f in fDisp:
+    pdfSv.savefig(f)
+    plt.close(f)
+pdfSv.close();
 

@@ -177,6 +177,29 @@ def bw_log_to_lin(log_bw, pref_sf):
     
     return lin_bw, sf_range
 
+def sf_highCut(params, sfMod, frac, sfRange=(0.1, 10), baseline_sub=None):
+  ''' given a fraction of peak response (e.g. 0.5 or 1/e or...), compute the frequency (above the peak)
+      at which the response reaches that response fraction
+        note: we can pass in obj_thresh (i.e. if the optimized objective function is greater than this value,
+              we count the model as NOT having a defined cut-off)
+  '''
+  np = numpy;
+  peak_sf = dog_prefSf(params, sfMod, sfRange);
+  if baseline_sub is None: # if we pass in baseline_sub, we're measuring for "frac" reduction in response modulation above baseline response
+    to_sub = np.array(0);
+  else:
+    to_sub = baseline_sub;
+  peak_resp = get_descrResp(params, np.array([peak_sf]), sfMod)[0] - to_sub; # wrapping, since we expect list/array in get_descrResp
+  # now, what is the criterion response you need?
+  crit_resp = peak_resp * frac;
+  crit_obj = lambda fc: np.square((get_descrResp(params, np.array([fc]), sfMod)[0] - to_sub) - crit_resp);
+  crit_opt = opt.minimize(crit_obj, peak_resp, bounds=((peak_sf, sfRange[1]), ));
+
+  if crit_opt['x'] == sfRange[1]: # i.e. we don't really have a cut-off in this range
+    return np.nan;
+  else:
+    return crit_opt['x'];
+
 def sf_com(resps, sfs):
   ''' model-free calculation of the tuning curve's center-of-mass
       input: resps, sfs (np arrays; sfs in linear cpd)
