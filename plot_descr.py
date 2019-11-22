@@ -111,26 +111,6 @@ if f1f0rat < 1 and expDir != 'LGN/': # i.e. if we're in LGN, DON'T get baseline,
 else:
   baseline_resp = None;
 
-### DEPRECATE???
-# now, we take into account that we fit the responses re-centered such that they are non-negative
-# i.e. if the adjusted responses were negative,
-#   we previuosly added the lowest value (i.e. most negative response) plus an additional scalar (0.1)
-#   thus making the lowest response 0.1 - the descriptive fits were made on this transformed data
-#   and thus we apply the reverse of that transformation here, to those fits, before plotting
-###
-min_resp = np.nanmin(spikes_rate);
-minThresh = 0.1;
-if min_resp < 0:
-  modAdj_add = - min_resp + minThresh;
-else:
-  modAdj_add = np.array(0);
-#############
-### TEMPORARY
-#############
-modAdj_add = np.array(0);
-#############
-### TEMPORARY
-#############
 # now get the measured responses
 _, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
 
@@ -200,7 +180,7 @@ for d in range(nDisps):
 
         ## plot descr fit
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
         dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=modClr, label='descr. fit');
 
         ## if flexGauss plot peak & c.o.m.
@@ -231,7 +211,7 @@ for d in range(nDisps):
 
           # plot descriptive model fit -- and inferred characteristic frequency (or peak...)
           prms_curr = descrParams[d, v_cons[c]];
-          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
+          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
           dispAx[d][c_plt_ind, 1].plot(sfs_plot, descrResp - to_sub, color=modClr, label='descr. fit', clip_on=False)
           if descrMod == 0:
             psf = hf.dog_prefSf(prms_curr, dog_model=descrMod);
@@ -287,7 +267,7 @@ for d in range(nDisps):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(1, 2, figsize=(35, 20));
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(35, 20), sharey=True, sharex=True);
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
 
@@ -309,7 +289,7 @@ for d in range(nDisps):
  
         # plot descr fit [1]
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
         dispAx[d][1].plot(sfs_plot, descrResp, color=col);
 
     for i in range(len(dispCurr)):
@@ -377,7 +357,7 @@ for d in range(nDisps):
 
         # plot descrFit
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
         sfMixAx[c_plt_ind, d].plot(sfs_plot, descrResp, label=modTxt, color=modClr);
 
         # plot prefSF, center of mass
@@ -626,7 +606,7 @@ for d in range(nDisps):
         '''
         ## plot descr fit
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
         dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=modClr, label='descr. fit');
 
         ## if flexGauss plot peak & c.o.m.
@@ -668,7 +648,7 @@ for d in range(nDisps):
           '''
           # plot descriptive model fit -- and inferred characteristic frequency (or peak...)
           prms_curr = descrParams[d, v_cons[c]];
-          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
+          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
           dispAx[d][c_plt_ind, 1].plot(sfs_plot, descrResp - to_sub, color=modClr, label='descr. fit', clip_on=False)
           if descrMod == 0:
             psf = hf.dog_prefSf(prms_curr, dog_model=descrMod);
@@ -738,7 +718,7 @@ for d in range(nDisps):
     refSf = respMean[d, v_sfs, v_cons[-1]];
     # reference descriptive fits
     prms_curr = descrParams[d, v_cons[-1]];
-    refDescr = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
+    refDescr = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
     # plot 'no difference' line
     dispAx[d][0].axhline(np.array(0), linestyle='dashed', color=diffClr);
     dispAx[d][1].axhline(np.array(0), linestyle='dashed', color=diffClr);
@@ -766,7 +746,7 @@ for d in range(nDisps):
  
         # plot descr fit [1a]
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod) - modAdj_add;
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
         dispAx[d][1].plot(sfs_plot, descrResp, color=col);
 
         # plot descr fit differences [1b]
@@ -881,7 +861,7 @@ for d in range(1): #nDisps
 #     ax[3].set_title('mult?')
 
   ### finally, just set some labels
-  f.suptitle('Cell #%d [%s]: Joint tuning w/SF and contrast [disp %d]' % (cellNum, dataList['unitType'][cellNum-1], d+1))
+  f.suptitle('Cell #%d [%s]: Joint tuning w/SF and contrast [disp %d]' % (cellNum, cellType, d+1))
   for i in range(nc):
     ax[i].set_xlabel('sf (c/deg)');
     ax[i].set_ylabel('con (%)')

@@ -391,8 +391,9 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
   if loss_type == 1: # lsq
     loss = np.sum(np.square(resps - pred_spikes));
     loss = loss + loss;
-  elif loss_type == 2: # sqrt
-    loss = np.sum(np.square(np.sqrt(resps) - np.sqrt(pred_spikes)));
+  elif loss_type == 2: # sqrt - now handles negative responses by first taking abs, sqrt, then re-apply the sign 
+    loss = np.sum(np.square(np.sign(resps)*np.sqrt(np.abs(resps)) - np.sign(pred_spikes)*np.sqrt(np.abs(pred_spikes))))
+    #loss = np.sum(np.square(np.sqrt(resps) - np.sqrt(pred_spikes)));
     loss = loss + loss;
   elif loss_type == 3: # poisson model of spiking
     poiss = poisson.pmf(np.round(resps), pred_spikes); # round since the values are nearly but not quite integer values (Sach artifact?)...
@@ -452,10 +453,6 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is
   # Note that if rvcFits is not None, then spks will be rates already
   # ensure the spikes array is a vector of overall response, not split by component 
   spks_sum = np.array([np.sum(x) for x in spks]);
-  min_resp = np.nanmin(spks_sum);
-  minThresh = 0.1; # TODO: ensure this value is standardized across here and helper_fcns
-  #if min_resp < 0:
-  #  spks_sum = spks_sum - min_resp + minThresh;
 
   _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True);  
   ''' can remove and replace with above one line if keeping spks = hf.get_adjusted_spikerate
