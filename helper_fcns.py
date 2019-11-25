@@ -1423,8 +1423,8 @@ def dog_get_param(params, DoGmodel, metric):
       return params[3];
     elif DoGmodel == 2: # tony
       fc = params[1];
-      rc = numpy.divide(1, 2*numpy.pi*fc);
-      return rc*params[3];
+      rs = numpy.divide(1, 2*numpy.pi*fc*params[3]);
+      return rs;
 
 ##
 
