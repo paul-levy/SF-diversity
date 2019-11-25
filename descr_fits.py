@@ -509,8 +509,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is
   elif DoGmodel == 2: # TONY
     bound_gainCent = (1e-3, None);
     bound_gainFracSurr = (1e-2, 1);
-    bound_freqCent = (1e-3, None);
-    bound_freqFracSurr = (1e-2, 1);
+    bound_freqCent = (1e-3, 2e1); # let's set the charFreq upper bound at 20 cpd (is that ok?)
+    bound_freqFracSurr = (1e-1, 1);
     allBounds = (bound_gainCent, bound_freqCent, bound_gainFracSurr, bound_freqFracSurr);
 
   for d in range(nDisps): # works for all disps
