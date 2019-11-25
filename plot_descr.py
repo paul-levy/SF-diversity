@@ -226,6 +226,7 @@ for d in range(nDisps):
           dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % descrFits[cellNum-1]['varExpl'][d, v_cons[c]]);
           dispAx[d][c_plt_ind, 1].set_xscale('log');
           dispAx[d][c_plt_ind, 1].set_yscale('log'); # double log
+          dispAx[d][c_plt_ind, 1].set_ylim((1e-1, 1.5*maxResp));
           dispAx[d][c_plt_ind, 1].legend();
 
         ## Now, set things for both plots (formatting)
@@ -407,7 +408,7 @@ for d in range(nDisps):
     n_v_sfs = len(v_sf_inds);
     n_rows = int(np.ceil(n_v_sfs/np.floor(np.sqrt(n_v_sfs)))); # make this close to a rectangle/square in arrangement (cycling through sfs)
     n_cols = int(np.ceil(n_v_sfs/n_rows));
-    fCurr, rvcCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*10, n_rows*10), sharex = True, sharey = True);
+    fCurr, rvcCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*10, n_rows*10), sharex = True, sharey = 'col');
     fRVC.append(fCurr);
     rvcAx.append(rvcCurr);
     
@@ -479,7 +480,7 @@ crfAx = []; fCRF = [];
 
 for d in range(nDisps):
     
-    fCurr, crfCurr = plt.subplots(1, 2, figsize=(35, 20), sharex = False, sharey = True);
+    fCurr, crfCurr = plt.subplots(1, 2, figsize=(35, 20), sharex = False, sharey = 'row');
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
 
@@ -520,8 +521,13 @@ for d in range(nDisps):
 
     for i in range(len(crfCurr)):
 
-      crfAx[d][i].set_xlim([-0.1, 1]);
-      crfAx[d][i].set_ylim([-0.1*maxResp, 1.1*maxResp]);
+      if expDir == 'LGN/': # then plot as double-log
+        crfAx[d][i].set_xscale('log');
+        crfAx[d][i].set_yscale('log');
+        crfAx[d][i].set_ylim([1e-1, 1.1*maxResp]);
+      else:
+        crfAx[d][i].set_xlim([-0.1, 1]);
+        crfAx[d][i].set_ylim([-0.1*maxResp, 1.1*maxResp]);
       crfAx[d][i].set_xlabel('contrast');
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left

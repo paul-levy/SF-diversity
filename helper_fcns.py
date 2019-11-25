@@ -1397,6 +1397,35 @@ def dog_charFreqMod(descrFit, allCons, varThresh=70, DoGmodel=1, lowConCut = 0.1
 
   return fcRatio, fc_model, opt_params, charFreqs, conVals;
 
+def dog_get_param(params, DoGmodel, metric):
+  ''' given a code for which tuning metric to get, and the model/parameters used, return that metric
+  '''
+  if DoGmodel == 0:
+    return numpy.nan; # we cannot compute from that form of the model!
+  if metric == 'gc': # i.e. center gain
+    if DoGmodel == 1: # sach
+      return params[0];
+    elif DoGmodel == 2: # tony
+      return params[0];
+  if metric == 'gs': # i.e. surround gain
+    if DoGmodel == 1: # sach
+      return params[2];
+    elif DoGmodel == 2: # tony
+      return params[0]*params[2];
+  if metric == 'rc': # i.e. center radius
+    if DoGmodel == 1: # sach
+      return params[1];
+    elif DoGmodel == 2: # tony
+      fc = params[1];
+      return numpy.divide(1, 2*numpy.pi*fc);
+  if metric == 'rs': # i.e. surround radius
+    if DoGmodel == 1: # sach
+      return params[3];
+    elif DoGmodel == 2: # tony
+      fc = params[1];
+      rc = numpy.divide(1, 2*numpy.pi*fc);
+      return rc*params[3];
+
 ##
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
