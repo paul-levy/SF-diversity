@@ -1191,7 +1191,7 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False,
    return rvc_model, all_opts, all_conGain, all_loss;
 
 def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
-  ''' Difference of gaussians 
+  ''' Difference of gaussians - as formulated in Levitt et al, 2001
   gain      - overall gain term
   f_c       - characteristic frequency of the center, i.e. freq at which response is 1/e of maximum
   gain_s    - relative gain of surround (e.g. gain_s of 0.5 says peak surround response is half of peak center response
@@ -1348,7 +1348,7 @@ def dog_charFreq(prms, DoGmodel=1):
       f_c = numpy.nan; # Cannot compute charFreq without DoG model fit (see sandbox_careful.ipynb)
   elif DoGmodel == 1: # sach
       r_c = prms[1];
-      f_c = 1/(2*numpy.pi*r_c)
+      f_c = 1/(numpy.pi*r_c)
   elif DoGmodel == 2: # tony
       f_c = prms[1];
 
@@ -1399,31 +1399,41 @@ def dog_charFreqMod(descrFit, allCons, varThresh=70, DoGmodel=1, lowConCut = 0.1
 
 def dog_get_param(params, DoGmodel, metric):
   ''' given a code for which tuning metric to get, and the model/parameters used, return that metric
+      note: when comparing the two formulations for DoG (i.e. Sach and Tony), we use Sach values as the reference
+        to this end, we make the following transformations of the Tony parameters
+        - gain:   gain/(pi*r^2)
+        - radius: 1/(pi*fc)
   '''
+  np = numpy;
+
   if DoGmodel == 0:
-    return numpy.nan; # we cannot compute from that form of the model!
+    return np.nan; # we cannot compute from that form of the model!
   if metric == 'gc': # i.e. center gain
     if DoGmodel == 1: # sach
       return params[0];
     elif DoGmodel == 2: # tony
-      return params[0];
+      fc = params[1];
+      rc = np.divide(1, np.pi*fc);
+      return np.divide(params[0], np.pi*np.square(rc));
   if metric == 'gs': # i.e. surround gain
     if DoGmodel == 1: # sach
       return params[2];
     elif DoGmodel == 2: # tony
-      return params[0]*params[2];
+      fc = params[1];
+      rs = np.divide(1, np.pi*fc*params[3]); # params[3] is the multiplier on fc to get fs
+      return np.divide(params[0]*params[2], np.pi*np.square(rs));
   if metric == 'rc': # i.e. center radius
     if DoGmodel == 1: # sach
       return params[1];
     elif DoGmodel == 2: # tony
       fc = params[1];
-      return numpy.divide(1, 2*numpy.pi*fc);
+      return np.divide(1, np.pi*fc);
   if metric == 'rs': # i.e. surround radius
     if DoGmodel == 1: # sach
       return params[3];
     elif DoGmodel == 2: # tony
       fc = params[1];
-      rs = numpy.divide(1, 2*numpy.pi*fc*params[3]);
+      rs = np.divide(1, np.pi*fc*params[3]); # params[3] is the multiplier on fc to get fs
       return rs;
 
 ##
