@@ -8,7 +8,7 @@
 ### Go to model_responses.py first
 
 ########
-# params are: cellNum, expDir, lossType, fitType, initFromCurr, trackSteps, [kMult]
+# params are: cellNum, expDir, lossType, fitType, initFromCurr, trackSteps, [kMult], [rvcMod]
 ########
 #   cellNum, expDir - obvious
 #   lossType - which loss function
@@ -24,9 +24,13 @@
 #   initFromCurr - 
 #      0 - don't...
 #      1 - do
-#      -1 - initialize from other fitType (i.e. if flat, initialize from weighted))
+#      -1 - initialize from other fitType (e.g. if flat, initialize from weighted))
 #   trackSteps - [1/0] save the steps in the optimization procedure
 #   kMult - if using the chiSq loss function, what is the multiplier (see model_responses/helper_fcns)
+#   rvcMod - which model of RVC are we using?
+#      0 - movshon (see hf for details)
+#      1 - naka-rushton [default]
+#      2 - peirce
 
 #### see model_responses.py for additional details
 
@@ -44,15 +48,15 @@ source activate lcv-python
 #################
 #################
 
-for run in {1..59}; do
+for run in {1..77}; do
   #python model_responses.py $run V1/ 4 1 -1 0 &
   #python model_responses.py $run V1/ 4 2 -1 0 &
 
-  python model_responses.py $run V1_orig/ 4 1 0 0 0.01 &
-  python model_responses.py $run V1_orig/ 4 2 0 0 0.01 &
+  #python model_responses.py $run V1_orig/ 4 1 0 0 0.01 &
+  #python model_responses.py $run V1_orig/ 4 2 0 0 0.01 &
 
-  #python model_responses.py $run V1_orig/ 4 1 0 0 0.05 &
-  #python model_responses.py $run V1_orig/ 4 2 0 0 0.05 &
+  python model_responses.py $run LGN/ 4 1 0 0 0.1 0 &
+  python model_responses.py $run LGN/ 4 2 0 0 0.1 0 &
 
 done
 

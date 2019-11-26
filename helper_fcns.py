@@ -21,6 +21,7 @@ import warnings
 # nan_rm        - remove nan from array
 # bw_lin_to_log
 # bw_log_to_lin
+# sf_highCut      - compute the (high) SF at which the response falls to X (a fraction) of the peak
 # sf_com          - model-free calculation of the tuning curve's center-of-mass
 # sf_var          - model-free calculation of the variance in the measured responses
 # get_datalist    - given the experiment directory, get the data list name
@@ -36,6 +37,7 @@ import warnings
 # descrMod_name   - returns string for descriptive model fit
 # descrLoss_name  - returns string for descriptive model loss type
 # descrFit_name   - name for descriptive fits
+# rvc_mod_suff    - what is the suffix for the given rvcModel (e.g. 'NR', 'peirce')b
 # rvc_fit_name    - name for rvcFits
 # angle_xy
 # flatten_list
@@ -470,7 +472,7 @@ def rvc_mod_suff(modNum):
    
    return suff;
 
-def rvc_fit_name(rvcBase, modNum, dir):
+def rvc_fit_name(rvcBase, modNum, dir=1):
    ''' returns the correct suffix for the given RVC model number and direction (pos/neg)
    '''
    suff = rvc_mod_suff(modNum);
@@ -1248,12 +1250,12 @@ def chiSq(data_resps, model_resps, stimDur=1, kMult = 0.10):
         with each condition a tuple (or 2-array) with [mean, var]
   '''
   np = numpy;
-  rats = np.divide(data_resps[1], data_resps[0]);
-  nan_rm = lambda x: x[~np.isnan(x)]
-  neg_rm = lambda x: x[x>0]; # particularly for adjusted responses, a few values might be negative; remove these from the rho calculation
-  rho = geomean(neg_rm(nan_rm(rats))); # only need neg_rm, but just being explicit
+
+  # particularly for adjusted responses, a few values might be negative; remove these from the rho calculation 
+  nonneg = np.where(np.logical_and(data_resps[0]>0, ~np.isnan(data_resps[0])))[0];
+  rats = np.divide(data_resps[1][nonneg], data_resps[0][nonneg]);
+  rho = geomean(rats);
   k   = kMult * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
-  #k   = 0.10 * rho * np.nanmax(data_resps[0]) # default kMult from Cavanaugh is 0.01
 
   # some conditions might be blank (and therefore NaN) - remove them!
   num = data_resps[0] - model_resps[0];
@@ -1268,9 +1270,9 @@ def chiSq(data_resps, model_resps, stimDur=1, kMult = 0.10):
 def c50_empirical(rvcMod, params):
   ''' given a response-versus-contrast model and associated parameters, find the empirical c50
         i.e. what is the contrast at which is the response 50% of the maximum
-             evaluted over contrast [0, 1]
+             evaluted over contrast [5e-2, 1]
   '''
-  con_bound = (0, 1);
+  con_bound = (5e-2, 1);
   # first, find the maximum response
   if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
     obj = lambda con: -naka_rushton(con, params)
@@ -1282,7 +1284,7 @@ def c50_empirical(rvcMod, params):
   max_con = max_opt['x'];
 
   # now, find out the contrast with 50% of max response
-  con_bound = (0, max_con); # i.e. ensure the c50_emp contrast is less than the max (relevant for super-saturating curves)
+  con_bound = (5e-2, max_con); # i.e. ensure the c50_emp contrast is less than the max (relevant for super-saturating curves)
   c50_obj = lambda con: numpy.square(max_response/2 + obj(con));
   c50_opt = opt.minimize(c50_obj, max_con/2, bounds=(con_bound, ));
   c50_con = c50_opt['x'][0]; # not as array, instead unpack
@@ -1691,6 +1693,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
                 dog_pSf[d, c] = dogFits[cell_ind]['prefSf'][d, c]
                 dog_charFreq[d, c] = dogFits[cell_ind]['charFreq'][d, c]
                 dog_varExpl[d, c] = varExpl;
+                dog_params[d, c] = dogFits[cell_ind]['params'][d, c];
             except: # then this dispersion does not have that contrast value, but it's ok - we already have nan
               pass 
 
@@ -2358,6 +2361,7 @@ def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', rvcMod=0, direc=1
 
 def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMod=0, descrFitName_f0=None, descrFitName_f1=None, force_dc=False, force_f1=False, baseline_sub=True):
   ''' wrapper function which will call needed subfunctions to return dc-subtracted spikes by trial
+      note: rvcMod = -1 is the code indicating that rvcName is actually the fits, already!
       OUTPUT: SPIKES (as rate, per s), baseline subtracted (default, if DC); responses are per stimulus, not per component
         note: user can override f1f0 calculation to force return of DC values only (set force_dc=TRUE) or F! values only (force_f1=TRUE)
   '''
@@ -2366,9 +2370,12 @@ def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMo
 
   ### i.e. if we're looking at a simple cell, then let's get F1
   if (f1f0_rat > 1 and force_dc is False) or force_f1 is True:
-      if rvcName is not None:
-          rvcFits = get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod);
+      if rvcMod == -1: # then rvcName is the rvcFits, already!
+        rvcFits = rvcName;
       else:
+        if rvcName is not None:
+          rvcFits = get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod);
+        else:
           rvcFits = None
       spikes_byComp = get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
       spikes = numpy.array([numpy.sum(x) for x in spikes_byComp]);

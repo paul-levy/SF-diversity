@@ -12,13 +12,9 @@ import pdb
 fft = numpy.fft
 
 dataListName = hf.get_datalist(sys.argv[2]); # argv[2] is expDir
-#dataListName = 'dataList.npy';
-#dataListName = 'dataList_glx.npy'
-#dataListName = 'dataList_mr.npy'
-#dataListName = 'dataList_glx_mr.npy'
 modRecov = 0;
 
-rvcBaseName = 'rvcFits_f0'; # a base set of RVC fits used for initializing c50 in opt...
+rvcBaseName = 'rvcFits_191023'; # a base set of RVC fits used for initializing c50 in opt...(full name, except .npy)
 
 # now, get descrFit name (ask if modRecov, too)
 if modRecov == 1:
@@ -36,7 +32,7 @@ if modRecov == 1:
     rvcBase = None;
 else:
   try:
-    descrFitName = 'descrFits_190503_poiss_flex.npy'
+    descrFitName = 'descrFits_191023_poiss_flex.npy'
   except:
     warnings.warn('Could not load descrFits in model_responses');
   # now try RVC base
@@ -649,7 +645,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     # 06 = late additive noise
     # 07 = variance of response gain    
     # if fitType == 1
-    # 08 = asymmetry ("historically", bounded [-0.35, 0.35])
+    # 08 = asymmetry ("historically", bounded [-0.35, 0.35], currently just "flat")
     # if fitType == 2
     # 08 = mean of normalization weights gaussian
     # 09 = std of ...
@@ -759,7 +755,17 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         respModel     = noiseLate + scale*meanRate; # respModel[iR]
         rateModel     = respModel / T['exp']['trial']['duration'];
         # and get the spike count
-        spikeCount = hf.get_spikes(T['exp']['trial'], rvcFits=rvcFits, expInd=expInd, overwriteSpikes=overwriteSpikes);
+        if overwriteSpikes is not None:
+          spikeCount = hf.get_spikes(T['exp']['trial'], rvcFits=rvcFits, expInd=expInd, overwriteSpikes=overwriteSpikes);
+        else:
+          f1f0_rat = hf.compute_f1f0(T['exp']['trial'], cellNum, expInd, loc_data=None)[0];
+          # TODO: should add line forcing F1 if LGN experiment...
+          spikeRate = hf.get_adjusted_spikerate(T['exp']['trial'], cellNum, expInd, dataPath=None, rvcName=rvcFits, rvcMod=-1, baseline_sub=False);
+          # NOTE: this is now a spikerate, not spike count, so let's convert (by multiplying rate by stimDir)
+          spikeCount = numpy.multiply(spikeRate, hf.get_exp_params(expInd).stimDur);
+          # now, we're recasting as an int, AND (necessary for simple cells), rounding to the nearest integer
+          # -- yes, int32 cannot represent NaNs, but all of these values are masked out, anyway, so the artifact is not harmful
+          spikeCount = numpy.rint(spikeCount).astype(numpy.int32);
 
         ### Masking the data - which trials will we include
         # now get the "right" subset of the data for evaluating loss (e.x. by default, orientation tuning trials are not included)
@@ -1027,7 +1033,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
 
     return respModel, Linh, Lexc, normResp['normResp'], denominator;
 
-def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBase, dataListName=dataListName, kMult=0.1):
+def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBaseName, rvcMod=1, dataListName=dataListName, kMult=0.1):
     # Given just a cell number, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
     #
     # lossType
@@ -1060,7 +1066,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       if modRecov == 1:
         fL_name = 'mr_fitList%s_190516cA' % loc_str
       else:
-        fL_name = 'fitList%s_190613%s' % (loc_str, hf.chiSq_suffix(kMult));
+        fL_name = 'fitList%s_191023%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_190321c' % loc_str
 
     np = numpy;
@@ -1079,8 +1085,6 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
 
     expInd = hf.exp_name_to_ind(dataList['expType'][cellNum-1]);
     
-    rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum, rvcName='none'); # see default arguments in helper_fcns.py
-
     print('loading data structure from %s...' % loc_data);
     S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy')); # why -1? 0 indexing...
     print('...finished loading');
@@ -1112,17 +1116,17 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
         allSfs    = np.unique(trial_inf['sf'][0]);
         allSfs    = allSfs[~np.isnan(allSfs)]; # remove NaN...
         prefSfEst = np.median(allSfs);
-    # get normConst estimate?
+
+    # load RVC fits, then get normConst estimate
+    rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
     try: 
-      rvcBase = hf.np_smart_load(loc_data + rvcBase);
-      c50_ind = 2; # position in the current rvc Model for the c50 parameter
       peakSf = prefSfEst; # just borrow from above
       stimVals = hf.tabulate_responses(S, expInd)[1];
       all_sfs = stimVals[2];
       # now, get the index corresponding to that peak SF and get the c50 from the corresponding RVC fit
       prefSfInd = np.argmin(np.abs(all_sfs - peakSf));
       # get the c50, but take log10 (we optimize in that space rather than in contrast)
-      c50_est = np.log10(rvcBase[cellNum-1]['params'][0][prefSfInd][c50_ind]); # get high contrast, single grating prefSf
+      c50_est = np.log10(hf.c50_empirical(rvcMod, rvcFits[0]['params'][prefSfInd]));
       normConst = np.minimum(c50_est, np.log10(0.25)); # don't let a c50 value larger than X as the starting point
     except:
       # why -1? Talked with Tony, he suggests starting with lower sigma rather than higher/non-saturating one
@@ -1203,7 +1207,6 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
           pref_sf,dOrdSp,normConst,respExp,respScalar,noiseEarly,noiseLate,varGain = altParams[0:8];
       except:
         warnings.warn('Could not initialize with alternate-fit parameters; defaulting to typical process');
-          
 
     print('Initial parameters:\n\tsf: ' + str(pref_sf)  + '\n\td.ord: ' + str(dOrdSp) + '\n\tnormConst: ' + str(normConst));
     print('\n\trespExp ' + str(respExp) + '\n\trespScalar ' + str(respScalar));
@@ -1316,8 +1319,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
 
 if __name__ == '__main__':
 
-    if len(sys.argv) < 5:
-      print('uhoh...you need six arguments here'); # and one is the script itself...
+    if len(sys.argv) < 6:
+      print('uhoh...you need 7 arguments here'); # and one is the script itself...
       print('See this file (setModel) or batchFitUnix.sh for guidance');
       exit();
 
@@ -1333,4 +1336,10 @@ if __name__ == '__main__':
     else:
       kMult = 0.10; # default (see modCompare.ipynb for details)
 
-    setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult);
+    if len(sys.argv) > 8:
+      rvcMod = float(sys.argv[8]);
+    else:
+      rvcMod = 1; # default (naka-rushton)
+
+
+    setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod);
