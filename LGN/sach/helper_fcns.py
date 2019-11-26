@@ -19,6 +19,8 @@ import pdb
 # dog_charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
 # dog_charFreqMod - smooth characteristic frequency vs. contrast with a functional form/fit
 
+# fit_rvc
+
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
@@ -41,8 +43,11 @@ def np_smart_load(file_path, encoding_str='latin1'):
          print('loaded');
          break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-         sleep(60); # i.e. wait for N seconds
-         print('sleep');
+         sleep_time = random_in_range([5, 15])[0];
+         sleep(sleep_time); # i.e. wait for 10 seconds
+     except EOFError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
+         sleep_time = random_in_range([5, 15])[0];
+         sleep(sleep_time); # i.e. wait for 10 seconds
 
    return loaded;
 
@@ -237,6 +242,166 @@ def dog_charFreqMod(descrFit, allCons, varThresh=65, DoGmodel=1, lowConCut = 0.1
   fcRatio = extrema[-1] / extrema[0]
 
   return fcRatio, fc_model, opt_params, charFreqs, conVals;
+
+
+#####
+
+def rvc_mod_suff(modNum):
+   ''' returns the suffix for a given rvcModel number'''
+   if modNum == 0:
+     suff = '';
+   elif modNum == 1:
+     suff = '_NR';
+   elif modNum == 2:
+     suff = '_peirce';
+   
+   return suff;
+
+def rvc_fit_name(rvcBase, modNum):
+   ''' returns the correct suffix for the given RVC model number and direction (pos/neg)
+   '''
+   suff = rvc_mod_suff(modNum);
+
+   return rvcBase + suff + '.npy';
+
+def get_rvc_model():
+  ''' simply return the rvc model used in the fits (type 0; should be used only for LGN)
+      --- from Eq. 3 of Movshon, Kiorpes, Hawken, Cavanaugh; 2005
+  '''
+  rvc_model = lambda b, k, c0, cons: b + k*np.log(1+np.divide(cons, c0));
+
+  return rvc_model  
+
+def naka_rushton(con, params):
+    ''' this is the classic naka rushton form of RVC - type 1
+        but, if incl. optional 5th param "s", this is the 2007 Peirce super-saturating RVC (type 2)
+    '''
+    base = params[0];
+    gain = params[1];
+    expon = params[2];
+    c50 = params[3];
+    if len(params) > 4: # optionally, include "s" - the super-saturating parameter from Peirce, JoV (2007)
+      sExp = params[4];
+    else:
+      sExp = 1; # otherwise, it's just 1
+
+    return base + gain*np.divide(np.power(con, expon), np.power(con, expon*sExp) + np.power(c50, expon*sExp));
+
+def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=True, prevFits=None):
+   ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
+       fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
+       Movshon, Kiorpes, Hawken, Cavanaugh; 2005
+       Optionally, can include a measure of variability in each response to perform weighted least squares
+       Optionally, can include mod = 0 (as above) or 1 (Naka-Rushton) or 2 (Peirce 2007 modification of Naka-Rushton)
+       RETURNS: rvc_model (the model equation), list of the optimal parameters, and the contrast gain measure
+       Vectorized - i.e. accepts arrays of amp/con arrays
+   '''
+   rvc_model = get_rvc_model(); # only used if mod == 0
+   
+   all_opts = []; all_loss = [];
+   all_conGain = [];
+   n_amps = len(amps);
+
+   for i in range(n_amps):
+     curr_amps = amps[i];
+     curr_cons = cons[i];
+     
+     if curr_amps == [] or curr_cons == []:
+       # nothing to do - set to blank and move on
+       all_opts.append([]);
+       all_loss.append([]);
+       all_conGain.append([]);
+       continue;
+
+     if var:
+       loss_weights = np.divide(1, var[i]);
+     else:
+       loss_weights = np.ones_like(var[i]);
+     if mod == 0:
+       obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - rvc_model(params[0], params[1], params[2], curr_cons))));
+     elif mod == 1:
+       obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params))));
+     elif mod == 2: # we also want a regularization term for the "s" term
+       lam1 = 5; # lambda parameter for regularization
+       obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params)))) + lam1*(params[-1]-1); # params[-1] is "sExp"
+
+     if prevFits is None:
+       best_loss = 1e6; # start with high value
+       best_params = []; conGain = [];
+     else: # load the previous best_loss/params/conGain
+       best_loss = prevFits['loss'][i];
+       best_params = prevFits['params'][i];
+       conGain = prevFits['conGain'][i];
+
+     for rpt in range(n_repeats):
+
+       if mod == 0:
+         if fix_baseline:
+           b_rat = 0;
+         else:
+           b_rat = random_in_range([0.0, 0.2])[0];
+         init_params = [b_rat*np.max(curr_amps), (2+3*b_rat)*np.max(curr_amps), random_in_range([0.05, 0.5])[0]]; 
+         if fix_baseline:
+           b_bounds = (0, 0);
+         else:
+           b_bounds = (None, 0);
+         k_bounds = (0, None);
+         c0_bounds = (1e-2, 1);
+         all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
+       elif mod == 1 or mod == 2: # bad initialization as of now...
+         if fix_baseline: # correct if we're fixing the baseline at 0
+           i_base = 0;
+         else:
+           i_base = np.min(curr_amps) + random_in_range([-2.5, 2.5])[0];
+         i_gain = random_in_range([2, 8])[0] * np.max(curr_amps);
+         i_expon = 2;
+         i_c50 = 0.1;
+         i_sExp = 1;
+         init_params = [i_base, i_gain, i_expon, i_c50, i_sExp];
+         if fix_baseline:
+           b_bounds = (0, 0);
+         else:
+           b_bounds = (None, None);
+         g_bounds = (0, None);
+         e_bounds = (0.75, None);
+         c_bounds = (0.01, 1);
+         if mod == 1:
+           s_bounds = (1, 1);
+         elif mod == 2:
+           s_bounds = (1, 2); # for now, but can adjust as needed (TODO)
+         all_bounds = (b_bounds, g_bounds, e_bounds, c_bounds, s_bounds);
+       # now optimize
+       to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
+       opt_params = to_opt['x'];
+       opt_loss = to_opt['fun'];
+
+       if opt_loss > best_loss:
+         continue;
+       else:
+         best_loss = opt_loss;
+         best_params = opt_params;
+
+       # now determine the contrast gain
+       if mod == 0:
+         b = opt_params[0]; k = opt_params[1]; c0 = opt_params[2];
+         if b < 0: 
+           # find the contrast value at which the rvc_model crosses/reaches 0
+           obj_whenR0 = lambda con: np.square(0 - rvc_model(b, k, c0, con));
+           con_bound = (0, 1);
+           init_r0cross = 0;
+           r0_cross = opt.minimize(obj_whenR0, init_r0cross, bounds=(con_bound, ));
+           con_r0 = r0_cross['x'];
+           conGain = k/(c0*(1+con_r0/c0));
+         else:
+           conGain = k/c0;
+       else:
+         conGain = -100;
+
+     all_opts.append(best_params);
+     all_loss.append(best_loss);
+     all_conGain.append(conGain);
+
+   return  rvc_model, all_opts, all_conGain, all_loss;
 
 
 #####

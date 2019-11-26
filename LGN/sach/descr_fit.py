@@ -8,6 +8,72 @@ import sys
 
 import pdb
 
+#################
+### SACH
+#################
+
+
+#################
+### RVC
+#################
+
+def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0):
+  ''' Piggy-backing off of phase_advance_fit above, get prepared to project the responses onto the proper phase to get the correct amplitude
+      Then, with the corrected response amplitudes, fit the RVC model
+      - as of 19.11.07, we will fit non-baseline subtracted responses 
+          (F1 have baseline of 0 always, but now we will not subtract baseline from F0 responses)
+  '''
+
+  # load cell information
+  dataList = hf.np_smart_load(data_loc + 'sachData.npy');
+  assert dataList!=[], "data file not found!"
+  data = dataList[cell_num-1]['data'];
+
+  rvcNameFinal = hf.rvc_fit_name(rvcName, rvcMod);
+  # first, load the file if it already exists
+  if os.path.isfile(data_loc + rvcNameFinal):
+      rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
+      try:
+        rvcFits_curr = rvcFits[cell_num-1];
+      except:
+        rvcFits_curr = None;
+  else:
+      rvcFits = dict();
+      rvcFits_curr = None;
+
+  print('Doing the work, now');
+
+  to_unpack = hf.tabulateResponses(data);
+  [_, f1] = to_unpack[0];
+  [all_cons, all_sfs] = to_unpack[1];
+  [_, f1arr] = to_unpack[2];
+
+  v_sfs = all_sfs;
+  n_v_sfs = len(v_sfs);
+
+  resps = [f1['mean'][:, x] for x in range(n_v_sfs)];
+  respsSEM = [f1['sem'][:, x] for x in range(n_v_sfs)];
+  cons = [all_cons] * len(resps); # tile
+
+  rvc_model, all_opts, all_conGain, all_loss = hf.rvc_fit(resps, cons, var=respsSEM, mod=rvcMod, prevFits=rvcFits_curr);
+
+  if os.path.isfile(data_loc + rvcNameFinal):
+    print('reloading rvcFits...');
+    rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
+  if cell_num-1 not in rvcFits:
+    rvcFits[cell_num-1] = dict();
+    rvcFits[cell_num-1] = dict();
+
+  rvcFits[cell_num-1]['loss'] = all_loss;
+  rvcFits[cell_num-1]['params'] = all_opts;
+  rvcFits[cell_num-1]['conGain'] = all_conGain;
+
+  np.save(data_loc + rvcNameFinal, rvcFits);
+
+#################
+### DESCRIPTIVE SF (DoG)
+#################
+
 def invalid(params, bounds):
 # given parameters and bounds, are the parameters valid?
   for p in range(len(params)):
@@ -185,23 +251,16 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
 if __name__ == '__main__':
 
     data_loc = '/users/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/LGN/sach/structures/';
-
-    if len(sys.argv) < 2:
-      print('uhoh...you need at least one argument here');
-      print('First be cell number, second [optional] is number of fit iterations');
-      exit();
+    rvcBase = 'rvcFits_191023'
 
     print('Running cell ' + sys.argv[1] + '...');
 
-    if len(sys.argv) > 4: # specify loss function, DoG model
-      print(' for ' + sys.argv[2] + ' iterations' + ' with loss type? ' + sys.argv[3] + ' and DoG model ' + sys.argv[4]);
-      fit_descr_DoG(int(sys.argv[1]), data_loc, int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]));
-    elif len(sys.argv) > 3: # specify loss type
-      print(' for ' + sys.argv[2] + ' iterations' + ' loss type? ' + sys.argv[3]);
-      fit_descr_DoG(int(sys.argv[1]), data_loc, int(sys.argv[2]), int(sys.argv[3]));
-    elif len(sys.argv) > 2: # specify # iterations
-      print(' for ' + sys.argv[2] + ' iterations');
-      fit_descr_DoG(int(sys.argv[1]), data_loc, int(sys.argv[2]));
-    else: # all trials in each iteration
-      fit_descr_DoG(int(sys.argv[1]), data_loc);
+    cellNum = int(sys.argv[1])
+    rvcModel = int(sys.argv[2]);
+    n_repeats = int(sys.argv[3])
+    loss_type = int(sys.argv[4])
+    DoGmodel = int(sys.argv[5])
+
+    rvc_fit(cellNum, data_loc, rvcBase, rvcModel); 
+    fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel);
 
