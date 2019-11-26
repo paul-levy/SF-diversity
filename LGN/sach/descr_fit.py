@@ -67,7 +67,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits_d181012';
+    fLname = 'descrFits_s191023';
     if loss_type == 1:
       loss_str = '_poiss';
     elif loss_type == 2:
@@ -120,8 +120,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     elif DoGmodel == 2:
       bound_gainCent = (1e-3, None);
       bound_gainFracSurr = (1e-2, 1);
-      bound_freqCent = (1e-3, None);
-      bound_freqFracSurr = (1e-2, 1);
+      bound_freqCent = (1e-3, 2e1);
+      bound_freqFracSurr = (1e-1, 1);
       allBounds = (bound_gainCent, bound_freqCent, bound_gainFracSurr, bound_freqFracSurr);
     
     for con in range(nCons):    
@@ -184,8 +184,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
                 
 if __name__ == '__main__':
 
-    data_loc = '/home/pl1465/SF_diversity/LGN/sach/structures/';
-    #data_loc = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/LGN/sach-data/';
+    data_loc = '/users/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/LGN/sach/structures/';
 
     if len(sys.argv) < 2:
       print('uhoh...you need at least one argument here');
