@@ -18,6 +18,7 @@ import pdb
 # dog_prefSfMod - smooth prefSf vs. contrast with a functional form/fit
 # dog_charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
 # dog_charFreqMod - smooth characteristic frequency vs. contrast with a functional form/fit
+# dog_get_param
 
 # fit_rvc
 
@@ -122,6 +123,14 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
     dog_norm = dog_norm(stim_sf);
 
   return dog(stim_sf), dog_norm;
+
+def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
+  # returns only pred_spikes
+  if DoGmodel == 1:
+    pred_spikes, _ = DoGsach(*params, stim_sf=stim_sf);
+  elif DoGmodel == 2:
+    pred_spikes, _ = DiffOfGauss(*params, stim_sf=stim_sf);
+  return pred_spikes;
 
 def var_expl_direct(obs_mean, pred_mean):
   # Just compute variance explained given the data and model responses (assumed same SF for each)
@@ -244,6 +253,43 @@ def dog_charFreqMod(descrFit, allCons, varThresh=65, DoGmodel=1, lowConCut = 0.1
   return fcRatio, fc_model, opt_params, charFreqs, conVals;
 
 
+def dog_get_param(params, DoGmodel, metric):
+  ''' given a code for which tuning metric to get, and the model/parameters used, return that metric
+      note: when comparing the two formulations for DoG (i.e. Sach and Tony), we use Sach values as the reference
+        to this end, we make the following transformations of the Tony parameters
+        - gain:   gain/(pi*r^2)
+        - radius: 1/(pi*fc)
+  '''
+  if DoGmodel == 0:
+    return np.nan; # we cannot compute from that form of the model!
+  if metric == 'gc': # i.e. center gain
+    if DoGmodel == 1: # sach
+      return params[0];
+    elif DoGmodel == 2: # tony
+      fc = params[1];
+      rc = np.divide(1, np.pi*fc);
+      return np.divide(params[0], np.pi*np.square(rc));
+  if metric == 'gs': # i.e. surround gain
+    if DoGmodel == 1: # sach
+      return params[2];
+    elif DoGmodel == 2: # tony
+      fc = params[1];
+      rs = np.divide(1, np.pi*fc*params[3]); # params[3] is the multiplier on fc to get fs
+      return np.divide(params[0]*params[2], np.pi*np.square(rs));
+  if metric == 'rc': # i.e. center radius
+    if DoGmodel == 1: # sach
+      return params[1];
+    elif DoGmodel == 2: # tony
+      fc = params[1];
+      return np.divide(1, np.pi*fc);
+  if metric == 'rs': # i.e. surround radius
+    if DoGmodel == 1: # sach
+      return params[3];
+    elif DoGmodel == 2: # tony
+      fc = params[1];
+      rs = np.divide(1, np.pi*fc*params[3]); # params[3] is the multiplier on fc to get fs
+      return rs;
+
 #####
 
 def rvc_mod_suff(modNum):
@@ -287,7 +333,7 @@ def naka_rushton(con, params):
 
     return base + gain*np.divide(np.power(con, expon), np.power(con, expon*sExp) + np.power(c50, expon*sExp));
 
-def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=True, prevFits=None):
+def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=True, prevFits=None):
    ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
        fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
@@ -392,7 +438,7 @@ def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=True, p
            r0_cross = opt.minimize(obj_whenR0, init_r0cross, bounds=(con_bound, ));
            con_r0 = r0_cross['x'];
            conGain = k/(c0*(1+con_r0/c0));
-         else:
+         else: # i.e. if b = 0
            conGain = k/c0;
        else:
          conGain = -100;

@@ -244,6 +244,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     descrFits[cell_num-1]['NLL'] = bestNLL;
     descrFits[cell_num-1]['params'] = currParams;
     descrFits[cell_num-1]['varExpl'] = varExpl;
+    descrFits[cell_num-1]['prefSf'] = prefSf;
+    descrFits[cell_num-1]['charFreq'] = charFreq;
 
     np.save(fLname, descrFits);
     print('saving for cell ' + str(cell_num));
@@ -262,5 +264,5 @@ if __name__ == '__main__':
     DoGmodel = int(sys.argv[5])
 
     rvc_fit(cellNum, data_loc, rvcBase, rvcModel); 
-    fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel);
+    #fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel);
 

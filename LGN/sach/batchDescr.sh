@@ -11,5 +11,6 @@ source activate lcv-python
 
 for run in {1..34}
 do
-  python descr_fit.py $run 0 100 3 1 &
+  python descr_fit.py $run 0 100 3 2 &
+  #python descr_fit.py $run 0 100 3 1 &
 done
