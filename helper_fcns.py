@@ -1612,6 +1612,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
   charFreq = np.ones((nCons, )) * np.nan;
   if joint==True:
     overallNLL = np.nan;
+    params = np.nan;
 
   ### set bounds
   if DoGmodel == 0: # FLEX - flexible gaussian (i.e. two halves)
@@ -1727,11 +1728,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
       # compare
       NLL = wax['fun'];
-      params = wax['x'];
+      params_curr = wax['x'];
 
       if np.isnan(overallNLL) or NLL < overallNLL:
         overallNLL = NLL;
-        params = params;
+        params = params_curr;
 
     ### then, we must unpack the fits to actually fill in the "true" parameters for each contrast
     gain_rat, shape_rat = params[0], params[1];

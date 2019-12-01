@@ -15,7 +15,7 @@ expName = hf.get_datalist(sys.argv[3]); # sys.argv[3] is experiment dir
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_191003_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName =  'descrFits_191130';
+dogName =  'descrFits_191201';
 phAdvName = 'phaseAdvanceFits_191023'
 rvcName_f0   = 'rvcFits_191023_f0.npy'
 rvcName_f1   = 'rvcFits_191023' # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
@@ -372,7 +372,7 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is_f0=0, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0):
+def fit_descr_DoG(cell_num, data_loc, n_repeats=50, loss_type=3, DoGmodel=1, is_f0=0, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0):
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
   '''
