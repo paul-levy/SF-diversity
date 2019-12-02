@@ -20,6 +20,10 @@ import pdb
 # dog_charFreqMod - smooth characteristic frequency vs. contrast with a functional form/fit
 # dog_get_param
 
+# dog_loss - compute the DoG loss, given responses and model parameters
+# dog_init_params - given the responses, estimate initial parameters for a given DoG model
+# dog_fit - used to fit the Diff of Gauss responses -- either separately for each con, or jointly for all cons within a given dispersion
+
 # fit_rvc
 
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
@@ -124,7 +128,7 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
 
   return dog(stim_sf), dog_norm;
 
-def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
+def get_descrResp(params, stim_sf, DoGmodel):
   # returns only pred_spikes
   if DoGmodel == 1:
     pred_spikes, _ = DoGsach(*params, stim_sf=stim_sf);
@@ -289,6 +293,278 @@ def dog_get_param(params, DoGmodel, metric):
       fc = params[1];
       rs = np.divide(1, np.pi*fc*params[3]); # params[3] is the multiplier on fc to get fs
       return rs;
+
+## - for fitting DoG models
+
+def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, resps_std=None, joint=False, debug=False):
+  '''Given the model params (i.e. sach or tony formulation)), the responses, sf values
+  return the loss
+  loss_type: 1 - poisson
+             2 - sqrt
+             3 - Sach sum{[(exp-obs)^2]/[k+sigma^2]} where
+                 k := 0.01*max(obs); sigma := measured variance of the response
+             4 - variance explained!
+  DoGmodel: 1 - sach
+            2 - tony
+
+    - if joint=True, then resps, resps_std will be arrays in which to index
+    - params will be 2*N+2, where N is the number of contrasts;
+    --- "2" is for a shared (across all contrasts) ratio of gain/[radius/freq]
+    --- then, there are two parameters fit uniquely to each contrast - center gain & [radius/freq]
+  '''
+
+  # we'll use the "joint" flag to determine how many DoGs we are fitting
+  if joint==True:
+    n_fits = len(resps);
+    gain_rat = params[0]; # the ratio of center::surround gain is shared across all fits
+    shape_rat = params[1]; # the ratio of ctr::surr freq (or radius) is shared across all fits
+  else:
+    n_fits = 1;
+
+  NLL = 0; # used to track the total loss (even across multiple contrasts, if joint=True)
+
+  for i in range(n_fits):
+    if n_fits == 1: # i.e. joint is False!
+      curr_params = params;
+      curr_resps = resps;
+      curr_std = resps_std;
+    else:
+      curr_resps = resps[i];
+      curr_std = resps_std[i];
+      local_gain = params[2+i*2]; 
+      local_shape = params[3+i*2]; # shape, as in radius/freq, depending on DoGmodel
+      if DoGmodel == 1: # i.e. sach
+        curr_params = [local_gain, local_shape, local_gain*gain_rat, local_shape*shape_rat];
+      elif DoGmodel == 2: # i.e. Tony
+        curr_params = [local_gain, local_shape, gain_rat, shape_rat];
+
+    pred_mean = get_descrResp(curr_params, sfs, DoGmodel);
+    ## now, compute the loss!
+    if loss_type == 1:
+      # poisson model of spiking
+      poiss = poisson.pmf(np.round(curr_resps), pred_mean); # round since the values are nearly but not quite integer values (Sach artifact?)...
+      ps = np.sum(poiss == 0);
+      if ps > 0:
+        poiss = np.maximum(poiss, 1e-6); # anything, just so we avoid log(0)
+      NLL = NLL + sum(-np.log(poiss));
+    elif loss_type == 2: # sqrt
+      loss = np.sum(np.square(np.sqrt(curr_resps) - np.sqrt(pred_mean)));
+      NLL = NLL + loss;
+    elif loss_type == 3: # sach
+      k = 0.01*np.max(curr_resps);
+      if resps_std is None:
+        sigma = np.ones_like(curr_resps);
+      else:
+        sigma = curr_std;
+      sq_err = np.square(curr_resps-pred_mean);
+      curr_err = np.sum(sq_err/(k+np.square(sigma)))
+      NLL = NLL + curr_err;
+    elif loss_type == 4:
+      resp_dist = lambda x, y: np.sum(np.square(x-y))/np.maximum(len(x), len(y))
+      var_expl = lambda m, r, rr: 100 * (1 - resp_dist(m, r)/resp_dist(r, rr));
+      # rr is the mean of all observed mean responses (and is last argument in below line)
+      NLL = NLL - var_expl(pred_mean, curr_resps, np.mean(curr_resps) * np.ones_like(curr_resps));
+    
+  return NLL;
+
+def dog_init_params(resps_curr, all_sfs, DoGmodel):
+  ''' return the initial parameters for the DoG model, given the model choice and responses
+  '''
+  maxResp       = np.max(resps_curr);
+  freqAtMaxResp = all_sfs[np.argmax(resps_curr)];
+
+  ############
+  ## SACH
+  ############
+  if DoGmodel == 1:
+    init_gainCent = random_in_range((maxResp, 5*maxResp))[0];
+    init_radiusCent = random_in_range((0.05, 2))[0];
+    init_gainSurr = init_gainCent * random_in_range((0.1, 0.95))[0];
+    init_radiusSurr = init_radiusCent * random_in_range((0.5, 8))[0];
+    init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
+  ############
+  ## TONY
+  ############
+  elif DoGmodel == 2:
+    init_gainCent = maxResp * random_in_range((0.9, 1.2))[0];
+    init_freqCent = np.maximum(all_sfs[2], freqAtMaxResp * random_in_range((1.2, 1.5))[0]); # don't pick all_sfs[0] -- that's zero (we're avoiding that)
+    init_gainFracSurr = random_in_range((0.7, 1))[0];
+    init_freqFracSurr = random_in_range((.25, .35))[0];
+    init_params = [init_gainCent, init_freqCent, init_gainFracSurr, init_freqFracSurr];
+
+  return init_params
+
+def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=False):
+  ''' Helper function for fitting descriptive funtions to SF responses
+      if joint=True, (and DoGmodel is 1 or 2, i.e. not flexGauss), then we fit assuming
+      a fixed ratio for the center-surround gains and [freq/radius]
+      - i.e. of the 4 DoG parameters, 2 are fit separately for each contrast, and 2 are fit 
+        jointly across all contrasts!
+
+      inputs: self-explanatory, except for resps, which should be "f1" from tabulateResponses 
+      outputs: bestNLL, currParams, varExpl, prefSf, charFreq, [overallNLL, paramList; if joint=True]
+  '''
+  nCons = len(all_cons);
+  nParam = 4;
+
+  # unpack responses
+  resps_mean = resps['mean'];
+  resps_sem = resps['sem'];
+
+  # next, let's compute some measures about the responses
+  max_resp = np.nanmax(resps_mean.flatten());
+
+  # and set up initial arrays
+  bestNLL = np.ones((nCons, )) * np.nan;
+  currParams = np.ones((nCons, nParam)) * np.nan;
+  varExpl = np.ones((nCons, )) * np.nan;
+  prefSf = np.ones((nCons, )) * np.nan;
+  charFreq = np.ones((nCons, )) * np.nan;
+  if joint==True:
+    overallNLL = np.nan;
+    params = np.nan;
+
+  ### set bounds
+  if DoGmodel == 1:
+    bound_gainCent = (1e-3, None);
+    bound_radiusCent= (1e-3, None);
+    if joint==True:
+      bound_gainRatio = (1e-3, 1); # the surround gain will always be less than the center gain
+      bound_radiusRatio= (1, None); # the surround radius will always be greater than the ctr r
+      # we'll add to allBounds later, reflecting joint gain/radius ratios common across all cons
+      allBounds = (bound_gainRatio, bound_radiusRatio);
+    elif joint==False:
+      bound_gainSurr = (1e-3, None);
+      bound_radiusSurr= (1e-3, None);
+      allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
+  elif DoGmodel == 2:
+    bound_gainCent = (1e-3, None);
+    bound_freqCent = (1e-3, 2e1);
+    if joint==True:
+      bound_gainRatio = (1e-3, 1); # surround gain always less than center gain
+      bound_freqRatio = (1e-1, 1); # surround freq always less than ctr freq
+      # we'll add to allBounds later, reflecting joint gain/radius ratios common across all cons
+      allBounds = (bound_gainRatio, bound_freqRatio);
+    elif joint==False:
+      bound_gainFracSurr = (1e-2, 1);
+      bound_freqFracSurr = (1e-1, 1);
+      allBounds = (bound_gainCent, bound_freqCent, bound_gainFracSurr, bound_freqFracSurr);
+
+  ### organize responses -- and fit, if joint=False
+  allResps = []; allRespsSem = []; valCons = [];
+  for con in range(nCons):
+    if all_cons[con] == 0: # skip 0 contrast...
+        continue;
+    else:
+      valCons.append(con);
+    resps_curr = resps_mean[con, :];
+    sem_curr   = resps_sem[con, :];
+
+    ### prepare for the joint fitting, if that's what we've specified!
+    if joint==True:
+      allResps.append(resps_curr);
+      allRespsSem.append(sem_curr);
+      # and add to the bounds list!
+      if DoGmodel == 1:
+        allBounds = (*allBounds, bound_gainCent, bound_radiusCent);
+      elif DoGmodel == 2:
+        allBounds = (*allBounds, bound_gainCent, bound_freqCent);
+      continue;
+
+    ### otherwise, we're really going to fit here! [i.e. if joint is False]
+    for n_try in range(n_repeats):
+      ###########
+      ### pick initial params
+      ###########
+      init_params = dog_init_params(resps_curr, all_sfs, DoGmodel)
+
+      # choose optimization method
+      if np.mod(n_try, 2) == 0:
+          methodStr = 'L-BFGS-B';
+      else:
+          methodStr = 'TNC';
+
+      obj = lambda params: DoG_loss(params, resps_curr, all_sfs, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, joint=joint);
+      wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
+
+      # compare
+      NLL = wax['fun'];
+      params = wax['x'];
+
+      if np.isnan(bestNLL[con]) or NLL < bestNLL[con]:
+        bestNLL[con] = NLL;
+        currParams[con, :] = params;
+        curr_mod = get_descrResp(params, all_sfs, DoGmodel);
+        varExpl[con] = var_expl_direct(resps_curr, curr_mod);
+        prefSf[con] = dog_prefSf(params, dog_model=DoGmodel, all_sfs=valSfVals);
+        charFreq[con] = dog_charFreq(params, DoGmodel=DoGmodel);
+
+  if joint==False: # then we're DONE
+    return bestNLL, currParams, varExpl, prefSf, charFreq, None, None; # placeholding None for overallNLL, params [full list]
+
+  ### NOW, we do the fitting if joint=True
+  if joint==True:
+    ### now, we fit!
+    for n_try in range(n_repeats):
+      # we'll also add to allInitParams later, to estimate the center gain/radius
+      if DoGmodel == 1:
+        # -- but first, we estimate the gain ratio and the radius ratio
+        allInitParams = [random_in_range((0.2, 0.8))[0], random_in_range((2, 3.5))[0]];
+      elif DoGmodel == 2:
+        # -- but first, we estimate the gain ratio and the cfreq ratio
+        allInitParams = [random_in_range((0.2, 0.8))[0], random_in_range((0.2, 0.4))[0]];
+      for resps_curr in allResps:
+        # now, we need to guess the local parameters - 0:2 will give us center gain/shape
+        curr_init = dog_init_params(resps_curr, all_sfs, DoGmodel)[0:2];
+        allInitParams = [*allInitParams, curr_init[0], curr_init[1]];
+
+      # choose optimization method
+      if np.mod(n_try, 2) == 0:
+          methodStr = 'L-BFGS-B';
+      else:
+          methodStr = 'TNC';
+
+      obj = lambda params: DoG_loss(params, allResps, all_sfs, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, joint=joint);
+      wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds);
+
+      # compare
+      NLL = wax['fun'];
+      params_curr = wax['x'];
+
+      if np.isnan(overallNLL) or NLL < overallNLL:
+        print('updating! NLL %.2f --> new %.2f' % (overallNLL, NLL));
+        print('\tparams: %s' % params_curr);
+        overallNLL = NLL;
+        params = params_curr;
+
+    ### then, we must unpack the fits to actually fill in the "true" parameters for each contrast
+    gain_rat, shape_rat = params[0], params[1];
+    for con in range(len(allResps)):
+      # get the current parameters and responses by unpacking the associated structures
+      local_gain = params[2+con*2]; 
+      local_shape = params[3+con*2]; # shape, as in radius/freq, depending on DoGmodel
+      if DoGmodel == 1: # i.e. sach
+        curr_params = [local_gain, local_shape, local_gain*gain_rat, local_shape*shape_rat];
+      elif DoGmodel == 2: # i.e. Tony
+        curr_params = [local_gain, local_shape, gain_rat, shape_rat];
+      # -- then the responses, and overall contrast index
+      resps_curr = allResps[con];
+      sem_curr   = allRespsSem[con];
+      
+      # now, compute!
+      conInd = valCons[con];
+      pdb.set_trace();
+      bestNLL[conInd] = DoG_loss(curr_params, resps_curr, all_sfs, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, joint=False); # now it's NOT joint!
+      currParams[conInd, :] = curr_params;
+      curr_mod = get_descrResp(curr_params, all_sfs, DoGmodel);
+      varExpl[conInd] = var_expl_direct(resps_curr, curr_mod);
+      prefSf[conInd] = dog_prefSf(curr_params, dog_model=DoGmodel, all_sfs=all_sfs);
+      charFreq[conInd] = dog_charFreq(curr_params, DoGmodel=DoGmodel);    
+
+    # and NOW, we can return!
+    return bestNLL, currParams, varExpl, prefSf, charFreq, overallNLL, params;
+##
+
 
 #####
 
