@@ -1478,8 +1478,10 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
     if n_fits == 1: # i.e. joint is False!
       curr_params = params;
       curr_resps = resps;
+      curr_std = resps_std;
     else:
       curr_resps = resps[i];
+      curr_std = resps_std[i];
       local_gain = params[2+i*2]; 
       local_shape = params[3+i*2]; # shape, as in radius/freq, depending on DoGmodel
       if DoGmodel == 1: # i.e. sach
@@ -1506,7 +1508,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
       if resps_std is None:
         sigma = np.ones_like(curr_resps);
       else:
-        sigma = resps_std[i];
+        sigma = curr_std;
       sq_err = np.square(curr_resps-pred_spikes);
       totalLoss = totalLoss + np.sum((sq_err/(k+np.square(sigma)))) + gain_reg*(params[0] + params[2]); # regularize - want gains as low as possible
 
@@ -1750,7 +1752,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       respConInd = valConByDisp[disp][con];
       
       # now, compute!
-      bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg);
+      bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=False); # not joint, now!
       currParams[respConInd, :] = curr_params;
       varExpl[respConInd] = var_explained(resps_curr, curr_params, valSfVals, DoGmodel);
       prefSf[respConInd] = dog_prefSf(curr_params, dog_model=DoGmodel, all_sfs=valSfVals);
