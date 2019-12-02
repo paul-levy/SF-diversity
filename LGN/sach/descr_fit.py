@@ -85,6 +85,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     assert dataList!=[], "data file not found!"
 
     fLname = 'descrFits_s191201';
+    if joint==True:
+      fLname = '%s_joint' % fLname
+
     if loss_type == 1:
       loss_str = '_poiss';
     elif loss_type == 2:
@@ -98,6 +101,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     elif DoGmodel == 2:
       mod_str = '_tony';
     fLname = str(data_loc + fLname + loss_str + mod_str + '.npy');
+
     if os.path.isfile(fLname):
         descrFits = hf.np_smart_load(fLname);
     else:

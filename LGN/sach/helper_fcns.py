@@ -532,8 +532,6 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
       params_curr = wax['x'];
 
       if np.isnan(overallNLL) or NLL < overallNLL:
-        print('updating! NLL %.2f --> new %.2f' % (overallNLL, NLL));
-        print('\tparams: %s' % params_curr);
         overallNLL = NLL;
         params = params_curr;
 
@@ -553,7 +551,6 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
       
       # now, compute!
       conInd = valCons[con];
-      pdb.set_trace();
       bestNLL[conInd] = DoG_loss(curr_params, resps_curr, all_sfs, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, joint=False); # now it's NOT joint!
       currParams[conInd, :] = curr_params;
       curr_mod = get_descrResp(curr_params, all_sfs, DoGmodel);

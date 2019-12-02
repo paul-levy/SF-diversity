@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 source activate lcv-python
 
 # 1 - cell #
@@ -12,6 +11,6 @@ source activate lcv-python
 
 for run in {1..34}
 do
-  #python descr_fit.py $run 0 250 3 2 1 &
-  python descr_fit.py $run 0 250 3 1 1 &
+  python descr_fit.py $run 0 250 3 2 1 &
+  #python descr_fit.py $run 0 250 3 1 1 &
 done
