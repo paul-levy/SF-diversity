@@ -372,7 +372,7 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats=50, loss_type=3, DoGmodel=1, is_f0=0, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0):
+def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is_f0=0, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0):
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
   '''
@@ -382,6 +382,13 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=50, loss_type=3, DoGmodel=1, is_
     nParam = 4;
       
   if joint==True:
+    try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
+      modStr  = hf.descrMod_name(DoGmodel);
+      ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr));
+      ref_varExpl = ref_fits[cell_num-1]['varExpl'][0];
+    except:
+      ref_varExpl = None;
+    # now set the name for the joint list
     fLname = '%s_joint' % fLname
 
   # load cell information
@@ -445,7 +452,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=50, loss_type=3, DoGmodel=1, is_
   ### here is where we do the real fitting!
   for d in range(nDisps): # works for all disps
     # a separate fitting call for each dispersion
-    nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg)
+    nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl)
 
     # before we update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(data_loc + fLname):

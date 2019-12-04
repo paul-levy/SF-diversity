@@ -1574,12 +1574,13 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel):
 
   return init_params
 
-def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint=False, gain_reg=0):
+def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint=False, gain_reg=0, ref_varExpl=None, veThresh=70):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint=True, (and DoGmodel is 1 or 2, i.e. not flexGauss), then we fit assuming
       a fixed ratio for the center-surround gains and [freq/radius]
       - i.e. of the 4 DoG parameters, 2 are fit separately for each contrast, and 2 are fit 
         jointly across all contrasts!
+      - note that ref_varExpl (optional) will be of the same form that the output for varExpl will be
 
       inputs: self-explanatory, except for resps, which should be [resps_mean, resps_all, resps_sem, base_rate]
       outputs: bestNLL, currParams, varExpl, prefSf, charFreq, [overallNLL, paramList; if joint=True]
@@ -1650,7 +1651,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       allBounds = (bound_gainCent, bound_freqCent, bound_gainFracSurr, bound_freqFracSurr);
 
   ### organize responses -- and fit, if joint=False
-  allResps = []; allRespsSem = [];
+  allResps = []; allRespsSem = []; start_incl = 0; incl_inds = [];
   for con in range(nCons):
     if con not in valConByDisp[disp]:
       continue;
@@ -1664,6 +1665,15 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
     ### prepare for the joint fitting, if that's what we've specified!
     if joint==True:
+      if ref_varExpl is None:
+        start_incl = 1; # hacky...
+      if start_incl == 0:
+        if ref_varExpl[con] < veThresh:
+          continue; # i.e. we're not adding this; yes we could move this up, but keep it here for now
+        else:
+          start_incl = 1; # now we're ready to start adding to our responses that we'll fit!
+
+      incl_inds.append(con); # keep note of which contrast indices are included
       allResps.append(resps_curr);
       allRespsSem.append(sem_curr);
       # and add to the parameter list!
@@ -1749,7 +1759,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       # -- then the responses, and overall contrast index
       resps_curr = allResps[con];
       sem_curr   = allRespsSem[con];
-      respConInd = valConByDisp[disp][con];
+      respConInd = incl_inds[con];
+      #respConInd = valConByDisp[disp][con]; 
       
       # now, compute!
       bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=False); # not joint, now!
