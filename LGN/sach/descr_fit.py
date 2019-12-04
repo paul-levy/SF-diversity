@@ -193,6 +193,6 @@ if __name__ == '__main__':
     DoGmodel = int(sys.argv[5])
     is_joint = int(sys.argv[6]);
 
-    #rvc_fit(cellNum, data_loc, rvcBase, rvcModel); 
+    rvc_fit(cellNum, data_loc, rvcBase, rvcModel); 
     fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel, is_joint);
 

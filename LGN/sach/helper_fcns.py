@@ -357,10 +357,10 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, resps_std=None, join
       else:
         sigma = curr_std;
       sq_err = np.square(curr_resps-pred_mean);
-      curr_err = np.sum(sq_err/(k+np.square(sigma)))
+      curr_err = np.sum(sq_err/(k+np.square(sigma)));
       NLL = NLL + curr_err;
     elif loss_type == 4:
-      resp_dist = lambda x, y: np.sum(np.square(x-y))/np.maximum(len(x), len(y))
+      resp_dist = lambda x, y: np.sum(np.square(x-y))/np.maximum(len(x), len(y));
       var_expl = lambda m, r, rr: 100 * (1 - resp_dist(m, r)/resp_dist(r, rr));
       # rr is the mean of all observed mean responses (and is last argument in below line)
       NLL = NLL - var_expl(pred_mean, curr_resps, np.mean(curr_resps) * np.ones_like(curr_resps));
@@ -496,7 +496,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
         currParams[con, :] = params;
         curr_mod = get_descrResp(params, all_sfs, DoGmodel);
         varExpl[con] = var_expl_direct(resps_curr, curr_mod);
-        prefSf[con] = dog_prefSf(params, dog_model=DoGmodel, all_sfs=valSfVals);
+        prefSf[con] = dog_prefSf(params, dog_model=DoGmodel, all_sfs=all_sfs);
         charFreq[con] = dog_charFreq(params, DoGmodel=DoGmodel);
 
   if joint==False: # then we're DONE

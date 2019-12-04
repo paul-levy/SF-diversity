@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 source activate lcv-python
 
 # second param is loss type (sf tuning):
@@ -15,7 +14,7 @@ source activate lcv-python
 for run in {1..34}
 do
   python plotting.py $run 3 2 0 & 
-  python plotting.py $run 3 1 0 & 
+  #python plotting.py $run 3 1 0 & 
 done
 
  
