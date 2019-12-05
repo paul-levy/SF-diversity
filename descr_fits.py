@@ -380,7 +380,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is
     nParam = 5;
   else:
     nParam = 4;
-      
+
   if joint==True:
     try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
       modStr  = hf.descrMod_name(DoGmodel);
@@ -390,6 +390,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is
       ref_varExpl = None;
     # now set the name for the joint list
     fLname = '%s_joint' % fLname
+  else:
+    ref_varExpl = None; # set to None as default      
 
   # load cell information
   dataList = hf.np_smart_load(data_loc + dLname);
