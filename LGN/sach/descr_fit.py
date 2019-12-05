@@ -84,23 +84,21 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits_s191201';
+    fLname = 'descrFits_s191204';
     if joint==True:
+      try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
+        modStr  = hf.descrMod_name(DoGmodel);
+        ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr));
+        ref_varExpl = ref_fits[cell_num-1]['varExpl'];
+      except:
+        ref_varExpl = None;
       fLname = '%s_joint' % fLname
+    else:
+      ref_varExpl = None; # set to None as default
 
-    if loss_type == 1:
-      loss_str = '_poiss';
-    elif loss_type == 2:
-      loss_str = '_sqrt';
-    elif loss_type == 3:
-      loss_str = '_sach';
-    elif loss_type == 4:
-      loss_str = '_varExpl';
-    if DoGmodel == 1:
-      mod_str = '_sach';
-    elif DoGmodel == 2:
-      mod_str = '_tony';
-    fLname = str(data_loc + fLname + loss_str + mod_str + '.npy');
+
+    mod_str = hf.descrMod_name(DoGmodel);
+    fLname = str(data_loc + hf.descrFit_name(loss_type, fLname, mod_str));
 
     if os.path.isfile(fLname):
         descrFits = hf.np_smart_load(fLname);
@@ -129,7 +127,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
       paramList = np.nan;
 
     # now, we fit!
-    nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit(f1, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=joint);
+    nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit(f1, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=joint, ref_varExpl=ref_varExpl);
 
     # before we update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(fLname):
@@ -193,6 +191,6 @@ if __name__ == '__main__':
     DoGmodel = int(sys.argv[5])
     is_joint = int(sys.argv[6]);
 
-    rvc_fit(cellNum, data_loc, rvcBase, rvcModel); 
+    #rvc_fit(cellNum, data_loc, rvcBase, rvcModel); 
     fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel, is_joint);
 

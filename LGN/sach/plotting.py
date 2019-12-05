@@ -1,7 +1,4 @@
-
 # coding: utf-8
-
-######################## To do:
 
 import os
 import numpy as np
@@ -45,7 +42,7 @@ cellStruct = allData[which_cell-1];
 
 # #### Load descriptive model fits, RVC Naka-Rushton fits, [comp. model fits]
 
-fLname = 'descrFits_s191023';
+fLname = 'descrFits_s191201_joint';
 if sf_loss_type == 1:
   loss_str = '_poiss';
 elif sf_loss_type == 2:
@@ -63,7 +60,8 @@ fLname_full = fLname + loss_str + mod_str + '.npy';
 descrFits = helper_fcns.np_smart_load(dataPath + fLname_full);
 descrFits = descrFits[which_cell-1]; # just get this cell
 
-rvcMod = 0;
+rvcMod = 1;
+rvcSuff = helper_fcns.rvc_mod_suff(rvcMod);
 rvcBase = 'rvcFits_191023';
 rvcFits = helper_fcns.np_smart_load(dataPath + helper_fcns.rvc_fit_name(rvcBase, rvcMod));
 rvcFits = rvcFits[which_cell-1];
@@ -118,7 +116,7 @@ for c in reversed(range(nCons)):
     sfs_plot = np.geomspace(all_sfs[val_sfs[0]], all_sfs[val_sfs[-1]], 100);
     prms_curr = descrFits['params'][c];
     descrResp = helper_fcns.get_descrResp(prms_curr, sfs_plot, sf_DoG_model);
-    ax[1].plot(sfs_plot, descrResp, '-o', clip_on=False, color=col, label=str(np.round(all_cons[c], conDig)))
+    ax[1].plot(sfs_plot, descrResp, '-', clip_on=False, color=col, label=str(np.round(all_cons[c], conDig)))
 
 for i in range(2):
   #ax[i].set_aspect('equal', 'box'); 
@@ -264,7 +262,7 @@ for sf in range(n_v_sfs):
 sns.despine(offset = 10, trim=False);
 
 saveName = "/cell_%03d.pdf" % (which_cell)
-full_save = os.path.dirname(str(save_loc + 'RVC/'));
+full_save = os.path.dirname(str(save_loc + 'RVC%s/' % rvcSuff));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -322,7 +320,7 @@ for i in range(2):
 sns.despine(offset=10, trim=False); 
 
 saveName = "/allSfs_cell_%03d.pdf" % (which_cell)
-full_save = os.path.dirname(str(save_loc + 'RVC/'));
+full_save = os.path.dirname(str(save_loc + 'RVC%s/' % rvcSuff));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
