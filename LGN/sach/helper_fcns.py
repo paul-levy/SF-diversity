@@ -468,6 +468,11 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
 
   # next, let's compute some measures about the responses
   max_resp = np.nanmax(resps_mean.flatten());
+  min_resp = np.nanmin(resps_mean.flatten());
+  ############
+  ### WARNING - we're subtracting min_resp-1 from all responses
+  ############  
+  resps_mean = np.subtract(resps_mean, min_resp-1); # i.e. make the minimum response 1 spk/s...
 
   # and set up initial arrays
   bestNLL = np.ones((nCons, )) * np.nan;

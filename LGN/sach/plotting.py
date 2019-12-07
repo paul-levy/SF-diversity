@@ -41,8 +41,9 @@ allData = np.load(dataPath + 'sachData.npy', encoding='latin1').item();
 cellStruct = allData[which_cell-1];
 
 # #### Load descriptive model fits, RVC Naka-Rushton fits, [comp. model fits]
+zSub = 1; # are we loading fits that were fit to responses adjusted s.t. the lowest value is 1?
 
-fLname = 'descrFits_s191201_joint';
+fLname = 'descrFits_s191205zSub_joint';
 if sf_loss_type == 1:
   loss_str = '_poiss';
 elif sf_loss_type == 2:
@@ -60,7 +61,7 @@ fLname_full = fLname + loss_str + mod_str + '.npy';
 descrFits = helper_fcns.np_smart_load(dataPath + fLname_full);
 descrFits = descrFits[which_cell-1]; # just get this cell
 
-rvcMod = 1;
+rvcMod = 0;
 rvcSuff = helper_fcns.rvc_mod_suff(rvcMod);
 rvcBase = 'rvcFits_191023';
 rvcFits = helper_fcns.np_smart_load(dataPath + helper_fcns.rvc_fit_name(rvcBase, rvcMod));
@@ -97,6 +98,11 @@ f1 = resps[1]; # power at fundamental freq. of stimulus
 
 plotThresh = 1e-1;
 maxResp = np.max(np.max(f1['mean']));
+minResp = np.nanmin(f1['mean'].flatten());
+if zSub == 1:
+  respAdj = minResp-1;
+else:
+  respAdj = np.array([0]);
 
 f, ax = plt.subplots(1, 2, figsize=(35, 20), sharey=True);
  
@@ -110,7 +116,7 @@ for c in reversed(range(nCons)):
     respAbBaseline = np.reshape(f1['mean'][c, val_sfs], (len(val_sfs), ));
     respVar = np.reshape(f1['sem'][c, val_sfs], (len(val_sfs), )); 
     # DO NOT actually plot error bar on these...
-    ax[0].plot(all_sfs[val_sfs], respAbBaseline, '-o', clip_on=False, color=col, label=str(np.round(all_cons[c], conDig)))
+    ax[0].plot(all_sfs[val_sfs], respAbBaseline - respAdj, '-o', clip_on=False, color=col, label=str(np.round(all_cons[c], conDig)))
  
     # then descriptive fit
     sfs_plot = np.geomspace(all_sfs[val_sfs[0]], all_sfs[val_sfs[-1]], 100);
@@ -121,7 +127,7 @@ for c in reversed(range(nCons)):
 for i in range(2):
   #ax[i].set_aspect('equal', 'box'); 
   ax[i].set_xlim((0.5*np.min(all_sfs[val_sfs]), 1.2*np.max(all_sfs[val_sfs])));
-  #ax.set_ylim((5e-2, 1.5*maxResp));
+  ax[i].set_ylim((5e-2, 1.5*maxResp));
 
   #ax.set_xscale('symlog', linthreshx=all_sfs[1]); # all_sfs[0] = 0, but all_sfs[0]>1
   ax[i].set_xscale('log');
@@ -165,7 +171,7 @@ for c in reversed(range(nCons)):
     data_sfs = all_sfs[val_sfs][v_sfs]
 
     # plot data
-    sfsAx[c_plt_ind].errorbar(data_sfs, curr_resps[v_sfs], 
+    sfsAx[c_plt_ind].errorbar(data_sfs, curr_resps[v_sfs] - respAdj, 
                                   curr_sem[v_sfs], fmt='o', clip_on=False);
 
     # plot descriptive model fit and inferred characteristic frequency
@@ -234,7 +240,7 @@ for sf in range(n_v_sfs):
     # organize (measured) responses
     respAbBaseline = np.reshape(f1['mean'][:, sf], (len(all_cons), )); 
     respVar = np.reshape(f1['sem'][:, sf], (len(all_cons), ));
-    ax[plt_y].errorbar(all_cons, respAbBaseline, respVar, fmt='o', clip_on=False, color=col);
+    ax[plt_y].errorbar(all_cons, respAbBaseline - respAdj, respVar, fmt='o', clip_on=False, color=col);
 
     # now plot model
     cons_plot = np.geomspace(np.min(all_cons), np.max(all_cons), 100);
@@ -243,7 +249,7 @@ for sf in range(n_v_sfs):
       rvcModel = helper_fcns.get_rvc_model();
       rvcResps = rvcModel(*prms_curr, cons_plot);
     elif rvcMod == 1 or rvcMod == 2: # naka-rushton (or modified version)
-      rvcResps = hf.naka_rushton(cons_plot, prms_curr)
+      rvcResps = helper_fcns.naka_rushton(cons_plot, prms_curr)
     ax[plt_y].plot(cons_plot, np.maximum(rvcResps, 0.1), 'r--', clip_on=False);
 
     ax[plt_y].set_xscale('log', basex=10); # was previously symlog, linthreshx=0.01
@@ -286,7 +292,7 @@ for sf in reversed(range(n_v_sfs)):
     # plot data
     col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
     respAbBaseline = f1['mean'][:, sf];
-    curr_line, = ax[0].plot(all_cons, respAbBaseline, '-o', clip_on=False, color=col, label=str(np.round(all_sfs[sf], conDig)));
+    curr_line, = ax[0].plot(all_cons, respAbBaseline - respAdj, '-o', clip_on=False, color=col, label=str(np.round(all_sfs[sf], conDig)));
     lines.append(curr_line);
 
     # now plot model
@@ -296,7 +302,7 @@ for sf in reversed(range(n_v_sfs)):
       rvcModel = helper_fcns.get_rvc_model();
       rvcResps = rvcModel(*prms_curr, cons_plot);
     elif rvcMod == 1 or rvcMod == 2: # naka-rushton (or modified version)
-      rvcResps = hf.naka_rushton(cons_plot, prms_curr)
+      rvcResps = helper_fcns.naka_rushton(cons_plot, prms_curr)
     ax[1].plot(cons_plot, np.maximum(rvcResps, 0.1), color=col, \
                      clip_on=False);
 
