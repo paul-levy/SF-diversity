@@ -24,7 +24,7 @@ warnings.filterwarnings('once');
 
 import pdb
 
-plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_cluster.mplstyle');
+plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
 from matplotlib import rcParams
 rcParams['font.size'] = 20;
 rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
@@ -38,10 +38,11 @@ cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
 descrMod  = int(sys.argv[3]);
 descrLoss = int(sys.argv[4]);
-rvcAdj    = int(sys.argv[5]); # if 1, then let's load rvcFits to adjust F1, as needed
-rvcMod    = int(sys.argv[6]);
-if len(sys.argv) > 7:
-  respVar = int(sys.argv[7]);
+descrJnt  = int(sys.argv[5]);
+rvcAdj    = int(sys.argv[6]); # if 1, then let's load rvcFits to adjust F1, as needed
+rvcMod    = int(sys.argv[7]);
+if len(sys.argv) > 8:
+  respVar = int(sys.argv[8]);
 else:
   respVar = 1;
 
@@ -54,7 +55,9 @@ save_loc = loc_base + expDir + 'figures/';
 expName = hf.get_datalist(expDir);
 ### DESCRLIST
 #descrBase = 'descrFits_191003';
-descrBase = 'descrFits_191023';
+descrBase = 'descrFits_191201';
+if descrJnt == 1:
+  descrBase = '%s_joint' % descrBase;
 ### RVCFITS
 #rvcBase = 'rvcFits_191003'; # direc flag & '.npy' are added
 rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
@@ -429,7 +432,9 @@ for d in range(nDisps):
 
 	# organize (measured) responses
         resp_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
-        respPlt = rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(resp_curr, 0.1), '-', clip_on=False, label='data', color=dataClr);
+        var_curr  = np.reshape([respVar[d, sf_ind, v_cons]], (n_cons, ));
+        #rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(resp_curr, 0.1), '-', clip_on=False, label='data', color=dataClr);
+        rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], np.maximum(resp_curr, 0.1), var_curr, fmt='o', linestyle='-', clip_on=False, label='data', color=dataClr);
 
  	# RVC descr model - TODO: Fix this discrepancy between f0 and f1 rvc structure? make both like descrFits?
         if rvcAdj == 1: # i.e. _f1 or non-"_f0" flag on rvcFits
