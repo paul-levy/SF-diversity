@@ -120,8 +120,8 @@ def v1_cell(v1_loc = None, LGN_locs=None, LGN_ids=None, nsteps=12, lmda=1, ctrMu
   ### overhead - set up the parameters which determine the 
   if relToLmda == 1: # default
     sig_ctr = ctrMult*lmda;
-    sig_conn = connMult*sig_ctr;
-    sig_syn = synMult*sig_ctr;
+    sig_conn = connMult*lmda;
+    sig_syn = synMult*lmda;
   else: # we just pass in the values from there
     sig_ctr = ctrMult;
     sig_conn = connMult;
