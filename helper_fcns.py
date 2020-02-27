@@ -138,6 +138,10 @@ import warnings
 ## VI. fitting/analysis for basic characterizations (i.e. NON sfMix* programs, like ori16, etc)
 #######
 # oriCV - return the orientation circular variance measure (Xing et al, 2004)
+# oriTune - return prefOri, oriBW, bestFitParams, struct from optimization call
+# tfTune - return prefTf, tfBW (in octaves)
+# sizeTune - data and model derived metrics, curves for plotting (disk and annulus tuning)
+# rvcTune - returns c50 and conGain value (if it can be computed)
 
 
 ##################################################################
@@ -3432,3 +3436,116 @@ def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False):
 
   return tfPref, tfBWlog;
 
+def sizeTune(diskSize, annSize, diskResps, annResps, stepSize=0.05):
+  ''' Analysis as in Cavanaugh, Bair, Movshon (2002a)
+      Inputs:
+      - stepSize is used to determine the steps (in diameter) we use to evaluate the model
+        // because we are approximating an integral
+      Returns:
+      - suppression index (calculated from responses, alone)
+      - 
+  '''
+  np = numpy;
+
+  ###########  
+  ### first, data-derived measures
+  ###########
+  metrics_data = dict();
+
+  rOpt = np.max(diskResps);  
+  rSupp = diskResps[-1];
+
+  supprInd_data = np.divide(rOpt - rSupp, rOpt);
+  gsf_data = diskSize[np.argmax(diskResps)]; # grating summation field
+
+  metrics_data['sInd'] = supprInd_data;
+  metrics_data['gsf'] = gsf_data;
+
+  ###########
+  ### now, let's fit a ratio of gaussians (eq. 9, fig. 6)
+  ###########
+  const_term = 2/np.sqrt(np.pi);
+  # extent is separate for center/surround; diam is/are the stimulus diameter/s
+  gauss_form = lambda extent, diam: np.square(const_term * np.trapz(np.exp(-np.square(np.divide(diam, extent))), x=diam));
+  full_resp = lambda kC, exC, kSrat, exSrat, diam: np.divide(kC*gauss_form(exC, diam), 1 + kSrat*kC*gauss_form(exC*exSrat, diam));
+
+  ## set bounds
+  kC_bound = (0, None);
+  kSrat_bound = (0, 1); # ensure kS is less than kC
+  exC_bound = (0, None);
+  exSrat_bound = (1, None); # i.e. exS = exC*exSrat must always be > exC
+  allBounds = (kC_bound, exC_bound, kSrat_bound, exSrat_bound);
+
+  ## initialize parameters
+  kC_init = rOpt;
+  kSrat_init = 0.3;
+  exC_init = gsf_data;
+  exSrat_init = 2;
+  init_params = [kC_init, exC_init, kSrat_init, exSrat_init];
+
+  diams_up_to = lambda x: np.arange(0, x, stepSize);
+
+  all_disk_comb = [diams_up_to(x) for x in diskSize];
+  all_resps = lambda params: [full_resp(*params, x) for x in all_disk_comb];
+  fit_wt = np.ones_like(diskResps); # for now, assume equal weight for all points
+
+  obj = lambda params: np.dot(fit_wt, np.square(all_resps(params) - diskResps));
+  wax = opt.minimize(obj, init_params, bounds=allBounds);
+  opt_params = wax['x']; 
+
+  # now, infer measures from the model fit
+  plt_diams = np.arange(0, np.max(diskSize), stepSize);
+  plt_diam_lists = [diams_up_to(x) for x in plt_diams];
+  plt_resps = [full_resp(*opt_params, x) for x in plt_diam_lists];
+
+  max_mod = np.max(plt_resps);
+  gsf_mod = plt_diam_lists[np.argmax(plt_resps)][-1]; # get the list with the maximum response, and get the last elem of that list (i.e. max size)
+
+  plat_cutoff = 1.05*plt_resps[-1];
+  plt_min = np.argmin(np.square(plt_resps - plat_cutoff));
+  plat_val = plt_resps[plt_min];
+  surr_diam_mod = plt_diam_lists[plt_min];
+
+  supprInd_mod = np.divide(max_mod-plat_val, max_mod);
+
+  ###########  
+  ### model-derived annulus tuning?
+  ###########
+  anns_list = np.arange(0, np.max(annSize), stepSize);
+  anns_from = lambda x: np.arange(x, np.max(diskSize), stepSize);
+  plt_ann_lists = [anns_from(x) for x in anns_list];
+  ann_resps = [full_resp(*opt_params, x) for x in plt_ann_lists];
+
+  amrf_val = 0.05 * max_mod;
+  amrf = anns_list[np.argmin(np.square(ann_resps - amrf_val))];
+
+  ###########  
+  ### now, save the model-derived measures
+  ###########
+  metrics_mod = dict();
+  metrics_mod['sInd'] = supprInd_mod;
+  metrics_mod['gsf'] = gsf_mod;
+  metrics_mod['surrDiam'] = surr_diam_mod;
+  metrics_mod['amrf'] = amrf;
+
+  # for plotting smooth tuning curve
+  to_plot = dict();
+  to_plot['diams'] = plt_diams;
+  to_plot['resps'] = plt_resps;
+  to_plot['ann'] = anns_list;
+  to_plot['ann_resp'] = ann_resps;
+ 
+  return metrics_data, metrics_mod, to_plot;
+
+def rvcTune(rvcVals, rvcResps, rvcResps_std, rvcMod=1):
+  ''' Response versus contrast!
+      Default form is naka_rushton (mod #1)
+  '''
+
+  # rvc_fit works on vectorized data, so wrap our single values...
+  modEqn, optParam, conGain, loss = rvc_fit([rvcResps], [rvcVals], var=[rvcResps_std], mod=rvcMod);
+  opt_params = optParam[0];
+
+  c50 = c50_empirical(rvcMod, opt_params);
+
+  return c50, conGain[0];
