@@ -1539,7 +1539,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel):
         range_baseline = (0, 3);
     else:
         range_baseline = (0.5 * base_rate, 1.5 * base_rate);
-    range_amp = (0.5 * max_resp, 1.25 * max_resp);
+    range_amp = (0.5 * maxResp, 1.25 * maxResp);
 
     max_sf_index = np.argmax(resps_curr); # what sf index gives peak response?
     mu_init = valSfVals[max_sf_index];
@@ -1828,7 +1828,7 @@ def compute_SF_BW(fit, height, sf_range):
 
     # otherwise we don't have defined BW!
     
-    return SF, bw_log
+    return SF, bw_log;
 
 def fix_params(params_in):
 
@@ -3338,7 +3338,7 @@ def getConstraints(fitType):
 ##################################################################
 ##################################################################
 
-def oriCV(oriVals, oriResps):
+def oriCV(oriVals, oriResps, baselineSub = False):
   ''' From Xing, Ringach, Shapley, and Hawken (2004), compute the orientation circular variance
       defined as 1 - divide(magnitude of summmed response vector, sum of all magnitudes)
       where the above numerator takes into account the angle of the stimulus
@@ -3350,7 +3350,85 @@ def oriCV(oriVals, oriResps):
   np = numpy;
 
   oriAsRad = np.deg2rad(oriVals);
+  if baselineSub:
+    oriResps = oriResps - np.min(oriResps);
   numer = np.abs(np.dot(oriResps, np.exp(2j*oriAsRad)));
   denom = np.sum(oriResps);
 
   return 1 - np.divide(numer, denom);
+
+def oriTune(oriVals, oriResps, oriResps_std=None, modMinZero=True, baselineSub = False):
+  ''' The von Mises function:
+        - a scales the height of the tuning curve
+        - b determines the tuning band-width
+        - xc is the location of the tuning curve peak
+        - θ is the direction (not a fitted parameter; based on data)
+        - m is thespontaneous firing rate of the cell. 
+  '''
+
+  np = numpy;
+
+  if baselineSub:
+    oriResps = oriResps - np.min(oriResps);
+
+  k = 0.01*np.max(oriResps);
+  if oriResps_std is None:
+    sigma = np.ones_like(oriResps);
+  else:
+    sigma = oriResps_std;
+
+  oriAsRad = np.deg2rad(oriVals);
+  if modMinZero:
+    mod = lambda a,b,xc,m,theta: np.maximum(0, a*np.exp(b*np.cos(theta - xc)) + m);
+  else:
+    mod = lambda a,b,xc,m,theta: a*np.exp(b*np.cos(theta - xc)) + m;
+    #mod = lambda prms: prms[0]*np.exp(prms[1]*np.cos(oriAsRad - prms[2])) + prms[3];
+ 
+  init_params = [np.max(oriResps)-np.min(oriResps), 0.5, oriVals[np.argmax(oriResps)], np.min(oriResps)];
+  # and set the bounds
+  allBounds = ((0, None), (0, None), (0, np.pi), (0, None));
+
+  # squared error - with the k+sig^2 adjustment
+  obj = lambda params: np.sum(np.divide(np.square(oriResps - mod(*params, oriAsRad)), (k+np.square(sigma))));
+  wax = opt.minimize(obj, init_params, bounds=allBounds);
+  #wax = opt.minimize(obj, init_params);
+
+  oriParams = wax['x'];
+  oriPrefRad = oriParams[2];
+  oriPref = np.rad2deg(oriPrefRad);
+  halfHeight = oriParams[-1] + 0.5 * (mod(*oriParams, oriPrefRad) - oriParams[-1]); # half-height relative to the baseline/pedestal
+  bwObj = lambda x: np.square(mod(*oriParams, x) - halfHeight);
+  bwLimsLow = opt.minimize(bwObj, oriPrefRad-0.1, bounds=((oriPrefRad - np.pi, oriPrefRad), ));
+  bwLimsHigh = opt.minimize(bwObj, oriPrefRad+0.1, bounds=((oriPrefRad, oriPrefRad + np.pi), ));
+  oriBW = np.abs(np.rad2deg(bwLimsHigh['x'] - bwLimsLow['x']));
+  # then, let's compute the prefOri and oriBandwidth
+
+  return oriPref, oriBW[0], oriParams, wax;
+
+def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False):
+  ''' Temporal frequency tuning!
+      Let's assume we use two-halved gaussian (flexible_Gauss, as above)
+      - respFloor, respRelFloor, tfPref, sigmaLow, sigmaHigh
+  '''
+  np = numpy;
+
+  mod = lambda params, tfVals: flexible_Gauss(params, stim_sf=tfVals);
+  init_params = dog_init_params(tfResps, np.min(tfResps), tfVals, tfVals, DoGmodel=0);
+  # set bounds
+  min_bw = 1/4; max_bw = 10; # ranges in octave bandwidth
+  bound_baseline = (0, np.max(tfResps));
+  bound_range = (0, 1.5*np.max(tfResps));
+  bound_mu = (np.min(tfVals), np.max(tfVals));
+  bound_sig = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
+  allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
+
+  modObj = lambda params: numpy.sum(numpy.square(mod(params, tfVals) - tfResps));
+
+  wax = opt.minimize(modObj, init_params, bounds=allBounds);
+  tfParams = wax['x'];
+  
+  tfPref = get_prefSF(tfParams);
+  tfBWbounds, tfBWlog = compute_SF_BW(tfParams, 1/2.0, sf_range=bound_mu);
+
+  return tfPref, tfBWlog;
+
