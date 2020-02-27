@@ -100,7 +100,7 @@ import warnings
 # jl_get_metric_byCon()
 
 ######
-## IV. return to fits/analysis
+## IV. return to fits/analysis (part ii)
 ######
 
 # blankResp - return mean/sem of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
@@ -133,6 +133,12 @@ import warnings
 # evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
 # setNormTypeArr - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters; DEPRECATED?
 # getConstraints - return the constraints used in model optimization
+
+#######
+## VI. fitting/analysis for basic characterizations (i.e. NON sfMix* programs, like ori16, etc)
+#######
+# oriCV - return the orientation circular variance measure (Xing et al, 2004)
+
 
 ##################################################################
 ##################################################################
@@ -3323,3 +3329,28 @@ def getConstraints(fitType):
       return (zero,one,two,three,four,five,six,seven,eight,nine,ten);
     else: # mistake!
       return [];
+
+##################################################################
+##################################################################
+##################################################################
+### VI. Basic characterization analysis
+##################################################################
+##################################################################
+##################################################################
+
+def oriCV(oriVals, oriResps):
+  ''' From Xing, Ringach, Shapley, and Hawken (2004), compute the orientation circular variance
+      defined as 1 - divide(magnitude of summmed response vector, sum of all magnitudes)
+      where the above numerator takes into account the angle of the stimulus
+      - Interpretation: low circular variance is high selectivity
+
+      - NOTE: we assume that oriVals are in deg (and we will convert to radians)
+              we also assume oriResps is just nX1, where n is #oriVals
+  '''
+  np = numpy;
+
+  oriAsRad = np.deg2rad(oriVals);
+  numer = np.abs(np.dot(oriResps, np.exp(2j*oriAsRad)));
+  denom = np.sum(oriResps);
+
+  return 1 - np.divide(numer, denom);
