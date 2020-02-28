@@ -3,7 +3,7 @@ from scipy.stats import norm, mode, poisson, nbinom, sem
 from scipy.stats.mstats import gmean as geomean
 from numpy.matlib import repmat
 import scipy.optimize as opt
-import os
+import os, sys
 import importlib as il
 import itertools
 from time import sleep
@@ -142,6 +142,8 @@ import warnings
 # tfTune - return prefTf, tfBW (in octaves)
 # sizeTune - data and model derived metrics, curves for plotting (disk and annulus tuning)
 # rvcTune - returns c50 and conGain value (if it can be computed)
+
+# get_basic_tunings - wrapper for the above, and calls to ExpoAnalysisTools/python/readBasicCharacterization
 
 
 ##################################################################
@@ -1070,7 +1072,7 @@ def get_rvc_model():
   '''
   rvc_model = lambda b, k, c0, cons: b + k*numpy.log(1+numpy.divide(cons, c0));
 
-  return rvc_model  
+  return rvc_model;
 
 def naka_rushton(con, params):
     ''' this is the classic naka rushton form of RVC - type 1
@@ -3460,6 +3462,8 @@ def sizeTune(diskSize, annSize, diskResps, annResps, stepSize=0.05):
 
   metrics_data['sInd'] = supprInd_data;
   metrics_data['gsf'] = gsf_data;
+  metrics_data['maxResp'] = rOpt;
+  metrics_data['platResp'] = rSupp;
 
   ###########
   ### now, let's fit a ratio of gaussians (eq. 9, fig. 6)
@@ -3504,7 +3508,7 @@ def sizeTune(diskSize, annSize, diskResps, annResps, stepSize=0.05):
   plat_cutoff = 1.05*plt_resps[-1];
   plt_min = np.argmin(np.square(plt_resps - plat_cutoff));
   plat_val = plt_resps[plt_min];
-  surr_diam_mod = plt_diam_lists[plt_min];
+  surr_diam_mod = plt_diams[plt_min];
 
   supprInd_mod = np.divide(max_mod-plat_val, max_mod);
 
@@ -3527,6 +3531,8 @@ def sizeTune(diskSize, annSize, diskResps, annResps, stepSize=0.05):
   metrics_mod['gsf'] = gsf_mod;
   metrics_mod['surrDiam'] = surr_diam_mod;
   metrics_mod['amrf'] = amrf;
+  metrics_mod['maxResp'] = max_mod;
+  metrics_mod['platResp'] = plat_val;
 
   # for plotting smooth tuning curve
   to_plot = dict();
@@ -3543,9 +3549,69 @@ def rvcTune(rvcVals, rvcResps, rvcResps_std, rvcMod=1):
   '''
 
   # rvc_fit works on vectorized data, so wrap our single values...
-  modEqn, optParam, conGain, loss = rvc_fit([rvcResps], [rvcVals], var=[rvcResps_std], mod=rvcMod);
+  _, optParam, conGain, loss = rvc_fit([rvcResps], [rvcVals], var=[rvcResps_std], mod=rvcMod);
   opt_params = optParam[0];
 
   c50 = c50_empirical(rvcMod, opt_params);
 
-  return c50, conGain[0];
+  return c50, conGain[0], opt_params;
+
+####
+
+def get_basic_tunings(basicPaths, basicProgNames):
+  ''' wrapper function used to get the derived measures for the basic characterizations
+  '''
+
+  from build_basics_list import prog_name
+  sys.path.append('ExpoAnalysisTools/python/');
+  import readBasicCharacterization as rbc
+
+  basic_outputs = dict();
+
+  for curr_name, prog in zip(basicPaths, basicProgNames):
+    try:
+      prog_curr = prog_name(curr_name);
+      if 'sf' in prog:
+        sf = rbc.readSf11(curr_name, prog_curr);
+        basic_outputs['sf'] = []; # TODO: for now, we don't have SF basic tuning (redundant...but should add)
+      if 'rv' in prog:
+        rv = rbc.readRVC(curr_name, prog_curr);
+        if 'LGN' in curr_name:
+          rvcMod = 0; # this is the model we use for LGN RVCs
+        else:
+          rvcMod = 1; # otherwise, naka-rushton
+        c50, cg, _  = rvcTune(rv['conVals'], rv['counts_mean'], rv['counts_std'], rvcMod);
+        rvc_dict = dict();
+        rvc_dict['c50'] = c50; rvc_dict['conGain'] = cg;
+        basic_outputs['rvc'] = rvc_dict;
+      if 'tf' in prog:
+        tf = rbc.readTf11(curr_name, prog_curr);
+        tfPref, tfBW = tfTune(tf['tfVals'], tf['counts_mean'][:,0]); # ignore other direction, if it's there...
+        tf_dict = dict();
+        tf_dict['tfPref'] = tfPref;
+        tf_dict['tfBW_oct'] = tfBW;
+        basic_outputs['tf'] = tf_dict;
+      if 'rf' in prog:
+        rf = rbc.readRFsize10(curr_name, prog_curr);
+        data, mod, _ = sizeTune(rf['diskVals'], rf['annulusVals'], rf['counts_mean'][:,0], rf['counts_mean'][:,1]);
+        rf_dict = dict();
+        rf_dict['gsf_data'] = data['gsf']
+        rf_dict['suprInd_data'] = data['sInd']
+        rf_dict['gsf_model'] = mod['gsf']
+        rf_dict['suprInd_model'] = mod['sInd']
+        rf_dict['surrDiam_model'] = mod['surrDiam'];
+        basic_outputs['rfsize'] = rf_dict;
+      if 'or' in prog:
+        ori = rbc.readOri16(curr_name, prog_curr);
+        ori_vals, mean, std = ori['oriVals'], ori['counts_mean'], ori['counts_std'];
+        ori_dict = dict();
+        ori_dict['cv'] = oriCV(ori_vals, mean);
+        pref, bw, _, _ = oriTune(ori_vals, mean);
+        ori_dict['bw'] = bw;
+        ori_dict['pref'] = pref;
+        basic_outputs['ori'] = ori_dict
+      
+    except:
+      basic_outputs[prog] = [];
+
+  return basic_outputs;
