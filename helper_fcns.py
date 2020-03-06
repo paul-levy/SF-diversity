@@ -32,7 +32,7 @@ import warnings
 # fitType_suffix  - get the string corresponding to a fit (i.e. normalization) type
 # lossType_suffix - get the string corresponding to a loss type
 # chiSq_suffix    - what suffix (e.g. 'a' or 'c') given the chiSq multiplier value
-# fitList_name    - put together the name for the fitlist
+# fitList_name    - put together the name for the fitlist 
 # phase_fit_name  
 # descrMod_name   - returns string for descriptive model fit
 # descrLoss_name  - returns string for descriptive model loss type
@@ -3438,7 +3438,7 @@ def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False):
 
   return tfPref, tfBWlog;
 
-def sizeTune(diskSize, annSize, diskResps, annResps, stepSize=0.05):
+def sizeTune(diskSize, annSize, diskResps, annResps, diskStd, annStd, stepSize=0.05):
   ''' Analysis as in Cavanaugh, Bair, Movshon (2002a)
       Inputs:
       - stepSize is used to determine the steps (in diameter) we use to evaluate the model
@@ -3488,12 +3488,16 @@ def sizeTune(diskSize, annSize, diskResps, annResps, stepSize=0.05):
   init_params = [kC_init, exC_init, kSrat_init, exSrat_init];
 
   diams_up_to = lambda x: np.arange(0, x, stepSize);
+  anns_from = lambda x: np.arange(x, np.max(diskSize), stepSize);
 
   all_disk_comb = [diams_up_to(x) for x in diskSize];
   all_resps = lambda params: [full_resp(*params, x) for x in all_disk_comb];
-  fit_wt = np.ones_like(diskResps); # for now, assume equal weight for all points
+  all_ann_comb = [anns_from(x) for x in annSize];
+  all_resps_ann = lambda params: [full_resp(*params, x) for x in all_ann_comb];
+  #fit_wt = np.ones_like(diskResps); # for now, assume equal weight for all points
+  fit_wt = np.divide(1, np.maximum(2, np.hstack((diskStd, annStd))));
 
-  obj = lambda params: np.dot(fit_wt, np.square(all_resps(params) - diskResps));
+  obj = lambda params: np.dot(fit_wt, np.hstack((np.square(all_resps(params) - diskResps), np.square(all_resps_ann(params) - annResps))));
   wax = opt.minimize(obj, init_params, bounds=allBounds);
   opt_params = wax['x']; 
 
