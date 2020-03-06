@@ -1,4 +1,4 @@
-function sfMixLGNLoad(unitLabels, varargin)
+function sfMixLoad(unitLabels, varargin)
 
 % sfMixLGNLoad       Sorting of sfMixLGN xml-files.
 %
