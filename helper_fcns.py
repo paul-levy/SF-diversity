@@ -1876,6 +1876,16 @@ def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
     pred_spikes, _ = DiffOfGauss(*params, stim_sf=stim_sf);
   return pred_spikes;
 
+def get_rvcResp(params, curr_cons, rvcMod):
+  # returns only pred_spikes
+  if rvcMod == 0:
+    mod = get_rvc_model();
+    pred_spikes = mod(*params, curr_cons);
+  elif rvcMod == 1 or rvcMod == 2:
+    pred_spikes = naka_rushton(curr_cons, params);
+  return pred_spikes;
+
+
 ##################################################################
 ##################################################################
 ##################################################################
@@ -3354,7 +3364,6 @@ def oriCV(oriVals, oriResps, baselineSub = False):
               we also assume oriResps is just nX1, where n is #oriVals
   '''
   np = numpy;
-
   oriAsRad = np.deg2rad(oriVals);
   if baselineSub:
     oriResps = oriResps - np.min(oriResps);
@@ -3363,15 +3372,16 @@ def oriCV(oriVals, oriResps, baselineSub = False):
 
   return 1 - np.divide(numer, denom);
 
-def oriTune(oriVals, oriResps, oriResps_std=None, modMinZero=True, baselineSub = False):
-  ''' The von Mises function:
+def oriTune(oriVals, oriResps, oriResps_std=None, baselineSub = False, nOpts = 100):
+  ''' Double Von Mises function as in Wang and Movshon, 2014
+      The von Mises function:
         - a scales the height of the tuning curve
-        - b determines the tuning band-width
+        - ds scales the non-preferred direction of the tuning curve
+        - w determines the tuning band-width
         - xc is the location of the tuning curve peak
         - θ is the direction (not a fitted parameter; based on data)
-        - m is thespontaneous firing rate of the cell. 
+        - r0 is thespontaneous firing rate of the cell. 
   '''
-
   np = numpy;
 
   if baselineSub:
@@ -3384,34 +3394,37 @@ def oriTune(oriVals, oriResps, oriResps_std=None, modMinZero=True, baselineSub =
     sigma = oriResps_std;
 
   oriAsRad = np.deg2rad(oriVals);
-  if modMinZero:
-    mod = lambda a,b,xc,m,theta: np.maximum(0, a*np.exp(b*np.cos(theta - xc)) + m);
-  else:
-    mod = lambda a,b,xc,m,theta: a*np.exp(b*np.cos(theta - xc)) + m;
-    #mod = lambda prms: prms[0]*np.exp(prms[1]*np.cos(oriAsRad - prms[2])) + prms[3];
+  vonMis = lambda w,xc,ds,theta: np.exp(np.cos(theta-xc)/w) + ds*np.exp(np.cos(theta-xc-np.pi)/w);
+  mod = lambda a,w,xc,ds,r0,theta: r0 + a*(vonMis(w,xc,ds,theta) - np.min(vonMis(w,xc,ds,theta)));
  
-  init_params = [np.max(oriResps)-np.min(oriResps), 0.5, oriVals[np.argmax(oriResps)], np.min(oriResps)];
   # and set the bounds
-  allBounds = ((0, None), (0, None), (0, np.pi), (0, None));
+  allBounds = ((0, None), (0, None), (0, 2*np.pi), (0,1), (0, None));
 
   # squared error - with the k+sig^2 adjustment
+  best_params = []; best_loss = np.nan; 
   obj = lambda params: np.sum(np.divide(np.square(oriResps - mod(*params, oriAsRad)), (k+np.square(sigma))));
-  wax = opt.minimize(obj, init_params, bounds=allBounds);
-  #wax = opt.minimize(obj, init_params);
 
-  oriParams = wax['x'];
+  for i in np.arange(nOpts):
+    init_params = [random_in_range([0.5, 2])[0] * (np.max(oriResps)-np.min(oriResps)), random_in_range([0.05, 0.3])[0], random_in_range([-0.2, 0.2])[0] + oriAsRad[np.argmax(oriResps)], random_in_range([0.1, 0.8])[0], random_in_range([0.1, 1.5])[0]*np.min(oriResps)];
+    wax = opt.minimize(obj, init_params, bounds=allBounds);
+    if best_loss is np.nan or wax['fun'] < best_loss:
+      best_loss = wax['fun'];
+      best_params = wax['x'];
+
+  oriParams = best_params;
   oriPrefRad = oriParams[2];
+  oriDS = oriParams[3];
+  # then, let's compute the prefOri and oriBandwidth
   oriPref = np.rad2deg(oriPrefRad);
   halfHeight = oriParams[-1] + 0.5 * (mod(*oriParams, oriPrefRad) - oriParams[-1]); # half-height relative to the baseline/pedestal
   bwObj = lambda x: np.square(mod(*oriParams, x) - halfHeight);
   bwLimsLow = opt.minimize(bwObj, oriPrefRad-0.1, bounds=((oriPrefRad - np.pi, oriPrefRad), ));
   bwLimsHigh = opt.minimize(bwObj, oriPrefRad+0.1, bounds=((oriPrefRad, oriPrefRad + np.pi), ));
   oriBW = np.abs(np.rad2deg(bwLimsHigh['x'] - bwLimsLow['x']));
-  # then, let's compute the prefOri and oriBandwidth
+  
+  return oriPref, oriBW[0], oriDS, oriParams, mod, wax;
 
-  return oriPref, oriBW[0], oriParams, wax;
-
-def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False):
+def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False, nOpts = 100):
   ''' Temporal frequency tuning!
       Let's assume we use two-halved gaussian (flexible_Gauss, as above)
       - respFloor, respRelFloor, tfPref, sigmaLow, sigmaHigh
@@ -3419,7 +3432,6 @@ def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False):
   np = numpy;
 
   mod = lambda params, tfVals: flexible_Gauss(params, stim_sf=tfVals);
-  init_params = dog_init_params(tfResps, np.min(tfResps), tfVals, tfVals, DoGmodel=0);
   # set bounds
   min_bw = 1/4; max_bw = 10; # ranges in octave bandwidth
   bound_baseline = (0, np.max(tfResps));
@@ -3428,17 +3440,38 @@ def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False):
   bound_sig = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
   allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
 
+  # now, run the optimization
+  best_params = []; best_loss = np.nan; 
   modObj = lambda params: numpy.sum(numpy.square(mod(params, tfVals) - tfResps));
+  for i in np.arange(nOpts):
+    init_params = dog_init_params(tfResps, np.min(tfResps), tfVals, tfVals, DoGmodel=0);
+    wax = opt.minimize(modObj, init_params, bounds=allBounds);
+    if best_loss is np.nan or wax['fun'] < best_loss:
+      best_loss = wax['fun'];
+      best_params = wax['x'];
 
-  wax = opt.minimize(modObj, init_params, bounds=allBounds);
-  tfParams = wax['x'];
+  tfParams = best_params;
   
   tfPref = get_prefSF(tfParams);
   tfBWbounds, tfBWlog = compute_SF_BW(tfParams, 1/2.0, sf_range=bound_mu);
 
-  return tfPref, tfBWlog;
+  # also fit a DoG and measure the characteristic frequency (high freq. cut-off)
+  mod = lambda params, tfVals: DoGsach(*params, tfVals);
+  modObj = lambda params: numpy.sum(numpy.square(mod(params, tfVals) - tfResps));
+  init_params = dog_init_params(tfResps, np.min(tfResps), tfVals, tfVals, 1); # sach is dogModel 1
+  bound_gainCent = (1e-3, None);
+  bound_radiusCent= (1e-3, None);
+  bound_gainSurr = (1e-3, None);
+  bound_radiusSurr= (1e-3, None);
+  allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
 
-def sizeTune(diskSize, annSize, diskResps, annResps, diskStd, annStd, stepSize=0.05):
+  wax = opt.minimize(modObj, init_params, bounds=allBounds);
+  tfParamsDoG = wax['x'];
+  
+
+  return tfPref, tfBWlog, tfParams, tfParamsDoG;
+
+def sizeTune(diskSize, annSize, diskResps, annResps, diskStd, annStd, stepSize=0.01, nOpts=100):
   ''' Analysis as in Cavanaugh, Bair, Movshon (2002a)
       Inputs:
       - stepSize is used to determine the steps (in diameter) we use to evaluate the model
@@ -3475,17 +3508,10 @@ def sizeTune(diskSize, annSize, diskResps, annResps, diskStd, annStd, stepSize=0
 
   ## set bounds
   kC_bound = (0, None);
-  kSrat_bound = (0, 1); # ensure kS is less than kC
-  exC_bound = (0, None);
+  kSrat_bound = (0, None); # ensure kS is less than kC
+  exC_bound = (0, 1);
   exSrat_bound = (1, None); # i.e. exS = exC*exSrat must always be > exC
   allBounds = (kC_bound, exC_bound, kSrat_bound, exSrat_bound);
-
-  ## initialize parameters
-  kC_init = rOpt;
-  kSrat_init = 0.3;
-  exC_init = gsf_data;
-  exSrat_init = 2;
-  init_params = [kC_init, exC_init, kSrat_init, exSrat_init];
 
   diams_up_to = lambda x: np.arange(0, x, stepSize);
   anns_from = lambda x: np.arange(x, np.max(diskSize), stepSize);
@@ -3494,12 +3520,37 @@ def sizeTune(diskSize, annSize, diskResps, annResps, diskStd, annStd, stepSize=0
   all_resps = lambda params: [full_resp(*params, x) for x in all_disk_comb];
   all_ann_comb = [anns_from(x) for x in annSize];
   all_resps_ann = lambda params: [full_resp(*params, x) for x in all_ann_comb];
-  #fit_wt = np.ones_like(diskResps); # for now, assume equal weight for all points
-  fit_wt = np.divide(1, np.maximum(2, np.hstack((diskStd, annStd))));
 
+  ###########  
+  ### LOSS FUNCTION
+  ###########  
+  ### weight by inverse std (including disk AND annulus points)
+  #fit_wt = np.divide(1, np.maximum(2, np.hstack((diskStd, annStd))));
+  ### weight by inverse std (disk ONLY)
+  fit_wt = np.hstack((np.divide(1, np.maximum(5, diskStd)), np.zeros_like(annStd)));
+  ### weight equally - disk ONLY
+  #fit_wt = np.hstack((np.ones_like(diskStd), np.zeros_like(annStd))); # for now, assume equal weight for all points
+  ### weight equally - disk AND annulus
+  #fit_wt = np.hstack((np.ones_like(diskStd), np.ones_like(annStd))); # for now, assume equal weight for all points
+  ###########  
+  ###########  
   obj = lambda params: np.dot(fit_wt, np.hstack((np.square(all_resps(params) - diskResps), np.square(all_resps_ann(params) - annResps))));
-  wax = opt.minimize(obj, init_params, bounds=allBounds);
-  opt_params = wax['x']; 
+
+  best_params = []; best_loss = np.nan;
+  for i in np.arange(nOpts):
+    ## initialize parameters
+    kC_init = random_in_range([1.25, 4])[0] * rOpt;
+    kSrat_init = random_in_range([0.1, 0.3])[0];
+    exC_init = random_in_range([0.1, 0.75])[0];
+    exSrat_init = random_in_range([2, 10])[0];
+    init_params = [kC_init, exC_init, kSrat_init, exSrat_init];
+
+    wax = opt.minimize(obj, init_params, bounds=allBounds);
+    if best_loss is np.nan or wax['fun'] < best_loss:
+      best_loss = wax['fun'];
+      best_params = wax['x'];
+
+  opt_params = best_params;
 
   # now, infer measures from the model fit
   plt_diams = np.arange(0, np.max(diskSize), stepSize);
@@ -3545,7 +3596,7 @@ def sizeTune(diskSize, annSize, diskResps, annResps, diskStd, annStd, stepSize=0
   to_plot['ann'] = anns_list;
   to_plot['ann_resp'] = ann_resps;
  
-  return metrics_data, metrics_mod, to_plot;
+  return metrics_data, metrics_mod, to_plot, opt_params;
 
 def rvcTune(rvcVals, rvcResps, rvcResps_std, rvcMod=1):
   ''' Response versus contrast!
@@ -3571,48 +3622,69 @@ def get_basic_tunings(basicPaths, basicProgNames):
   import readBasicCharacterization as rbc
 
   basic_outputs = dict();
+  basic_outputs['rvc'] = [];
+  basic_outputs['sf'] = [];
+  basic_outputs['rfsize'] = [];
+  basic_outputs['tf'] = [];
+  basic_outputs['ori'] = [];
 
   for curr_name, prog in zip(basicPaths, basicProgNames):
     try:
       prog_curr = prog_name(curr_name);
       if 'sf' in prog:
         sf = rbc.readSf11(curr_name, prog_curr);
-        basic_outputs['sf'] = []; # TODO: for now, we don't have SF basic tuning (redundant...but should add)
+        sf_dict = dict();
+        sf_dict['sf_exp'] = sf;
+        basic_outputs['sf'] = sf_dict; # TODO: for now, we don't have SF basic tuning (redundant...but should add)
       if 'rv' in prog:
         rv = rbc.readRVC(curr_name, prog_curr);
         if 'LGN' in curr_name:
           rvcMod = 0; # this is the model we use for LGN RVCs
         else:
           rvcMod = 1; # otherwise, naka-rushton
-        c50, cg, _  = rvcTune(rv['conVals'], rv['counts_mean'], rv['counts_std'], rvcMod);
+        c50, cg, params  = rvcTune(rv['conVals'], rv['counts_mean'], rv['counts_std'], rvcMod);
         rvc_dict = dict();
         rvc_dict['c50'] = c50; rvc_dict['conGain'] = cg;
+        rvc_dict['params'] = params;
+        rvc_dict['rvcMod'] = rvcMod;
+        rvc_dict['rvc_exp'] = rv;
         basic_outputs['rvc'] = rvc_dict;
       if 'tf' in prog:
         tf = rbc.readTf11(curr_name, prog_curr);
-        tfPref, tfBW = tfTune(tf['tfVals'], tf['counts_mean'][:,0]); # ignore other direction, if it's there...
+        tfPref, tfBW, tfParams, tfParamsDoG = tfTune(tf['tfVals'], tf['counts_mean'][:,0]); # ignore other direction, if it's there...
         tf_dict = dict();
         tf_dict['tfPref'] = tfPref;
         tf_dict['tfBW_oct'] = tfBW;
+        tf_dict['tfParams'] = tfParams;
+        tf_dict['tfParamsDoG'] = tfParamsDoG;
+        tf_dict['charFreq'] = dog_charFreq(tfParamsDoG, DoGmodel=1); # 1 is Sach, that's what is used in tfTune
+        tf_dict['tf_exp'] = tf;
         basic_outputs['tf'] = tf_dict;
       if 'rf' in prog:
         rf = rbc.readRFsize10(curr_name, prog_curr);
-        data, mod, _ = sizeTune(rf['diskVals'], rf['annulusVals'], rf['counts_mean'][:,0], rf['counts_mean'][:,1]);
+        data, mod, to_plot, opt_params = sizeTune(rf['diskVals'], rf['annulusVals'], rf['counts_mean'][:,0], rf['counts_mean'][:,1], rf['counts_std'][:,0], rf['counts_std'][:,1]);
         rf_dict = dict();
         rf_dict['gsf_data'] = data['gsf']
         rf_dict['suprInd_data'] = data['sInd']
         rf_dict['gsf_model'] = mod['gsf']
         rf_dict['suprInd_model'] = mod['sInd']
         rf_dict['surrDiam_model'] = mod['surrDiam'];
+        rf_dict['to_plot'] = to_plot;
+        rf_dict['params'] = opt_params;
+        rf_dict['rf_exp'] = rf;
         basic_outputs['rfsize'] = rf_dict;
       if 'or' in prog:
         ori = rbc.readOri16(curr_name, prog_curr);
         ori_vals, mean, std = ori['oriVals'], ori['counts_mean'], ori['counts_std'];
         ori_dict = dict();
         ori_dict['cv'] = oriCV(ori_vals, mean);
-        pref, bw, _, _ = oriTune(ori_vals, mean);
+        pref, bw, oriDS, params, mod, _ = oriTune(ori_vals, mean); # ensure the oriVals are in radians
+        ori_dict['DS'] = oriDS;
         ori_dict['bw'] = bw;
         ori_dict['pref'] = pref;
+        ori_dict['params'] = params;
+        ori_dict['oriMod'] = mod;
+        ori_dict['ori_exp'] = ori;
         basic_outputs['ori'] = ori_dict
       
     except:
