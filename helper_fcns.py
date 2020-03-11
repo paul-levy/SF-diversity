@@ -3372,8 +3372,9 @@ def oriCV(oriVals, oriResps, baselineSub = False):
 
   return 1 - np.divide(numer, denom);
 
-def oriTune(oriVals, oriResps, oriResps_std=None, baselineSub = False, nOpts = 100):
+def oriTune(oriVals, oriResps, oriResps_std=None, baselineSub = False, nOpts = 30):
   ''' Double Von Mises function as in Wang and Movshon, 2014
+      - with one modification: normalize by resp at pref ori to make "a" parameterization more clear
       The von Mises function:
         - a scales the height of the tuning curve
         - ds scales the non-preferred direction of the tuning curve
@@ -3395,7 +3396,7 @@ def oriTune(oriVals, oriResps, oriResps_std=None, baselineSub = False, nOpts = 1
 
   oriAsRad = np.deg2rad(oriVals);
   vonMis = lambda w,xc,ds,theta: np.exp(np.cos(theta-xc)/w) + ds*np.exp(np.cos(theta-xc-np.pi)/w);
-  mod = lambda a,w,xc,ds,r0,theta: r0 + a*(vonMis(w,xc,ds,theta) - np.min(vonMis(w,xc,ds,theta)));
+  mod = lambda a,w,xc,ds,r0,theta: r0 + a*np.divide(vonMis(w,xc,ds,theta) - np.min(vonMis(w,xc,ds,theta)), vonMis(w,xc,ds,xc) - np.min(vonMis(w,xc,ds,theta)));
  
   # and set the bounds
   allBounds = ((0, None), (0, None), (0, 2*np.pi), (0,1), (0, None));
@@ -3404,16 +3405,30 @@ def oriTune(oriVals, oriResps, oriResps_std=None, baselineSub = False, nOpts = 1
   best_params = []; best_loss = np.nan; 
   obj = lambda params: np.sum(np.divide(np.square(oriResps - mod(*params, oriAsRad)), (k+np.square(sigma))));
 
+  baseline = np.min(oriResps);
+  maxResp = np.max(oriResps);
+  oriEst = oriAsRad[np.argmax(oriResps)];
+  nonPD = np.where(oriVals == np.mod(180 + oriVals[np.argmax(oriResps)], 360))[0];
+  dsEst = np.divide(oriResps[nonPD], maxResp);
+
   for i in np.arange(nOpts):
-    init_params = [random_in_range([0.5, 2])[0] * (np.max(oriResps)-np.min(oriResps)), random_in_range([0.05, 0.3])[0], random_in_range([-0.2, 0.2])[0] + oriAsRad[np.argmax(oriResps)], random_in_range([0.1, 0.8])[0], random_in_range([0.1, 1.5])[0]*np.min(oriResps)];
-    wax = opt.minimize(obj, init_params, bounds=allBounds);
+    init_a = random_in_range([0.75, 1.25])[0] * (maxResp - baseline);
+    init_w = random_in_range([0.2, 0.7])[0];
+    init_xc = random_in_range([-0.5, 0.5])[0] + oriEst;
+    init_ds = dsEst + random_in_range([-0.1, 0.1])[0];
+    init_r0 = random_in_range([0.5, 1])[0] * np.min(oriResps)
+    init_params = [init_a, init_w, init_xc, init_ds, init_r0];
+    if np.mod(i, 2) == 0:
+      wax = opt.minimize(obj, init_params, bounds=allBounds, method='TNC');
+    else:
+      wax = opt.minimize(obj, init_params, bounds=allBounds, method='L-BFGS-B');
     if best_loss is np.nan or wax['fun'] < best_loss:
       best_loss = wax['fun'];
       best_params = wax['x'];
 
   oriParams = best_params;
   oriPrefRad = oriParams[2];
-  oriDS = oriParams[3];
+  oriDS = 1-oriParams[3];
   # then, let's compute the prefOri and oriBandwidth
   oriPref = np.rad2deg(oriPrefRad);
   halfHeight = oriParams[-1] + 0.5 * (mod(*oriParams, oriPrefRad) - oriParams[-1]); # half-height relative to the baseline/pedestal
@@ -3424,7 +3439,7 @@ def oriTune(oriVals, oriResps, oriResps_std=None, baselineSub = False, nOpts = 1
   
   return oriPref, oriBW[0], oriDS, oriParams, mod, wax;
 
-def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False, nOpts = 100):
+def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False, nOpts = 30):
   ''' Temporal frequency tuning!
       Let's assume we use two-halved gaussian (flexible_Gauss, as above)
       - respFloor, respRelFloor, tfPref, sigmaLow, sigmaHigh
@@ -3440,12 +3455,17 @@ def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False, nOpts = 100):
   bound_sig = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
   allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
 
+  ######
   # now, run the optimization
+  ######
   best_params = []; best_loss = np.nan; 
   modObj = lambda params: numpy.sum(numpy.square(mod(params, tfVals) - tfResps));
   for i in np.arange(nOpts):
     init_params = dog_init_params(tfResps, np.min(tfResps), tfVals, tfVals, DoGmodel=0);
-    wax = opt.minimize(modObj, init_params, bounds=allBounds);
+    if np.mod(i, 2) == 0:
+      wax = opt.minimize(modObj, init_params, bounds=allBounds, method='TNC');
+    else:
+      wax = opt.minimize(modObj, init_params, bounds=allBounds, method='L-BFGS-B');
     if best_loss is np.nan or wax['fun'] < best_loss:
       best_loss = wax['fun'];
       best_params = wax['x'];
@@ -3455,23 +3475,33 @@ def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False, nOpts = 100):
   tfPref = get_prefSF(tfParams);
   tfBWbounds, tfBWlog = compute_SF_BW(tfParams, 1/2.0, sf_range=bound_mu);
 
+  ######
   # also fit a DoG and measure the characteristic frequency (high freq. cut-off)
-  mod = lambda params, tfVals: DoGsach(*params, tfVals);
-  modObj = lambda params: numpy.sum(numpy.square(mod(params, tfVals) - tfResps));
-  init_params = dog_init_params(tfResps, np.min(tfResps), tfVals, tfVals, 1); # sach is dogModel 1
+  ######
   bound_gainCent = (1e-3, None);
   bound_radiusCent= (1e-3, None);
   bound_gainSurr = (1e-3, None);
   bound_radiusSurr= (1e-3, None);
   allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
 
-  wax = opt.minimize(modObj, init_params, bounds=allBounds);
-  tfParamsDoG = wax['x'];
-  
+  best_params = []; best_loss = np.nan; 
+  mod = lambda params, tfVals: DoGsach(*params, tfVals);
+  modObj = lambda params: numpy.sum(numpy.square(mod(params, tfVals) - tfResps));
+  for i in np.arange(nOpts):
+    init_params = dog_init_params(tfResps, np.min(tfResps), tfVals, tfVals, 1); # sach is dogModel 1
+    if np.mod(i, 2) == 0:
+      wax = opt.minimize(modObj, init_params, bounds=allBounds, method='TNC');
+    else:
+      wax = opt.minimize(modObj, init_params, bounds=allBounds, method='L-BFGS-B');
+    if best_loss is np.nan or wax['fun'] < best_loss:
+      best_loss = wax['fun'];
+      best_params = wax['x'];
+
+  tfParamsDoG = best_params;
 
   return tfPref, tfBWlog, tfParams, tfParamsDoG;
 
-def sizeTune(diskSize, annSize, diskResps, annResps, diskStd, annStd, stepSize=0.01, nOpts=100):
+def sizeTune(diskSize, annSize, diskResps, annResps, diskStd, annStd, stepSize=0.01, nOpts=30):
   ''' Analysis as in Cavanaugh, Bair, Movshon (2002a)
       Inputs:
       - stepSize is used to determine the steps (in diameter) we use to evaluate the model
@@ -3545,7 +3575,10 @@ def sizeTune(diskSize, annSize, diskResps, annResps, diskStd, annStd, stepSize=0
     exSrat_init = random_in_range([2, 10])[0];
     init_params = [kC_init, exC_init, kSrat_init, exSrat_init];
 
-    wax = opt.minimize(obj, init_params, bounds=allBounds);
+    if np.mod(i, 2) == 0:
+      wax = opt.minimize(obj, init_params, bounds=allBounds, method='TNC');
+    else:
+      wax = opt.minimize(obj, init_params, bounds=allBounds, method='L-BFGS-B');
     if best_loss is np.nan or wax['fun'] < best_loss:
       best_loss = wax['fun'];
       best_params = wax['x'];
@@ -3678,7 +3711,8 @@ def get_basic_tunings(basicPaths, basicProgNames):
         ori_vals, mean, std = ori['oriVals'], ori['counts_mean'], ori['counts_std'];
         ori_dict = dict();
         ori_dict['cv'] = oriCV(ori_vals, mean);
-        pref, bw, oriDS, params, mod, _ = oriTune(ori_vals, mean); # ensure the oriVals are in radians
+        #pref, bw, oriDS, params, mod, _ = oriTune(ori_vals, mean); # ensure the oriVals are in radians
+        pref, bw, oriDS, params, mod, _ = oriTune(ori_vals, mean, std); # ensure the oriVals are in radians
         ori_dict['DS'] = oriDS;
         ori_dict['bw'] = bw;
         ori_dict['pref'] = pref;
