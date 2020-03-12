@@ -1929,6 +1929,10 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     descrFits = np_smart_load(data_loc + dF_nm);
     dogFits = np_smart_load(data_loc + dog_nm);
     rvcFits = np_smart_load(data_loc + rv_nm);
+    try:
+      superAnalysis = np_smart_load(data_loc + 'superposition_analysis.npy');
+    except:
+      superAnalysis = None;
 
     # Now, go through for each cell in the dataList
     nCells = len(dataList['unitName']);
@@ -3372,16 +3376,31 @@ def oriCV(oriVals, oriResps, baselineSub = False):
 
   return 1 - np.divide(numer, denom);
 
-def oriTune(oriVals, oriResps, oriResps_std=None, baselineSub = False, nOpts = 30):
+def get_ori_mod(extrema = None):
   ''' Double Von Mises function as in Wang and Movshon, 2014
       - with one modification: normalize by resp at pref ori to make "a" parameterization more clear
+      IF norm_factor is not None, then we assume we've already computed the function and simply want to evaluate at a particular theta
       The von Mises function:
         - a scales the height of the tuning curve
         - ds scales the non-preferred direction of the tuning curve
         - w determines the tuning band-width
         - xc is the location of the tuning curve peak
         - θ is the direction (not a fitted parameter; based on data)
-        - r0 is thespontaneous firing rate of the cell. 
+        - r0 is thespontaneous firing rate of the cell.
+  '''
+  np = numpy;
+
+  vonMis = lambda w,xc,ds,theta: np.exp(np.cos(theta-xc)/w) + ds*np.exp(np.cos(theta-xc-np.pi)/w);
+  if extrema is None:
+    mod = lambda a,w,xc,ds,r0,theta: r0 + a*np.divide(vonMis(w,xc,ds,theta) - np.min(vonMis(w,xc,ds,theta)), vonMis(w,xc,ds,xc) - np.min(vonMis(w,xc,ds,theta)));
+  else:
+    minResp, maxResp = extrema[0], extrema[1];
+    mod = lambda a,w,xc,ds,r0,theta: r0 + a*np.divide(vonMis(w,xc,ds,theta) - minResp, maxResp-minResp);
+
+  return mod, vonMis;
+
+def oriTune(oriVals, oriResps, oriResps_std=None, baselineSub = False, nOpts = 30):
+  ''' Using double von mises (see get_ori_mod above)
   '''
   np = numpy;
 
@@ -3395,15 +3414,14 @@ def oriTune(oriVals, oriResps, oriResps_std=None, baselineSub = False, nOpts = 3
     sigma = oriResps_std;
 
   oriAsRad = np.deg2rad(oriVals);
-  vonMis = lambda w,xc,ds,theta: np.exp(np.cos(theta-xc)/w) + ds*np.exp(np.cos(theta-xc-np.pi)/w);
-  mod = lambda a,w,xc,ds,r0,theta: r0 + a*np.divide(vonMis(w,xc,ds,theta) - np.min(vonMis(w,xc,ds,theta)), vonMis(w,xc,ds,xc) - np.min(vonMis(w,xc,ds,theta)));
  
   # and set the bounds
   allBounds = ((0, None), (0, None), (0, 2*np.pi), (0,1), (0, None));
 
   # squared error - with the k+sig^2 adjustment
   best_params = []; best_loss = np.nan; 
-  obj = lambda params: np.sum(np.divide(np.square(oriResps - mod(*params, oriAsRad)), (k+np.square(sigma))));
+  curr_mod, vonMises = get_ori_mod();
+  obj = lambda params: np.sum(np.divide(np.square(oriResps - curr_mod(*params, oriAsRad)), (k+np.square(sigma))));
 
   baseline = np.min(oriResps);
   maxResp = np.max(oriResps);
@@ -3431,16 +3449,20 @@ def oriTune(oriVals, oriResps, oriResps_std=None, baselineSub = False, nOpts = 3
   oriDS = 1-oriParams[3];
   # then, let's compute the prefOri and oriBandwidth
   oriPref = np.rad2deg(oriPrefRad);
-  halfHeight = oriParams[-1] + 0.5 * (mod(*oriParams, oriPrefRad) - oriParams[-1]); # half-height relative to the baseline/pedestal
-  bwObj = lambda x: np.square(mod(*oriParams, x) - halfHeight);
-  bwLimsLow = opt.minimize(bwObj, oriPrefRad-0.1, bounds=((oriPrefRad - np.pi, oriPrefRad), ));
-  bwLimsHigh = opt.minimize(bwObj, oriPrefRad+0.1, bounds=((oriPrefRad, oriPrefRad + np.pi), ));
+  # now, compute the normalization factor as shown in get_ori_mod -- necessary, since we are evaluating only at one theta
+  maxResp, minResp = vonMises(*oriParams[1:-1], oriPrefRad), np.min(vonMises(*oriParams[1:-1], oriAsRad));
+  eval_mod, _ = get_ori_mod([minResp, maxResp]);
+  halfHeight = oriParams[-1] + 0.5 * (eval_mod(*oriParams, oriPrefRad) - oriParams[-1]); # half-height relative to the baseline/pedestal
+  bwObj = lambda x: np.square(eval_mod(*oriParams, x) - halfHeight);
+  # only look within 180 deg (i.e. [-pi/2, +pi/2] relative to peak]
+  bwLimsLow = opt.minimize(bwObj, oriPrefRad-0.1, bounds=((oriPrefRad - np.pi/2, oriPrefRad), ));
+  bwLimsHigh = opt.minimize(bwObj, oriPrefRad+0.1, bounds=((oriPrefRad, oriPrefRad + np.pi/2), ));
   oriBW = np.abs(np.rad2deg(bwLimsHigh['x'] - bwLimsLow['x']));
   
-  return oriPref, oriBW[0], oriDS, oriParams, mod, wax;
+  return oriPref, oriBW[0], oriDS, oriParams, curr_mod, wax;
 
 def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False, nOpts = 30):
-  ''' Temporal frequency tuning!
+  ''' Temporal frequency tuning! (Can also be used for sfTune)
       Let's assume we use two-halved gaussian (flexible_Gauss, as above)
       - respFloor, respRelFloor, tfPref, sigmaLow, sigmaHigh
   '''
@@ -3655,18 +3677,24 @@ def get_basic_tunings(basicPaths, basicProgNames):
   import readBasicCharacterization as rbc
 
   basic_outputs = dict();
-  basic_outputs['rvc'] = [];
-  basic_outputs['sf'] = [];
-  basic_outputs['rfsize'] = [];
-  basic_outputs['tf'] = [];
-  basic_outputs['ori'] = [];
+  basic_outputs['rvc'] = None;
+  basic_outputs['sf'] = None;
+  basic_outputs['rfsize'] = None;
+  basic_outputs['tf'] = None;
+  basic_outputs['ori'] = None;
 
   for curr_name, prog in zip(basicPaths, basicProgNames):
     try:
       prog_curr = prog_name(curr_name);
       if 'sf' in prog:
         sf = rbc.readSf11(curr_name, prog_curr);
+        sfPref, sfBW, sfParams, sfParamsDoG = tfTune(sf['sfVals'], sf['counts_mean'][:,0]); # ignore other direction, if it's there..
         sf_dict = dict();
+        sf_dict['sfPref'] = sfPref;
+        sf_dict['sfBW_oct'] = sfBW;
+        sf_dict['sfParams'] = sfParams;
+        sf_dict['sfParamsDoG'] = sfParamsDoG;
+        sf_dict['charFreq'] = dog_charFreq(sfParamsDoG, DoGmodel=1); # 1 is Sach, that's what is used in tfTune
         sf_dict['sf_exp'] = sf;
         basic_outputs['sf'] = sf_dict; # TODO: for now, we don't have SF basic tuning (redundant...but should add)
       if 'rv' in prog:
@@ -3717,11 +3745,10 @@ def get_basic_tunings(basicPaths, basicProgNames):
         ori_dict['bw'] = bw;
         ori_dict['pref'] = pref;
         ori_dict['params'] = params;
-        ori_dict['oriMod'] = mod;
         ori_dict['ori_exp'] = ori;
         basic_outputs['ori'] = ori_dict
       
     except:
-      basic_outputs[prog] = [];
+      basic_outputs[prog] = None;
 
   return basic_outputs;
