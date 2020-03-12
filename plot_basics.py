@@ -62,65 +62,80 @@ f, ax = plt.subplots(nrow, ncol, figsize=(ncol*10, nrow*10));
 #############
 ### Response versus contrast
 #############
-# data
-convals, conresps, constderr = [rvc['rvc_exp'][x] for x in ['conVals', 'counts_mean', 'counts_stderr']]
-ax[0, 0].errorbar(convals, conresps, constderr, fmt='o', color='k');
-# model
-modNum = rvc['rvcMod'];
-plt_cons = np.geomspace(convals[0], convals[-1], 100);
-mod_resp = hf.get_rvcResp(rvc['params'], plt_cons, modNum)
-c50 = rvc['c50']
-ax[0, 0].plot(c50, 0, 'kv', label='c50 (%d%%)' % (100*c50));
-ax[0, 0].semilogx(plt_cons, mod_resp, 'k-')
-ax[0, 0].legend();
+if rvc is not None:
+  # data
+  convals, conresps, constderr = [rvc['rvc_exp'][x] for x in ['conVals', 'counts_mean', 'counts_stderr']]
+  ax[0, 0].errorbar(convals, conresps, constderr, fmt='o', color='k');
+  # model
+  modNum = rvc['rvcMod'];
+  plt_cons = np.geomspace(convals[0], convals[-1], 100);
+  mod_resp = hf.get_rvcResp(rvc['params'], plt_cons, modNum)
+  c50 = rvc['c50']
+  ax[0, 0].plot(c50, 0, 'kv', label='c50 (%d%%)' % (100*c50));
+  ax[0, 0].semilogx(plt_cons, mod_resp, 'k-')
+  ax[0, 0].legend();
 
 #############
 ### RF size tuning
 #############
-# first the data
-diskResp, annResp = rf['rf_exp']['counts_mean'][:, 0], rf['rf_exp']['counts_mean'][:, 1]
-diskStdErr, annStdErr = rf['rf_exp']['counts_stderr'][:, 0], rf['rf_exp']['counts_stderr'][:, 1]
-diskVals, annVals = rf['rf_exp']['diskVals'], rf['rf_exp']['annulusVals']
-ax[0, 1].errorbar(diskVals, diskResp, diskStdErr, fmt='o', color='k', label='disk');
-ax[0, 1].errorbar(annVals, annResp, annStdErr, fmt='o', color='r', label='annulus');
-# then the model fits
-ax[0, 1].semilogx(rf['to_plot']['diams'], rf['to_plot']['resps'], 'k-');
-ax[0, 1].semilogx(rf['to_plot']['ann'], rf['to_plot']['ann_resp'], 'r-');
-ax[0, 1].set_xlabel('size (deg)');
-ax[0, 1].set_ylabel('response (spks/s)');
-ax[0, 1].legend();
+if rf is not None:
+  # first the data
+  diskResp, annResp = rf['rf_exp']['counts_mean'][:, 0], rf['rf_exp']['counts_mean'][:, 1]
+  diskStdErr, annStdErr = rf['rf_exp']['counts_stderr'][:, 0], rf['rf_exp']['counts_stderr'][:, 1]
+  diskVals, annVals = rf['rf_exp']['diskVals'], rf['rf_exp']['annulusVals']
+  ax[0, 1].errorbar(diskVals, diskResp, diskStdErr, fmt='o', color='k', label='disk');
+  ax[0, 1].errorbar(annVals, annResp, annStdErr, fmt='o', color='r', label='annulus');
+  # then the model fits
+  ax[0, 1].semilogx(rf['to_plot']['diams'], rf['to_plot']['resps'], 'k-');
+  ax[0, 1].semilogx(rf['to_plot']['ann'], rf['to_plot']['ann_resp'], 'r-');
+  ax[0, 1].set_xlabel('size (deg)');
+  ax[0, 1].set_ylabel('response (spks/s)');
+  ax[0, 1].legend();
 
 #############
 ### SF tuning [1, 1]
 #############
-# blank for now...
+if sf is not None:
+  # data
+  sfvals, sfresps, sfstderr = [sf['sf_exp'][x] for x in ['sfVals', 'counts_mean', 'counts_stderr']];
+  ax[1, 1].errorbar(sfvals, sfresps[:,0], sfstderr[:,0], fmt='o', color='k');
+  # model
+  plt_sfs = np.geomspace(sfvals[0], sfvals[-1], 100);
+  mod_resp = hf.flexible_Gauss(sf['sfParams'], plt_sfs)
+  ax[1, 1].plot(sf['charFreq'], 0, 'kv', label='char freq (%.1f Hz)' % sf['charFreq'])
+  ax[1, 1].semilogx(plt_sfs, mod_resp, 'k-')
+  ax[1, 1].set_title('Peak %.1f Hz, bw %.1f oct' % (sf['sfPref'], sf['sfBW_oct']))
+  #ax[1, 1].legend();
 
 #############
 ### TF tuning
 #############
-# data
-tfvals, tfresps, tfstderr = [tf['tf_exp'][x] for x in ['tfVals', 'counts_mean', 'counts_stderr']];
-ax[1, 0].errorbar(tfvals, tfresps[:,0], tfstderr[:,0], fmt='o', color='k');
-# model
-plt_tfs = np.geomspace(tfvals[0], tfvals[-1], 100);
-mod_resp = hf.flexible_Gauss(tf['tfParams'], plt_tfs)
-ax[1, 0].plot(tf['charFreq'], 0, 'kv', label='char freq (%.1f Hz)' % tf['charFreq'])
-ax[1, 0].semilogx(plt_tfs, mod_resp, 'k-')
-ax[1, 0].set_title('Peak %.1f Hz, bw %.1f oct' % (tf['tfPref'], tf['tfBW_oct']))
-#ax[1, 0].legend();
+if tf is not None:
+  # data
+  tfvals, tfresps, tfstderr = [tf['tf_exp'][x] for x in ['tfVals', 'counts_mean', 'counts_stderr']];
+  ax[1, 0].errorbar(tfvals, tfresps[:,0], tfstderr[:,0], fmt='o', color='k');
+  # model
+  plt_tfs = np.geomspace(tfvals[0], tfvals[-1], 100);
+  mod_resp = hf.flexible_Gauss(tf['tfParams'], plt_tfs)
+  ax[1, 0].plot(tf['charFreq'], 0, 'kv', label='char freq (%.1f Hz)' % tf['charFreq'])
+  ax[1, 0].semilogx(plt_tfs, mod_resp, 'k-')
+  ax[1, 0].set_title('Peak %.1f Hz, bw %.1f oct' % (tf['tfPref'], tf['tfBW_oct']))
+  #ax[1, 0].legend();
 
 #############
 ### Orientation tuning
 #############
-# data
-orivals, oriresps, oristderr = [ori['ori_exp'][x] for x in ['oriVals', 'counts_mean', 'counts_stderr']];
-ax[2, 0].errorbar(orivals, oriresps, oristderr, fmt='o', color='k');
-# model
-plt_oris = np.linspace(0, 2*np.pi, 100);
-mod_resp = ori['oriMod'](*ori['params'], plt_oris)
-ax[2, 0].plot(np.rad2deg(plt_oris), mod_resp, 'k-');
-ax[2, 0].set_title('Peak %d deg, bw %d deg, cv %.2f, ds %.2f' % (ori['pref'], ori['bw'], ori['cv'], ori['DS']))
-#ax[2, 0].legend();
+if ori is not None:
+  # data
+  orivals, oriresps, oristderr = [ori['ori_exp'][x] for x in ['oriVals', 'counts_mean', 'counts_stderr']];
+  ax[2, 0].errorbar(orivals, oriresps, oristderr, fmt='o', color='k');
+  # model
+  plt_oris = np.linspace(0, 2*np.pi, 100);
+  oriMod, _ = hf.get_ori_mod();
+  mod_resp = oriMod(*ori['params'], plt_oris)
+  ax[2, 0].plot(np.rad2deg(plt_oris), mod_resp, 'k-');
+  ax[2, 0].set_title('Peak %d deg, bw %d deg, cv %.2f, ds %.2f' % (ori['pref'], ori['bw'], ori['cv'], ori['DS']))
+  #ax[2, 0].legend();
 
 sns.despine(fig=f, offset=10);
 
