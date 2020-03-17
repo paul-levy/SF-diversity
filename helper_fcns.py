@@ -1966,6 +1966,32 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
                   ('val_con_by_disp', val_con_by_disp)]);
 
       ###########
+      ### superposition analysis
+      ###########
+      if superAnalysis is not None:
+        try:
+          super_curr = superAnalysis[cell_ind];
+          suppr = dict([('byDisp', super_curr['supr_disp']),
+                        ('bySf', super_curr['supr_sf']),
+                        ('corr_derivWithErr', super_curr['corr_derivWithErr']),
+                        ('corr_derivWithErrNorm', super_curr['corr_derivWithErrNorm']),
+                        ('supr_index', super_curr['supr_index'])]);
+        except:
+          suppr = None;
+
+      ###########
+      ### basics (ori16, tf11, rfsize10, rvc10, sf11)
+      ###########
+      try:
+        basics_list = superAnalysis[cell_ind]['basics'];
+      except:
+        try:
+          basic_names, basic_order = dataList['basicProgName'][cell_ind], dataList['basicProgOrder'];
+          basics_list = get_basic_tunings(basic_names, basic_order);
+        except:
+          basics_list = None;
+
+      ###########
       ### metrics (inferred data measures)
       ###########
       disps, cons, sfs = stimVals;
@@ -2189,7 +2215,9 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       ###########
       cellSummary = dict([('metadata', meta),
                          ('metrics', dataMetrics),
-                         ('model', model)]);
+                         ('model', model),
+                         ('superpos', suppr),
+                         ('basics', basics_list)]);
 
 
       jointList.append(cellSummary);
