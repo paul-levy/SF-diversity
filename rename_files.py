@@ -1,10 +1,12 @@
 import pdb
 import os, sys
 
-def rename_files(loc_data, files, fileExt='.xml', mBase='m6', isDataList=False):
+def rename_files(loc_data, files, fileExt='.xml', mBase='m6', trialRun=1, isDataList=False):
   # used for renaming files within a directory to pad numbers up to 2 digits
   # - i.e. m675p4r9 to m675p04r09
   # can also be used to rename files in a dataList if fileExt='' and files is the list of names in the dataList
+  # trialRun: if True, just print what would be the renaming, but don't do it
+  #           if False, then actually rename
 
   for ind, i in enumerate(files):
 #     if i.find('#') >= 0:
@@ -58,11 +60,14 @@ def rename_files(loc_data, files, fileExt='.xml', mBase='m6', isDataList=False):
         ## finally, the part that applies to both!
         if new_str2 == i:
             continue;
-
-        #os.rename(loc_data + i, loc_data + new_str2)
-        print('renaming %s to %s' % (i, new_str2))
+        
+        if trialRun == 1:
+          print('renaming %s to %s' % (i, new_str2))
+        else:
+          os.rename(loc_data + i, loc_data + new_str2)
 
         files[ind] = new_str2;
+
   return files;
 
 if __name__ == "__main__":
@@ -70,7 +75,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print('Need one argument, at least! Folder to look into');
     
-    folder = sys.argv[1];
+    loc_data = sys.argv[1];
     try:
       fileExt = sys.argv[2];
     except:
@@ -79,7 +84,11 @@ if __name__ == "__main__":
       mBase = sys.argv[3];
     except:
       mBase = 'm6';
-      
- 
+    try:
+      trRun = int(sys.argv[4]);
+    except:
+      trRun = 1;
+
     files = os.listdir(loc_data);
-    rename_files(loc_data, files, fileExt, mBase);
+
+    rename_files(loc_data, files, fileExt, mBase, trRun);
