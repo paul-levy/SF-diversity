@@ -7,19 +7,19 @@
 ### see plot_simple.py for changes/details
 
 # second param is expDir (e.g. V1/ or LGN/)
-# third param is descrMod:
+# third param is descrMod: (descr)
 	# 0 - flex
 	# 1 - sach
 	# 2 - tony
-# fourth param is loss type
+# fourth param is loss type (descr)
         # 1 - lsq
         # 2 - sqrt
         # 3 - poiss
         # 4 - sach
-# fifth param is f0/f1 (i.e. if 1, load rvcFits)
-# sixth param is which rvcModel to get/plot (0: movshon; 1: naka-rushton)
-# seventh param is std/sem as variance measure: (1 sem (default))
-
+# fifth param is joint (descr) - 0/1
+# sixth param is f0/f1 (i.e. if 1, load rvcFits)
+# seventh param is which rvcModel to get/plot (0: movshon; 1: naka-rushton; 2: peirce)
+# eigth param is std/sem as variance measure: (1 sem (default))
 
 source activate lcv-python
 
@@ -34,10 +34,11 @@ source activate lcv-python
 # altExp   - standard, 8 cells
 # LGN/ - standard, 77 cells
 
-for run in {1..56}
-do
-  python plot_descr.py $run V1/ 0 3 1 0 1 &
-  #python plot_descr.py $run LGN/ 1 2 1 0 1 &
+for run in {1..77}
+do  
+  #python plot_descr.py $run V1/ 0 2 1 2 1 &
+  #python plot_descr.py $run LGN/ 1 4 1 1 0 1 &
+  python plot_descr.py $run LGN/ 2 4 0 1 0 1 &
 done
 
 # leave a blank line at the end

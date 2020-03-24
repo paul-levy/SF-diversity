@@ -67,7 +67,7 @@ do
   #python descr_fits.py $run 3 altExp/ 0 1 0 2 0 0 3 1 & 
 
   # V1 - descr fits
-  #python descr_fits.py $run 0 altExp/ 0 0 0 1 1 1 4 1 &
+  #python descr_fits.py $run 0 V1/ 0 0 0 1 1 2 4 1 1 &
   #python descr_fits.py $run 0 altExp/ 0 0 0 1 1 0 2 1 &
 
 done

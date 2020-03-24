@@ -9,13 +9,16 @@ source activate lcv-python
 # 5th arg - make summary plots of rvc fits, phase advance fits?
 # 6th arg - optional: direction (default is -1) 
 
-for run in {1..17}
+for run in {1..77}
 do
   # LGN 
   #python phase_plotting.py $run 0 LGN/ 1 1 1 &  
+  python phase_plotting.py $run 0 LGN/ 1 1 -1 &  
+  #python phase_plotting.py $run 1 LGN/ 1 1 1 &  
+  #python phase_plotting.py $run 2 LGN/ 1 1 1 &  
 
   # V1
-  python phase_plotting.py $run 0 V1/ 1 1 1 &  
+  #python phase_plotting.py $run 0 V1/ 1 1 1 &  
   #python phase_plotting.py $run 1 V1/ 1 0 1 &  
   #python phase_plotting.py $run 0 V1/ 0 1 1 &  
   #python phase_plotting.py $run 0 V1/ 1 0 1 & 

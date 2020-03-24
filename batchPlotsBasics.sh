@@ -10,9 +10,9 @@ source activate lcv-python
 # altExp   - standard, 8 cells
 # LGN/ - standard, 77 cells
 
-for run in {1..56}
+for run in {1..77}
 do
-  python plot_basics.py $run V1/ &
+  python plot_basics.py $run LGN/ &
 done
 
 # leave a blank line at the end
