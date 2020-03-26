@@ -404,6 +404,17 @@ if fitz is not None:
   ax[4,1].set_ylabel('mean (signed) error -- as fraction of fit prediction');
   ax[4,1].errorbar(all_sfs[val_sfs][sfInds], sfErrsNorm, sfErrsNormStd, color='k', linestyle='-', clip_on=False)
 
+  # compute the unsigned "area under curve" for the sfErrsNorm, and normalize by the octave span of SF values considered
+  val_errs = ~np.isnan(sfErrsNorm)
+  val_x = all_sfs[val_sfs][sfInds][val_errs]
+  oct_span = hf.bw_lin_to_log(val_x[0], val_x[-1])
+  # note that we square (to avoid negative values) and then sqrt (to restore original magnitude)
+  auc = np.trapz(np.sqrt(np.square(sfErrsNorm))[val_errs], x=val_x)
+  auc_norm = auc/oct_span;
+  curr_suppr['sfErrsNorm_AUC'] = auc_norm;
+  # - and put that value on the plot
+  ax[4,1].text(0.1, -0.25, '|auc|=%.2f' % auc_norm);
+
 #########
 ### NOW, let's evaluate the derivative of the SF tuning curve and get the correlation with the errors
 #########
