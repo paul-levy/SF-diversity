@@ -74,6 +74,7 @@ import warnings
 # DoGsach - difference of gaussians as implemented in sach's thesis
 # var_explained - compute the variance explained for a given model fit/set of responses
 # chiSq      - compute modified chiSq loss value as described in Cavanaugh et al
+# get_c50 - get the c50 given the rvcModel and model parameters5
 # c50_empirical - compute the effective/emperical c50 by optimization
 # dog_prefSf - compute the prefSf for a given DoG model/parameter set
 # dog_prefSfMod - fit a simple model of prefSf as f'n of contrast
@@ -1107,7 +1108,7 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False,
    all_opts = []; all_loss = [];
    all_conGain = [];
    n_amps = len(amps);
-
+   
    for i in range(n_amps):
      curr_amps = amps[i];
      curr_cons = cons[i];
@@ -1284,11 +1285,19 @@ def chiSq(data_resps, model_resps, stimDur=1, kMult = 0.10):
 
   return chi;
 
-def c50_empirical(rvcMod, params):
-  ''' given a response-versus-contrast model and associated parameters, find the empirical c50
-        i.e. what is the contrast at which is the response 50% of the maximum
-             evaluted over contrast [5e-2, 1]
+def get_c50(rvcMod, params):
+  ''' get the c50 for a given rvcModel and parameter list
   '''
+  # first, find the maximum response
+  if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
+    c50 = params[3];
+  elif rvcMod == 0: # i.e. movshon form
+    c50 = params[2]
+  return c50;
+
+def c50_empirical(rvcMod, params):
+  # now, by optimization and discrete numerical evaluation, get the c50
+
   con_bound = (5e-2, 1);
   # first, find the maximum response
   if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
@@ -1304,9 +1313,18 @@ def c50_empirical(rvcMod, params):
   con_bound = (5e-2, max_con); # i.e. ensure the c50_emp contrast is less than the max (relevant for super-saturating curves)
   c50_obj = lambda con: numpy.square(max_response/2 + obj(con));
   c50_opt = opt.minimize(c50_obj, max_con/2, bounds=(con_bound, ));
-  c50_con = c50_opt['x'][0]; # not as array, instead unpack
+  c50_lsq = c50_opt['x'][0]; # not as array, instead unpack
   
-  return c50_con;
+  # now, let's evaluate in a second method: just sample, find the value closest to max_response/2
+  con_vals = numpy.geomspace(0.05, max_con, 500);
+  if rvcMod == 1 or rvcMod == 2:
+    rvc_evals = naka_rushton(con_vals, params);
+  elif rvcMod == 0: # mov form
+    rvc_evals = rvcModel(*params, con_vals);
+  ind_min = numpy.argmin(numpy.square(rvc_evals-max_response/2));
+  c50_eval = con_vals[ind_min];
+
+  return c50_lsq, c50_eval;
 
 def dog_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11)):
   ''' Compute the preferred SF given a set of DoG [or in the case of dog_model==0, not DoG...) parameters
@@ -1894,8 +1912,8 @@ def get_rvcResp(params, curr_cons, rvcMod):
 ##################################################################
 ##################################################################
 
-def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, 
-              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, c50Loc=2, varExplThresh=75, dog_varExplThresh=60):
+def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods,
+              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60):
   ''' create the "super structure" that we use to analyze data across multiple versions of the experiment
       TODO: update this to get proper spikes/tuning measures based on f1/f0 ratio (REQUIRES descrFits to be like rvcFits, i.e. fit F1 or F0 responses, accordingly)
       inputs:
@@ -1907,19 +1925,20 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
         descrNames   - names of the non-DoG descriptive SF fits
         dogNames     - names of the DoG descriptive SF fits
         rvcNames     - names of the response-versus-contrast fits
+        rvcMods
 
         [default inputs]
         [conDig]     - how many decimal places to round contrast value when testing equality
         [sf_range]   - what bounds to use when computing SF bandwidth
         [rawInd]     - for accessing ratios/differences that we pass into diffsAtThirdCon
-        [mu/c50 loc] - what index into corresponding parameter array is the peak SF/c50 value?
+        [mu loc]     - what index into corresponding parameter array is the peak SF value?
         [{dog_}vaExplThresh] - only fits with >= % variance explained have their paramter values added for consideration
   '''
 
   np = numpy;
   jointList = [];
 
-  for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames):
+  for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, rvcMod in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods):
     
     # get the current directory, load data list
     data_loc = base_dir + expDir + 'structures/';    
@@ -1973,6 +1992,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
           super_curr = superAnalysis[cell_ind];
           suppr = dict([('byDisp', super_curr['supr_disp']),
                         ('bySf', super_curr['supr_sf']),
+                        ('errs_auc', super_curr['sfErrsNorm_AUC']),
                         ('corr_derivWithErr', super_curr['corr_derivWithErr']),
                         ('corr_derivWithErrNorm', super_curr['corr_derivWithErrNorm']),
                         ('supr_index', super_curr['supr_index'])]);
@@ -2015,6 +2035,8 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       pSf = np.zeros((nDisps, nCons)) * np.nan;
       sfVarExpl = np.zeros((nDisps, nCons)) * np.nan;
       c50 = np.zeros((nDisps, nSfs)) * np.nan;
+      c50_emp = np.zeros((nDisps, nSfs)) * np.nan;
+      c50_eval = np.zeros((nDisps, nSfs)) * np.nan;
       # including from the DoG fits
       dog_pSf = np.zeros((nDisps, nCons)) * np.nan;
       dog_varExpl = np.zeros((nDisps, nCons)) * np.nan;
@@ -2118,12 +2140,14 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
         for s in range(nSfs):
           if cell_ind in rvcFits:
             # on data
-            try:
-                c50[d, s] = rvcFits[cell_ind]['params'][d, s, c50Loc];
-            except: # might just be arranged differently...
+            try: # if from fit_RVC_F0
+                c50[d, s] = get_c50(rvcMod, rvcFits[cell_ind]['params'][d, s, :]);
+                c50_emp[d, s], c50_eval[d, s] = c50_empirical(rvcMod, rvcFits[cell_ind]['params'][d, s, :]);
+            except: # might just be arranged differently...(not fit_rvc_f0)
                 try: # TODO: investigate why c50 param is saving for nan fits in hf.fit_rvc...
                   if ~np.isnan(rvcFits[cell_ind][d]['loss'][s]): # only add it if it's a non-NaN loss value...
-                    c50[d, s] = rvcFits[cell_ind][d]['params'][s][c50Loc];
+                    c50[d, s] = get_c50(rvcMod, rvcFits[cell_ind][d]['params'][s]);
+                    c50_emp[d, s], c50_eval[d, s] = c50_empirical(rvcMod, rvcFits[cell_ind][d]['params'][s]);
                 except: # then this dispersion does not have that SF value, but it's ok - we already have nan
                   pass;
 
@@ -2174,6 +2198,8 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
                          ('bw34', bw34),
                          ('pSf', pSf),
                          ('c50', c50),
+                         ('c50_emp', c50_emp),
+                         ('c50_eval', c50_eval),
                          ('dog_pSf', dog_pSf),
                          ('dog_charFreq', dog_charFreq),
                          ('dog_varExpl', dog_varExpl),
@@ -3690,9 +3716,11 @@ def rvcTune(rvcVals, rvcResps, rvcResps_std, rvcMod=1):
   _, optParam, conGain, loss = rvc_fit([rvcResps], [rvcVals], var=[rvcResps_std], mod=rvcMod);
   opt_params = optParam[0];
 
-  c50 = c50_empirical(rvcMod, opt_params);
+  c50 = get_c50(rvcMod, opt_params);
+  # now, by optimization and discrete numerical evaluation, get the c50
+  c50_emp, c50_emp_eval = c50_empirical(rvcMod, opt_params);
 
-  return c50, conGain[0], opt_params;
+  return c50, c50_emp, c50_emp_eval, conGain[0], opt_params;
 
 ####
 
@@ -3731,9 +3759,10 @@ def get_basic_tunings(basicPaths, basicProgNames):
           rvcMod = 0; # this is the model we use for LGN RVCs
         else:
           rvcMod = 1; # otherwise, naka-rushton
-        c50, cg, params  = rvcTune(rv['conVals'], rv['counts_mean'], rv['counts_std'], rvcMod);
+        c50, c50_emp, c50_eval, cg, params  = rvcTune(rv['conVals'], rv['counts_mean'], rv['counts_std'], rvcMod);
         rvc_dict = dict();
-        rvc_dict['c50'] = c50; rvc_dict['conGain'] = cg;
+        rvc_dict['c50'] = c50; rvc_dict['c50_emp'] = c50_emp; rvc_dict['c50_eval'] = c50_eval; 
+        rvc_dict['conGain'] = cg;
         rvc_dict['params'] = params;
         rvc_dict['rvcMod'] = rvcMod;
         rvc_dict['rvc_exp'] = rv;
