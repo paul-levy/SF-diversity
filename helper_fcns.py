@@ -611,7 +611,6 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, des
   '''
   np = numpy;
 
-
   ######
   # why are we keeping the trials with max response at F0 (always) and F1 (if present)? Per discussion with Tony, 
   # we should evaluate F1/F0 at the SF  which has the highest response as determined by comparing F0 and F1, 
@@ -655,7 +654,7 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, des
   ### now, figure out which SF value to evaluate at, get corresponding trials
   sf_match_inds = [np.argmin(np.square(all_sfs - psfEst)) for psfEst in prefSfEst]; # matching inds
   disp = 0; con = val_con_by_disp[disp][-1]; # i.e. highest con, single gratings
-  val_trs = [get_valid_trials(trial_inf, disp=disp, con=con, sf=match_ind, expInd=expInd)[0][0] for match_ind in sf_match_inds]; # unpack - first 0 for first output argument, 2nd to unpack into array rather than list of array(s)
+  val_trs = [get_valid_trials(trial_inf, disp=disp, con=con, sf=match_ind, expInd=expInd)[0][0] for match_ind in sf_match_inds]; # unpack - first 0 for first output argument, 2nd one to unpack into array rather than list of array(s)
   stimDur = get_exp_params(expInd).stimDur;
 
   ######
@@ -3739,13 +3738,24 @@ def get_basic_tunings(basicPaths, basicProgNames):
   basic_outputs['tf'] = None;
   basic_outputs['ori'] = None;
 
+  # this var will be used to get f1 or f0 responses, correspondingly
+  # - if available, we base it off of the SF f1/f0 ratio; otherwise, exp by exp
+  sf_resp_ind = None;
+
   for curr_name, prog in zip(basicPaths, basicProgNames):
     try:
       prog_curr = prog_name(curr_name);
       if 'sf' in prog:
         sf = rbc.readSf11(curr_name, prog_curr);
-        sfPref, sfBW, sfParams, sfParamsDoG = tfTune(sf['sfVals'], sf['counts_mean'][:,0]); # ignore other direction, if it's there..
+        f1f0 = sf['f1f0_rat'];
+        if f1f0 > 1: # simple
+          sf_resp_ind = 1;
+        else:
+          sf_resp_ind = 0;
+
+        sfPref, sfBW, sfParams, sfParamsDoG = tfTune(sf['sfVals'], sf['counts_mean'][:,0,sf_resp_ind]); # ignore other direction, if it's there..
         sf_dict = dict();
+        sf_dict['isSimple'] = sf_resp_ind;
         sf_dict['sfPref'] = sfPref;
         sf_dict['sfBW_oct'] = sfBW;
         sf_dict['sfParams'] = sfParams;
@@ -3753,24 +3763,46 @@ def get_basic_tunings(basicPaths, basicProgNames):
         sf_dict['charFreq'] = dog_charFreq(sfParamsDoG, DoGmodel=1); # 1 is Sach, that's what is used in tfTune
         sf_dict['sf_exp'] = sf;
         basic_outputs['sf'] = sf_dict; # TODO: for now, we don't have SF basic tuning (redundant...but should add)
+
       if 'rv' in prog:
         rv = rbc.readRVC(curr_name, prog_curr);
         if 'LGN' in curr_name:
           rvcMod = 0; # this is the model we use for LGN RVCs
         else:
           rvcMod = 1; # otherwise, naka-rushton
-        c50, c50_emp, c50_eval, cg, params  = rvcTune(rv['conVals'], rv['counts_mean'], rv['counts_std'], rvcMod);
+        if sf_resp_ind is None:
+          f1f0 = rv['f1f0_rat'];
+          if f1f0 > 1: # simple
+            resp_ind = 1;
+          else:
+            resp_ind = 0;
+        else:
+          resp_ind = sf_resp_ind
+
+        c50, c50_emp, c50_eval, cg, params  = rvcTune(rv['conVals'], rv['counts_mean'][:, resp_ind], rv['counts_std'][:, resp_ind], rvcMod);
         rvc_dict = dict();
+        rvc_dict['isSimple'] = resp_ind;
         rvc_dict['c50'] = c50; rvc_dict['c50_emp'] = c50_emp; rvc_dict['c50_eval'] = c50_eval; 
         rvc_dict['conGain'] = cg;
         rvc_dict['params'] = params;
         rvc_dict['rvcMod'] = rvcMod;
         rvc_dict['rvc_exp'] = rv;
         basic_outputs['rvc'] = rvc_dict;
+
       if 'tf' in prog:
         tf = rbc.readTf11(curr_name, prog_curr);
-        tfPref, tfBW, tfParams, tfParamsDoG = tfTune(tf['tfVals'], tf['counts_mean'][:,0]); # ignore other direction, if it's there...
+        if sf_resp_ind is None:
+          f1f0 = tf['f1f0_rat'];
+          if f1f0 > 1: # simple
+            resp_ind = 1;
+          else:
+            resp_ind = 0;
+        else:
+          resp_ind = sf_resp_ind
+
+        tfPref, tfBW, tfParams, tfParamsDoG = tfTune(tf['tfVals'], tf['counts_mean'][:,0,resp_ind]); # ignore other direction, if it's there...
         tf_dict = dict();
+        tf_dict['isSimple'] = resp_ind;
         tf_dict['tfPref'] = tfPref;
         tf_dict['tfBW_oct'] = tfBW;
         tf_dict['tfParams'] = tfParams;
@@ -3778,10 +3810,21 @@ def get_basic_tunings(basicPaths, basicProgNames):
         tf_dict['charFreq'] = dog_charFreq(tfParamsDoG, DoGmodel=1); # 1 is Sach, that's what is used in tfTune
         tf_dict['tf_exp'] = tf;
         basic_outputs['tf'] = tf_dict;
+
       if 'rf' in prog:
         rf = rbc.readRFsize10(curr_name, prog_curr);
-        data, mod, to_plot, opt_params = sizeTune(rf['diskVals'], rf['annulusVals'], rf['counts_mean'][:,0], rf['counts_mean'][:,1], rf['counts_std'][:,0], rf['counts_std'][:,1]);
+        if sf_resp_ind is None:
+          f1f0 = rf['f1f0_rat'];
+          if f1f0 > 1: # simple
+            resp_ind = 1;
+          else:
+            resp_ind = 0;
+        else:
+          resp_ind = sf_resp_ind
+
+        data, mod, to_plot, opt_params = sizeTune(rf['diskVals'], rf['annulusVals'], rf['counts_mean'][:,0,resp_ind], rf['counts_mean'][:,1,resp_ind], rf['counts_std'][:,0,resp_ind], rf['counts_std'][:,1,resp_ind]);
         rf_dict = dict();
+        rf_dict['isSimple'] = resp_ind;
         rf_dict['gsf_data'] = data['gsf']
         rf_dict['suprInd_data'] = data['sInd']
         rf_dict['gsf_model'] = mod['gsf']
@@ -3791,10 +3834,21 @@ def get_basic_tunings(basicPaths, basicProgNames):
         rf_dict['params'] = opt_params;
         rf_dict['rf_exp'] = rf;
         basic_outputs['rfsize'] = rf_dict;
+
       if 'or' in prog:
         ori = rbc.readOri16(curr_name, prog_curr);
-        ori_vals, mean, std = ori['oriVals'], ori['counts_mean'], ori['counts_std'];
+        if sf_resp_ind is None:
+          f1f0 = ori['f1f0_rat'];
+          if f1f0 > 1: # simple
+            resp_ind = 1;
+          else:
+            resp_ind = 0;
+        else:
+          resp_ind = sf_resp_ind;
+
+        ori_vals, mean, std = ori['oriVals'], ori['counts_mean'][:, resp_ind], ori['counts_std'][:, resp_ind];
         ori_dict = dict();
+        ori_dict['isSimple'] = resp_ind;
         ori_dict['cv'] = oriCV(ori_vals, mean);
         #pref, bw, oriDS, params, mod, _ = oriTune(ori_vals, mean); # ensure the oriVals are in radians
         pref, bw, oriDS, params, mod, _ = oriTune(ori_vals, mean, std); # ensure the oriVals are in radians
