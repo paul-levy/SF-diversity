@@ -38,7 +38,7 @@ cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2];
 
 rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
-rvcMod = 1; # naka rushton
+rvcMod = 0; # naka rushton (1); 
 
 loc_base = os.getcwd() + '/';
 
@@ -51,12 +51,11 @@ dataList = hf.np_smart_load(data_loc + dataListNm);
 
 cellName = dataList['unitName'][cellNum-1];
 expInd = hf.get_exp_ind(data_loc, cellName)[0]
-
-### Load the "basics" information
-basic_names, basic_order = dataList['basicProgName'][cellNum-1], dataList['basicProgOrder']
-basics = hf.get_basic_tunings(basic_names, basic_order)
-# - and get the basic characterization outputs
-[rf, tf, sf, rvc, ori] = [basics[x] for x in ['rfsize', 'tf', 'sf', 'rvc', 'ori']];
+try:
+  cellType = dataList['unitType'][cellNum-1];
+except:
+  # TODO: note, this is dangerous; thus far, only V1 cells don't have 'unitType' field in dataList, so we can safely do this
+  cellType = 'V1';
 
 ### set up the figure
 nrow, ncol = 3, 2;
@@ -80,13 +79,13 @@ if f1f0_rat > 1 or expDir == 'LGN/': # i.e. if we're looking at a simple cell, t
   spikes_byComp = hf.get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
   spikes = np.array([np.sum(x) for x in spikes_byComp]);
   rates = True; # when we get the spikes from rvcFits, they've already been converted into rates (in hf.get_all_fft)
-  baseline = None; # f1 has no "DC", yadig?
+  baseline_sfMix = None; # f1 has no "DC", yadig?
 else: # otherwise, if it's complex, just get F0
   spikes = hf.get_spikes(expData, get_f0=1, rvcFits=None, expInd=expInd);
   rates = False; # get_spikes without rvcFits is directly from spikeCount, which is counts, not rates!
-  baseline = hf.blankResp(expData, expInd)[0]; # we'll plot the spontaneous rate
+  baseline_sfMix = hf.blankResp(expData, expInd)[0]; # we'll plot the spontaneous rate
   # why mult by stimDur? well, spikes are not rates but baseline is, so we convert baseline to count (i.e. not rate, too)
-  spikes = spikes - baseline*hf.get_exp_params(expInd).stimDur; 
+  spikes = spikes - baseline_sfMix*hf.get_exp_params(expInd).stimDur; 
 
 _, _, respOrg, respAll = hf.organize_resp(spikes, expData, expInd);
 resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates);
@@ -104,6 +103,33 @@ all_disps = stimVals[0];
 all_cons = stimVals[1];
 all_sfs = stimVals[2];
 
+#############
+### Load the "basics" information
+#############
+
+### Use this section to force the basic characterization responses to have the same response measure (f0 or f1) as the sfMix responses
+#if f1f0_rat > 1:
+#  forceSimple = 1;
+#else:
+#  forceSimple = 0;
+forceSimple = None; # otherwise, determined per cell, distinct from sfMix simple/complex classification
+###
+
+basic_names, basic_order = dataList['basicProgName'][cellNum-1], dataList['basicProgOrder']
+basics = hf.get_basic_tunings(basic_names, basic_order, forceSimple)
+# - and get the basic characterization outputs
+[rf, tf, sf, rvc, ori] = [basics[x] for x in ['rfsize', 'tf', 'sf', 'rvc', 'ori']];
+
+### Now, let's show the f1f0 ratio in the basic characterizations vs the sfMix
+f1f0_basic = np.nan;
+try:
+  f1f0_basic = sf['sf_exp']['f1f0_rat'];
+except:
+  try:
+    f1f0_basic = rvc['rvc_exp']['f1f0_rat'];
+  except:
+    pass
+
 ### get the sfRef and rvcRef - i.e. single grating, high contrast/prefSf SF/RVC tuning
 sfRef = hf.nan_rm(respMean[0, :, -1]); # high contrast tuning
 sfRefSEM = hf.nan_rm(respSem[0, :, -1]);
@@ -118,17 +144,24 @@ v_cons_single = val_con_by_disp[0]
 rvcRefs = [hf.nan_rm(respMean[0, sfInd, v_cons_single]) for sfInd in (sfPeak, sfComp)];
 rvcRefsSEM = [hf.nan_rm(respSem[0, sfInd, v_cons_single]) for sfInd in (sfPeak, sfComp)];
 rvcRefsColor = ['r', 'b']
+  
+f.suptitle('%s [%s]: f1f0 basic|sfMix (%.2f|%.2f)' % (cellType, cellName, f1f0_basic, f1f0_rat));
 
 #############
 ### Response versus contrast
 #############
+plt_cons = None;
 if rvc is not None:
   # data
   respInd = rvc['isSimple'];
   convals, conresps, constderr = [rvc['rvc_exp'][x] for x in ['conVals', 'counts_mean', 'counts_stderr']]
   rvc10_sf = np.unique(rvc['rvc_exp']['byTrial']['sf']);
-  ax[0, 0].errorbar(convals, conresps[:, respInd], constderr[:, respInd], fmt='o', color='k');
-  # model
+  mean, stderr = conresps[:, respInd], constderr[:, respInd];
+  # NOTE: we do NOT subtract the baseline for RVC in plotting nor in fitting
+  if respInd == 0:
+    ax[0, 0].axhline(rvc['rvc_exp']['blank']['mean'], linestyle='dashed', color='k', label='rvc10 baseline');
+  ax[0, 0].errorbar(convals, mean, stderr, fmt='o', color='k');
+  # model (fit to baseline subtracted, if complex cell)
   modNum = rvc['rvcMod'];
   plt_cons = np.geomspace(convals[0], convals[-1], 100);
   mod_resp = hf.get_rvcResp(rvc['params'], plt_cons, modNum)
@@ -136,15 +169,17 @@ if rvc is not None:
   ax[0, 0].plot(c50, 0, 'kv', label='c50/eval (%d%%, %d%%) at %.1f cpd' % (100*c50, 100*c50_eval, rvc10_sf));
   ax[0, 0].semilogx(plt_cons, mod_resp, 'k-')
   ax[0, 0].set_xlabel('contrast (%%)');
+
 ### NOW, let's also plot the RVC for the nearest optimal SF as it appears in sfMix
 # if possible, let's also plot the RVC fit from sfMix's prefSf RVC
 if rvcName is not None and (expDir == 'V1/' or expDir == 'LGN/'): 
   # we CANNOT do this for V1_orig; we SHOULD be able to do for altExp 
   #TODO: will need to fix how we get the parameters to account for differing way in 
   # fit_rvc_f0 vs. rvc_adjusted_fit on how we store parameters [d,sf,prm] vs. [d]['params'][sf]
+  if plt_cons is None: # else, let's just use the plt_cons from the rvc10 experiment
+    plt_cons = np.geomspace(convals[0], convals[-1], 100);
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcName, rvcMod=rvcMod);
   rel_rvcs = [rvcFits[0]['params'][sfInd] for sfInd in (sfPeak, sfComp)]; # we get 0 dispersion, peak SF
-  plt_cons = np.geomspace(all_cons[0], all_cons[-1], 50);
   c50s = [hf.get_c50(rvcMod, rel_rvc) for rel_rvc in rel_rvcs];
   c50_emps = [hf.c50_empirical(rvcMod, rel_rvc)[1] for rel_rvc in rel_rvcs]; # determine c50 by optimization, numerical approx. (take the latter)
   if rvcMod == 0:
@@ -152,26 +187,29 @@ if rvcName is not None and (expDir == 'V1/' or expDir == 'LGN/'):
     rvcmodResps = [rvc_mod(*rel_rvc, plt_cons) for rel_rvc in rel_rvcs];
   else: # i.e. mod=1 or mod=2
     rvcmodResps = [hf.naka_rushton(plt_cons, rel_rvc) for rel_rvc in rel_rvcs];
-  if baseline is not None:
-    rvcmodResp = [rvcmodResp + baseline for rvcmodResp in rvcmodResps]; # why? we subtract baseline before fitting RVC; add it back, here
   [ax[0, 0].plot(plt_cons, rvcmodResp, color=clr, linestyle='-', label='rvc fit (c50/eval=%d%%, %d%%)' % (100*c50, 100*c50_eval)) for rvcmodResp,c50,c50_eval,clr in zip(rvcmodResps, c50s, c50_emps, rvcRefsColor)]
   # and save it
 ### and plot the data from sfMix
-if baseline is not None:
-  rvcRefs = [rvcRef + baseline for rvcRef in rvcRefs];
+if baseline_sfMix is not None: # add back the baseline if complex cel
+  rvcRefs = [rvcRef + baseline_sfMix for rvcRef in rvcRefs]; # add back the baseline for rvc (NOTE: we add back the rate, NOT the raw counts, since we fit to/plot rate)
 [ax[0, 0].errorbar(all_cons[v_cons_single], rvcRef, rvcRefSEM, color=clr, fmt='o', label='sfMix (d0, %.1f cpd)' % rvcRef_sf, clip_on=False) for rvcRef, rvcRefSEM, rvcRef_sf, clr in zip(rvcRefs, rvcRefsSEM, rvcRef_sfs, rvcRefsColor)]
+ax[0, 0].set_title('RVC');
 ax[0, 0].legend();
-
 
 #############
 ### RF size tuning
 #############
+ax[0, 1].set_title('Size tuning');
 if rf is not None:
   respInd = rf['isSimple'];
   # first the data
   diskResp, annResp = rf['rf_exp']['counts_mean'][:, 0, respInd], rf['rf_exp']['counts_mean'][:, 1, respInd]
   diskStdErr, annStdErr = rf['rf_exp']['counts_stderr'][:, 0, respInd], rf['rf_exp']['counts_stderr'][:, 1, respInd]
   diskVals, annVals = rf['rf_exp']['diskVals'], rf['rf_exp']['annulusVals']
+  if respInd == 0:
+    baseline = rf['rf_exp']['blank']['mean'];
+    diskResp = diskResp - baseline;
+    annResp = annResp - baseline;
   ax[0, 1].errorbar(diskVals, diskResp, diskStdErr, fmt='o', color='k', label='disk');
   ax[0, 1].errorbar(annVals, annResp, annStdErr, fmt='o', color='r', label='annulus');
   # then the model fits
@@ -188,18 +226,20 @@ if sf is not None:
   respInd = sf['isSimple'];
   # data
   sfvals, sfresps, sfstderr = [sf['sf_exp'][x] for x in ['sfVals', 'counts_mean', 'counts_stderr']];
-  ax[1, 1].errorbar(sfvals, sfresps[:,0, respInd], sfstderr[:,0, respInd], fmt='o', color='k');
+  sfresps = sfresps[:,0, respInd];
+  sfstderr = sfstderr[:,0, respInd];
+  if respInd == 0:
+    sfresps = sfresps - sf['sf_exp']['blank']['mean'];
+  ax[1, 1].errorbar(sfvals, sfresps, sfstderr, fmt='o', color='k');
   # model
   plt_sfs = np.geomspace(sfvals[0], sfvals[-1], 100);
   mod_resp = hf.flexible_Gauss(sf['sfParams'], plt_sfs)
-  ax[1, 1].plot(sf['charFreq'], 0, 'kv', label='char freq (%.1f Hz)' % sf['charFreq'])
+  ax[1, 1].plot(sf['charFreq'], 0, 'kv', label='char freq (%.1f cpd)' % sf['charFreq'])
   ax[1, 1].semilogx(plt_sfs, mod_resp, 'k-')
   ax[1, 1].set_title('SF: Peak %.1f cyc/deg, bw %.1f oct' % (sf['sfPref'], sf['sfBW_oct']))
   ax[1, 1].set_xlabel('spatial frequency (cyc/sec)');
 # also plot the sfMix high contrast, single grating sf tuning
 ### plot reference tuning [row 1 (i.e. 2nd row)]
-if baseline is not None:
-  sfRef = sfRef + baseline;
 ax[1, 1].errorbar(all_sfs, sfRef, sfRefSEM, color='r', fmt='o', label='ref. tuning (d0, high con)', clip_on=False)
 ax[1, 1].legend();
 
@@ -210,7 +250,10 @@ if tf is not None:
   respInd = tf['isSimple'];
   # data
   tfvals, tfresps, tfstderr = [tf['tf_exp'][x] for x in ['tfVals', 'counts_mean', 'counts_stderr']];
-  ax[1, 0].errorbar(tfvals, tfresps[:,0, respInd], tfstderr[:,0, respInd], fmt='o', color='k');
+  mean, stderr = tfresps[:,0, respInd], tfstderr[:,0, respInd];
+  if respInd == 0:
+    mean = mean - tf['tf_exp']['blank']['mean'];
+  ax[1, 0].errorbar(tfvals, mean, stderr, fmt='o', color='k');
   # model
   plt_tfs = np.geomspace(tfvals[0], tfvals[-1], 100);
   mod_resp = hf.flexible_Gauss(tf['tfParams'], plt_tfs)
@@ -227,7 +270,10 @@ if ori is not None:
   respInd = ori['isSimple'];
   # data
   orivals, oriresps, oristderr = [ori['ori_exp'][x] for x in ['oriVals', 'counts_mean', 'counts_stderr']];
-  ax[2, 0].errorbar(orivals, oriresps[:, respInd], oristderr[:, respInd], fmt='o', color='k');
+  mean, stderr = oriresps[:, respInd], oristderr[:, respInd];
+  if respInd == 0:
+    mean = mean - ori['ori_exp']['blank']['mean'];
+  ax[2, 0].errorbar(orivals, mean, stderr, fmt='o', color='k');
   # model
   plt_oris = np.linspace(0, 2*np.pi, 100);
   oriMod, _ = hf.get_ori_mod();

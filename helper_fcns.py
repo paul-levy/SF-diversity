@@ -3723,7 +3723,7 @@ def rvcTune(rvcVals, rvcResps, rvcResps_std, rvcMod=1):
 
 ####
 
-def get_basic_tunings(basicPaths, basicProgNames):
+def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None):
   ''' wrapper function used to get the derived measures for the basic characterizations
   '''
 
@@ -3742,18 +3742,28 @@ def get_basic_tunings(basicPaths, basicProgNames):
   # - if available, we base it off of the SF f1/f0 ratio; otherwise, exp by exp
   sf_resp_ind = None;
 
+  if numpy.any(['LGN' in y for y in basicPaths]): # automatically make LGN simple (sf_resp_ind = 1)
+    sf_resp_ind = 1;
+  if forceSimple is not None:
+    sf_resp_ind = forceSimple;
+
   for curr_name, prog in zip(basicPaths, basicProgNames):
     try:
       prog_curr = prog_name(curr_name);
+
       if 'sf' in prog:
         sf = rbc.readSf11(curr_name, prog_curr);
         f1f0 = sf['f1f0_rat'];
-        if f1f0 > 1: # simple
+        if f1f0 > 1 and sf_resp_ind is None: # simple
           sf_resp_ind = 1;
-        else:
+        elif f1f0 < 1 and sf_resp_ind is None: # complex - let's subtract baseline
           sf_resp_ind = 0;
+        resps = sf['counts_mean'][:,0,sf_resp_ind];
+        if sf_resp_ind == 0:
+          baseline = sf['blank']['mean'];
+          resps = resps - baseline;
 
-        sfPref, sfBW, sfParams, sfParamsDoG = tfTune(sf['sfVals'], sf['counts_mean'][:,0,sf_resp_ind]); # ignore other direction, if it's there..
+        sfPref, sfBW, sfParams, sfParamsDoG = tfTune(sf['sfVals'], resps); # ignore other direction, if it's there..
         sf_dict = dict();
         sf_dict['isSimple'] = sf_resp_ind;
         sf_dict['sfPref'] = sfPref;
@@ -3779,7 +3789,16 @@ def get_basic_tunings(basicPaths, basicProgNames):
         else:
           resp_ind = sf_resp_ind
 
-        c50, c50_emp, c50_eval, cg, params  = rvcTune(rv['conVals'], rv['counts_mean'][:, resp_ind], rv['counts_std'][:, resp_ind], rvcMod);
+        mean, std = rv['counts_mean'][:, resp_ind], rv['counts_std'][:, resp_ind]
+        conVals = rv['conVals'];
+        # NOTE: Unlike other measures, we do NOT baseline subtract the RVC
+        # - in fact, we will fit the responses including the 0% con responses (i.e. blank resp)
+        if resp_ind == 0:
+          bs_mean, bs_std = rv['blank']['mean'], rv['blank']['std'];
+          mean = numpy.hstack((bs_mean, mean)); std = numpy.hstack((bs_std, std));
+          conVals = numpy.hstack((0, conVals));
+
+        c50, c50_emp, c50_eval, cg, params  = rvcTune(conVals, mean, std, rvcMod);
         rvc_dict = dict();
         rvc_dict['isSimple'] = resp_ind;
         rvc_dict['c50'] = c50; rvc_dict['c50_emp'] = c50_emp; rvc_dict['c50_eval'] = c50_eval; 
@@ -3787,6 +3806,7 @@ def get_basic_tunings(basicPaths, basicProgNames):
         rvc_dict['params'] = params;
         rvc_dict['rvcMod'] = rvcMod;
         rvc_dict['rvc_exp'] = rv;
+
         basic_outputs['rvc'] = rvc_dict;
 
       if 'tf' in prog:
@@ -3800,7 +3820,13 @@ def get_basic_tunings(basicPaths, basicProgNames):
         else:
           resp_ind = sf_resp_ind
 
-        tfPref, tfBW, tfParams, tfParamsDoG = tfTune(tf['tfVals'], tf['counts_mean'][:,0,resp_ind]); # ignore other direction, if it's there...
+        mean = tf['counts_mean'][:,0,resp_ind]
+        if resp_ind == 0:
+          baseline = tf['blank']['mean'];
+          mean = mean - baseline;
+
+
+        tfPref, tfBW, tfParams, tfParamsDoG = tfTune(tf['tfVals'], mean); # ignore other direction, if it's there...
         tf_dict = dict();
         tf_dict['isSimple'] = resp_ind;
         tf_dict['tfPref'] = tfPref;
@@ -3822,7 +3848,14 @@ def get_basic_tunings(basicPaths, basicProgNames):
         else:
           resp_ind = sf_resp_ind
 
-        data, mod, to_plot, opt_params = sizeTune(rf['diskVals'], rf['annulusVals'], rf['counts_mean'][:,0,resp_ind], rf['counts_mean'][:,1,resp_ind], rf['counts_std'][:,0,resp_ind], rf['counts_std'][:,1,resp_ind]);
+        disk_mean, ann_mean = rf['counts_mean'][:,0,resp_ind], rf['counts_mean'][:,1,resp_ind]
+        disk_std, ann_std = rf['counts_std'][:,0,resp_ind], rf['counts_std'][:,1,resp_ind];
+        if resp_ind == 0: # i.e. complex
+          baseline = rf['blank']['mean'];
+          disk_mean = disk_mean - baseline;
+          ann_mean = ann_mean - baseline;
+
+        data, mod, to_plot, opt_params = sizeTune(rf['diskVals'], rf['annulusVals'], disk_mean, ann_mean, disk_std, ann_std);
         rf_dict = dict();
         rf_dict['isSimple'] = resp_ind;
         rf_dict['gsf_data'] = data['gsf']
@@ -3847,6 +3880,10 @@ def get_basic_tunings(basicPaths, basicProgNames):
           resp_ind = sf_resp_ind;
 
         ori_vals, mean, std = ori['oriVals'], ori['counts_mean'][:, resp_ind], ori['counts_std'][:, resp_ind];
+        if resp_ind == 0: # i.e. complex - subtract baseline
+          baseline = ori['blank']['mean'];
+          mean = mean - baseline;
+
         ori_dict = dict();
         ori_dict['isSimple'] = resp_ind;
         ori_dict['cv'] = oriCV(ori_vals, mean);
