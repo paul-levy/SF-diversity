@@ -38,7 +38,7 @@ cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2];
 
 rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
-rvcMod = 0; # naka rushton (1); 
+rvcMod = 1; # naka rushton (1); 
 
 loc_base = os.getcwd() + '/';
 
@@ -133,12 +133,18 @@ except:
 ### get the sfRef and rvcRef - i.e. single grating, high contrast/prefSf SF/RVC tuning
 sfRef = hf.nan_rm(respMean[0, :, -1]); # high contrast tuning
 sfRefSEM = hf.nan_rm(respSem[0, :, -1]);
-rvc10_sf = np.unique(rvc['rvc_exp']['byTrial']['sf']);
-# now, let's get two RVCs - one at nearest sf to what was used in rvc10, one at peak sfMix response 
 sfPeak = np.argmax(sfRef); # stupid/simple, but just get the rvc for the max response
 rvcRef_sf = all_sfs[sfPeak];
-sfComp = np.argmin(np.square(np.log2(all_sfs) - np.log2(rvc10_sf)));
-rvcComp_sf = all_sfs[sfComp];
+# now, get the rvcRef, if possible
+try:
+  rvc10_sf = np.unique(rvc['rvc_exp']['byTrial']['sf']);
+  sfComp = np.argmin(np.square(np.log2(all_sfs) - np.log2(rvc10_sf)));
+  rvcComp_sf = all_sfs[sfComp];
+except:
+  rvc10_sf = np.nan;
+  sfComp = None;
+  rvcComp_sf = np.nan;
+# now, let's get two RVCs - one at nearest sf to what was used in rvc10, one at peak sfMix response 
 rvcRef_sfs = [rvcRef_sf, rvcComp_sf];
 v_cons_single = val_con_by_disp[0]
 rvcRefs = [hf.nan_rm(respMean[0, sfInd, v_cons_single]) for sfInd in (sfPeak, sfComp)];
@@ -192,7 +198,10 @@ if rvcName is not None and (expDir == 'V1/' or expDir == 'LGN/'):
 ### and plot the data from sfMix
 if baseline_sfMix is not None: # add back the baseline if complex cel
   rvcRefs = [rvcRef + baseline_sfMix for rvcRef in rvcRefs]; # add back the baseline for rvc (NOTE: we add back the rate, NOT the raw counts, since we fit to/plot rate)
-[ax[0, 0].errorbar(all_cons[v_cons_single], rvcRef, rvcRefSEM, color=clr, fmt='o', label='sfMix (d0, %.1f cpd)' % rvcRef_sf, clip_on=False) for rvcRef, rvcRefSEM, rvcRef_sf, clr in zip(rvcRefs, rvcRefsSEM, rvcRef_sfs, rvcRefsColor)]
+try:
+  [ax[0, 0].errorbar(all_cons[v_cons_single], rvcRef, rvcRefSEM, color=clr, fmt='o', label='sfMix (d0, %.1f cpd)' % rvcRef_sf, clip_on=False) for rvcRef, rvcRefSEM, rvcRef_sf, clr in zip(rvcRefs, rvcRefsSEM, rvcRef_sfs, rvcRefsColor)]
+except:
+  pass;
 ax[0, 0].set_title('RVC');
 ax[0, 0].legend();
 

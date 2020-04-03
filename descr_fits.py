@@ -17,8 +17,8 @@ df_f0 = 'descrFits_191003_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
 dogName =  'descrFits_191201';
 phAdvName = 'phaseAdvanceFits_191023'
-rvcName_f0   = 'rvcFits_191023_f0.npy'
-rvcName_f1   = 'rvcFits_191023' # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f0   = 'rvcFits_201330_f0' # .npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f1   = 'rvcFits_200330' # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 ## model recovery???
 modelRecov = 0;
 if modelRecov == 1:
@@ -281,12 +281,15 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcNam
 
 ### 1.1 RVC fits without adjusted responses (organized like SF tuning)
 
-def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName_f0, dLname=expName, modelRecov=modelRecov, normType=normType):
+def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName_f0, dLname=expName, modelRecov=modelRecov, normType=normType, rvcMod=0):
   # TODO: Should replace spikes with baseline subtracted spikes?
   # NOTE: n_repeats not used (19.05.06)
   # normType used iff modelRecv == 1
 
-  nParam = 3; # RVC model is 3 parameters only
+  if rvcMod == 0:
+    nParam = 3; # RVC model is 3 parameters only
+  else:
+    nParam = 5; # naka rushton is 4, peirce modification is 5 (but for NR, we just add a fixed parameter for #5)
 
   # load cell information
   dataList = hf.np_smart_load(data_loc + dLname);
@@ -297,8 +300,9 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName_f0, dLname=ex
   expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1]);
   print('Making RVC (F0) fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
 
-  if os.path.isfile(data_loc + fLname):
-    rvcFits = hf.np_smart_load(data_loc + fLname);
+  name_final = '%s%s.npy' % (fLname, hf.rvc_mod_suff(rvcMod));
+  if os.path.isfile(data_loc + name_final):
+    rvcFits = hf.np_smart_load(data_loc + name_final);
   else:
     rvcFits = dict();
 
@@ -340,7 +344,7 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName_f0, dLname=ex
       curr_conVals = all_cons[curr_conInd];
       curr_resps, curr_sem = resps_mean[d, sf, curr_conInd], resps_sem[d, sf, curr_conInd];
       # wrap in arrays, since rvc_fit is written for multiple rvc fits at once (i.e. vectorized)
-      _, params, conGain, loss = hf.rvc_fit([curr_resps], [curr_conVals], [curr_sem], n_repeats=n_repeats);
+      _, params, conGain, loss = hf.rvc_fit([curr_resps], [curr_conVals], [curr_sem], n_repeats=n_repeats, mod=rvcMod);
 
       if (np.isnan(bestLoss[d, sf]) or loss < bestLoss[d, sf]) and params[0] != []: # i.e. params is not empty
         bestLoss[d, sf] = loss[0];
@@ -348,16 +352,16 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName_f0, dLname=ex
         conGains[d, sf] = conGain[0];
 
   # update stuff - load again in case some other run has saved/made changes
-  if os.path.isfile(data_loc + fLname):
+  if os.path.isfile(data_loc + name_final):
     print('reloading RVC (F0) fits...');
-    rvcFits = hf.np_smart_load(data_loc + fLname);
+    rvcFits = hf.np_smart_load(data_loc + name_final);
   if cell_num-1 not in rvcFits:
     rvcFits[cell_num-1] = dict();
   rvcFits[cell_num-1]['loss'] = bestLoss;
   rvcFits[cell_num-1]['params'] = currParams;
   rvcFits[cell_num-1]['conGain'] = conGains;
 
-  np.save(data_loc + fLname, rvcFits);
+  np.save(data_loc + name_final, rvcFits);
 
 #####################################
 
@@ -567,4 +571,4 @@ if __name__ == '__main__':
         fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint);
 
     if rvcF0_fits == 1:
-      fit_RVC_f0(cell_num, data_loc=dataPath);
+      fit_RVC_f0(cell_num, data_loc=dataPath, rvcMod=rvc_model);
