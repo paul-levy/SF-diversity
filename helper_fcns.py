@@ -3753,7 +3753,10 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None):
 
       if 'sf' in prog:
         sf = rbc.readSf11(curr_name, prog_curr);
-        f1f0 = sf['f1f0_rat'];
+        if sf['f1f0_rat'] == []:
+          f1f0 = -1; # ensure it's complex...
+        else:
+          f1f0 = sf['f1f0_rat'];
         if f1f0 > 1 and sf_resp_ind is None: # simple
           sf_resp_ind = 1;
         elif f1f0 < 1 and sf_resp_ind is None: # complex - let's subtract baseline
@@ -3781,7 +3784,10 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None):
         else:
           rvcMod = 1; # otherwise, naka-rushton
         if sf_resp_ind is None:
-          f1f0 = rv['f1f0_rat'];
+          if rv['f1f0_rat'] == []:
+            f1f0 = -1; # ensure it's complex...
+          else:
+            f1f0 = rv['f1f0_rat'];
           if f1f0 > 1: # simple
             resp_ind = 1;
           else:
@@ -3812,7 +3818,10 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None):
       if 'tf' in prog:
         tf = rbc.readTf11(curr_name, prog_curr);
         if sf_resp_ind is None:
-          f1f0 = tf['f1f0_rat'];
+          if tf['f1f0_rat'] == []:
+            f1f0 = -1; # ensure it's complex...
+          else:
+            f1f0 = tf['f1f0_rat'];
           if f1f0 > 1: # simple
             resp_ind = 1;
           else:
@@ -3824,7 +3833,6 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None):
         if resp_ind == 0:
           baseline = tf['blank']['mean'];
           mean = mean - baseline;
-
 
         tfPref, tfBW, tfParams, tfParamsDoG = tfTune(tf['tfVals'], mean); # ignore other direction, if it's there...
         tf_dict = dict();
@@ -3840,7 +3848,10 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None):
       if 'rf' in prog:
         rf = rbc.readRFsize10(curr_name, prog_curr);
         if sf_resp_ind is None:
-          f1f0 = rf['f1f0_rat'];
+          if rf['f1f0_rat'] == []:
+            f1f0 = -1; # ensure it's complex...
+          else:
+            f1f0 = rf['f1f0_rat'];
           if f1f0 > 1: # simple
             resp_ind = 1;
           else:
@@ -3871,7 +3882,10 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None):
       if 'or' in prog:
         ori = rbc.readOri16(curr_name, prog_curr);
         if sf_resp_ind is None:
-          f1f0 = ori['f1f0_rat'];
+          if ori['f1f0_rat'] == []:
+            f1f0 = -1; # ensure it's complex...
+          else:
+            f1f0 = ori['f1f0_rat'];
           if f1f0 > 1: # simple
             resp_ind = 1;
           else:
