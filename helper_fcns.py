@@ -2498,9 +2498,7 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
         overwriteSpikes: optional argument - if None, simply use F0 as saved in cell (i.e. spikeCount)
                          otherwise, pass in response by trial (i.e. not organized by condition; MUST be one value per trial, not per component)
                            e.g. F1, or adjusted F1 responses
-        respsAsRates: optional argument - if False (or if overwriteSpikes is None), then divide response
-                         otherwise, pass in response by trial (i.e. not organized by condition)
-                           e.g. F1, or adjusted F1 responses
+        respsAsRates/modsAsRate: optional argument - if False (or if overwriteSpikes is None), then divide response by stimDur
     '''
     np = numpy;
     conDig = 3; # round contrast to the thousandth
@@ -2678,7 +2676,7 @@ def organize_adj_responses(data, rvcFits, expInd):
 def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False):
     ''' organizes the responses by condition given spikes, experiment structure, and expInd
         mask will be None OR list of trials to consider (i.e. trials not in mask/where mask is false are ignored)
-
+        - respsAsRate: are "spikes" already in rates? if yes, pass in "True"; otherwise, we'll divide by stimDur to get rate
     '''
     # the blockIDs are fixed...
     exper = get_exp_params(expInd);
@@ -3372,8 +3370,13 @@ def getConstraints(fitType):
         #   08 = mean of normalization weights gaussian || [>-2]
         #   09, 10 = std left/right ... || >1e-3 or >5e-1
 
+    np = numpy;
+
     zero = (0.05, None);
-    one = (0.1, None);
+    # sigma for flexGauss version (bandwidth)
+    min_bw = 1/4; max_bw = 10; # ranges in octave bandwidth
+    one = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
+    #one = (0.1, None);
     two = (None, None);
     #three = (2.0, 2.0); # fix at 2 (addtl suffix B)
     three = (0.25, None); # trying, per conversation with Tony (03.01.19)
@@ -3384,11 +3387,13 @@ def getConstraints(fitType):
     seven = (1e-3, None);
     if fitType == 1:
       eight = (0, 0); # flat normalization (i.e. no tilt)
-      return (zero,one,two,three,four,five,six,seven,eight);
+      nine = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
+      return (zero,one,two,three,four,five,six,seven,eight,nine);
     if fitType == 2:
       eight = (-2, None);
       nine = (5e-1, None);
-      return (zero,one,two,three,four,five,six,seven,eight,nine);
+      ten = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
+      return (zero,one,two,three,four,five,six,seven,eight,nine,ten);
     elif fitType == 3:
       eight = (0, 0.75);
       nine = (1e-1, None);

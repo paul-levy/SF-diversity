@@ -11,6 +11,8 @@ import pdb
 
 fft = numpy.fft
 
+cellNum      = int(sys.argv[1]);
+
 dataListName = hf.get_datalist(sys.argv[2]); # argv[2] is expDir
 modRecov = 0;
 
@@ -48,6 +50,7 @@ loss_glob = [];
 resp_glob = [];
 
 ###
+# TODO?: get_normPrms   - get the parameters for the normalization pool, depending on normType
 # oriFilt        - used only in plotting to create 2D image of receptive field/filter
 # SFMSimpleResp  - compute the response of the cell's linear filter to a given (set of) stimuli
 # SFMNormResp    - compute the response of the normalization pool to stimulus; not called in optimization, but called in simulation
@@ -124,8 +127,12 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None):
 
     # Get directional selectivity - removed 7/18/17
 
+    # Get sigmaLow/High
+    sigLow = channel['sigLow'];
+    sigHigh = channel['sigHigh'];
+
     # Get derivative order in space and time
-    dOrdSp = channel.get('dord').get('sp');
+    #dOrdSp = channel.get('dord').get('sp');
     dOrdTi = channel.get('dord').get('ti');
 
     # Get aspect ratio in space - removed 7/18/17
@@ -142,12 +149,13 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None):
     pref.setdefault('tf', prefTf);
     pref.setdefault('xCo', xCo);
     pref.setdefault('yCo', yCo);
-    dord.setdefault('sp', dOrdSp);
+    #dord.setdefault('sp', dOrdSp);
     dord.setdefault('ti', dOrdTi);
     
     M.setdefault('pref', pref);
     M.setdefault('dord', dord);
-    
+    M.setdefault('sig', (sigLow, sigHigh));
+
     # Pre-allocate memory
     z             = trialInf;
     nSf           = 1;
@@ -199,12 +207,21 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None):
         # I. Orientation, spatial frequency and temporal frequency
         # Compute orientation tuning - removed 17.18.7
 
-        # Compute spatial frequency tuning
-        sfRel = stimSf / prefSf;
-        s     = pow(stimSf, dOrdSp) * numpy.exp(-dOrdSp/2 * pow(sfRel, 2));
-        sMax  = pow(prefSf, dOrdSp) * numpy.exp(-dOrdSp/2);
-        sNl   = s/sMax;
-        selSf = sNl;
+        # Compute spatial frequency tuning - flexible Gauss
+        sfRel = numpy.divide(stimSf, prefSf);
+        # - set the sigma appropriately, depending on what the stimulus SF is
+        sigma = numpy.multiply(sigLow, [1]*len(sfRel));
+        sigma[[x for x in range(len(sfRel)) if sfRel[x] > 1]] = sigHigh;
+        # - now, compute the responses (automatically normalized, since max gaussian value is 1...)
+        s     = [numpy.exp(-numpy.divide(numpy.square(numpy.log(x)), 2*numpy.square(y))) for x,y in zip(sfRel, sigma)];
+        selSf = s; 
+
+        # Compute spatial frequency tuning - Deriv. order Gaussian
+        #sfRel = stimSf / prefSf;
+        #s     = pow(stimSf, dOrdSp) * numpy.exp(-dOrdSp/2 * pow(sfRel, 2));
+        #sMax  = pow(prefSf, dOrdSp) * numpy.exp(-dOrdSp/2);
+        #sNl   = s/sMax;
+        #selSf = sNl;
 
         # Compute temporal frequency tuning - removed 19.05.13
 
@@ -621,7 +638,7 @@ def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None, normType=2, trialArtifi
 
   return respByFr;
 
-def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None, trackSteps=False, overwriteSpikes=None, kMult = 0.10):
+def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None, trackSteps=False, overwriteSpikes=None, kMult = 0.10, cellNum=cellNum):
     '''
     Computes the negative log likelihood for the LN-LN model
        Optional arguments: //note: true means include in mask, false means exclude
@@ -634,6 +651,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     Returns NLL ###, respModel
        Note: to keep in sync with the organization/gathering of measured spiking responses, we return
          respModel as spikes/trial (and not a rate of spks/s)
+         - (and, of course), we are fitting to the raw spike counts, not the rates
     '''
 
     # 00 = preferred spatial frequency   (cycles per degree)
@@ -644,28 +662,28 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     # 05 = early additive noise
     # 06 = late additive noise
     # 07 = variance of response gain    
-    # if fitType == 1
-    # 08 = asymmetry ("historically", bounded [-0.35, 0.35], currently just "flat")
-    # if fitType == 2
-    # 08 = mean of normalization weights gaussian
-    # 09 = std of ...
-    # if fitType == 3
-    # 08 = offset of c50 tuning filter (filter bounded between [sigOffset, 1]
-    # 09/10 = standard deviations to the left and right of the peak of the c50 filter
-    # 11 = peak (in sf cpd) of c50 filter
-    # if fitType == 4
-    # 08 = mean of normalization weights gaussian
-    # 09/10 = std (left/right) of ...
+    # if fitType == 1 (flat normalization)
+    #   08 = asymmetry ("historically", bounded [-0.35, 0.35], currently just "flat")
+    # if fitType == 2 (gaussian-weighted normalization responses)
+    #   08 = mean of normalization weights gaussian
+    #   09 = std of ...
+    # if fitType == 3 (gaussian-weighted c50/norm "constant")
+    #   08 = offset of c50 tuning filter (filter bounded between [sigOffset, 1]
+    #   09/10 = standard deviations to the left and right of the peak of the c50 filter
+    #   11 = peak (in sf cpd) of c50 filter
+    # if fitType == 4 (gaussian-weighted (flexible/two-halved) normalization responses)
+    #   08 = mean of normalization weights gaussian
+    #   09/10 = std (left/right) of ...
 
-    #print('ha!');
-    
     T = structureSFM['sfm'];
 
     # Get parameter values
     # Excitatory channel
     pref = {'sf': params[0]};
-    dord = {'sp': params[1], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
-    excChannel = {'pref': pref, 'dord': dord};
+    sigLow = params[1]; sigHigh = params[-1];
+    dord = {'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
+    #dord = {'sp': params[1], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
+    excChannel = {'pref': pref, 'dord': dord, 'sigLow': sigLow, 'sigHigh': sigHigh};
 
     # Inhibitory channel
     # nothing in this current iteration - 7/7/17
@@ -750,7 +768,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         denominator   = pow(sigmaFilt + pow(Linh, 2), 0.5); # square Linh added 7/24 - was mistakenly not fixed earlier
         ratio         = pow(numerator/denominator, respExp);
         # NOTE: TODO - turned off the 0 thresholding to see what happens and to better fit LGN responses, which - when adjusted - can be negative
-        #ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
+        ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
         meanRate      = ratio.mean(0);
         respModel     = noiseLate + scale*meanRate; # respModel[iR]
         rateModel     = respModel / T['exp']['trial']['duration'];
@@ -760,6 +778,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         else:
           f1f0_rat = hf.compute_f1f0(T['exp']['trial'], cellNum, expInd, loc_data=None)[0];
           # TODO: should add line forcing F1 if LGN experiment...
+          # -- rvcMod = - 1 only because rvcFits already contains the loaded fits (tells func call to use rvcName as fits)
           spikeRate = hf.get_adjusted_spikerate(T['exp']['trial'], cellNum, expInd, dataPath=None, rvcName=rvcFits, rvcMod=-1, baseline_sub=False);
           # NOTE: this is now a spikerate, not spike count, so let's convert (by multiplying rate by stimDir)
           spikeCount = numpy.multiply(spikeRate, hf.get_exp_params(expInd).stimDur);
@@ -1066,7 +1085,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       if modRecov == 1:
         fL_name = 'mr_fitList%s_190516cA' % loc_str
       else:
-        fL_name = 'fitList%s_191023%s' % (loc_str, hf.chiSq_suffix(kMult));
+        fL_name = 'fitList%s_200418%s' % (loc_str, hf.chiSq_suffix(kMult));
+        #fL_name = 'fitList%s_200413%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_190321c' % loc_str
 
     np = numpy;
@@ -1154,7 +1174,13 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     # 09/10 = std of (log)gaussian (to left/right) for normalization weights
     
     if cellNum-1 in fitList:
-      curr_params = fitList[cellNum-1]['params']; # load parameters from the fitList! this is what actually gets updated...
+      try:
+        curr_params = fitList[cellNum-1]['params']; # load parameters from the fitList! this is what actually gets updated...
+      except:
+        curr_params = [];
+        initFromCurr = 0; # override initFromCurr so that we just go with default parameters
+        fitList[cellNum-1] = dict();
+        fitList[cellNum-1]['NLL'] = 1e4; # large initial value...
     else: # set up basic fitList structure...
       curr_params = [];
       initFromCurr = 0; # override initFromCurr so that we just go with default parameters
@@ -1171,7 +1197,9 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       initFromCurr = 0;
 
     pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
-    dOrdSp = np.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
+    sigLow = np.random.uniform(1, 4) if initFromCurr==0 else curr_params[1];
+    sigHigh = np.random.uniform(0.1, 2) if initFromCurr==0 else curr_params[-1];
+    #dOrdSp = np.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
     normConst = normConst if initFromCurr==0 else curr_params[2];
     respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
     respScalar = np.random.uniform(10, 200) if initFromCurr==0 else curr_params[4];
@@ -1208,7 +1236,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       except:
         warnings.warn('Could not initialize with alternate-fit parameters; defaulting to typical process');
 
-    print('Initial parameters:\n\tsf: ' + str(pref_sf)  + '\n\td.ord: ' + str(dOrdSp) + '\n\tnormConst: ' + str(normConst));
+    print('Initial parameters:\n\tsf: ' + str(pref_sf)  + '\n\tsigLow: ' + str(sigLow) + '\n\tsigHigh: ' + str(sigHigh) + '\n\tnormConst: ' + str(normConst));
+    #print('Initial parameters:\n\tsf: ' + str(pref_sf)  + '\n\td.ord: ' + str(dOrdSp) + '\n\tnormConst: ' + str(normConst));
     print('\n\trespExp ' + str(respExp) + '\n\trespScalar ' + str(respScalar));
     
     #########
@@ -1253,9 +1282,11 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       
     # Set up model here - get the parameters and parameter bounds
     if fitType == 1:
-      param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym);
+      param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym, sigHigh);
+      #param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym);
     elif fitType == 2:
-      param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd);
+      param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, sigHigh);
+      #param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd);
     elif fitType == 3:
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, sigOffset, stdLeft, stdRight, sigPeak);
     elif fitType == 4:
