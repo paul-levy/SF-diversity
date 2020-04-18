@@ -20,7 +20,7 @@ warnings.filterwarnings('once');
 
 import pdb
 
-plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_cluster.mplstyle');
+plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
 from matplotlib import rcParams
 # TODO: migrate this to actual .mplstyle sheet
 rcParams['font.size'] = 20;
@@ -72,22 +72,18 @@ save_loc = loc_base + expDir + 'figures/';
 ### DATALIST
 expName = hf.get_datalist(expDir);
 #expName = 'dataList.npy';
-#expName = 'dataList_glx.npy'
+#expName = 'dataList_glx_vss2019.npy'
 #expName = 'dataList_mr.npy'
 ### FITLIST
-#fitBase = 'fitList_190321c';
-#fitBase = 'fitListSPcns_181130c';
-#fitBase = 'fitListSP_181202c';
-#fitBase = 'fitList_190206c';
-#fitBase = 'fitList_190321c';
-
 #fitBase = 'mr_fitList_190502cA';
 #fitBase = 'fitList_190502aA';
-fitBase = 'fitList_190513cA';
+#fitBase = 'fitList_190513cA'; # NOTE: THIS VERSION USED FOR VSS2019 poster
 #fitBase = 'fitList_190516cA';
+#fitBase = 'fitList_191023c';
+fitBase = 'fitList_200413c';
 #fitBase = 'holdout_fitList_190513cA';
 ### RVCFITS
-rvcBase = 'rvcFits'; # direc flag & '.npy' are added
+rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
 
 # first the fit type
 fitSuf_fl = '_flat';
@@ -153,13 +149,13 @@ normTypes = [1, 2]; # flat, then weighted
 
 # ### Organize data
 # #### determine contrasts, center spatial frequency, dispersions
-
-modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd) for fit, norm in zip(modFits, normTypes)];
+# SFMGiveBof returns spike counts per trial, NOT rates -- we will correct in hf.organize_resp call below
+modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum) for fit, norm in zip(modFits, normTypes)];
 modResps = [x[1] for x in modResps]; # 1st return output (x[0]) is NLL (don't care about that here)
 gs_mean = modFit_wg[8]; 
 gs_std = modFit_wg[9];
 # now organize the responses
-orgs = [hf.organize_resp(mr, expData, expInd) for mr in modResps];
+orgs = [hf.organize_resp(mr, expData, expInd, respsAsRate=False) for mr in modResps];
 oriModResps = [org[0] for org in orgs]; # only non-empty if expInd = 1
 conModResps = [org[1] for org in orgs]; # only non-empty if expInd = 1
 sfmixModResps = [org[2] for org in orgs];
@@ -178,8 +174,9 @@ if rvcAdj == 1:
 else:
   rvcFlag = '_f0';
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
-spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcBase, rvcMod=rvcMod, descrFitName_f0 = fLname, baseline_sub=False);
-_, _, respOrg, respAll    = hf.organize_resp(spikes_rate, expData, expInd);
+# rvcMod=-1 tells the function call to treat rvcName as the fits, already (we loaded above!)
+spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=rvcFits, rvcMod=-1, descrFitName_f0=None, baseline_sub=False);
+_, _, respOrg, respAll = hf.organize_resp(spikes_rate, expData, expInd, respsAsRate=True);
 
 respMean = respOrg;
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
