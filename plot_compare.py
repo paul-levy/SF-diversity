@@ -46,14 +46,15 @@ minorWid, minorLen = 2, 12;
 majorWid, majorLen = 5, 25;
 
 cellNum  = int(sys.argv[1]);
-lossType = int(sys.argv[2]);
-expDir   = sys.argv[3]; 
-rvcAdj   = int(sys.argv[4]); # if 1, then let's load rvcFits to adjust responses to F1
-rvcMod   = int(sys.argv[5]); # 0/1/2 (see hf.rvc_fit_name)
-diffPlot = int(sys.argv[6]);
-intpMod  = int(sys.argv[7]);
-if len(sys.argv) > 8:
-  respVar = int(sys.argv[8]);
+excType  = int(sys.argv[2]);
+lossType = int(sys.argv[3]);
+expDir   = sys.argv[4]; 
+rvcAdj   = int(sys.argv[5]); # if 1, then let's load rvcFits to adjust responses to F1
+rvcMod   = int(sys.argv[6]); # 0/1/2 (see hf.rvc_fit_name)
+diffPlot = int(sys.argv[7]);
+intpMod  = int(sys.argv[8]);
+if len(sys.argv) > 9:
+  respVar = int(sys.argv[9]);
 else:
   respVar = 1;
 
@@ -80,7 +81,9 @@ expName = hf.get_datalist(expDir);
 #fitBase = 'fitList_190513cA'; # NOTE: THIS VERSION USED FOR VSS2019 poster
 #fitBase = 'fitList_190516cA';
 #fitBase = 'fitList_191023c';
-fitBase = 'fitList_200413c';
+#fitBase = 'fitList_200413c';
+#fitBase = 'fitList_200417c';
+fitBase = 'fitList_200418c';
 #fitBase = 'holdout_fitList_190513cA';
 ### RVCFITS
 rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
@@ -150,7 +153,7 @@ normTypes = [1, 2]; # flat, then weighted
 # ### Organize data
 # #### determine contrasts, center spatial frequency, dispersions
 # SFMGiveBof returns spike counts per trial, NOT rates -- we will correct in hf.organize_resp call below
-modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum) for fit, norm in zip(modFits, normTypes)];
+modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, excType=excType) for fit, norm in zip(modFits, normTypes)];
 modResps = [x[1] for x in modResps]; # 1st return output (x[0]) is NLL (don't care about that here)
 gs_mean = modFit_wg[8]; 
 gs_std = modFit_wg[9];
@@ -264,7 +267,7 @@ for d in range(nDisps):
           else:
             nRptsCurr = nRpts;
           for pm, typ in zip(modFits, normTypes):
-            simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, v_cons[c], x, normType=typ, expInd=expInd, nRepeats=nRptsCurr)[0];
+            simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, v_cons[c], x, normType=typ, expInd=expInd, nRepeats=nRptsCurr, excType=excType)[0];
             interpMod = [np.mean(simWrap(np.array([sfCurr]))) for sfCurr in plt_sfs];
             interpModBoth.append(np.array(interpMod));
           # TODO plot, but recenter if diffPlot == 1...
@@ -374,7 +377,7 @@ mixCons = hf.get_exp_params(expInd).nCons;
 minResp = np.min(np.min(np.min(respMean[~np.isnan(respMean)])));
 maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
 
-f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(20, 1.5*15));
+f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(25, 1.5*20));
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
 
@@ -408,7 +411,7 @@ for d in range(nDisps):
           else:
             nRptsCurr = nRpts;
           for pm, typ in zip(modFits, normTypes):
-            simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, v_cons[c], x, normType=typ, expInd=expInd, nRepeats=nRptsCurr)[0];
+            simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, v_cons[c], x, normType=typ, expInd=expInd, nRepeats=nRptsCurr, excType=excType)[0];
             interpMod = [np.mean(simWrap(np.array([sfCurr]))) for sfCurr in plt_sfs];
             interpModBoth.append(np.array(interpMod));
           # TODO plot, but recenter if diffPlot == 1...
@@ -452,6 +455,7 @@ if ~np.any([i is None for i in oriModResps]): # then we're using an experiment w
   expPlt = plt.plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-', clip_on=False); # Exp responses
   plt.xlabel('Ori (deg)', fontsize=12);
   plt.ylabel('Response (ips)', fontsize=12);
+
 if ~np.any([i is None for i in conModResps]): # then we're using an experiment with RVC curves
   # CRF - with values from TF simulation and the broken down (i.e. numerator, denominator separately) values from resimulated conditions
   curr_ax = plt.subplot2grid(detailSize, (0, 1)); # default size is 1x1
@@ -487,6 +491,8 @@ sfToUse = np.int(np.floor(len(v_sfs)/2));
 plt.semilogx(all_cons[val_cons], respMean[disp_rvc, sfToUse, val_cons], 'o', clip_on=False); # Measured responses
 [plt.plot(all_cons[val_cons], modAvg[disp_rvc, sfToUse, val_cons], '%so-' % c, clip_on=False, label=s) for modAvg, c, s in zip(modAvgs, modColors, modLabels)]; # Model responses
 plt.xlabel('Con (%)', fontsize=20);
+plt.ylim([np.minimum(-5, np.nanmin(respMean[disp_rvc, sfToUse, val_cons])), 1.1*np.nanmax(respMean[disp_rvc, sfToUse, val_cons])]);
+
 # Remove top/right axis, put ticks only on bottom/left
 
 # plot model details - exc/suppressive components
@@ -494,11 +500,26 @@ omega = np.logspace(-2, 2, 1000);
 sfExc = [];
 for i in modFits:
   prefSf = i[0];
-  dOrder = i[1];
-  sfRel = omega/prefSf;
-  s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
-  sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
-  sfExcCurr = s/sMax;
+
+  if excType == 1:
+    ### deriv. gauss
+    dOrder = i[1];
+    sfRel = omega/prefSf;
+    s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
+    sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
+    sfExcCurr = s/sMax;
+  if excType == 2:
+    ### flex. gauss
+    sigLow = i[1];
+    sigHigh = i[-1];
+    sfRel = np.divide(omega, prefSf);
+    # - set the sigma appropriately, depending on what the stimulus SF is
+    sigma = np.multiply(sigLow, [1]*len(sfRel));
+    sigma[[x for x in range(len(sfRel)) if sfRel[x] > 1]] = sigHigh;
+    # - now, compute the responses (automatically normalized, since max gaussian value is 1...)
+    s     = [np.exp(-np.divide(np.square(np.log(x)), 2*np.square(y))) for x,y in zip(sfRel, sigma)];
+    sfExcCurr = s; 
+
   sfExc.append(sfExcCurr);
 
 inhSfTuning = hf.getSuppressiveSFtuning();
@@ -577,9 +598,16 @@ plt.text(0.5, 1.1, 'respExp: %.2f, %.2f' % (modExps[0], modExps[1]), fontsize=12
 # print, in text, model parameters:
 curr_ax = plt.subplot2grid(detailSize, (0, 4));
 plt.text(0.5, 0.5, 'prefSf: %.3f, %.3f' % (modFits[0][0], modFits[1][0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-plt.text(0.5, 0.4, 'derivative order: %.3f, %.3f' % (modFits[0][1], modFits[1][1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+if excType == 1:
+  plt.text(0.5, 0.4, 'derivative order: %.3f, %.3f' % (modFits[0][1], modFits[1][1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+elif excType == 2:
+  plt.text(0.5, 0.4, 'sig: %.2f|%.2f, %.2f|%.2f' % (modFits[0][1], modFits[0][-1], modFits[1][1], modFits[1][-1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.text(0.5, 0.3, 'response scalar: %.3f, %.3f' % (modFits[0][4], modFits[1][4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, modFits[0][2]), np.power(10, modFits[1][2]), modFits[0][2], modFits[1][2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+
+# Now, space out the subplots...
+#f.tight_layout(pad=0.1)
+fDetails.tight_layout(pad=0.1)
 
 ### now save all figures (sfMix contrasts, details, normalization stuff)
 allFigs = [f, fDetails];
@@ -653,7 +681,7 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
             else:
               nRptsCurr = nRpts;
             for pm, typ in zip(modFits, normTypes):
-              simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, x, sf_ind, normType=typ, expInd=expInd, nRepeats=nRptsCurr)[0];
+              simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, x, sf_ind, normType=typ, expInd=expInd, nRepeats=nRptsCurr, excType=excType)[0];
               interpMod = np.array([np.mean(simWrap(np.array([conCurr]))) for conCurr in plt_cons]);
               interpModBoth.append(np.array(interpMod));
             if diffPlot == 1:

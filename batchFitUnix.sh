@@ -11,6 +11,9 @@
 # params are: cellNum, expDir, lossType, fitType, initFromCurr, trackSteps, [kMult], [rvcMod]
 ########
 #   cellNum, expDir - obvious
+#   excType - which excitatory filter?
+#      1 - deriv. order of gaussian (the first/usual/most common; default)
+#      2 - flex. gauss (i.e. two-halved gaussian)
 #   lossType - which loss function
 #      1 - (sqrt(mod) - sqrt(data)).^2
 #      2 - poiss
@@ -48,9 +51,9 @@ source activate lcv-python
 #################
 #################
 
-for run in {1..77}; do
-  python model_responses.py $run V1/ 4 1 -1 0 0.1 1 &
-  python model_responses.py $run V1/ 4 2 -1 0 0.1 1 &
+for run in {1..56}; do
+  python3.6 model_responses.py $run V1/ 1 4 1 -1 0 0.1 1 &
+  python3.6 model_responses.py $run V1/ 1 4 2 -1 0 0.1 1 &
 
   #python model_responses.py $run V1_orig/ 4 1 0 0 0.01 &
   #python model_responses.py $run V1_orig/ 4 2 0 0 0.01 &

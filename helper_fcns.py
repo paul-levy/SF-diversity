@@ -3349,9 +3349,13 @@ def setNormTypeArr(params, normTypeArr = []):
 
   return normTypeArr;
 
-def getConstraints(fitType):
+def getConstraints(fitType, excType = 1):
         #   00 = preferred spatial frequency   (cycles per degree) || [>0.05]
-        #   01 = derivative order in space || [>0.1]
+        #   if excType == 1:
+          #   01 = derivative order in space || [>0.1]
+        #   elif excType == 2:
+          #   01 = sigma for SF lower than sfPref
+          #   -1 = sigma for SF higher than sfPref
         #   02 = normalization constant (log10 basis) || unconstrained
         #   03 = response exponent || >1
         #   04 = response scalar || >1e-3
@@ -3373,10 +3377,12 @@ def getConstraints(fitType):
     np = numpy;
 
     zero = (0.05, None);
-    # sigma for flexGauss version (bandwidth)
-    min_bw = 1/4; max_bw = 10; # ranges in octave bandwidth
-    one = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
-    #one = (0.1, None);
+    if excType == 1:
+      one = (0.1, None);
+    elif excType == 2:
+      # sigma for flexGauss version (bandwidth)
+      min_bw = 1/4; max_bw = 10; # ranges in octave bandwidth
+      one = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
     two = (None, None);
     #three = (2.0, 2.0); # fix at 2 (addtl suffix B)
     three = (0.25, None); # trying, per conversation with Tony (03.01.19)
@@ -3387,13 +3393,19 @@ def getConstraints(fitType):
     seven = (1e-3, None);
     if fitType == 1:
       eight = (0, 0); # flat normalization (i.e. no tilt)
-      nine = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
-      return (zero,one,two,three,four,five,six,seven,eight,nine);
+      if excType == 1:
+        return (zero,one,two,three,four,five,six,seven,eight);
+      elif excType == 2:
+        nine = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
+        return (zero,one,two,three,four,five,six,seven,eight,nine);
     if fitType == 2:
       eight = (-2, None);
       nine = (5e-1, None);
-      ten = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
-      return (zero,one,two,three,four,five,six,seven,eight,nine,ten);
+      if excType == 1:
+        return (zero,one,two,three,four,five,six,seven,eight,nine);
+      elif excType == 2:
+        ten = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
+        return (zero,one,two,three,four,five,six,seven,eight,nine,ten);
     elif fitType == 3:
       eight = (0, 0.75);
       nine = (1e-1, None);
