@@ -1112,8 +1112,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       if modRecov == 1:
         fL_name = 'mr_fitList%s_190516cA' % loc_str
       else:
-        #fL_name = 'fitList%s_200418%s' % (loc_str, hf.chiSq_suffix(kMult));
-        fL_name = 'fitList%s_200417%s' % (loc_str, hf.chiSq_suffix(kMult));
+        fL_name = 'fitList%s_200418%s_TNC' % (loc_str, hf.chiSq_suffix(kMult));
+        #fL_name = 'fitList%s_200417%s_TNC' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_190321c' % loc_str
 
     np = numpy;
@@ -1340,7 +1340,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     ## NOW: set up the objective function
     obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult, excType=excType)[0];
     print('...now minimizing!'); 
-    tomin = opt.minimize(obj, param_list, bounds=all_bounds);
+    tomin = opt.minimize(obj, param_list, bounds=all_bounds, method='TNC');
+    #tomin = opt.minimize(obj, param_list, bounds=all_bounds);
 
     opt_params = tomin['x'];
     NLL = tomin['fun'];
@@ -1353,7 +1354,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       currNLL = fitList[cellNum-1]['NLL']; # exists - either from real fit or as placeholder
     except:
       # this is the placeholder case...
-      currNLL = fitList[cellNum-1]['NLL']; # exists - either from real fit or as placeholder
+      currNLL = 1e4;
 
     ### SAVE: Now we save the results, including the results of each step, if specified
     print('...finished. Current NLL (%.2f) vs. previous NLL (%.2f)' % (NLL, currNLL)); 
