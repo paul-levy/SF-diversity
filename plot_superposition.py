@@ -9,9 +9,11 @@ import matplotlib.cm as cm
 import seaborn as sns
 import itertools
 import helper_fcns as hf
-import autoreload
+import model_responses as mod_resp
 import scipy.optimize as opt
 from scipy.stats.mstats import gmean as geomean
+
+import pdb
 
 import sys # so that we can import model_responses (in different folder)
 
@@ -22,12 +24,30 @@ plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/p
 
 which_cell = int(sys.argv[1]);
 expDir    = sys.argv[2];
+if len(sys.argv) > 3:
+  use_mod_resp = int(sys.argv[3]);
+else:
+  use_mod_resp = 0; # default is to NOT use model
+if len(sys.argv) > 4: # which type of normalization?
+  fitType = int(sys.argv[4]);
+else:
+  fitType = 2; # default is wght
+if len(sys.argv) > 5:
+  excType = int(sys.argv[5]);
+else:
+  excType = 1; # default is wght
 
 basePath = os.getcwd() + '/'
-rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
+rvcName = None; # updated - computes RVC for best responses (i.e. f0 or f1)
+#rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
 dFits_base = 'descrFits_191023';
 dMod_num, dLoss_num = 1, 4; # see hf.descrFit_name/descrMod_name/etc for details
-# ^^^ EDIT rvc/descrFits names here; 
+if use_mod_resp == 1: 
+  fitBase = 'fitList_200417c';
+  #fitBase = 'fitList_200418c';
+  lossType = 4; # chiSq
+  fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
+# ^^^ EDIT rvc/descrFits/fitList names here; 
 
 ############
 # Before any plotting, fix plotting paramaters
@@ -60,29 +80,27 @@ rcParams['font.size'] = 20;
 ############
 dataListNm = hf.get_datalist(expDir);
 descrFits_f0 = None;
-if expDir == 'V1/':
+if expDir == 'V1/' or expDir == 'altExp/':
   rvcMod = 1;
 elif expDir == 'LGN/':
   rvcMod = 0; 
 
 dFits_mod = hf.descrMod_name(dMod_num)
-
 descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, modelName=dFits_mod);
-    
-# expDir   = 'altExp/';
-# dataListNm = hf.get_datalist(expDir);
-# descrFits_f0 = 'descrFits_190503_poiss_flex.npy';
-# rvcName = None;
-# rvcnm = 'rvcFits_190905_pos.npy';
-# rvcName = 'rvcFits_190905_pos.npy';
 
 ## now, let it run
 dataPath = basePath + expDir + 'structures/'
 save_loc = basePath + expDir + 'figures/'
-save_locSuper = save_loc + 'superposition_200305/'
+save_locSuper = save_loc + 'superposition_200419/'
+if use_mod_resp == 1:
+  save_locSuper = save_locSuper + '%s/' % fitBase
 
 dataList = hf.np_smart_load(dataPath + dataListNm);
 descrFits = hf.np_smart_load(dataPath + descrFits_name);
+if use_mod_resp == 1:
+  fitList = hf.np_smart_load(dataPath + fitList_nm);
+else:
+  fitList = None;
 
 if not os.path.exists(save_locSuper):
   os.makedirs(save_locSuper)
@@ -110,10 +128,14 @@ expData = S['sfm']['exp']['trial'];
 # 0th, let's load the basic tuning characterizations AND the descriptive fit
 dfit_curr = descrFits[which_cell-1]['params'][0,-1,:]; # single grating, highest contrast
 # - then the basics
-basic_names, basic_order = dataList['basicProgName'][which_cell-1], dataList['basicProgOrder']
-basics = hf.get_basic_tunings(basic_names, basic_order);
+try:
+  basic_names, basic_order = dataList['basicProgName'][which_cell-1], dataList['basicProgOrder']
+  #basics = hf.get_basic_tunings(basic_names, basic_order);
+except:
+  basics = None;
 ### TEMPORARY: save the "basics" in curr_suppr; should live on its own, though; TODO
-curr_suppr['basics'] = basics;
+#curr_suppr['basics'] = basics;
+
 try:
   oriBW, oriCV = basics['ori']['bw'], basics['ori']['cv'];
 except:
@@ -146,7 +168,10 @@ curr_suppr['f1f0'] = f1f0_rat;
 
 if f1f0_rat > 1 or expDir == 'LGN/': # i.e. if we're looking at a simple cell, then let's get F1
   if rvcName is not None:
-    rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod);
+    try:
+      rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod);
+    except:
+      rvcFits = None;
   else:
     rvcFits = None
   spikes_byComp = hf.get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
@@ -161,7 +186,19 @@ else: # otherwise, if it's complex, just get F0
   spikes = spikes - baseline*hf.get_exp_params(expInd).stimDur; 
 
 _, _, respOrg, respAll = hf.organize_resp(spikes, expData, expInd);
-resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates);
+
+resps_data, _, _, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates);
+
+if fitList is None:
+  resps = resps_data; # otherwise, we'll still keep resps_data for reference
+elif fitList is not None: # OVERWRITE the data with the model spikes!
+  curr_fit = fitList[which_cell-1]['params'];
+  modResp = mod_resp.SFMGiveBof(curr_fit, S, normType=fitType, lossType=lossType, expInd=expInd, cellNum=which_cell, excType=excType)[1];
+  if f1f0_rat < 1: # then subtract baseline..
+    modResp = modResp - baseline*hf.get_exp_params(expInd).stimDur; 
+  # now organize the responses
+  resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp, respsAsRates=False);
+
 predResps = resps[2];
 
 respMean = resps[0]; # equivalent to resps[0];
@@ -186,9 +223,19 @@ all_preds = predResps[1:, :, :].flatten() # all disp>0
 myFit = lambda x, b, g, expon, c50: hf.naka_rushton(x, [b, g, expon, c50]) 
 non_neg = np.where(all_preds>0) # cannot fit negative values with naka-rushton...
 try:
-  fitz, _ = opt.curve_fit(myFit, all_preds[non_neg], all_resps[non_neg], p0=[1, 100, 2, 25], maxfev=5000)
+  if use_mod_resp == 1: # the reference will ALWAYS be the data -- redo the above analysis for data
+    predResps_data = resps_data[2];
+    respMean_data = resps_data[0];
+    all_resps_data = respMean_data[1:, :, :].flatten() # all disp>0
+    all_preds_data = predResps_data[1:, :, :].flatten() # all disp>0
+    non_neg_data = np.where(all_preds_data>0) # cannot fit negative values with naka-rushton...
+    fitz, _ = opt.curve_fit(myFit, all_preds_data[non_neg_data], all_resps_data[non_neg_data], p0=[1, 100, 2, 25], maxfev=5000)
+  else:
+    fitz, _ = opt.curve_fit(myFit, all_preds[non_neg], all_resps[non_neg], p0=[1, 100, 2, 25], maxfev=5000)
+  rel_c50 = np.divide(fitz[-1], np.max(all_preds[non_neg]));
 except:
   fitz = None;
+  rel_c50 = -99;
 
 ############
 ### organize stimulus information
@@ -233,7 +280,10 @@ ax[1, 1].set_xlabel('sf (c/deg)')
 ax[1, 1].set_ylabel('response (spikes/s)')
 ax[1, 1].set_ylim((-5, 1.1*np.nanmax(sfRef)));
 ax[1, 1].legend(fontsize='x-small');
+
+#####
 ## then on the left, RVC (peak SF)
+#####
 sfPeak = np.argmax(sfRef); # stupid/simple, but just get the rvc for the max response
 v_cons_single = val_con_by_disp[0]
 rvcRef = hf.nan_rm(respMean[0, sfPeak, v_cons_single]);
@@ -242,18 +292,22 @@ if rvcName is not None:
   rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod);
   rel_rvc = rvcFits[0]['params'][sfPeak]; # we get 0 dispersion, peak SF
   plt_cons = np.geomspace(all_cons[0], all_cons[-1], 50);
+  c50, pk = hf.get_c50(rvcMod, rel_rvc), rvcFits[0]['conGain'][sfPeak];
+  c50_emp, c50_eval = hf.c50_empirical(rvcMod, rel_rvc); # determine c50 by optimization, numerical approx.
   if rvcMod == 0:
     rvc_mod = hf.get_rvc_model();
-    c50, pk = rel_rvc[-1], rvcFits[0]['conGain'][sfPeak];
     rvcmodResp = rvc_mod(*rel_rvc, plt_cons);
   else: # i.e. mod=1 or mod=2
-    c50, pk = rel_rvc[3], rvcFits[0]['conGain'][sfPeak];
     rvcmodResp = hf.naka_rushton(plt_cons, rel_rvc);
   if baseline is not None:
     rvcmodResp = rvcmodResp - baseline; 
   ax[1, 0].plot(plt_cons, rvcmodResp, 'k--', label='rvc fit (c50=%.2f, gain=%0f)' %(c50, pk))
   # and save it
   curr_suppr['c50'] = c50; curr_suppr['conGain'] = pk;
+  curr_suppr['c50_emp'] = c50_emp; curr_suppr['c50_emp_eval'] = c50_eval
+else:
+  curr_suppr['c50'] = np.nan; curr_suppr['conGain'] = np.nan;
+  curr_suppr['c50_emp'] = np.nan; curr_suppr['c50_emp_eval'] = np.nan;
 
 ax[1, 0].plot(all_cons[v_cons_single], rvcRef, 'k-', marker='o', label='ref. tuning (d0, peak SF)', clip_on=False)
 #         ax[1, 0].set_xscale('log')
@@ -414,14 +468,16 @@ if fitz is not None:
   curr_suppr['sfErrsNorm_AUC'] = auc_norm;
   # - and put that value on the plot
   ax[4,1].text(0.1, -0.25, '|auc|=%.2f' % auc_norm);
+else:
+  curr_suppr['sfErrsNorm_AUC'] = np.nan
 
 #########
 ### NOW, let's evaluate the derivative of the SF tuning curve and get the correlation with the errors
 #########
 mod_sfs = np.geomspace(all_sfs[0], all_sfs[-1], 1000);
 mod_resp = hf.get_descrResp(dfit_curr, mod_sfs, DoGmodel=dMod_num);
-deriv = np.divide(np.diff(mod_resp), np.diff(mod_sfs))
-deriv_norm = np.divide(deriv, np.nanmax(deriv));
+deriv = np.divide(np.diff(mod_resp), np.diff(np.log10(mod_sfs)))
+deriv_norm = np.divide(deriv, np.maximum(np.nanmax(deriv), np.abs(np.nanmin(deriv)))); # make the maximum response 1 (or -1)
 # - then, what indices to evaluate for comparing with sfErr?
 errSfs = all_sfs[val_sfs][sfInds];
 mod_inds = [np.argmin(np.square(mod_sfs-x)) for x in errSfs];
@@ -452,6 +508,9 @@ if fitz is not None:
   curr_suppr['corr_derivWithErrNorm'] = corr_nsfN;
   ax[3,1].text(0.1, 0.25*np.nanmax(sfErrs), 'corr w/g\' = %.2f' % corr_nsf)
   ax[4,1].text(0.1, 0.25, 'corr w/g\' = %.2f' % corr_nsfN)
+else:
+  curr_suppr['corr_derivWithErr'] = np.nan;
+  curr_suppr['corr_derivWithErrNorm'] = np.nan;
 
 # make a polynomial fit
 hmm = np.polyfit(allSum, allMix, deg=1) # returns [a, b] in ax + b 
@@ -460,17 +519,20 @@ curr_suppr['supr_index'] = hmm[0];
 for j in range(1):
   for jj in range(nCols):
     ax[j, jj].axis('square')
-    ax[j, jj].set_xlabel('predicted');
-    ax[j, jj].set_ylabel('superposition');
+    ax[j, jj].set_xlabel('prediction: sum(components) (imp/s)');
+    ax[j, jj].set_ylabel('mixture response (imp/s)');
     ax[j, jj].plot([0, 1*maxResp], [0, 1*maxResp], 'k--')
     ax[j, jj].set_xlim((-5, maxResp));
     ax[j, jj].set_ylim((-5, 1.1*maxResp));
-    ax[j, jj].set_title('Suppression index: %.2f' % hmm[0])
+    ax[j, jj].set_title('Suppression index: %.2f|%.2f' % (hmm[0], rel_c50))
     ax[j, jj].legend(fontsize='x-small');
 
 fSuper.suptitle('Superposition: %s #%d [%s; f1f0 %.2f; szSupr[dt/md] %.2f/%.2f; oriBW|CV %.2f|%.2f; tfBW %.2f]' % (cellType, which_cell, cellName, f1f0_rat, suprDat, suprMod, oriBW, oriCV, tfBW))
 
-save_name = 'cell_%03d.pdf' % which_cell
+if fitList is None:
+  save_name = 'cell_%03d.pdf' % which_cell
+else:
+  save_name = 'cell_%03d_mod%s.pdf' % (which_cell, hf.fitType_suffix(fitType))
 pdfSv = pltSave.PdfPages(str(save_locSuper + save_name));
 pdfSv.savefig(fSuper)
 pdfSv.close();
@@ -478,10 +540,13 @@ pdfSv.close();
 #########
 ### Finally, add this "superposition" to the newest 
 #########
-super_name = 'superposition_analysis.npy';
+if fitList is None:
+  super_name = 'superposition_analysis.npy';
+else:
+  super_name = 'superposition_analysis_mod%s.npy' % hf.fitType_suffix(fitType);
 if os.path.exists(dataPath + super_name):
   suppr_all = hf.np_smart_load(dataPath + super_name);
 else:
   suppr_all = dict();
 suppr_all[which_cell-1] = curr_suppr;
-np.save(dataPath + super_name, suppr_all);
+#np.save(dataPath + super_name, suppr_all);

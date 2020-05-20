@@ -246,13 +246,16 @@ def sf_var(resps, sfs, sf_cm):
 
 def get_datalist(expDir):
   if expDir == 'V1_orig/':
-    return 'dataList.npy';
+    return 'dataList_200507.npy'; # limited set of data
+    #return 'dataList.npy';
   elif expDir == 'altExp/':
-    return 'dataList.npy';
+    return 'dataList_200507.npy'; # limited set of data
+    #return 'dataList.npy';
   elif expDir == 'LGN/':
     return 'dataList.npy';
   elif expDir == 'V1/':
-    return 'dataList_glx.npy';
+    return 'dataList_glx_200507.npy'; # limited set of data
+    #return 'dataList_glx.npy';
 
 def exp_name_to_ind(expName):
     ''' static mapping from name of experiment to expInd

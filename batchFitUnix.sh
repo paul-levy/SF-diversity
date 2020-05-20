@@ -46,14 +46,30 @@
 # LGN/ - standard, 77 cells
 ###
 
+### TEMP GUIDE (as of 20.05.07)
+# V1/ - 8 cells
+# V1_orig/ - 3 cells
+# altExp   - 3 cells
+###
+
+
 source activate lcv-python
 
 #################
 #################
 
-for run in {1..56}; do
-  python3.6 model_responses.py $run V1/ 1 4 1 -1 0 0.1 1 &
-  python3.6 model_responses.py $run V1/ 1 4 2 -1 0 0.1 1 &
+for run in {1..8}; do
+  python3.6 model_responses.py $run V1/ 2 4 1 -1 1 0.1 1 & # ... 1 0.1 1 ... where the first 1 in that sequence means track steps to animate!!!
+  python3.6 model_responses.py $run V1/ 2 4 2 0 1 0.1 1 &
+
+  python3.6 model_responses.py $run V1_orig/ 2 4 1 -1 0 0.1 1 &
+  python3.6 model_responses.py $run V1_orig/ 2 4 2 0 0 0.1 1 &
+
+  python3.6 model_responses.py $run altExp/ 2 4 1 -1 0 0.1 1 &
+  python3.6 model_responses.py $run altExp/ 2 4 2 0 0 0.1 1 &
+
+  #python3.6 model_responses.py $run altExp/ 1 4 1 0 0 0.1 1 &
+  #python3.6 model_responses.py $run altExp/ 1 4 2 0 0 0.1 1 &
 
   #python model_responses.py $run V1_orig/ 4 1 0 0 0.01 &
   #python model_responses.py $run V1_orig/ 4 2 0 0 0.01 &

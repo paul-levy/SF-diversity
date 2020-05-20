@@ -2,6 +2,7 @@
 # NOTE: Unlike plot_simple.py, this file is used to plot 
 # - descriptive SF tuning fit ONLY
 # - RVC with Naka-Rushton fit
+# - all the basic characterization plots in one figure
 
 import os
 import sys
@@ -24,7 +25,7 @@ warnings.filterwarnings('once');
 
 import pdb
 
-plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
+plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_cluster.mplstyle');
 from matplotlib import rcParams
 rcParams['font.size'] = 20;
 rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
@@ -54,13 +55,15 @@ save_loc = loc_base + expDir + 'figures/';
 ### DATALIST
 expName = hf.get_datalist(expDir);
 ### DESCRLIST
+descrBase = 'descrFits_190503';
 #descrBase = 'descrFits_191003';
-descrBase = 'descrFits_191201';
+#descrBase = 'descrFits_191023';
+#descrBase = 'descrFits_191201';
 if descrJnt == 1:
   descrBase = '%s_joint' % descrBase;
 ### RVCFITS
-#rvcBase = 'rvcFits_191003'; # direc flag & '.npy' are added
-rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
+#rvcBase = 'rvcFits_200330'; # direc flag & '.npy' are added
+rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
 
 ##################
 ### Spatial frequency
@@ -69,10 +72,11 @@ rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
 modStr  = hf.descrMod_name(descrMod)
 fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr);
 descrFits = hf.np_smart_load(data_loc + fLname);
+
 if rvcAdj == 1:
   rvcFits = hf.np_smart_load(data_loc + hf.rvc_fit_name(rvcBase, modNum=rvcMod, dir=1)); # i.e. positive
 else:
-  rvcFits = hf.np_smart_load(data_loc + rvcBase + '_f0.npy');
+  rvcFits = hf.np_smart_load(data_loc + rvcBase + '_f0_NR.npy');
 rvcFits = rvcFits[cellNum-1];
 
 # set the save directory to save_loc, then create the save directory if needed
@@ -304,7 +308,7 @@ for d in range(nDisps):
         dispAx[d][i].set_yscale('log');
         dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
       else:
-        dispAx[d][i].set_ylim((np.minimum(-5, min_resp-5), 1.5*maxResp));
+        dispAx[d][i].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
 
       dispAx[d][i].set_xlabel('sf (c/deg)'); 
 
@@ -441,12 +445,11 @@ for d in range(nDisps):
           prms_curr = rvcFits[d]['params'][sf_ind];
         else:
           prms_curr = rvcFits['params'][d][sf_ind]; 
+        c50 = hf.get_c50(rvcMod, prms_curr); # second to last entry
         if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
           rvcResps = hf.naka_rushton(cons_plot, prms_curr)
-          c50 = prms_curr[-2]; # second to last entry
         elif rvcMod == 0: # i.e. movshon form
           rvcResps = rvcModel(*prms_curr, cons_plot);
-          c50 = prms_curr[-1]; # last entry is c50
         # TODO: do you want to do the max(x, 0.1)???
         rvcAx[plt_x][plt_y].plot(cons_plot, np.maximum(rvcResps, 0.1), color=modClr, \
           alpha=0.7, clip_on=False, label=modTxt);
@@ -762,7 +765,7 @@ for d in range(nDisps):
 
         # plot descr fit differences [1b]
         if c < (n_v_cons-1):
-          dispAx[d][1].plot(sfs_plot, descrResp-refDescr, color=col, linestyle='--');
+          dispAx[d][1].plot(sfs_plot, np.subtract(descrResp, refDescr), color=col, linestyle='--');
 
     for i in range(len(dispCurr)):
       dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
@@ -772,7 +775,7 @@ for d in range(nDisps):
         dispAx[d][i].set_yscale('symlog', linthresh=1);
         #dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
       #else:
-        #dispAx[d][i].set_ylim((np.minimum(-5, min_resp-5), 1.5*maxResp));
+        #dispAx[d][i].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
 
       dispAx[d][i].set_xlabel('sf (c/deg)'); 
 

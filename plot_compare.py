@@ -61,9 +61,9 @@ else:
 ## used for interpolation plot
 sfSteps  = 45; # i.e. how many steps between bounds of interest
 conSteps = -1;
-#nRpts    = 500; # how many repeats for stimuli in interpolation plot?
-#nRpts    = 5; # how many repeats for stimuli in interpolation plot?
-nRpts    = 3000; # how many repeats for stimuli in interpolation plot?n
+#nRpts    = 100; # how many repeats for stimuli in interpolation plot?
+nRpts    = 5; # how many repeats for stimuli in interpolation plot?
+#nRpts    = 3000; # how many repeats for stimuli in interpolation plot? USE FOR PUBLICATION/PRESENTATION QUALITY, but SLOW
 nRptsSingle = 5; # when disp = 1 (which is most cases), we do not need so many interpolated points
 
 loc_base = os.getcwd() + '/';
@@ -72,9 +72,6 @@ save_loc = loc_base + expDir + 'figures/';
 
 ### DATALIST
 expName = hf.get_datalist(expDir);
-#expName = 'dataList.npy';
-#expName = 'dataList_glx_vss2019.npy'
-#expName = 'dataList_mr.npy'
 ### FITLIST
 #fitBase = 'mr_fitList_190502cA';
 #fitBase = 'fitList_190502aA';
@@ -82,11 +79,13 @@ expName = hf.get_datalist(expDir);
 #fitBase = 'fitList_190516cA';
 #fitBase = 'fitList_191023c';
 #fitBase = 'fitList_200413c';
-#fitBase = 'fitList_200417c';
-fitBase = 'fitList_200418c';
+#fitBase = 'fitList_200417c_TNC'; # excType 1
+#fitBase = 'fitList_200418c_TNC'; # excType 2
+fitBase = 'fitList_200507c'; # excType 2
 #fitBase = 'holdout_fitList_190513cA';
 ### RVCFITS
-rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
+#rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
+rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
 
 # first the fit type
 fitSuf_fl = '_flat';
@@ -174,12 +173,14 @@ _, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData,
 if rvcAdj == 1:
   rvcFlag = '';
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
+  asRates = True;
 else:
   rvcFlag = '_f0';
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
+  asRates = False;
 # rvcMod=-1 tells the function call to treat rvcName as the fits, already (we loaded above!)
 spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=rvcFits, rvcMod=-1, descrFitName_f0=None, baseline_sub=False);
-_, _, respOrg, respAll = hf.organize_resp(spikes_rate, expData, expInd, respsAsRate=True);
+_, _, respOrg, respAll = hf.organize_resp(spikes_rate, expData, expInd, respsAsRate=asRates);
 
 respMean = respOrg;
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
@@ -240,59 +241,66 @@ for d in range(nDisps):
         c_plt_ind = len(v_cons) - c - 1;
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
 
-        # make things nice
-        for i in range(2):
+        for i in range(2): # i = 0 (lin-y); i = 1 (log-y)
 
+          ### make things nice
           dispAx[d][c_plt_ind, i].set_xlim((min(all_sfs), max(all_sfs)));
 
           dispAx[d][c_plt_ind, i].set_xscale('log');
           dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
           dispAx[d][c_plt_ind, i].set_title('D%02d: contrast: %.3f' % (d, all_cons[v_cons[c]]));
+          dispAx[d][c_plt_ind, i].set_ylabel('resp (imp/s)');
 
-        # Set ticks out, remove top/right axis, put ticks only on bottom/left
+          # Set ticks out, remove top/right axis, put ticks only on bottom/left
           dispAx[d][c_plt_ind, i].tick_params(labelsize=15, width=majorWid, length=majorLen, direction='out');
-          dispAx[d][c_plt_ind, i].tick_params(which='minor', direction='out'); # minor ticks, too...	
+          dispAx[d][c_plt_ind, i].tick_params(which='minor', direction='out', width=minorWid, length=minorLen); # minor ticks, too...
           sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
    
-        # plot data
-        dispAx[d][c_plt_ind, 0].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                      respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=False);
+          ### plot data
+          dispAx[d][c_plt_ind, i].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
+                                        respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=False);
 
-        # plot model fits
-        if intpMod == 1:
-          plt_sfs = np.geomspace(all_sfs[v_sfs][0], all_sfs[v_sfs][-1], sfSteps);
-          interpModBoth = []; # well, flat is first, so we will subtract that off...
-          if d == 0:
-            nRptsCurr = nRptsSingle;
-          else:
-            nRptsCurr = nRpts;
-          for pm, typ in zip(modFits, normTypes):
-            simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, v_cons[c], x, normType=typ, expInd=expInd, nRepeats=nRptsCurr, excType=excType)[0];
-            interpMod = [np.mean(simWrap(np.array([sfCurr]))) for sfCurr in plt_sfs];
-            interpModBoth.append(np.array(interpMod));
-          # TODO plot, but recenter if diffPlot == 1...
+          ### plot model fits
+          if intpMod == 1:
+            plt_sfs = np.geomspace(all_sfs[v_sfs][0], all_sfs[v_sfs][-1], sfSteps);
+            interpModBoth = []; # well, flat is first, so we will subtract that off...
+            if d == 0:
+              nRptsCurr = nRptsSingle;
+            else:
+              nRptsCurr = nRpts;
+            for pm, typ in zip(modFits, normTypes):
+              simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, v_cons[c], x, normType=typ, expInd=expInd, nRepeats=nRptsCurr, excType=excType)[0];
+              interpMod = [np.mean(simWrap(np.array([sfCurr]))) for sfCurr in plt_sfs];
+              interpModBoth.append(np.array(interpMod));
+            # TODO plot, but recenter if diffPlot == 1...
+            if diffPlot == 1:
+              relTo = interpModBoth[0];
+            else:
+              relTo = np.zeros_like(interpModBoth[0]);
+            for rsp, cc, s in zip(interpModBoth, modColors, modLabels):
+              dispAx[d][c_plt_ind, i].plot(plt_sfs, rsp-relTo, color=cc, label=s);
+          else: # plot model evaluated only at data point
+            [dispAx[d][c_plt_ind, i].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=False, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
+          '''
+          sponRate = dispAx[d][c_plt_ind, 0].axhline(blankMean, color='b', linestyle='dashed', label='data spon. rate');
+          [dispAx[d][c_plt_ind, 0].axhline(sponRate, color=cc, linestyle='dashed') for sponRate,cc in zip(modSponRates, modColors)];
+          '''
+
+          ### plot model fits
           if diffPlot == 1:
-            relTo = interpModBoth[0];
+            if i == 0:
+              dispAx[d][c_plt_ind, i].set_ylim((-1.5*np.abs(minResp), 1.5*maxResp));
+            else:
+              dispAx[d][c_plt_ind, i].set_yscale('symlog');
+              dispAx[d][c_plt_ind, i].set_ylim((-1.5*np.abs(minResp), 1.5*maxResp));
           else:
-            relTo = np.zeros_like(interpModBoth[0]);
-          for rsp, cc, s in zip(interpModBoth, modColors, modLabels):
-            dispAx[d][c_plt_ind, 0].plot(plt_sfs, rsp-relTo, color=cc, label=s);
-        else: # plot model evaluated only at data point
-          [dispAx[d][c_plt_ind, 0].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=False, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
-        '''
-        sponRate = dispAx[d][c_plt_ind, 0].axhline(blankMean, color='b', linestyle='dashed', label='data spon. rate');
-        [dispAx[d][c_plt_ind, 0].axhline(sponRate, color=cc, linestyle='dashed') for sponRate,cc in zip(modSponRates, modColors)];
-        '''
+            if i == 0:
+              dispAx[d][c_plt_ind, i].set_ylim((0, 1.5*maxResp));
+            else:
+              dispAx[d][c_plt_ind, i].set_yscale('symlog');
+              dispAx[d][c_plt_ind, i].set_ylim((1.1*minResp, 1.5*maxResp));
 
-        if diffPlot == 1:
-          dispAx[d][c_plt_ind, 0].set_ylim((-1.5*np.abs(minResp), 1.5*maxResp));
-        else:
-          dispAx[d][c_plt_ind, 0].set_ylim((0, 1.5*maxResp));
-        dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
-        dispAx[d][c_plt_ind, 1].set_ylabel('ratio (pred:measure)');
-        dispAx[d][c_plt_ind, 1].set_ylim((1e-1, 1e3));
-        dispAx[d][c_plt_ind, 1].set_yscale('log');
-        dispAx[d][c_plt_ind, 1].legend();
+          dispAx[d][c_plt_ind, i].legend();
 
     fCurr.suptitle('%s #%d, loss %.2f|%.2f' % (cellType, cellNum, fitList_fl[cellNum-1]['NLL'], fitList_wg[cellNum-1]['NLL']));
 
@@ -357,7 +365,7 @@ if diffPlot != 1:
         #dispAx[d][i].set_yscale('log');
         dispAx[d][i].set_xlabel('sf (c/deg)'); 
 
-        dispAx[d][i].set_ylabel('resp above baseline (sps)');
+        dispAx[d][i].set_ylabel('resp above baseline (imp/s)');
         dispAx[d][i].set_title('D%02d - sf tuning %s' % (d, labels[i]));
         dispAx[d][i].legend(); 
 
@@ -431,7 +439,7 @@ for d in range(nDisps):
           sfMixAx[c_plt_ind, d].set_ylim((0, 1.5*maxResp));
         sfMixAx[c_plt_ind, d].set_xscale('log');
         sfMixAx[c_plt_ind, d].set_xlabel('sf (c/deg)');
-        sfMixAx[c_plt_ind, d].set_ylabel('resp (sps)');
+        sfMixAx[c_plt_ind, d].set_ylabel('resp (imp/s)');
 
 
 f.legend();
@@ -476,8 +484,8 @@ if lossType == 3: # i.e. modPoiss
   mean_vals = np.logspace(-1, 2, 50);
   varGains  = [x[7] for x in modFits];
   [plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals)) for varGain in varGains];
-plt.xlabel('Mean (sps)');
-plt.ylabel('Variance (sps^2)');
+plt.xlabel('Mean (imp/s)');
+plt.ylabel('Variance (imp/s^2)');
 plt.title('Super-poisson?');
 plt.axis('equal');
 
@@ -780,14 +788,14 @@ if diffPlot != 1 or intpMod == 0:
         '''
         crfAx[d][i].set_xlabel('contrast');
 
-        crfAx[d][i].set_ylabel('resp above baseline (sps)');
+        crfAx[d][i].set_ylabel('resp above baseline (imp/s)');
         crfAx[d][i].set_title('D%d: sf:all - log resp %s' % (d, labels[i]));
         crfAx[d][i].legend();
 
   saveName = "/allSfs_cell_%03d.pdf" % (cellNum)
+  full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
   if not os.path.exists(full_save):
     os.makedirs(full_save);
-  full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
   pdfSv = pltSave.PdfPages(full_save + saveName);
   for f in fCRF:
       pdfSv.savefig(f)
