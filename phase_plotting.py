@@ -47,17 +47,18 @@ expDir = sys.argv[3];
 if len(sys.argv) > 6:
   dir = int(sys.argv[6]);
   print('direction is %d' % dir);
-  saveDir = hf.phase_fit_name('figuresTest', dir).replace('.npy', '/');
+  saveDir = hf.phase_fit_name('figures', dir).replace('.npy', '/');
 else:
-  saveDir = 'figuresTest/';
+  saveDir = 'figures/';
 
 dataPath = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + saveDir;
 
 expName = hf.get_datalist(expDir);
-descrFit_f0 = 'descrFits_190503_sach_flex.npy';
-phAdvName = 'phaseAdvanceFits_190828';
-rvcName = 'rvcFits_190828_f1';
+descrFit_f0 = None;
+#descrFit_f0 = 'descrFits_191023_sach_flex.npy';
+phAdvName = 'phaseAdvanceFits_191023';
+rvcName = 'rvcFits_191023_f1';
 
 ######
 ## contents

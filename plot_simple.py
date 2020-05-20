@@ -58,13 +58,10 @@ expName = hf.get_datalist(expDir);
 ### FITLIST
 #fitBase = 'fitList_190321c';
 #fitBase = 'fitListSPcns_181130c';
-#fitBase = 'fitListSP_181202c';
-#fitBase = 'fitList_190206c';
-#fitBase = 'fitList_190321c';
 #fitBase = 'mr_fitList_190502cA';
-fitBase = 'fitList_190502cA';
+fitBase = 'fitList_200413c';
 ### RVCFITS
-rvcBase = 'rvcFits'; # model tag, direc flag & '.npy' are added
+rvcBase = 'rvcFits_191023'; # model tag, direc flag & '.npy' are added later
 
 ### Descriptive fits?
 if descrMod > -1:
@@ -178,7 +175,7 @@ if rvcAdj == 1:
 else:
   rvcFlag = '_f0';
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
-spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcBase, rvcMod=rvcMod, descrFitName_f0 = fLname, baseline_sub=False);
+spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcBase, rvcMod=rvcMod, baseline_sub=False);
 _, _, respOrg, respAll = hf.organize_resp(spikes_rate, expData, expInd);
 
 respMean = respOrg;

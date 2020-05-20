@@ -55,15 +55,16 @@ save_loc = loc_base + expDir + 'figures/';
 ### DATALIST
 expName = hf.get_datalist(expDir);
 ### DESCRLIST
-descrBase = 'descrFits_190503';
+descrBase = 'descrFits_200507';
+#descrBase = 'descrFits_190503';
 #descrBase = 'descrFits_191003';
 #descrBase = 'descrFits_191023';
 #descrBase = 'descrFits_191201';
 if descrJnt == 1:
   descrBase = '%s_joint' % descrBase;
 ### RVCFITS
-#rvcBase = 'rvcFits_200330'; # direc flag & '.npy' are added
-rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
+rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
+#rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
 
 ##################
 ### Spatial frequency
@@ -72,12 +73,6 @@ rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
 modStr  = hf.descrMod_name(descrMod)
 fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr);
 descrFits = hf.np_smart_load(data_loc + fLname);
-
-if rvcAdj == 1:
-  rvcFits = hf.np_smart_load(data_loc + hf.rvc_fit_name(rvcBase, modNum=rvcMod, dir=1)); # i.e. positive
-else:
-  rvcFits = hf.np_smart_load(data_loc + rvcBase + '_f0_NR.npy');
-rvcFits = rvcFits[cellNum-1];
 
 # set the save directory to save_loc, then create the save directory if needed
 subDir = fLname.replace('Fits', '').replace('.npy', '');
@@ -93,10 +88,19 @@ try:
 except: 
   # TODO: note, this is dangerous; thus far, only V1 cells don't have 'unitType' field in dataList, so we can safely do this
   cellType = 'V1'; 
+expInd   = hf.get_exp_ind(data_loc, cellName)[0];
+
+if expInd <= 2: # if expInd <= 2, then there cannot be rvcAdj, anyway!
+  rvcAdj = 0; # then we'll load just below!
+
+if rvcAdj == 1:
+  rvcFits = hf.np_smart_load(data_loc + hf.rvc_fit_name(rvcBase, modNum=rvcMod, dir=1)); # i.e. positive
+if rvcAdj == 0:
+  rvcFits = hf.np_smart_load(data_loc + rvcBase + '_f0_NR.npy');
+rvcFits = rvcFits[cellNum-1];
 
 expData  = hf.np_smart_load(str(data_loc + cellName + '_sfm.npy'));
 trialInf = expData['sfm']['exp']['trial'];
-expInd   = hf.get_exp_ind(data_loc, cellName)[0];
 
 descrParams = descrFits[cellNum-1]['params'];
 f1f0rat = hf.compute_f1f0(trialInf, cellNum, expInd, data_loc, descrFitName_f0=fLname)[0];
@@ -441,10 +445,11 @@ for d in range(nDisps):
         rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], np.maximum(resp_curr, 0.1), var_curr, fmt='o', linestyle='-', clip_on=False, label='data', color=dataClr);
 
  	# RVC descr model - TODO: Fix this discrepancy between f0 and f1 rvc structure? make both like descrFits?
+        # NOTE: changing split of accessing rvcFits based on rvcAdj
         if rvcAdj == 1: # i.e. _f1 or non-"_f0" flag on rvcFits
           prms_curr = rvcFits[d]['params'][sf_ind];
         else:
-          prms_curr = rvcFits['params'][d][sf_ind]; 
+          prms_curr = rvcFits['params'][d, sf_ind, :]; 
         c50 = hf.get_c50(rvcMod, prms_curr); # second to last entry
         if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
           rvcResps = hf.naka_rushton(cons_plot, prms_curr)
@@ -515,11 +520,10 @@ for d in range(nDisps):
         lines_log.append(line_curr);
 
         # now RVC model [1]
- 	# RVC descr model - TODO: Fix this discrepancy between f0 and f1 rvc structure? make both like descrFits?
         if rvcAdj == 1:
           prms_curr = rvcFits[d]['params'][sf_ind];
         else: # i.e. f0 flag on the rvc fits...
-          prms_curr = rvcFits['params'][d][sf_ind]; 
+          prms_curr = rvcFits['params'][d, sf_ind, :]; 
         if rvcMod == 0: # i.e. movshon form
           rvcResps = rvcModel(*prms_curr, cons_plot);
         elif rvcMod == 1 or rvcMod == 2: # naka-rushton (or modified version)
