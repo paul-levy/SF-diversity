@@ -1096,7 +1096,9 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
 
         if lossType == 1:
           # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
-          lsq = numpy.square(numpy.add(numpy.sqrt(respModel[mask]), -numpy.sqrt(spikeCount[mask])));
+          # sqrt - now handles negative responses by first taking abs, sqrt, then re-apply the sign 
+          losq = np.sum(np.square(np.sign(respModel[mask])*np.sqrt(np.abs(respModel[mask])) - np.sign(spikeCount[mask])*np.sqrt(np.abs(spikeCount[mask])))) 
+          #lsq = numpy.square(numpy.add(numpy.sqrt(respModel[mask]), -numpy.sqrt(spikeCount[mask])));
           NLL = numpy.mean(lsq);
           nll_notSum = numpy.square(numpy.add(numpy.sqrt(respModel), -numpy.sqrt(spikeCount)));
  
@@ -1388,9 +1390,9 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
         #fL_name = 'fitList%s_200507%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_200418%s_TNC' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_190321c' % loc_str
-        #fL_name = 'fitList%s_200507%s' % (loc_str, hf.chiSq_suffix(kMult));
+        fL_name = 'fitList%s_200507%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_200519%s' % (loc_str, hf.chiSq_suffix(kMult));
-        fL_name = 'fitList%s_200522%s' % (loc_str, hf.chiSq_suffix(kMult));
+        #fL_name = 'fitList%s_200522%s' % (loc_str, hf.chiSq_suffix(kMult));
 
     np = numpy;
 
@@ -1616,6 +1618,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     elif fitType == 4:
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStdL, normStdR);
     all_bounds = hf.getConstraints(fitType, excType);
+    '''
     # TODO: TEMPORARY -- fix prefSf, sigLow/sigHigh at the initial values (from descrFits)
     all_bnds_list = list(all_bounds);
     all_bnds_list[0] = (prefSfEst, prefSfEst);
@@ -1623,6 +1626,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     all_bnds_list[-1] = (sigHi, sigHi);
     all_bnds_list[3] = (1, 1); # fix nonlinearity at 1!
     all_bounds = tuple(all_bnds_list);
+    '''
    
     ## NOW: set up the objective function
     obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult, excType=excType)[0];
