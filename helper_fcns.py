@@ -1285,7 +1285,11 @@ def chiSq(data_resps, model_resps, stimDur=1, kMult = 0.10):
   # thus, chi will always be >=0, avoiding a fit which maximizes the numerator to reduce the loss (denom was not strictly >0)   
   chi = np.sum(np.divide(np.square(num[valid]), k + data_resp_recenter*rho/stimDur));
 
-  return chi;
+  # - now, again, but keep everything and don't sum
+  data_resp_recenter = data_resps[0] - np.nanmin(data_resps[0]);
+  notSum = np.divide(np.square(num), k + data_resp_recenter*rho/stimDur);
+
+  return chi, notSum;
 
 def get_c50(rvcMod, params):
   ''' get the c50 for a given rvcModel and parameter list

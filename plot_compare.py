@@ -82,6 +82,7 @@ expName = hf.get_datalist(expDir);
 #fitBase = 'fitList_200417c_TNC'; # excType 1
 #fitBase = 'fitList_200418c_TNC'; # excType 2
 fitBase = 'fitList_200507c'; # excType 2
+#fitBase = 'fitList_200522c'; # excType 2
 #fitBase = 'holdout_fitList_190513cA';
 ### RVCFITS
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
@@ -152,7 +153,13 @@ normTypes = [1, 2]; # flat, then weighted
 # ### Organize data
 # #### determine contrasts, center spatial frequency, dispersions
 # SFMGiveBof returns spike counts per trial, NOT rates -- we will correct in hf.organize_resp call below
-modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, excType=excType) for fit, norm in zip(modFits, normTypes)];
+# - to properly evaluate the loss, load rvcFits, mask the trials
+rvcCurr = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
+stimOr = np.vstack(expData['sfm']['exp']['trial']['ori']);
+mask = np.isnan(np.sum(stimOr, 0)); # sum over all stim components...if there are any nans in that trial, we know
+# - now compute SFMGiveBof!
+modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask) for fit, norm in zip(modFits, normTypes)];
+
 modResps = [x[1] for x in modResps]; # 1st return output (x[0]) is NLL (don't care about that here)
 gs_mean = modFit_wg[8]; 
 gs_std = modFit_wg[9];

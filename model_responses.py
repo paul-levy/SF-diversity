@@ -36,7 +36,7 @@ if modRecov == 1:
     rvcBase = None;
 else:
   try:
-    descrFitName = 'descrFits_200507_poiss_flex.npy' # dataset 200507
+    descrFitName = 'descrFits_200507_sqrt_flex.npy' # dataset 200507
     #descrFitName = 'descrFits_191023_poiss_flex.npy' # full dataset 
   except:
     warnings.warn('Could not load descrFits in model_responses');
@@ -971,6 +971,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     normParams = hf.getNormParams(params, normType);
     if normType == 1:
       inhAsym = normParams;
+      gs_mean = None; gs_std = None; # replacing the "else" in commented out 'if normType == 2 or normType == 4' below
     elif normType == 2:
       gs_mean = normParams[0];
       gs_std  = normParams[1];
@@ -1038,11 +1039,11 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         #pdb.set_trace();
 
         # Extract simple cell response (half-rectified linear filtering)
-        Lexc = E['simpleResp'];
+        Lexc = E['simpleResp']; # [nFrames x nTrials]
 
         # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to bring everything in linear contrast scale again)
         #Linh = numpy.sqrt((inhWeightMat*T['mod']['normalization']['normResp']).sum(1)).transpose();
-        Linh = SimpleNormResp(structureSFM, expInd, gs_mean, gs_std, normType);
+        Linh = SimpleNormResp(structureSFM, expInd, gs_mean, gs_std, normType); # [nFrames x nTrials]
  
         # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
         numerator     = noiseEarly + Lexc;
@@ -1097,9 +1098,13 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
           lsq = numpy.square(numpy.add(numpy.sqrt(respModel[mask]), -numpy.sqrt(spikeCount[mask])));
           NLL = numpy.mean(lsq);
+          nll_notSum = numpy.square(numpy.add(numpy.sqrt(respModel), -numpy.sqrt(spikeCount)));
+ 
         elif lossType == 2:
           poiss_llh = numpy.log(poisson.pmf(spikeCount[mask], respModel[mask]));
+          nll_notSum = poiss_llh;
           NLL = numpy.mean(-poiss_llh);
+          nll_notSum = -numpy.log(poisson.pmf(spikeCount, respModel));
         elif lossType == 3:
           # Get predicted spike count distributions
           mu  = numpy.maximum(.01, respModel[mask]); # The predicted mean spike count; respModel[iR]
@@ -1113,7 +1118,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           exp_responses = [expByCond.flatten(), numpy.nanvar(expAll, axis=3).flatten()];
           _, _, modByCond, modAll = hf.organize_resp(respModel, structureSFM['sfm']['exp']['trial'], expInd, mask);
           mod_responses = [modByCond.flatten(), numpy.nanvar(modAll, axis=3).flatten()];
-          NLL = hf.chiSq(exp_responses, mod_responses, kMult = kMult);
+          NLL, nll_notSum = hf.chiSq(exp_responses, mod_responses, kMult = kMult);
 
     if trackSteps == True:
       global params_glob, loss_glob, resp_glob;
@@ -1121,7 +1126,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
       loss_glob.append(NLL);
       resp_glob.append(respModel);
 
-    return NLL, respModel;
+    return NLL, respModel, nll_notSum;
 
 def SFMsimulateNew(params, structureSFM, disp, con, sf_c, normType=1, expInd=1, nRepeats=None, excType=1):
   ''' New version of SFMsimulate...19.05.13 create date
@@ -1381,9 +1386,11 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
         #fL_name = 'fitList%s_200417%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_200418%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_200507%s' % (loc_str, hf.chiSq_suffix(kMult));
-        fL_name = 'fitList%s_200519%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_200418%s_TNC' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_190321c' % loc_str
+        #fL_name = 'fitList%s_200507%s' % (loc_str, hf.chiSq_suffix(kMult));
+        #fL_name = 'fitList%s_200519%s' % (loc_str, hf.chiSq_suffix(kMult));
+        fL_name = 'fitList%s_200522%s' % (loc_str, hf.chiSq_suffix(kMult));
 
     np = numpy;
 
@@ -1419,7 +1426,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       dfits = hf.np_smart_load(loc_data + descrFitName);
       hiCon = -1;
       prefSfEst = dfits[cellNum-1]['prefSf'][0][hiCon]; # get high contrast, single grating prefSf
-      sigLo, sigHi = dfits[cellNum-1]['params'][0, hiCon, 3:5];
+      sigLo, sigHi = dfits[cellNum-1]['params'][0, hiCon, 3:5]; # parameter locations for sigmaLow/High
     except:
       if expInd == 1:
         prefOrEst = mode(trial_inf['ori'][1]).mode;
@@ -1501,12 +1508,13 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     if excType == 1:
       dOrdSp = np.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
     elif excType == 2:
-      sigLow = sigLo if initFromCurr==0 else curr_params[1];
-      sigHigh = sigHi if initFromCurr==0 else curr_params[-1];
-      #sigLow = np.random.uniform(1, 4) if initFromCurr==0 else curr_params[1];
-      #sigHigh = np.random.uniform(0.1, 2) if initFromCurr==0 else curr_params[-1];
+      #sigLow = sigLo if initFromCurr==0 else curr_params[1];
+      #sigHigh = sigHi if initFromCurr==0 else curr_params[-1];
+      sigLow = np.random.uniform(1, 4) if initFromCurr==0 else curr_params[1];
+      sigHigh = np.random.uniform(0.1, 2) if initFromCurr==0 else curr_params[-1];
     normConst = normConst if initFromCurr==0 else curr_params[2];
-    respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
+    respExp = 1 if initFromCurr==0 else curr_params[3];
+    #respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
     respScalar = np.random.uniform(10, 200) if initFromCurr==0 else curr_params[4];
     noiseEarly = np.random.uniform(0.001, 0.01) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
     noiseLate = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[6];
@@ -1613,7 +1621,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     all_bnds_list[0] = (prefSfEst, prefSfEst);
     all_bnds_list[1] = (sigLo, sigLo);
     all_bnds_list[-1] = (sigHi, sigHi);
-    all_bounds = tuple(all_bounds);
+    all_bnds_list[3] = (1, 1); # fix nonlinearity at 1!
+    all_bounds = tuple(all_bnds_list);
    
     ## NOW: set up the objective function
     obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult, excType=excType)[0];
@@ -1711,4 +1720,4 @@ if __name__ == '__main__':
     start = time.process_time();
     setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod, excType=excType);
     enddd = time.process_time();
-    print('Took %d time -- unpar' % (enddd-start));
+    print('Took %d time -- NOT par!!!' % (enddd-start));
