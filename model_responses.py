@@ -1024,8 +1024,8 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     for iR in range(1): #range(len(structureSFM['sfm'])): # why 1 for now? We don't have S.sfm as array (just one)
         T = structureSFM['sfm']; # [iR]
 
-        E = SFMSimpleResp(structureSFM, excChannel, expInd=expInd, excType=excType);
-        #E = SFMSimpleResp_par(structureSFM, excChannel, expInd=expInd, excType=excType);
+        #E = SFMSimpleResp(structureSFM, excChannel, expInd=expInd, excType=excType);
+        E = SFMSimpleResp_par(structureSFM, excChannel, expInd=expInd, excType=excType);
 
         #timing/debugging parallelization
         # Get simple cell response for excitatory channel
@@ -1097,7 +1097,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         if lossType == 1:
           # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
           # sqrt - now handles negative responses by first taking abs, sqrt, then re-apply the sign 
-          losq = np.sum(np.square(np.sign(respModel[mask])*np.sqrt(np.abs(respModel[mask])) - np.sign(spikeCount[mask])*np.sqrt(np.abs(spikeCount[mask])))) 
+          lsq = numpy.square(numpy.sign(respModel[mask])*numpy.sqrt(numpy.abs(respModel[mask])) - numpy.sign(spikeCount[mask])*numpy.sqrt(numpy.abs(spikeCount[mask])));
           #lsq = numpy.square(numpy.add(numpy.sqrt(respModel[mask]), -numpy.sqrt(spikeCount[mask])));
           NLL = numpy.mean(lsq);
           nll_notSum = numpy.square(numpy.add(numpy.sqrt(respModel), -numpy.sqrt(spikeCount)));
@@ -1390,7 +1390,10 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
         #fL_name = 'fitList%s_200507%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_200418%s_TNC' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_190321c' % loc_str
-        fL_name = 'fitList%s_200507%s' % (loc_str, hf.chiSq_suffix(kMult));
+        if excType == 1:
+          fL_name = 'fitList%s_200417%s' % (loc_str, hf.chiSq_suffix(kMult));
+        elif excType == 2:
+          fL_name = 'fitList%s_200507%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_200519%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_200522%s' % (loc_str, hf.chiSq_suffix(kMult));
 
@@ -1515,8 +1518,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       sigLow = np.random.uniform(1, 4) if initFromCurr==0 else curr_params[1];
       sigHigh = np.random.uniform(0.1, 2) if initFromCurr==0 else curr_params[-1];
     normConst = normConst if initFromCurr==0 else curr_params[2];
-    respExp = 1 if initFromCurr==0 else curr_params[3];
-    #respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
+    #respExp = 1 if initFromCurr==0 else curr_params[3];
+    respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
     respScalar = np.random.uniform(10, 200) if initFromCurr==0 else curr_params[4];
     noiseEarly = np.random.uniform(0.001, 0.01) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
     noiseLate = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[6];
@@ -1724,4 +1727,4 @@ if __name__ == '__main__':
     start = time.process_time();
     setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod, excType=excType);
     enddd = time.process_time();
-    print('Took %d time -- NOT par!!!' % (enddd-start));
+    print('Took %d time -- PAR!!!' % (enddd-start));

@@ -315,7 +315,7 @@ for d in range(nDisps):
           else:
             if i == 0:
               dispAx[d][c_plt_ind, i].set_ylim((0, 1.5*maxResp));
-              dispAx[d][c_plt_ind, i].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True, fontsize=15);
+              dispAx[d][c_plt_ind, i].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True, fontsize=25);
             else:
               dispAx[d][c_plt_ind, i].set_yscale('symlog');
               dispAx[d][c_plt_ind, i].set_ylim((1.1*minResp, 1.5*maxResp));
