@@ -81,7 +81,10 @@ expName = hf.get_datalist(expDir);
 #fitBase = 'fitList_200413c';
 #fitBase = 'fitList_200417c_TNC'; # excType 1
 #fitBase = 'fitList_200418c_TNC'; # excType 2
-fitBase = 'fitList_200507c'; # excType 2
+if excType == 1:
+  fitBase = 'fitList_200417c'; # excType 1
+elif excType == 2:
+  fitBase = 'fitList_200507c'; # excType 2
 #fitBase = 'fitList_200522c'; # excType 2
 #fitBase = 'holdout_fitList_190513cA';
 ### RVCFITS
