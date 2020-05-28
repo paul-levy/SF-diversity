@@ -1024,8 +1024,8 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     for iR in range(1): #range(len(structureSFM['sfm'])): # why 1 for now? We don't have S.sfm as array (just one)
         T = structureSFM['sfm']; # [iR]
 
-        #E = SFMSimpleResp(structureSFM, excChannel, expInd=expInd, excType=excType);
-        E = SFMSimpleResp_par(structureSFM, excChannel, expInd=expInd, excType=excType);
+        E = SFMSimpleResp(structureSFM, excChannel, expInd=expInd, excType=excType);
+        #E = SFMSimpleResp_par(structureSFM, excChannel, expInd=expInd, excType=excType);
 
         #timing/debugging parallelization
         # Get simple cell response for excitatory channel
@@ -1100,7 +1100,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           lsq = numpy.square(numpy.sign(respModel[mask])*numpy.sqrt(numpy.abs(respModel[mask])) - numpy.sign(spikeCount[mask])*numpy.sqrt(numpy.abs(spikeCount[mask])));
           #lsq = numpy.square(numpy.add(numpy.sqrt(respModel[mask]), -numpy.sqrt(spikeCount[mask])));
           NLL = numpy.mean(lsq);
-          nll_notSum = numpy.square(numpy.add(numpy.sqrt(respModel), -numpy.sqrt(spikeCount)));
+          nll_notSum = numpy.square(numpy.add(numpy.sign(respModel)*numpy.sqrt(numpy.abs(respModel)), -numpy.sign(spikeCount)*numpy.sqrt(numpy.abs(spikeCount))));
  
         elif lossType == 2:
           poiss_llh = numpy.log(poisson.pmf(spikeCount[mask], respModel[mask]));
@@ -1727,4 +1727,4 @@ if __name__ == '__main__':
     start = time.process_time();
     setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod, excType=excType);
     enddd = time.process_time();
-    print('Took %d time -- PAR!!!' % (enddd-start));
+    print('Took %d time -- NO par!!!' % (enddd-start));

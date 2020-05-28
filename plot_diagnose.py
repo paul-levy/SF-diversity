@@ -81,7 +81,10 @@ expName = hf.get_datalist(expDir);
 #fitBase = 'fitList_200413c';
 #fitBase = 'fitList_200417c_TNC'; # excType 1
 #fitBase = 'fitList_200418c_TNC'; # excType 2
-fitBase = 'fitList_200507c'; # excType 2
+if excType == 1:
+  fitBase = 'fitList_200417c'; # excType 1
+elif excType == 2:
+  fitBase = 'fitList_200507c'; # excType 2
 #fitBase = 'fitList_200522c'; # excType 2
 #fitBase = 'holdout_fitList_190513cA';
 ### RVCFITS
@@ -253,7 +256,14 @@ for d in range(nDisps):
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
 
         # NOW...let's compute the sum loss across all SF values for this disp X con condition
-        if lossType == 4: # must add for lossType == 1||2 (handled the same way)...
+        if lossType == 1: # should be same for lossType == 2...
+          # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
+          sfs_to_check = np.where(v_sfs)[0];
+          all_trials = [hf.get_valid_trials(expData, d, v_cons[c], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in sfs_to_check];
+          all_loss_all = np.array([lossByCond[x] for x in all_trials]);
+          all_loss = np.mean(all_loss_all, axis=1); # for error per SF condition
+          curr_loss = np.sum(all_loss_all)
+        elif lossType == 4: # must add for lossType == 1||2 (handled the same way)...
           # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
           sfs_to_check = np.where(v_sfs)[0];
           all_conds = [np.ravel_multi_index([d, sf, v_cons[c]], [nDisps, nSfs, nCons]) for sf in sfs_to_check];
@@ -426,6 +436,14 @@ for d in range(nDisps):
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);
         
         # put sum loss for all conditions present
+        # NOW...let's compute the sum loss across all SF values for this disp X con condition
+        if lossType == 1: # should be same for lossType == 2...
+          # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
+          sfs_to_check = np.where(v_sfs)[0];
+          all_trials = [hf.get_valid_trials(expData, d, v_cons[c], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in sfs_to_check];
+          all_loss_all = np.array([lossByCond[x] for x in all_trials]);
+          all_loss = np.mean(all_loss_all, axis=1); # for error per SF condition
+          curr_loss = np.sum(all_loss_all)
         if lossType == 4: # must add for lossType == 1||2 (handled the same way)...
           sfs_to_check = np.where(v_sfs)[0];
           all_conds = [np.ravel_multi_index([d, sf, v_cons[c]], [nDisps, nSfs, nCons]) for sf in sfs_to_check];
