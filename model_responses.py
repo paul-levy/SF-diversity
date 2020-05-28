@@ -1452,7 +1452,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       # now, get the index corresponding to that peak SF and get the c50 from the corresponding RVC fit
       prefSfInd = np.argmin(np.abs(all_sfs - peakSf));
       # get the c50, but take log10 (we optimize in that space rather than in contrast)
-      c50_est = np.log10(hf.c50_empirical(rvcMod, rvcFits[0]['params'][prefSfInd]));
+      c50_est = np.log10(hf.c50_empirical(rvcMod, rvcFits[0]['params'][prefSfInd])[0]);
       normConst = np.minimum(c50_est, np.log10(0.25)); # don't let a c50 value larger than X as the starting point
     except:
       # why -1? Talked with Tony, he suggests starting with lower sigma rather than higher/non-saturating one
