@@ -53,8 +53,9 @@ rvcAdj   = int(sys.argv[5]); # if 1, then let's load rvcFits to adjust responses
 rvcMod   = int(sys.argv[6]); # 0/1/2 (see hf.rvc_fit_name)
 diffPlot = int(sys.argv[7]);
 intpMod  = int(sys.argv[8]);
-if len(sys.argv) > 9:
-  respVar = int(sys.argv[9]);
+kMult  = float(sys.argv[9]);
+if len(sys.argv) > 10:
+  respVar = int(sys.argv[10]);
 else:
   respVar = 1;
 
@@ -70,6 +71,11 @@ loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
+if 'pl1465' in loc_base:
+  loc_str = 'HPC';
+else:
+  loc_str = '';
+
 ### DATALIST
 expName = hf.get_datalist(expDir);
 ### FITLIST
@@ -82,11 +88,15 @@ expName = hf.get_datalist(expDir);
 #fitBase = 'fitList_200417c_TNC'; # excType 1
 #fitBase = 'fitList_200418c_TNC'; # excType 2
 if excType == 1:
-  fitBase = 'fitList_200417c'; # excType 1
+  fitBase = 'fitList_200417'; # excType 1
 elif excType == 2:
-  fitBase = 'fitList_200507c'; # excType 2
+  fitBase = 'fitList_200507'; # excType 2
 #fitBase = 'fitList_200522c'; # excType 2
 #fitBase = 'holdout_fitList_190513cA';
+
+if lossType == 4: # chiSq...
+  fitBase = '%s%s' % (fitBase, hf.chiSq_suffix(kMult));
+
 ### RVCFITS
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
 rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
@@ -165,6 +175,7 @@ mask = np.isnan(np.sum(stimOr, 0)); # sum over all stim components...if there ar
 #modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=1, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask) for fit, norm in zip(modFits, normTypes)];
 modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask) for fit, norm in zip(modFits, normTypes)];
 
+lossByCond_flat = modResps[0][2];
 lossByCond = modResps[1][2]; # We only care about weighted...
 modResps = [x[1] for x in modResps]; # 1st return output (x[0]) is NLL (don't care about that here)
 #lossByCond = [x[2] for x in modResps]; # if we want both...
@@ -260,15 +271,23 @@ for d in range(nDisps):
           # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
           sfs_to_check = np.where(v_sfs)[0];
           all_trials = [hf.get_valid_trials(expData, d, v_cons[c], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in sfs_to_check];
+          # first weighted
           all_loss_all = np.array([lossByCond[x] for x in all_trials]);
           all_loss = np.mean(all_loss_all, axis=1); # for error per SF condition
           curr_loss = np.sum(all_loss_all)
+          # then flat
+          all_loss_all_flat = np.array([lossByCond_flat[x] for x in all_trials]);
+          all_loss_flat = np.mean(all_loss_all_flat, axis=1); # for error per SF condition
+          curr_loss_flat = np.sum(all_loss_all_flat);
         elif lossType == 4: # must add for lossType == 1||2 (handled the same way)...
           # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
           sfs_to_check = np.where(v_sfs)[0];
           all_conds = [np.ravel_multi_index([d, sf, v_cons[c]], [nDisps, nSfs, nCons]) for sf in sfs_to_check];
           all_loss = np.array([lossByCond[x] for x in all_conds]);
           curr_loss = np.sum(all_loss)
+          # then flat
+          all_loss_flat = np.array([lossByCond_flat[x] for x in all_conds]);
+          curr_loss_flat = np.sum(all_loss_flat);
 
         for i in range(2): # i = 0 (lin-y); i = 1 (log-y)
 
@@ -277,7 +296,7 @@ for d in range(nDisps):
 
           dispAx[d][c_plt_ind, i].set_xscale('log');
           dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
-          dispAx[d][c_plt_ind, i].set_title('D%02d: contrast: %.3f (l_w %.1f)' % (d, all_cons[v_cons[c]], curr_loss));
+          dispAx[d][c_plt_ind, i].set_title('D%02d: contrast: %.3f (l_w %.1f, l_f %.1f)' % (d, all_cons[v_cons[c]], curr_loss, curr_loss_flat));
           dispAx[d][c_plt_ind, i].set_ylabel('resp (imp/s)');
 
           # Set ticks out, remove top/right axis, put ticks only on bottom/left
@@ -415,7 +434,7 @@ mixCons = hf.get_exp_params(expInd).nCons;
 minResp = np.min(np.min(np.min(respMean[~np.isnan(respMean)])));
 maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
 
-f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(25, 1.5*20));
+f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(30, 35));
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
 
@@ -441,16 +460,24 @@ for d in range(nDisps):
           # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
           sfs_to_check = np.where(v_sfs)[0];
           all_trials = [hf.get_valid_trials(expData, d, v_cons[c], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in sfs_to_check];
+          # first, wghtd
           all_loss_all = np.array([lossByCond[x] for x in all_trials]);
           all_loss = np.mean(all_loss_all, axis=1); # for error per SF condition
           curr_loss = np.sum(all_loss_all)
+          # then flat
+          all_loss_all_flat = np.array([lossByCond_flat[x] for x in all_trials]);
+          all_loss_flat = np.mean(all_loss_all_flat, axis=1); # for error per SF condition
+          curr_loss_flat = np.sum(all_loss_all_flat);
         if lossType == 4: # must add for lossType == 1||2 (handled the same way)...
           sfs_to_check = np.where(v_sfs)[0];
           all_conds = [np.ravel_multi_index([d, sf, v_cons[c]], [nDisps, nSfs, nCons]) for sf in sfs_to_check];
           all_loss = np.array([lossByCond[x] for x in all_conds]);
           curr_loss = np.sum(all_loss);
+          # then flat
+          all_loss_flat = np.array([lossByCond_flat[x] for x in all_conds]);
+          curr_loss_flat = np.sum(all_loss_flat);
 
-        sfMixAx[c_plt_ind, d].set_title('con: %s (l_w %.1f)' % (str(np.round(all_cons[v_cons[c]], 2)), curr_loss));
+        sfMixAx[c_plt_ind, d].set_title('con: %s (l_w %.1f, l_f %.1f)' % (str(np.round(all_cons[v_cons[c]], 2)), curr_loss, curr_loss_flat));
         # plot data
         sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
                                        respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=False);
@@ -545,7 +572,7 @@ val_cons = np.array(val_con_by_disp[disp_rvc]);
 v_sfs = ~np.isnan(respMean[disp_rvc, :, val_cons[0]]); # remember, for single gratings, all cons have same #/index of sfs
 sfToUse = np.int(np.floor(len(v_sfs)/2));
 plt.semilogx(all_cons[val_cons], respMean[disp_rvc, sfToUse, val_cons], 'o', clip_on=False); # Measured responses
-[plt.plot(all_cons[val_cons], modAvg[disp_rvc, sfToUse, val_cons], '%so-' % c, clip_on=False, label=s) for modAvg, c, s in zip(modAvgs, modColors, modLabels)]; # Model responses
+[plt.plot(all_cons[val_cons], modAvg[disp_rvc, sfToUse, val_cons], marker=None, color=c, clip_on=False, label=s) for modAvg, c, s in zip(modAvgs, modColors, modLabels)]; # Model responses
 plt.xlabel('Con (%)', fontsize=20);
 plt.ylim([np.minimum(-5, np.nanmin(respMean[disp_rvc, sfToUse, val_cons])), 1.1*np.nanmax(respMean[disp_rvc, sfToUse, val_cons])]);
 

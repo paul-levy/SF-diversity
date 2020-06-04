@@ -38,8 +38,10 @@ else:
   excType = 1; # default is wght
 
 basePath = os.getcwd() + '/'
-rvcName = None; # updated - computes RVC for best responses (i.e. f0 or f1)
-#rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
+#rvcName = None; # Use NONE if getting model responses, only
+rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
+if expDir == 'altExp/': # we don't adjust responses there...
+  rvcName = None;
 dFits_base = 'descrFits_191023';
 dMod_num, dLoss_num = 1, 4; # see hf.descrFit_name/descrMod_name/etc for details
 if use_mod_resp == 1: 
@@ -91,7 +93,7 @@ descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, mode
 ## now, let it run
 dataPath = basePath + expDir + 'structures/'
 save_loc = basePath + expDir + 'figures/'
-save_locSuper = save_loc + 'superposition_200419/'
+save_locSuper = save_loc + 'superposition_200604/'
 if use_mod_resp == 1:
   save_locSuper = save_locSuper + '%s/' % fitBase
 
@@ -186,8 +188,7 @@ else: # otherwise, if it's complex, just get F0
   spikes = spikes - baseline*hf.get_exp_params(expInd).stimDur; 
 
 _, _, respOrg, respAll = hf.organize_resp(spikes, expData, expInd);
-
-resps_data, _, _, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates);
+resps_data, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates);
 
 if fitList is None:
   resps = resps_data; # otherwise, we'll still keep resps_data for reference
@@ -459,7 +460,8 @@ if fitz is not None:
   ax[4,1].errorbar(all_sfs[val_sfs][sfInds], sfErrsNorm, sfErrsNormStd, color='k', linestyle='-', clip_on=False)
 
   # compute the unsigned "area under curve" for the sfErrsNorm, and normalize by the octave span of SF values considered
-  val_errs = ~np.isnan(sfErrsNorm)
+  #val_errs = ~np.isnan(sfErrsNorm)
+  val_errs = np.logical_and(~np.isnan(sfErrsNorm), np.array(sfErrsNormStd) < 1.25);
   val_x = all_sfs[val_sfs][sfInds][val_errs]
   oct_span = hf.bw_lin_to_log(val_x[0], val_x[-1])
   # note that we square (to avoid negative values) and then sqrt (to restore original magnitude)
@@ -467,7 +469,7 @@ if fitz is not None:
   auc_norm = auc/oct_span;
   curr_suppr['sfErrsNorm_AUC'] = auc_norm;
   # - and put that value on the plot
-  ax[4,1].text(0.1, -0.25, '|auc|=%.2f' % auc_norm);
+  ax[4,1].text(0.1, -0.25, '|auc*|=%.2f' % auc_norm);
 else:
   curr_suppr['sfErrsNorm_AUC'] = np.nan
 
@@ -541,7 +543,7 @@ pdfSv.close();
 ### Finally, add this "superposition" to the newest 
 #########
 if fitList is None:
-  super_name = 'superposition_analysis.npy';
+  super_name = 'superposition_analysis_200604.npy';
 else:
   super_name = 'superposition_analysis_mod%s.npy' % hf.fitType_suffix(fitType);
 if os.path.exists(dataPath + super_name):

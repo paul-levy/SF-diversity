@@ -246,16 +246,16 @@ def sf_var(resps, sfs, sf_cm):
 
 def get_datalist(expDir):
   if expDir == 'V1_orig/':
-    return 'dataList_200507.npy'; # limited set of data
-    #return 'dataList.npy';
+    #return 'dataList_200507.npy'; # limited set of data
+    return 'dataList.npy';
   elif expDir == 'altExp/':
-    return 'dataList_200507.npy'; # limited set of data
-    #return 'dataList.npy';
+    #return 'dataList_200507.npy'; # limited set of data
+    return 'dataList.npy';
   elif expDir == 'LGN/':
     return 'dataList.npy';
   elif expDir == 'V1/':
-    return 'dataList_glx_200507.npy'; # limited set of data
-    #return 'dataList_glx.npy';
+    #return 'dataList_glx_200507.npy'; # limited set of data
+    return 'dataList_glx.npy';
 
 def exp_name_to_ind(expName):
     ''' static mapping from name of experiment to expInd
@@ -2413,7 +2413,7 @@ def get_conditionAdj(data, n_comps, con, sf, adjByTrial):
 
   val_disp = data['num_comps'] == n_comps;
   val_con = np.round(data['total_con'], conDig) == con;
-  val_sf = data['cent_sf'] == sf;
+  val_sf = np.round(data['cent_sf'], conDig) == np.round(sf, conDig);
 
   val_trials = np.where(val_disp & val_con & val_sf)[0]; # get as int array of indices rather than boolean array
   resps = adjByTrial[val_trials];

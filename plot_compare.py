@@ -48,13 +48,14 @@ majorWid, majorLen = 5, 25;
 cellNum  = int(sys.argv[1]);
 excType  = int(sys.argv[2]);
 lossType = int(sys.argv[3]);
-expDir   = sys.argv[4]; 
+expDir   = sys.argv[4];
 rvcAdj   = int(sys.argv[5]); # if 1, then let's load rvcFits to adjust responses to F1
 rvcMod   = int(sys.argv[6]); # 0/1/2 (see hf.rvc_fit_name)
 diffPlot = int(sys.argv[7]);
 intpMod  = int(sys.argv[8]);
-if len(sys.argv) > 9:
-  respVar = int(sys.argv[9]);
+kMult  = float(sys.argv[9]);
+if len(sys.argv) > 10:
+  respVar = int(sys.argv[10]);
 else:
   respVar = 1;
 
@@ -70,21 +71,30 @@ loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
+if 'pl1465' in loc_base:
+  loc_str = 'HPC';
+else:
+  loc_str = '';
+
 ### DATALIST
 expName = hf.get_datalist(expDir);
 ### FITLIST
 #fitBase = 'mr_fitList_190502cA';
 #fitBase = 'fitList_190502aA';
-#fitBase = 'fitList_190513cA'; # NOTE: THIS VERSION USED FOR VSS2019 poster
+#fitBase = 'fitList_190513cA'; # NOTE: THIS VERSION USED FOR VSS2019 poster -- with older dataList/rvcFits/etc
 #fitBase = 'fitList_190516cA';
 #fitBase = 'fitList_191023c';
 #fitBase = 'fitList_200413c';
 #fitBase = 'fitList_200417c_TNC'; # excType 1
 #fitBase = 'fitList_200418c_TNC'; # excType 2
 if excType == 1:
-  fitBase = 'fitList_200417c'; # excType 1
+  fitBase = 'fitList%s_200417' % (loc_str); # excType 1
 elif excType == 2:
-  fitBase = 'fitList_200507c'; # excType 2
+  fitBase = 'fitList%s_200507' % (loc_str); # excType 2
+
+if lossType == 4: # chiSq...
+  fitBase = '%s%s' % (fitBase, hf.chiSq_suffix(kMult));
+
 #fitBase = 'fitList_200522c'; # excType 2
 #fitBase = 'holdout_fitList_190513cA';
 ### RVCFITS
@@ -469,7 +479,7 @@ if ~np.any([i is None for i in oriModResps]): # then we're using an experiment w
   sns.despine(ax=curr_ax, offset = 5);
 
   # plot ori tuning
-  [plt.plot(expData['sfm']['exp']['ori'], oriResp, '%so' % c, clip_on=False, label=s) for oriResp, c, s in zip(oriModResps, modColors, modLabels)]; # Model responses
+  [plt.plot(expData['sfm']['exp']['ori'], oriResp, color=c, marker=None, clip_on=False, label=s) for oriResp, c, s in zip(oriModResps, modColors, modLabels)]; # Model responses
   expPlt = plt.plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-', clip_on=False); # Exp responses
   plt.xlabel('Ori (deg)', fontsize=12);
   plt.ylabel('Response (ips)', fontsize=12);
@@ -479,7 +489,7 @@ if ~np.any([i is None for i in conModResps]): # then we're using an experiment w
   curr_ax = plt.subplot2grid(detailSize, (0, 1)); # default size is 1x1
   consUse = expData['sfm']['exp']['con'];
   plt.semilogx(consUse, expData['sfm']['exp']['conRateMean'], 'o-', clip_on=False); # Measured responses
-  [plt.plot(consUse, conResp, '%so' % c, clip_on=False, label=s) for conResp, c, s in zip(conModResps, modColors, modLabels)]; # Model responses
+  [plt.plot(consUse, conResp, color=c, marker=None, linestyle='-', clip_on=False, label=s, alpha=0.3) for conResp, c, s in zip(conModResps, modColors, modLabels)]; # Model responses
   plt.xlabel('Con (%)', fontsize=20);
 
 # poisson test - mean/var for each condition (i.e. sfXdispXcon)
@@ -507,9 +517,9 @@ val_cons = np.array(val_con_by_disp[disp_rvc]);
 v_sfs = ~np.isnan(respMean[disp_rvc, :, val_cons[0]]); # remember, for single gratings, all cons have same #/index of sfs
 sfToUse = np.int(np.floor(len(v_sfs)/2));
 plt.semilogx(all_cons[val_cons], respMean[disp_rvc, sfToUse, val_cons], 'o', clip_on=False); # Measured responses
-[plt.plot(all_cons[val_cons], modAvg[disp_rvc, sfToUse, val_cons], '%so-' % c, clip_on=False, label=s) for modAvg, c, s in zip(modAvgs, modColors, modLabels)]; # Model responses
+[plt.plot(all_cons[val_cons], modAvg[disp_rvc, sfToUse, val_cons], color=c, marker=None, clip_on=False, label=s) for modAvg, c, s in zip(modAvgs, modColors, modLabels)]; # Model responses
 plt.xlabel('Con (%)', fontsize=20);
-plt.ylim([np.minimum(-5, np.nanmin(respMean[disp_rvc, sfToUse, val_cons])), 1.1*np.nanmax(respMean[disp_rvc, sfToUse, val_cons])]);
+plt.ylim([np.minimum(-5, np.nanmin(respMean[disp_rvc, sfToUse, val_cons])), 1.4*np.nanmax(respMean[disp_rvc, sfToUse, val_cons])]);
 
 # Remove top/right axis, put ticks only on bottom/left
 
