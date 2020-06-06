@@ -38,16 +38,18 @@ else:
   excType = 1; # default is wght
 
 basePath = os.getcwd() + '/'
-#rvcName = None; # Use NONE if getting model responses, only
 rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
 if expDir == 'altExp/': # we don't adjust responses there...
   rvcName = None;
 dFits_base = 'descrFits_191023';
 dMod_num, dLoss_num = 1, 4; # see hf.descrFit_name/descrMod_name/etc for details
-if use_mod_resp == 1: 
-  fitBase = 'fitList_200417c';
-  #fitBase = 'fitList_200418c';
-  lossType = 4; # chiSq
+if use_mod_resp == 1:
+  rvcName = None; # Use NONE if getting model responses, only
+  if excType == 1:
+    fitBase = 'fitList_200417c';
+  elif excType == 2:
+    fitBase = 'fitList_200507c';
+  lossType = 1; # sqrt
   fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
 # ^^^ EDIT rvc/descrFits/fitList names here; 
 
@@ -93,7 +95,7 @@ descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, mode
 ## now, let it run
 dataPath = basePath + expDir + 'structures/'
 save_loc = basePath + expDir + 'figures/'
-save_locSuper = save_loc + 'superposition_200604/'
+save_locSuper = save_loc + 'superposition_200606/'
 if use_mod_resp == 1:
   save_locSuper = save_locSuper + '%s/' % fitBase
 
@@ -120,7 +122,7 @@ curr_suppr = dict();
 ############
 ### Establish the plot, load cell-specific measures
 ############
-nRows, nCols = 5, 2;
+nRows, nCols = 6, 2;
 
 cellName = dataList['unitName'][which_cell-1];
 expInd = hf.get_exp_ind(dataPath, cellName)[0]
@@ -221,7 +223,7 @@ all_preds = predResps[1:, :, :].flatten() # all disp>0
 #         non_nan = np.where(~np.isnan(all_preds)); # cannot fit negative values with naka-rushton...
 #         fitz, _ = opt.curve_fit(myFit, all_preds[non_nan], all_resps[non_nan], p0=[-5, 10, 5], maxfev=5000)
 # naka rushton
-myFit = lambda x, b, g, expon, c50: hf.naka_rushton(x, [b, g, expon, c50]) 
+myFit = lambda x, g, expon, c50: hf.naka_rushton(x, [0, g, expon, c50]) 
 non_neg = np.where(all_preds>0) # cannot fit negative values with naka-rushton...
 try:
   if use_mod_resp == 1: # the reference will ALWAYS be the data -- redo the above analysis for data
@@ -230,9 +232,9 @@ try:
     all_resps_data = respMean_data[1:, :, :].flatten() # all disp>0
     all_preds_data = predResps_data[1:, :, :].flatten() # all disp>0
     non_neg_data = np.where(all_preds_data>0) # cannot fit negative values with naka-rushton...
-    fitz, _ = opt.curve_fit(myFit, all_preds_data[non_neg_data], all_resps_data[non_neg_data], p0=[1, 100, 2, 25], maxfev=5000)
+    fitz, _ = opt.curve_fit(myFit, all_preds_data[non_neg_data], all_resps_data[non_neg_data], p0=[100, 2, 25], maxfev=5000)
   else:
-    fitz, _ = opt.curve_fit(myFit, all_preds[non_neg], all_resps[non_neg], p0=[1, 100, 2, 25], maxfev=5000)
+    fitz, _ = opt.curve_fit(myFit, all_preds[non_neg], all_resps[non_neg], p0=[100, 2, 25], maxfev=5000)
   rel_c50 = np.divide(fitz[-1], np.max(all_preds[non_neg]));
 except:
   fitz = None;
@@ -380,7 +382,7 @@ for d in range(nDisps):
   # and set some labels/lines, as needed
   if d == 1:
       ax[2, 0].set_xlabel('dispersion');
-      ax[2, 0].set_ylabel('suppression ratio')
+      ax[2, 0].set_ylabel('suppression ratio (linear)')
       ax[2, 0].axhline(1, ls='--', color='k')
       ax[3, 0].set_xlabel('dispersion');
       ax[3, 0].set_ylabel('mean (signed) error')
@@ -393,7 +395,7 @@ for d in range(nDisps):
 
 ### plot averaged across all cons/disps
 sfInds = []; sfRats = []; sfRatStd = []; 
-sfErrs = []; sfErrsStd = []; sfErrsNorm = []; sfErrsNormStd = [];
+sfErrs = []; sfErrsStd = []; sfErrsNorm = []; sfErrsNormStd = []; sfErrsRat = []; sfErrsRatStd = [];
 for s in range(len(val_sfs)):
   try: # not all sfs will have legitmate values;
     # only get mixtures (i.e. ignore single gratings)
@@ -404,17 +406,26 @@ for s in range(len(val_sfs)):
     sfInds.append(s); sfRats.append(geomean(rats_curr)); sfRatStd.append(np.std(np.log10(rats_curr)));
 
     if fitz is not None:
-      curr_err = mixSf - myFit(sumSf, *fitz);
+      curr_NR = myFit(sumSf, *fitz)
+
+      curr_err = mixSf - curr_NR;
       sfErrs.append(np.mean(curr_err));
       sfErrsStd.append(np.std(curr_err))
-      curr_errNorm = np.divide(mixSf - myFit(sumSf, *fitz), myFit(sumSf, *fitz));
+
+      curr_errNorm = np.divide(mixSf - curr_NR, curr_NR);
       sfErrsNorm.append(np.mean(curr_errNorm));
       sfErrsNormStd.append(np.std(curr_errNorm))
+
+      curr_errRat = np.divide(mixSf, curr_NR);
+      sfErrsRat.append(np.mean(curr_errRat));
+      sfErrsRatStd.append(np.std(curr_errRat));
     else:
       sfErrs.append([]);
       sfErrsStd.append([]);
       sfErrsNorm.append([]);
       sfErrsNormStd.append([]);
+      sfErrsRat.append([]);
+      sfErrsRatStd.append([]);
   except:
     pass
 
@@ -458,6 +469,24 @@ if fitz is not None:
   ax[4,1].set_ylim((-2, 2))
   ax[4,1].set_ylabel('mean (signed) error -- as fraction of fit prediction');
   ax[4,1].errorbar(all_sfs[val_sfs][sfInds], sfErrsNorm, sfErrsNormStd, color='k', linestyle='-', clip_on=False)
+  # -- AND simply the ratio between the mixture response and the mean expected mix response (i.e. Naka-Rushton)
+  # --- equivalent to the suppression ratio, but relative to the NR fit rather than perfect linear summation
+  ax[5,1].scatter(all_sfs[val_sfs][sfInds], sfErrsRat, color=clrs_sf[sfInds], clip_on=False)
+  ax[5,1].errorbar(all_sfs[val_sfs][sfInds], sfErrsRat, sfErrsRatStd, color='k', linestyle='-', clip_on=False, label='suppression tuning')
+  ax[5,1].axhline(1, ls='--', color='k')
+  ax[5,1].set_xlabel('sf (cpd)')
+  ax[5,1].set_xscale('log')
+  ax[5,1].set_xlim((0.1, 10));
+  ax[5,1].set_ylabel('suppression ratio (wrt NR)');
+  ax[5,1].set_yscale('log', basey=2)
+#         ax[2,1].yaxis.set_ticks(minorticks)
+  ax[5,1].set_ylim(0.1, 10);        
+  ax[5,1].legend(fontsize='x-small');
+  # - compute the variance!
+  val_errs = np.logical_and(~np.isnan(sfErrsRat), np.logical_and(np.array(sfErrsRatStd)>0, np.array(sfErrsRatStd) < 1.25));        errsratVar = np.var(sfErrsRat);
+  # - and put that value on the plot
+  errsratVar = np.var(sfErrsRat[val_errs]);
+  ax[5,1].text(0.1, 2, 'var=%.2f' % errsratVar);
 
   # compute the unsigned "area under curve" for the sfErrsNorm, and normalize by the octave span of SF values considered
   #val_errs = ~np.isnan(sfErrsNorm)
@@ -543,7 +572,7 @@ pdfSv.close();
 ### Finally, add this "superposition" to the newest 
 #########
 if fitList is None:
-  super_name = 'superposition_analysis_200604.npy';
+  super_name = 'superposition_analysis_200606.npy';
 else:
   super_name = 'superposition_analysis_mod%s.npy' % hf.fitType_suffix(fitType);
 if os.path.exists(dataPath + super_name):
@@ -551,4 +580,4 @@ if os.path.exists(dataPath + super_name):
 else:
   suppr_all = dict();
 suppr_all[which_cell-1] = curr_suppr;
-#np.save(dataPath + super_name, suppr_all);
+np.save(dataPath + super_name, suppr_all);
