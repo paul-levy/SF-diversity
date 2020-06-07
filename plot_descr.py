@@ -115,11 +115,13 @@ _, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData,
 rvcModel = hf.get_rvc_model();
 if rvcAdj == 0:
   rvcFlag = '_f0';
+  force_dc = True;
 else:
   rvcFlag = '';
+  force_dc = False;
 rvcSuff = hf.rvc_mod_suff(rvcMod);
 rvcBase = '%s%s' % (rvcBase, rvcFlag);
-spikes_rate = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcBase, rvcMod=rvcMod, descrFitName_f0 = fLname, baseline_sub=False);
+spikes_rate = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcBase, rvcMod=rvcMod, descrFitName_f0 = fLname, baseline_sub=False, force_dc=force_dc);
 # let's also get the baseline
 if f1f0rat < 1 and expDir != 'LGN/': # i.e. if we're in LGN, DON'T get baseline, even if f1f0 < 1 (shouldn't happen)
   baseline_resp = hf.blankResp(trialInf, expInd, spikes=spikes_rate, spksAsRate=True)[0];

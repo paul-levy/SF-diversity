@@ -13,12 +13,15 @@ data_suff = 'structures/';
 
 expName = hf.get_datalist(sys.argv[3]); # sys.argv[3] is experiment dir
 #expName = 'dataList_glx_mr.npy'
-df_f0 = 'descrFits_191003_sqrt_flex.npy';
+#df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName =  'descrFits_191201';
+df_f0 = None;
+dogName =  'descrFits_200507';
+#phAdvName = 'phaseAdvanceFits_200507'
 phAdvName = 'phaseAdvanceFits_191023'
-rvcName_f0   = 'rvcFits_201330_f0' # .npy will be added later, as will suffix assoc. w/particular RVC model
-rvcName_f1   = 'rvcFits_200330' # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f0   = 'rvcFits_200507_f0' # .npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f1   = 'rvcFits_191023' # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+#rvcName_f1   = 'rvcFits_200507' # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 ## model recovery???
 modelRecov = 0;
 if modelRecov == 1:
@@ -131,7 +134,7 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save=1
 
   return phAdv_model, all_opts;
 
-def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=1, expName=expName, force_f1=False, rvcMod=0):
+def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=1, expName=expName, force_f1=False, rvcMod=0):
   ''' Piggy-backing off of phase_advance_fit above, get prepared to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
       - as of 19.11.07, we will fit non-baseline subtracted responses 

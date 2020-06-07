@@ -2745,6 +2745,7 @@ def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes 
       Given the data (S.sfm.exp.trial), if rvcFits is None, simply return saved spike count;
                                         else return the adjusted spike counts (e.g. LGN, expInd 3)
   '''
+
   if overwriteSpikes is not None: # as of 19.05.02, used for fitting model recovery spikes
     return overwriteSpikes;
   if rvcFits is None:

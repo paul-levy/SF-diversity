@@ -1391,11 +1391,14 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
         #fL_name = 'fitList%s_200418%s_TNC' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_190321c' % loc_str
         if excType == 1:
-          fL_name = 'fitList%s_200417%s' % (loc_str, hf.chiSq_suffix(kMult));
+          fL_name = 'fitList%s_200417' % (loc_str);
         elif excType == 2:
-          fL_name = 'fitList%s_200507%s' % (loc_str, hf.chiSq_suffix(kMult));
+          fL_name = 'fitList%s_200507' % (loc_str);
         #fL_name = 'fitList%s_200519%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_200522%s' % (loc_str, hf.chiSq_suffix(kMult));
+
+    if lossType == 4: # chiSq...
+      fL_name = '%s%s' % (fL_name, hf.chiSq_suffix(kMult));
 
     np = numpy;
 
