@@ -46,6 +46,10 @@ if len(sys.argv) > 8:
   respVar = int(sys.argv[8]);
 else:
   respVar = 1;
+if len(sys.argv) > 9:
+  forceLog = 1; # used for byDisp/allCons_... (sf plots)
+else:
+  forceLog = 0;
 
 loc_base = os.getcwd() + '/';
 
@@ -55,16 +59,16 @@ save_loc = loc_base + expDir + 'figures/';
 ### DATALIST
 expName = hf.get_datalist(expDir);
 ### DESCRLIST
-descrBase = 'descrFits_200507';
+#descrBase = 'descrFits_200507';
 #descrBase = 'descrFits_190503';
 #descrBase = 'descrFits_191003';
-#descrBase = 'descrFits_191023';
+descrBase = 'descrFits_191023';
 #descrBase = 'descrFits_191201';
 if descrJnt == 1:
   descrBase = '%s_joint' % descrBase;
 ### RVCFITS
-rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
-#rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
+#rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
+rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
 
 ##################
 ### Spatial frequency
@@ -167,7 +171,7 @@ for d in range(nDisps):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(nDisps*8, n_v_cons*8), sharey=False);
+    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(nDisps*5.5, n_v_cons*8), sharey=False);
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
     
@@ -211,14 +215,22 @@ for d in range(nDisps):
 
         ### right side of plots - BASELINE SUBTRACTED IF COMPLEX CELL
         if d == 0:
+          minResp_toPlot = 5e-1;
           ## plot everything again on log-log coordinates...
           # first data
           if baseline_resp is not None:
             to_sub = baseline_resp;
           else:
             to_sub = np.array(0);
-          dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]] - to_sub, 
-                                                     respVar[d, v_sfs, v_cons[c]], fmt='o', color=dataClr, clip_on=False, label=dataTxt);
+          resps_curr = respMean[d, v_sfs, v_cons[c]] - to_sub;
+          abvThresh = [resps_curr>minResp_toPlot];
+          var_curr = respVar[d, v_sfs, v_cons[c]][abvThresh];
+          # in the below line, we ensure that the negative lobe of the error bar does not extend past the lower threshold
+          #cut_errBars = [np.maximum(resps_curr[abvThresh]-np.divide(var_curr,2)minResp_toPlot, var_curr), var_curr];
+          #varMult_log10 = (1/np.log(10))*(1/resps_curr[abvThresh]);
+          #var_curr_adj = np.multiply(var_curr, varMult_log10);
+          dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs][abvThresh], resps_curr[abvThresh], var_curr, 
+                fmt='o', color=dataClr, clip_on=False, markersize=12, label=dataTxt);
 
           # plot descriptive model fit -- and inferred characteristic frequency (or peak...)
           prms_curr = descrParams[d, v_cons[c]];
@@ -237,7 +249,7 @@ for d in range(nDisps):
           dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % descrFits[cellNum-1]['varExpl'][d, v_cons[c]]);
           dispAx[d][c_plt_ind, 1].set_xscale('log');
           dispAx[d][c_plt_ind, 1].set_yscale('log'); # double log
-          dispAx[d][c_plt_ind, 1].set_ylim((1e-1, 1.5*maxResp));
+          dispAx[d][c_plt_ind, 1].set_ylim((minResp_toPlot, 1.5*maxResp));
           dispAx[d][c_plt_ind, 1].legend();
 
         ## Now, set things for both plots (formatting)
@@ -287,32 +299,43 @@ for d in range(nDisps):
 
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));  
 
+    minToPlot = 5e-1;
+
     lines = [];
     for c in reversed(range(n_v_cons)):
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
 
         # plot data [0]
-        col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
+        col = [(n_v_cons-c-1)/float(n_v_cons), (n_v_cons-c-1)/float(n_v_cons), (n_v_cons-c-1)/float(n_v_cons)];
         plot_resp = respMean[d, v_sfs, v_cons[c]];
+        if forceLog == 1:
+          if baseline_resp is not None:
+            to_sub = baseline_resp;
+          else:
+            to_sub = np.array(0);
+          plot_resp = plot_resp - to_sub;
 
-        curr_line, = dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', clip_on=False, \
+        curr_line, = dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], '-o', clip_on=False, \
                                        color=col, label=str(np.round(all_cons[v_cons[c]], 2)));
         lines.append(curr_line);
  
         # plot descr fit [1]
         prms_curr = descrParams[d, v_cons[c]];
         descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
-        dispAx[d][1].plot(sfs_plot, descrResp, color=col);
+        dispAx[d][1].plot(sfs_plot, descrResp-to_sub, color=col);
 
     for i in range(len(dispCurr)):
       dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
 
       dispAx[d][i].set_xscale('log');
-      if expDir == 'LGN/': # we want double-log if it's the LGN!
+      if expDir == 'LGN/' or forceLog == 1: # we want double-log if it's the LGN!
         dispAx[d][i].set_yscale('log');
-        dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
+        #dispAx[d][i].set_ylim((minToPlot, 1.5*maxResp));
+        dispAx[d][i].set_ylim((5e-1, 300)); # common y axis for ALL plots
+        logSuffix = 'log_';
       else:
         dispAx[d][i].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
+        logSuffix = '';
 
       dispAx[d][i].set_xlabel('sf (c/deg)'); 
 
@@ -325,7 +348,7 @@ for d in range(nDisps):
       dispAx[d][i].set_title('D%02d - sf tuning' % (d+1));
       dispAx[d][i].legend(); 
 
-saveName = "/allCons_cell_%03d.pdf" % (cellNum)
+saveName = "/allCons_%scell_%03d.pdf" % (logSuffix, cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
@@ -503,6 +526,7 @@ for d in range(nDisps):
     n_v_sfs = len(v_sf_inds);
 
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
+    minResp_plot = 5e-1;
 
     lines_log = [];
     for sf in range(n_v_sfs):
@@ -514,8 +538,14 @@ for d in range(nDisps):
         con_str = str(np.round(all_sfs[sf_ind], 2));
         # plot data
         plot_resp = respMean[d, sf_ind, v_cons];
+        if forceLog == 1:
+          if baseline_resp is not None:
+            to_sub = baseline_resp;
+          else:
+            to_sub = np.array(0);
+          plot_resp = plot_resp - to_sub;
 
-        line_curr, = crfAx[d][0].plot(all_cons[v_cons][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', color=col, \
+        line_curr, = crfAx[d][0].plot(all_cons[v_cons][plot_resp>minResp_plot], plot_resp[plot_resp>minResp_plot], '-o', color=col, \
                                       clip_on=False, label=con_str);
         lines_log.append(line_curr);
 
@@ -528,18 +558,21 @@ for d in range(nDisps):
           rvcResps = rvcModel(*prms_curr, cons_plot);
         elif rvcMod == 1 or rvcMod == 2: # naka-rushton (or modified version)
           rvcResps = hf.naka_rushton(cons_plot, prms_curr)
-        crfAx[d][1].plot(cons_plot, np.maximum(rvcResps, 0.1), color=col, \
+        crfAx[d][1].plot(cons_plot, np.maximum(rvcResps-to_sub, 0.1), color=col, \
                          clip_on=False, label = con_str);
 
     for i in range(len(crfCurr)):
 
-      if expDir == 'LGN/': # then plot as double-log
+      if expDir == 'LGN/' or forceLog == 1: # then plot as double-log
         crfAx[d][i].set_xscale('log');
         crfAx[d][i].set_yscale('log');
-        crfAx[d][i].set_ylim([1e-1, 1.1*maxResp]);
+        #crfAx[d][i].set_ylim([minResp_plot, 1.1*maxResp]);
+        dispAx[d][i].set_ylim((minResp_plot, 300)); # common y axis for ALL plots
+        logSuffix = 'log_';
       else:
         crfAx[d][i].set_xlim([-0.1, 1]);
         crfAx[d][i].set_ylim([-0.1*maxResp, 1.1*maxResp]);
+        logSuffix = '';
       crfAx[d][i].set_xlabel('contrast');
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
@@ -551,7 +584,7 @@ for d in range(nDisps):
       crfAx[d][i].set_title('D%d: sf:all - log resp' % (d+1));
       crfAx[d][i].legend();
 
-saveName = "/allSfs_cell_%03d.pdf" % (cellNum)
+saveName = "/allSfs_%scell_%03d.pdf" % (logSuffix, cellNum)
 full_save = os.path.dirname(str(save_loc + 'CRF%s%s/' % (rvcSuff, rvcFlag)));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
@@ -564,6 +597,8 @@ pdfSv.close()
 ####################################
 ##### difference plots #############
 ####################################
+
+'''
 
 # #### DIFFERENCE: Plots by dispersion
 # for each cell, we will plot the high contrast SF tuning curve (for that dispersion; the "reference"), and then plot the
@@ -621,24 +656,6 @@ for d in range(nDisps):
         if baseline_resp is not None: # i.e. complex cell
           dispAx[d][c_plt_ind, 0].axhline(baseline_resp, color=dataClr, linestyle='dashed');
 
-        '''
-        ## plot descr fit
-        prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
-        dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=modClr, label='descr. fit');
-
-        ## if flexGauss plot peak & c.o.m.
-        if descrMod == 0:
-          ctr = hf.sf_com(resps, sfVals);
-          pSf = hf.dog_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
-          dispAx[d][c_plt_ind, 0].plot(ctr, 1, linestyle='None', marker='v', label='c.o.m.', color=dataClr); # plot at y=1
-          dispAx[d][c_plt_ind, 0].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr); # plot at y=1
-        ## otherwise, let's plot the char freq.
-        elif descrMod == 1 or descrMod == 2:
-          char_freq = hf.dog_charFreq(prms_curr, descrMod);
-          dispAx[d][c_plt_ind, 0].plot(char_freq, 1, linestyle='None', marker='v', label='$f_c$', color=dataClr); # plot at y=1
-        '''
-
         dispAx[d][c_plt_ind, 0].legend();
         dispAx[d][c_plt_ind, 0].set_title('D%02d: contrast: %.3f' % (d+1, all_cons[v_cons[c]]));
 
@@ -662,22 +679,6 @@ for d in range(nDisps):
           #  note: for now, just plotting the variance for this contrast (not any difference between vars...)
           dispAx[d][c_plt_ind, 1].errorbar(sfVals, (resps_curr-to_sub) - (sfRefmn-to_sub),
                                            vars_curr, color=diffClr, fmt='o', clip_on=False, label=diffTxt, linestyle='dashed');
-
-          '''
-          # plot descriptive model fit -- and inferred characteristic frequency (or peak...)
-          prms_curr = descrParams[d, v_cons[c]];
-          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
-          dispAx[d][c_plt_ind, 1].plot(sfs_plot, descrResp - to_sub, color=modClr, label='descr. fit', clip_on=False)
-          if descrMod == 0:
-            psf = hf.dog_prefSf(prms_curr, dog_model=descrMod);
-            if psf != np.nan:
-              dispAx[d][c_plt_ind, 1].plot(psf, 1, 'b', color='k', label='peak freq', clip_on=False);
-          elif descrMod == 1 or descrMod == 2: # diff-of-gauss
-            # now plot characteristic frequency!  
-            char_freq = hf.dog_charFreq(prms_curr, descrMod);
-            if char_freq != np.nan:
-              dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k', label='char. freq', clip_on=False);
-          '''
 
           dispAx[d][c_plt_ind, 1].set_title('log-log');
           #dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % descrFits[cellNum-1]['varExpl'][d, v_cons[c]]);
@@ -801,6 +802,8 @@ for f in fDisp:
     pdfSv.savefig(f)
     plt.close(f)
 pdfSv.close()
+
+'''
 
 ####################################
 ##### joint tuning plots ###########

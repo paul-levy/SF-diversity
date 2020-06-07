@@ -170,7 +170,7 @@ except:
 f1f0_rat = hf.compute_f1f0(expData, which_cell, expInd, dataPath, descrFitName_f0=descrFits_f0)[0];
 curr_suppr['f1f0'] = f1f0_rat;
 
-if f1f0_rat > 1 or expDir == 'LGN/': # i.e. if we're looking at a simple cell, then let's get F1
+if (f1f0_rat > 1 or expDir == 'LGN/') and expDir != 'altExp/' : # i.e. if we're looking at a simple cell, then let's get F1
   if rvcName is not None:
     try:
       rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod);
@@ -396,6 +396,7 @@ for d in range(nDisps):
 ### plot averaged across all cons/disps
 sfInds = []; sfRats = []; sfRatStd = []; 
 sfErrs = []; sfErrsStd = []; sfErrsNorm = []; sfErrsNormStd = []; sfErrsRat = []; sfErrsRatStd = [];
+curr_errNormFactor = [];
 for s in range(len(val_sfs)):
   try: # not all sfs will have legitmate values;
     # only get mixtures (i.e. ignore single gratings)
@@ -406,7 +407,8 @@ for s in range(len(val_sfs)):
     sfInds.append(s); sfRats.append(geomean(rats_curr)); sfRatStd.append(np.std(np.log10(rats_curr)));
 
     if fitz is not None:
-      curr_NR = myFit(sumSf, *fitz)
+      #curr_NR = myFit(sumSf, *fitz); # unvarnished
+      curr_NR = np.maximum(myFit(sumSf, *fitz), 0.5); # thresholded at 0.5...
 
       curr_err = mixSf - curr_NR;
       sfErrs.append(np.mean(curr_err));
@@ -419,6 +421,9 @@ for s in range(len(val_sfs)):
       curr_errRat = np.divide(mixSf, curr_NR);
       sfErrsRat.append(np.mean(curr_errRat));
       sfErrsRatStd.append(np.std(curr_errRat));
+
+      curr_normFactors = np.array(curr_NR)
+      curr_errNormFactor.append(geomean(curr_normFactors[curr_normFactors>0]));
     else:
       sfErrs.append([]);
       sfErrsStd.append([]);
@@ -426,6 +431,7 @@ for s in range(len(val_sfs)):
       sfErrsNormStd.append([]);
       sfErrsRat.append([]);
       sfErrsRatStd.append([]);
+      curr_errNormFactor.append([]);
   except:
     pass
 
@@ -459,8 +465,12 @@ if fitz is not None:
   ax[3,1].set_xlim((0.1, 10));
   #ax[3,1].set_xlim((np.min(all_sfs), np.max(all_sfs)));
   ax[3,1].set_ylabel('mean (signed) error');
-  ax[3,1].errorbar(all_sfs[val_sfs][sfInds], sfErrs, sfErrsStd, color='k', linestyle='-', clip_on=False)
+  ax[3,1].errorbar(all_sfs[val_sfs][sfInds], sfErrs, sfErrsStd, color='k', marker='o', linestyle='-', clip_on=False)
   # -- and normalized by the prediction output response
+  val_errs = np.logical_and(~np.isnan(sfErrsRat), np.logical_and(np.array(sfErrsNormStd)>0, np.array(sfErrsNormStd) < 2));
+  norm_subset = np.array(sfErrsNorm)[val_errs];
+  normStd_subset = np.array(sfErrsNormStd)[val_errs];
+  #normStd_subset = (1/np.log(10))*np.divide(np.array(sfErrsNormStd)[val_errs], norm_subset); # 10, since that's our base here
   ax[4,1].axhline(0, ls='--', color='k')
   ax[4,1].set_xlabel('sf (cpd)')
   ax[4,1].set_xscale('log')
@@ -468,11 +478,15 @@ if fitz is not None:
   #ax[4,1].set_xlim((np.min(all_sfs), np.max(all_sfs)));
   ax[4,1].set_ylim((-2, 2))
   ax[4,1].set_ylabel('mean (signed) error -- as fraction of fit prediction');
-  ax[4,1].errorbar(all_sfs[val_sfs][sfInds], sfErrsNorm, sfErrsNormStd, color='k', linestyle='-', clip_on=False)
+  ax[4,1].errorbar(all_sfs[val_sfs][sfInds][val_errs], norm_subset, normStd_subset, color='k', marker='o', linestyle='-', clip_on=False)
   # -- AND simply the ratio between the mixture response and the mean expected mix response (i.e. Naka-Rushton)
   # --- equivalent to the suppression ratio, but relative to the NR fit rather than perfect linear summation
-  ax[5,1].scatter(all_sfs[val_sfs][sfInds], sfErrsRat, color=clrs_sf[sfInds], clip_on=False)
-  ax[5,1].errorbar(all_sfs[val_sfs][sfInds], sfErrsRat, sfErrsRatStd, color='k', linestyle='-', clip_on=False, label='suppression tuning')
+  val_errs = np.logical_and(~np.isnan(sfErrsRat), np.logical_and(np.array(sfErrsRatStd)>0, np.array(sfErrsRatStd) < 2));
+  rat_subset = np.array(sfErrsRat)[val_errs];
+  ratStd_subset = np.array(sfErrsRatStd)[val_errs];
+  #ratStd_subset = (1/np.log(2))*np.divide(np.array(sfErrsRatStd)[val_errs], rat_subset);
+  ax[5,1].scatter(all_sfs[val_sfs][sfInds][val_errs], rat_subset, color=clrs_sf[sfInds], clip_on=False)
+  ax[5,1].errorbar(all_sfs[val_sfs][sfInds][val_errs], rat_subset, ratStd_subset, color='k', linestyle='-', clip_on=False, label='suppression tuning')
   ax[5,1].axhline(1, ls='--', color='k')
   ax[5,1].set_xlabel('sf (cpd)')
   ax[5,1].set_xscale('log')
@@ -482,11 +496,10 @@ if fitz is not None:
 #         ax[2,1].yaxis.set_ticks(minorticks)
   ax[5,1].set_ylim(0.1, 10);        
   ax[5,1].legend(fontsize='x-small');
-  # - compute the variance!
-  val_errs = np.logical_and(~np.isnan(sfErrsRat), np.logical_and(np.array(sfErrsRatStd)>0, np.array(sfErrsRatStd) < 1.25));        errsratVar = np.var(sfErrsRat);
-  # - and put that value on the plot
-  errsratVar = np.var(sfErrsRat[val_errs]);
-  ax[5,1].text(0.1, 2, 'var=%.2f' % errsratVar);
+  # - compute the variance - and put that value on the plot
+  errsRatVar = np.var(np.log2(sfErrsRat)[val_errs]);
+  curr_suppr['sfRat_VAR'] = errsRatVar;
+  ax[5,1].text(0.1, 2, 'var=%.2f' % errsRatVar);
 
   # compute the unsigned "area under curve" for the sfErrsNorm, and normalize by the octave span of SF values considered
   #val_errs = ~np.isnan(sfErrsNorm)
@@ -501,6 +514,7 @@ if fitz is not None:
   ax[4,1].text(0.1, -0.25, '|auc*|=%.2f' % auc_norm);
 else:
   curr_suppr['sfErrsNorm_AUC'] = np.nan
+  curr_suppr['sfRat_VAR'] = np.nan
 
 #########
 ### NOW, let's evaluate the derivative of the SF tuning curve and get the correlation with the errors

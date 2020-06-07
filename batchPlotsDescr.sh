@@ -20,6 +20,7 @@
 # sixth param is f0/f1 (i.e. if 1, load rvcFits)
 # seventh param is which rvcModel to get/plot (0: movshon; 1: naka-rushton; 2: peirce)
 # eigth param is std/sem as variance measure: (1 sem (default))
+# ninth param is force log Y for byDisp/allCon and CRF/allSfs: (0/no (default))
 
 source activate lcv-python
 
@@ -34,11 +35,27 @@ source activate lcv-python
 # altExp   - standard, 8 cells
 # LGN/ - standard, 77 cells
 
-for run in {1..77}
+for run in {1..8}
 do  
-  #python plot_descr.py $run V1/ 0 2 1 2 1 &
-  #python plot_descr.py $run LGN/ 1 4 1 1 0 1 &
-  python plot_descr.py $run LGN/ 2 4 0 1 0 1 &
+  #python plot_descr.py $run V1/ 0 2 0 1 1 1 1 &
+  #python plot_descr.py $run V1_orig/ 0 2 0 0 1 1 1 &
+  python plot_descr.py $run altExp/ 0 2 0 1 1 1 1 &
+  #python plot_descr.py $run LGN/ 1 4 0 1 0 1 1 &
+  #python plot_descr.py $run LGN/ 1 1 0 1 0 1 1 &
 done
+
+#python plot_descr.py 3 LGN/ 1 4 0 1 0 1 1
+#python plot_descr.py 8 LGN/ 1 4 0 1 0 1 1 
+#python plot_descr.py 19 LGN/ 1 4 0 1 0 1 1 
+#python plot_descr.py 24 LGN/ 1 4 0 1 0 1 1 
+#python plot_descr.py 25 LGN/ 1 4 0 1 0 1 1 
+#python plot_descr.py 28 LGN/ 1 4 0 1 0 1 1 
+#python plot_descr.py 31 LGN/ 1 4 0 1 0 1 1 
+#python plot_descr.py 33 LGN/ 1 4 0 1 0 1 1 
+#python plot_descr.py 41 LGN/ 1 4 0 1 0 1 1 
+#python plot_descr.py 45 LGN/ 1 4 0 1 0 1 1 
+#python plot_descr.py 53 LGN/ 1 4 0 1 0 1 1 
+#python plot_descr.py 54 LGN/ 1 4 0 1 0 1 1 
+#python plot_descr.py 70 LGN/ 1 4 0 1 0 1 1 
 
 # leave a blank line at the end

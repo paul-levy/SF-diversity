@@ -1955,7 +1955,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     dogFits = np_smart_load(data_loc + dog_nm);
     rvcFits = np_smart_load(data_loc + rv_nm);
     try:
-      superAnalysis = np_smart_load(data_loc + 'superposition_analysis.npy');
+      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_200606.npy');
     except:
       superAnalysis = None;
 
@@ -1999,6 +1999,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
           suppr = dict([('byDisp', super_curr['supr_disp']),
                         ('bySf', super_curr['supr_sf']),
                         ('errs_auc', super_curr['sfErrsNorm_AUC']),
+                        ('errsRat_var', super_curr['sfRat_VAR']),
                         ('corr_derivWithErr', super_curr['corr_derivWithErr']),
                         ('corr_derivWithErrNorm', super_curr['corr_derivWithErrNorm']),
                         ('supr_index', super_curr['supr_index'])]);
