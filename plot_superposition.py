@@ -12,6 +12,7 @@ import helper_fcns as hf
 import model_responses as mod_resp
 import scipy.optimize as opt
 from scipy.stats.mstats import gmean as geomean
+import time
 
 import pdb
 
@@ -95,7 +96,7 @@ descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, mode
 ## now, let it run
 dataPath = basePath + expDir + 'structures/'
 save_loc = basePath + expDir + 'figures/'
-save_locSuper = save_loc + 'superposition_200606/'
+save_locSuper = save_loc + 'superposition_200606_lim/'
 if use_mod_resp == 1:
   save_locSuper = save_locSuper + '%s/' % fitBase
 
@@ -494,7 +495,7 @@ if fitz is not None:
   ax[5,1].set_ylabel('suppression ratio (wrt NR)');
   ax[5,1].set_yscale('log', basey=2)
 #         ax[2,1].yaxis.set_ticks(minorticks)
-  ax[5,1].set_ylim(0.1, 10);        
+  ax[5,1].set_ylim(np.power(2.0, -2), np.power(2.0, 2));
   ax[5,1].legend(fontsize='x-small');
   # - compute the variance - and put that value on the plot
   errsRatVar = np.var(np.log2(sfErrsRat)[val_errs]);
@@ -589,6 +590,11 @@ if fitList is None:
   super_name = 'superposition_analysis_200606.npy';
 else:
   super_name = 'superposition_analysis_mod%s.npy' % hf.fitType_suffix(fitType);
+
+pause_tm = 5*np.random.rand();
+print('sleeping for %d secs (#%d)' % (pause_tm, which_cell));
+time.sleep(pause_tm);
+
 if os.path.exists(dataPath + super_name):
   suppr_all = hf.np_smart_load(dataPath + super_name);
 else:
