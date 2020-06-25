@@ -35,14 +35,17 @@ source activate lcv-python
 # altExp   - standard, 8 cells
 # LGN/ - standard, 77 cells
 
-for run in {1..8}
+for run in {1..77}
 do  
-  #python plot_descr.py $run V1/ 0 2 0 1 1 1 1 &
-  #python plot_descr.py $run V1_orig/ 0 2 0 0 1 1 1 &
-  python plot_descr.py $run altExp/ 0 2 0 1 1 1 1 &
+  python plot_descr.py $run LGN/ 0 2 0 1 0 1 1 &
   #python plot_descr.py $run LGN/ 1 4 0 1 0 1 1 &
+  #python plot_descr.py $run V1/ 0 2 0 1 1 1 1 &
+  #python plot_descr.py $run altExp/ 0 2 0 0 1 1 1 &
+  #python plot_descr.py $run V1_orig/ 0 2 0 0 1 1 1 &
+  #python plot_descr.py $run altExp/ 0 2 0 1 1 1 1 &
   #python plot_descr.py $run LGN/ 1 1 0 1 0 1 1 &
 done
+
 
 #python plot_descr.py 3 LGN/ 1 4 0 1 0 1 1
 #python plot_descr.py 8 LGN/ 1 4 0 1 0 1 1 

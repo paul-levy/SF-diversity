@@ -27,13 +27,23 @@ import pdb
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_cluster.mplstyle');
 from matplotlib import rcParams
-rcParams['font.size'] = 20;
+rcParams['font.size'] = 40;
 rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
 rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['lines.linewidth'] = 2.5;
-rcParams['axes.linewidth'] = 1.5;
-rcParams['lines.markersize'] = 5;
+rcParams['lines.linewidth'] = 4;
+rcParams['axes.linewidth'] = 4;
+rcParams['lines.markersize'] = 9;
 rcParams['font.style'] = 'oblique';
+rcParams['xtick.major.size'] = 24;
+rcParams['xtick.minor.size'] = 12;
+rcParams['ytick.major.size'] = 24;
+rcParams['ytick.minor.size'] = 12;
+
+majWidth = 4;
+minWidth = 4;
+lblSize = 40;
+
+peakFrac = 0.75; # plot fall of to peakFrac of peak, rather than peak or charFreq
 
 cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
@@ -59,10 +69,10 @@ save_loc = loc_base + expDir + 'figures/';
 ### DATALIST
 expName = hf.get_datalist(expDir);
 ### DESCRLIST
-#descrBase = 'descrFits_200507';
+#descrBase = 'descrFits_191023';
+descrBase = 'descrFits_200507';
 #descrBase = 'descrFits_190503';
 #descrBase = 'descrFits_191003';
-descrBase = 'descrFits_191023';
 #descrBase = 'descrFits_191201';
 if descrJnt == 1:
   descrBase = '%s_joint' % descrBase;
@@ -173,7 +183,7 @@ for d in range(nDisps):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(nDisps*5.5, n_v_cons*8), sharey=False);
+    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(2*10, n_v_cons*10), sharey=False);
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
     
@@ -184,40 +194,45 @@ for d in range(nDisps):
         c_plt_ind = len(v_cons) - c - 1;
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
 
+        currClr = [(n_v_cons-c-1)/float(n_v_cons), (n_v_cons-c-1)/float(n_v_cons), (n_v_cons-c-1)/float(n_v_cons)];
+
         ### left side of plots
         sfVals = all_sfs[v_sfs];
         resps  = respMean[d, v_sfs, v_cons[c]];
         ## plot data
         dispAx[d][c_plt_ind, 0].errorbar(sfVals, resps,
-                                         respVar[d, v_sfs, v_cons[c]], color=dataClr, fmt='o', clip_on=False, label=dataTxt);
+                                         respVar[d, v_sfs, v_cons[c]], color=currClr, fmt='o', clip_on=False, label=dataTxt);
 
         # now, let's also plot the baseline, if complex cell
         if baseline_resp is not None: # i.e. complex cell
-          dispAx[d][c_plt_ind, 0].axhline(baseline_resp, color=dataClr, linestyle='dashed');
+          dispAx[d][c_plt_ind, 0].axhline(baseline_resp, color=currClr, linestyle='dashed');
 
         ## plot descr fit
         prms_curr = descrParams[d, v_cons[c]];
         descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
-        dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=modClr, label='descr. fit');
+        dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=currClr, label='descr. fit');
 
-        ## if flexGauss plot peak & c.o.m.
+        ## if flexGauss plot peak & frac of peak
+        frac_freq = hf.sf_highCut(prms_curr, descrMod, frac=peakFrac, sfRange=(0.1, 15), baseline_sub=baseline_resp);
         if descrMod == 0:
-          ctr = hf.sf_com(resps, sfVals);
-          pSf = hf.dog_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
-          dispAx[d][c_plt_ind, 0].plot(ctr, 1, linestyle='None', marker='v', label='c.o.m.', color=dataClr); # plot at y=1
-          dispAx[d][c_plt_ind, 0].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr); # plot at y=1
-          dispAx[d][c_plt_ind, 0].legend();
-        ## otherwise, let's plot the char freq.
+          #ctr = hf.sf_com(resps, sfVals);
+          pSf = hf.descr_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
+          for ii in range(2):
+            dispAx[d][c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
+            #dispAx[d][c_plt_ind, ii].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=currClr, alpha=1); # plot at y=1
+        ## otherwise, let's plot the char freq. and frac of peak
         elif descrMod == 1 or descrMod == 2:
           char_freq = hf.dog_charFreq(prms_curr, descrMod);
-          dispAx[d][c_plt_ind, 0].plot(char_freq, 1, linestyle='None', marker='v', label='$f_c$', color=dataClr); # plot at y=1
-          dispAx[d][c_plt_ind, 0].legend();
+          for ii in range(2):
+            dispAx[d][c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
+            #dispAx[d][c_plt_ind, ii].plot(char_freq, 1, linestyle='None', marker='v', label='$f_c$', color=currClr, alpha=1); # plot at y=1
 
+        dispAx[d][c_plt_ind, 0].legend();
         dispAx[d][c_plt_ind, 0].set_title('D%02d: contrast: %.3f' % (d+1, all_cons[v_cons[c]]));
 
         ### right side of plots - BASELINE SUBTRACTED IF COMPLEX CELL
         if d == 0:
-          minResp_toPlot = 5e-1;
+          minResp_toPlot = 1e-0;
           ## plot everything again on log-log coordinates...
           # first data
           if baseline_resp is not None:
@@ -227,32 +242,30 @@ for d in range(nDisps):
           resps_curr = respMean[d, v_sfs, v_cons[c]] - to_sub;
           abvThresh = [resps_curr>minResp_toPlot];
           var_curr = respVar[d, v_sfs, v_cons[c]][abvThresh];
-          # in the below line, we ensure that the negative lobe of the error bar does not extend past the lower threshold
-          #cut_errBars = [np.maximum(resps_curr[abvThresh]-np.divide(var_curr,2)minResp_toPlot, var_curr), var_curr];
-          #varMult_log10 = (1/np.log(10))*(1/resps_curr[abvThresh]);
-          #var_curr_adj = np.multiply(var_curr, varMult_log10);
           dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs][abvThresh], resps_curr[abvThresh], var_curr, 
-                fmt='o', color=dataClr, clip_on=False, markersize=12, label=dataTxt);
+                fmt='o', color=currClr, clip_on=False, markersize=9, label=dataTxt);
 
           # plot descriptive model fit -- and inferred characteristic frequency (or peak...)
           prms_curr = descrParams[d, v_cons[c]];
           descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod);
-          dispAx[d][c_plt_ind, 1].plot(sfs_plot, descrResp - to_sub, color=modClr, label='descr. fit', clip_on=False)
+          descr_curr = descrResp - to_sub;
+          abvThresh = [descr_curr>minResp_toPlot]
+          dispAx[d][c_plt_ind, 1].plot(sfs_plot[abvThresh], descr_curr[abvThresh], color=currClr, label='descr. fit', clip_on=False)
           if descrMod == 0:
-            psf = hf.dog_prefSf(prms_curr, dog_model=descrMod);
-            if psf != np.nan:
-              dispAx[d][c_plt_ind, 1].plot(psf, 1, 'b', color='k', label='peak freq', clip_on=False);
+            psf = hf.descr_prefSf(prms_curr, dog_model=descrMod);
+            #if psf != np.nan:
+            #  dispAx[d][c_plt_ind, 1].plot(psf, 1, 'b', color='k', label='peak freq', clip_on=False);
           elif descrMod == 1 or descrMod == 2: # diff-of-gauss
             # now plot characteristic frequency!  
             char_freq = hf.dog_charFreq(prms_curr, descrMod);
-            if char_freq != np.nan:
-              dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k', label='char. freq', clip_on=False);
+            #if char_freq != np.nan:
+            #  dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k', label='char. freq', clip_on=False);
 
-          dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % descrFits[cellNum-1]['varExpl'][d, v_cons[c]]);
+          dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % descrFits[cellNum-1]['varExpl'][d, v_cons[c]], fontsize='medium');
           dispAx[d][c_plt_ind, 1].set_xscale('log');
           dispAx[d][c_plt_ind, 1].set_yscale('log'); # double log
           dispAx[d][c_plt_ind, 1].set_ylim((minResp_toPlot, 1.5*maxResp));
-          dispAx[d][c_plt_ind, 1].legend();
+          dispAx[d][c_plt_ind, 1].set_aspect('equal');
 
         ## Now, set things for both plots (formatting)
         for i in range(2):
@@ -263,8 +276,8 @@ for d in range(nDisps):
           dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
 
 	  # Set ticks out, remove top/right axis, put ticks only on bottom/left
-          dispAx[d][c_plt_ind, i].tick_params(labelsize=15, width=1, length=8, direction='out');
-          dispAx[d][c_plt_ind, i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
+          dispAx[d][c_plt_ind, i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
+          dispAx[d][c_plt_ind, i].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...	
           sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
 
         dispAx[d][c_plt_ind, 0].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
@@ -399,7 +412,7 @@ for d in range(nDisps):
 
         # plot prefSF, center of mass
         ctr = hf.sf_com(resps, sfVals);
-        pSf = hf.dog_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
+        pSf = hf.descr_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
         sfMixAx[c_plt_ind, d].plot(ctr, 1, linestyle='None', marker='v', label='c.o.m.', color=dataClr, clip_on=False); # plot at y=1
         sfMixAx[c_plt_ind, d].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr, clip_on=False); # plot at y=1
 

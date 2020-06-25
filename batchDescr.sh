@@ -47,7 +47,7 @@ source activate lcv-python
 ###   
 ########
 
-for run in {1..8}
+for run in {1..77}
 do
   ## LGN - phase adjustment (if LGN/ 1; not if LGN/ 0 ) and F1 rvc
   #python descr_fits.py $run 0 LGN/ 1 0 0 0 0 0 3 1
@@ -57,7 +57,7 @@ do
   #python descr_fits.py $run 3 LGN/ 0 1 0 0 0 0 3 1 &
 
   ## LGN - descrFits (DoG)
-  #python descr_fits.py $run 0 LGN/ 0 0 0 0 1 2 4 1 1 &
+  python descr_fits.py $run 0 LGN/ 0 0 0 0 1 0 2 0 1 &
 
   ## V1 - phase adjustment and F1 rvc
   #python descr_fits.py $run 0 altExp/ 1 0 0 1 0 0 3 1 # phAdv fits, only; each cell, in turn (not in background)
@@ -68,9 +68,14 @@ do
   #python descr_fits.py $run 3 V1/ 0 1 0 1 0 0 3 1 & 
 
   # V1 - descr fits
-  python descr_fits.py $run 0 V1/ 0 0 0 1 1 0 2 0 &
-  python descr_fits.py $run 0 altExp/ 0 0 0 1 1 0 2 0 &
-  python descr_fits.py $run 0 V1_orig/ 0 0 0 1 1 0 2 0 &
+  #python descr_fits.py $run 0 V1/ 0 0 0 1 1 0 2 0 &
+  #python descr_fits.py $run 0 altExp/ 1 0 0 1 0 0 2 0
+  #python descr_fits.py $run 0 altExp/ 0 1 0 1 0 0 2 0 &
+  #python descr_fits.py $run 1 altExp/ 0 1 0 1 0 0 2 0 &
+  #python descr_fits.py $run 2 altExp/ 0 1 0 1 0 0 2 0 &
+  #python descr_fits.py $run 3 altExp/ 0 1 0 1 0 0 2 0 &
+  #python descr_fits.py $run 0 altExp/ 0 0 0 1 1 0 2 0 &
+  #python descr_fits.py $run 0 V1_orig/ 0 0 1 1 1 0 2 0 &
 
   #python descr_fits.py $run 0 altExp/ 0 0 1 1 0 0 1 0 &
 done

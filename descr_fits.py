@@ -16,6 +16,7 @@ expName = hf.get_datalist(sys.argv[3]); # sys.argv[3] is experiment dir
 #df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
 df_f0 = None;
+#dogName =  'descrFits_191023';
 dogName =  'descrFits_200507';
 #phAdvName = 'phaseAdvanceFits_200507'
 phAdvName = 'phaseAdvanceFits_191023'
