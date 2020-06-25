@@ -59,14 +59,14 @@ source activate lcv-python
 #################
 
 for run in {1..8}; do
-  python3.6 model_responses.py $run V1/ 2 4 1 -1 1 0.1 1 & # ... 1 0.1 1 ... where the first 1 in that sequence means track steps to animate!!!
-  python3.6 model_responses.py $run V1/ 2 4 2 0 1 0.1 1 &
+  python3.6 model_responses.py $run V1/ 2 1 1 0 0 0.05 1 & # ... 1 0.1 1 ... where the first 1 in that sequence means track steps to animate!!!
+  python3.6 model_responses.py $run V1/ 2 1 2 0 0 0.05 1 &
 
-  python3.6 model_responses.py $run V1_orig/ 2 4 1 -1 0 0.1 1 &
-  python3.6 model_responses.py $run V1_orig/ 2 4 2 0 0 0.1 1 &
+  python3.6 model_responses.py $run V1_orig/ 2 1 1 0 0 0.05 1 &
+  python3.6 model_responses.py $run V1_orig/ 2 1 2 0 0 0.05 1 &
 
-  python3.6 model_responses.py $run altExp/ 2 4 1 -1 0 0.1 1 &
-  python3.6 model_responses.py $run altExp/ 2 4 2 0 0 0.1 1 &
+  python3.6 model_responses.py $run altExp/ 2 1 1 0 0 0.05 1 &
+  python3.6 model_responses.py $run altExp/ 2 1 2 0 0 0.05 1 &
 
   #python3.6 model_responses.py $run altExp/ 1 4 1 0 0 0.1 1 &
   #python3.6 model_responses.py $run altExp/ 1 4 2 0 0 0.1 1 &

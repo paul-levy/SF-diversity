@@ -16,18 +16,27 @@
 # 6 param is rvcMod (0/1/2 - see hf.rvc_fit_name)
 # 7 param is diffPlot (i.e. plot everything relative to flat model prediction)
 # 8 param is interpModel (i.e. interpolate model?)
-# 9th param is std/sem as variance measure: (1 sem (default))
+# 9th param is kMult (0.01, 0.05, 0.10, usually...)
+# 10th param is std/sem as variance measure: (1 sem (default))
 
 source activate lcv-python
 
-for run in {1..56}
+for run in {1..8}
 do
-  #python plot_compare.py $run 4 altExp/ 0 0 0 1 & # original (simple)
-  #python plot_compare.py $run 4 V1_orig/ 0 1 0 1 & # diff plots
+  #python3.6 plot_compare.py $run 1 4 altExp/ 1 1 0 1 & # original (simple), interpolated
+  #python3.6 plot_compare.py $run 1 4 V1_orig/ 0 1 0 1 & # diff plots
 
-  python3.6 plot_compare.py $run 2 4 V1/ 1 1 0 0 1 & # no diff, not interpolated
-  #python plot_compare.py $run 4 V1/ 1 0 2 1 1 & # interpolated
-  #python plot_compare.py $run 4 V1/ 1 1 2 1 1 & # diff plots, interpolated
+  python3.6 plot_compare.py $run 2 1 V1/ 1 1 0 0 0.1 1 & # no diff, not interpolated
+  python3.6 plot_compare.py $run 2 1 altExp/ 1 1 0 0 0.1 1 & # no diff, not interpolated
+  python3.6 plot_compare.py $run 2 1 V1_orig/ 1 1 0 0 0.1 1 & # no diff, not interpolated
+
+  python3.6 plot_compare.py $run 1 1 V1/ 1 1 0 0 0.1 1 & # no diff, not interpolated
+  python3.6 plot_compare.py $run 1 1 altExp/ 1 1 0 0 0.1 1 & # no diff, not interpolated
+  python3.6 plot_compare.py $run 1 1 V1_orig/ 1 1 0 0 0.1 1 & # no diff, not interpolated
+
+  #python3.6 plot_compare.py $run 2 4 V1/ 1 1 0 1 1 & # no diff, YES interpolated
+  #python plot_compare.py $run 1 4 V1/ 1 0 2 1 1 & # interpolated
+  #python plot_compare.py $run 1 4 V1/ 1 1 2 1 1 & # diff plots, interpolated
 done
 
 # leave a blank line at the end

@@ -25,10 +25,10 @@
 
 source activate lcv-python
 
-for run in {1..16}
+for run in {1..56}
 do
-  python plot_simple.py $run 4 1 V1/ 0 0 1 2 &
-  #python plot_simple.py $run 4 1 V1/ 1 0 1 2 &
+  python plot_simple.py $run 4 1 V1/ 0 0 1 1 &
+  python plot_simple.py $run 4 2 V1/ 0 0 1 1 &
 done
 
 # leave a blank line at the end

@@ -96,7 +96,7 @@ descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, mode
 ## now, let it run
 dataPath = basePath + expDir + 'structures/'
 save_loc = basePath + expDir + 'figures/'
-save_locSuper = save_loc + 'superposition_200606_lim/'
+save_locSuper = save_loc + 'superposition_200608/'
 if use_mod_resp == 1:
   save_locSuper = save_locSuper + '%s/' % fitBase
 
@@ -396,7 +396,7 @@ for d in range(nDisps):
 
 ### plot averaged across all cons/disps
 sfInds = []; sfRats = []; sfRatStd = []; 
-sfErrs = []; sfErrsStd = []; sfErrsNorm = []; sfErrsNormStd = []; sfErrsRat = []; sfErrsRatStd = [];
+sfErrs = []; sfErrsStd = []; sfErrsInd = []; sfErrsIndStd = []; sfErrsRat = []; sfErrsRatStd = [];
 curr_errNormFactor = [];
 for s in range(len(val_sfs)):
   try: # not all sfs will have legitmate values;
@@ -415,9 +415,9 @@ for s in range(len(val_sfs)):
       sfErrs.append(np.mean(curr_err));
       sfErrsStd.append(np.std(curr_err))
 
-      curr_errNorm = np.divide(mixSf - curr_NR, curr_NR);
-      sfErrsNorm.append(np.mean(curr_errNorm));
-      sfErrsNormStd.append(np.std(curr_errNorm))
+      curr_errNorm = np.divide(mixSf - curr_NR, mixSf + curr_NR);
+      sfErrsInd.append(np.mean(curr_errNorm));
+      sfErrsIndStd.append(np.std(curr_errNorm))
 
       curr_errRat = np.divide(mixSf, curr_NR);
       sfErrsRat.append(np.mean(curr_errRat));
@@ -428,8 +428,8 @@ for s in range(len(val_sfs)):
     else:
       sfErrs.append([]);
       sfErrsStd.append([]);
-      sfErrsNorm.append([]);
-      sfErrsNormStd.append([]);
+      sfErrsInd.append([]);
+      sfErrsIndStd.append([]);
       sfErrsRat.append([]);
       sfErrsRatStd.append([]);
       curr_errNormFactor.append([]);
@@ -467,18 +467,17 @@ if fitz is not None:
   #ax[3,1].set_xlim((np.min(all_sfs), np.max(all_sfs)));
   ax[3,1].set_ylabel('mean (signed) error');
   ax[3,1].errorbar(all_sfs[val_sfs][sfInds], sfErrs, sfErrsStd, color='k', marker='o', linestyle='-', clip_on=False)
-  # -- and normalized by the prediction output response
-  val_errs = np.logical_and(~np.isnan(sfErrsRat), np.logical_and(np.array(sfErrsNormStd)>0, np.array(sfErrsNormStd) < 2));
-  norm_subset = np.array(sfErrsNorm)[val_errs];
-  normStd_subset = np.array(sfErrsNormStd)[val_errs];
-  #normStd_subset = (1/np.log(10))*np.divide(np.array(sfErrsNormStd)[val_errs], norm_subset); # 10, since that's our base here
+  # -- and normalized by the prediction output response + output respeonse
+  val_errs = np.logical_and(~np.isnan(sfErrsRat), np.logical_and(np.array(sfErrsIndStd)>0, np.array(sfErrsIndStd) < 2));
+  norm_subset = np.array(sfErrsInd)[val_errs];
+  normStd_subset = np.array(sfErrsIndStd)[val_errs];
   ax[4,1].axhline(0, ls='--', color='k')
   ax[4,1].set_xlabel('sf (cpd)')
   ax[4,1].set_xscale('log')
   ax[4,1].set_xlim((0.1, 10));
   #ax[4,1].set_xlim((np.min(all_sfs), np.max(all_sfs)));
-  ax[4,1].set_ylim((-2, 2))
-  ax[4,1].set_ylabel('mean (signed) error -- as fraction of fit prediction');
+  ax[4,1].set_ylim((-1, 1));
+  ax[4,1].set_ylabel('error index');
   ax[4,1].errorbar(all_sfs[val_sfs][sfInds][val_errs], norm_subset, normStd_subset, color='k', marker='o', linestyle='-', clip_on=False)
   # -- AND simply the ratio between the mixture response and the mean expected mix response (i.e. Naka-Rushton)
   # --- equivalent to the suppression ratio, but relative to the NR fit rather than perfect linear summation
@@ -502,19 +501,15 @@ if fitz is not None:
   curr_suppr['sfRat_VAR'] = errsRatVar;
   ax[5,1].text(0.1, 2, 'var=%.2f' % errsRatVar);
 
-  # compute the unsigned "area under curve" for the sfErrsNorm, and normalize by the octave span of SF values considered
-  #val_errs = ~np.isnan(sfErrsNorm)
-  val_errs = np.logical_and(~np.isnan(sfErrsNorm), np.array(sfErrsNormStd) < 1.25);
-  val_x = all_sfs[val_sfs][sfInds][val_errs]
-  oct_span = hf.bw_lin_to_log(val_x[0], val_x[-1])
-  # note that we square (to avoid negative values) and then sqrt (to restore original magnitude)
-  auc = np.trapz(np.sqrt(np.square(sfErrsNorm))[val_errs], x=val_x)
-  auc_norm = auc/oct_span;
-  curr_suppr['sfErrsNorm_AUC'] = auc_norm;
+  # compute the unsigned "area under curve" for the sfErrsInd, and normalize by the octave span of SF values considered
+  val_errs = np.logical_and(~np.isnan(sfErrsRat), np.logical_and(np.array(sfErrsIndStd)>0, np.array(sfErrsIndStd) < 2));
+  val_x = all_sfs[val_sfs][sfInds][val_errs];
+  ind_var = np.var(np.array(sfErrsInd)[val_errs]);
+  curr_suppr['sfErrsInd_VAR'] = ind_var;
   # - and put that value on the plot
-  ax[4,1].text(0.1, -0.25, '|auc*|=%.2f' % auc_norm);
+  ax[4,1].text(0.1, -0.25, 'var=%.3f' % ind_var);
 else:
-  curr_suppr['sfErrsNorm_AUC'] = np.nan
+  curr_suppr['sfErrsInd_VAR'] = np.nan
   curr_suppr['sfRat_VAR'] = np.nan
 
 #########
@@ -544,19 +539,19 @@ offset, scale = np.nanmax(sfRats), np.nanmax(sfRats) - np.nanmin(sfRats);
 derivShift = offset - scale * (deriv_norm/np.nanmax(deriv_norm));
 ax[2,1].plot(mod_sfs[1:], derivShift, 'r--', label='deriv(ref. tuning)', clip_on=False)
 ax[2,1].legend(fontsize='x-small');
-# - then, normalize the sfErrs/sfErrsNorm and compute the correlation coefficient
+# - then, normalize the sfErrs/sfErrsInd and compute the correlation coefficient
 if fitz is not None:
-  norm_sfErr = np.divide(sfErrs, np.nanmax(sfErrs));
-  norm_sfErrNorm = np.divide(sfErrsNorm, np.nanmax(sfErrsNorm)); # remember, sfErrsNorm is normalized per condition; this is overall
+  norm_sfErr = np.divide(sfErrs, np.nanmax(np.abs(sfErrs)));
+  norm_sfErrInd = np.divide(sfErrsInd, np.nanmax(np.abs(sfErrsInd))); # remember, sfErrsInd is normalized per condition; this is overall
   non_nan = np.logical_and(~np.isnan(norm_sfErr), ~np.isnan(deriv_norm_eval))
-  corr_nsf, corr_nsfN = np.corrcoef(deriv_norm_eval[non_nan], norm_sfErr[non_nan])[0,1], np.corrcoef(deriv_norm_eval[non_nan], norm_sfErrNorm[non_nan])[0,1]
+  corr_nsf, corr_nsfN = np.corrcoef(deriv_norm_eval[non_nan], norm_sfErr[non_nan])[0,1], np.corrcoef(deriv_norm_eval[non_nan], norm_sfErrInd[non_nan])[0,1]
   curr_suppr['corr_derivWithErr'] = corr_nsf;
-  curr_suppr['corr_derivWithErrNorm'] = corr_nsfN;
+  curr_suppr['corr_derivWithErrsInd'] = corr_nsfN;
   ax[3,1].text(0.1, 0.25*np.nanmax(sfErrs), 'corr w/g\' = %.2f' % corr_nsf)
   ax[4,1].text(0.1, 0.25, 'corr w/g\' = %.2f' % corr_nsfN)
 else:
   curr_suppr['corr_derivWithErr'] = np.nan;
-  curr_suppr['corr_derivWithErrNorm'] = np.nan;
+  curr_suppr['corr_derivWithErrsInd'] = np.nan;
 
 # make a polynomial fit
 hmm = np.polyfit(allSum, allMix, deg=1) # returns [a, b] in ax + b 
@@ -587,7 +582,7 @@ pdfSv.close();
 ### Finally, add this "superposition" to the newest 
 #########
 if fitList is None:
-  super_name = 'superposition_analysis_200606.npy';
+  super_name = 'superposition_analysis_200608.npy';
 else:
   super_name = 'superposition_analysis_mod%s.npy' % hf.fitType_suffix(fitType);
 
