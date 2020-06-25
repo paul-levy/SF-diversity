@@ -43,7 +43,8 @@ cellStruct = allData[which_cell-1];
 # #### Load descriptive model fits, RVC Naka-Rushton fits, [comp. model fits]
 zSub = 1; # are we loading fits that were fit to responses adjusted s.t. the lowest value is 1?
 
-fLname = 'descrFits_s191205zSub_joint';
+fLname = 'descrFits_s191023';
+#fLname = 'descrFits_s191205zSub_joint';
 if sf_loss_type == 1:
   loss_str = '_poiss';
 elif sf_loss_type == 2:
@@ -112,7 +113,7 @@ for c in reversed(range(nCons)):
     # summary plot (just data) first
     val_sfs = np.where(all_sfs>0)[0]; # there is one SF which is zero; ignore this one
     # plot data
-    col = [c/float(nCons), c/float(nCons), c/float(nCons)];
+    col = [(nCons-c-1)/float(nCons), (nCons-c-1)/float(nCons), (nCons-c-1)/float(nCons)];
     respAbBaseline = np.reshape(f1['mean'][c, val_sfs], (len(val_sfs), ));
     respVar = np.reshape(f1['sem'][c, val_sfs], (len(val_sfs), )); 
     # DO NOT actually plot error bar on these...
@@ -127,7 +128,8 @@ for c in reversed(range(nCons)):
 for i in range(2):
   #ax[i].set_aspect('equal', 'box'); 
   ax[i].set_xlim((0.5*np.min(all_sfs[val_sfs]), 1.2*np.max(all_sfs[val_sfs])));
-  ax[i].set_ylim((5e-2, 1.5*maxResp));
+  ax[i].set_ylim((5e-1, 300)); # common y axis for ALL plots
+  #ax[i].set_ylim((5e-2, 1.5*maxResp));
 
   #ax.set_xscale('symlog', linthreshx=all_sfs[1]); # all_sfs[0] = 0, but all_sfs[0]>1
   ax[i].set_xscale('log');
@@ -157,10 +159,13 @@ pdfSv.close()
 # #### SF tuning - split by contrast, data and model
 #########
 
-fSfs, sfsAx = plt.subplots(nCons, 1, figsize=(20, 8*nCons), sharey=True);
+### TODO: make log, too...
+fSfs, sfsAx = plt.subplots(nCons, 2, figsize=(4*5.5, 8*nCons), sharey=True);
 
 val_sfs = np.where(all_sfs>0); # do not plot the zero sf condition
 sfs_plot = np.logspace(np.log10(np.min(all_sfs[val_sfs])), np.log10(np.max(all_sfs[val_sfs])), 51);
+
+minResp_toPlot = 5e-1;
 
 for c in reversed(range(nCons)):
     c_plt_ind = nCons - c - 1;
@@ -170,40 +175,51 @@ for c in reversed(range(nCons)):
     v_sfs = ~np.isnan(curr_resps);
     data_sfs = all_sfs[val_sfs][v_sfs]
 
-    # plot data
-    sfsAx[c_plt_ind].errorbar(data_sfs, curr_resps[v_sfs] - respAdj, 
-                                  curr_sem[v_sfs], fmt='o', clip_on=False);
+    curr_resps_adj = np.array(curr_resps[v_sfs]-respAdj);
+    abvThresh = [curr_resps_adj > minResp_toPlot];
 
-    # plot descriptive model fit and inferred characteristic frequency
-    if fromFile:
-      curr_mod_params = helper_fcns.load_modParams(which_cell, c);
-    else:
-      curr_mod_params = descrFits['params'][c]; 
-    mod_resps = helper_fcns.get_descrResp(curr_mod_params, data_sfs, sf_DoG_model);
-    mod_resps_plt = helper_fcns.get_descrResp(curr_mod_params, sfs_plot, sf_DoG_model);
-    sfsAx[c_plt_ind].plot(sfs_plot, mod_resps_plt, clip_on=False)
-    # now plot characteristic frequency!
-    f_c = helper_fcns.dog_charFreq(curr_mod_params, sf_DoG_model);
-    sfsAx[c_plt_ind].plot(f_c, 1, 'v', color='k');
+    for i in range(2):
 
-    sfsAx[c_plt_ind].set_xlim((min(sfs_plot), max(sfs_plot)));
+      # plot data
+      sfsAx[c_plt_ind, i].errorbar(data_sfs, curr_resps_adj[abvThresh], 
+                                    curr_sem[v_sfs][abvThresh], fmt='o', markersize=12, clip_on=False);
 
-    sfsAx[c_plt_ind].set_xscale('log');
-    sfsAx[c_plt_ind].set_xlabel('spatial frequency (c/deg)'); 
-    if fromFile:
-      varExpl = helper_fcns.var_expl_direct(curr_resps[v_sfs], mod_resps);
-    else:
-      varExpl = descrFits['varExpl'][c];
-    sfsAx[c_plt_ind].set_title('SF tuning: contrast: %.3f%%, %.1f%% varExpl' % (all_cons[c], varExpl));
+      # plot descriptive model fit and inferred characteristic frequency
+      if fromFile:
+        curr_mod_params = helper_fcns.load_modParams(which_cell, c);
+      else:
+        curr_mod_params = descrFits['params'][c]; 
+      mod_resps = helper_fcns.get_descrResp(curr_mod_params, data_sfs, sf_DoG_model);
+      mod_resps_plt = helper_fcns.get_descrResp(curr_mod_params, sfs_plot, sf_DoG_model);
+      sfsAx[c_plt_ind, i].plot(sfs_plot, mod_resps_plt, clip_on=False)
+      # now plot characteristic frequency!
+      f_c = helper_fcns.dog_charFreq(curr_mod_params, sf_DoG_model);
+      sfsAx[c_plt_ind, i].plot(f_c, 1, 'v', color='k');
 
-    # Set ticks out, remove top/right axis, put ticks only on bottom/left
-    sfsAx[c_plt_ind].tick_params(labelsize=15, width=1, length=8, direction='out');
-    sfsAx[c_plt_ind].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
-    sns.despine(ax=sfsAx[c_plt_ind], offset=10, trim=False); 
+      sfsAx[c_plt_ind, i].set_xlim((min(sfs_plot), max(sfs_plot)));
 
-    #sfsAx[c_plt_ind].set_ylim((0, 1.5*maxResp));
-    yAxStr = 'response ';
-    sfsAx[c_plt_ind].set_ylabel(str(yAxStr + '(spikes/s)'));
+      sfsAx[c_plt_ind, i].set_xscale('log');
+      sfsAx[c_plt_ind, i].set_xlabel('spatial frequency (c/deg)'); 
+      if fromFile:
+        varExpl = helper_fcns.var_expl_direct(curr_resps[v_sfs], mod_resps);
+      else:
+        varExpl = descrFits['varExpl'][c];
+      sfsAx[c_plt_ind, i].set_title('SF tuning: contrast: %.3f%%, %.1f%% varExpl' % (all_cons[c], varExpl));
+
+      # Set ticks out, remove top/right axis, put ticks only on bottom/left
+      sfsAx[c_plt_ind, i].tick_params(labelsize=15, width=1, length=8, direction='out');
+      sfsAx[c_plt_ind, i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
+      sns.despine(ax=sfsAx[c_plt_ind, i], offset=10, trim=False); 
+
+      yAxStr = 'response ';
+      sfsAx[c_plt_ind, i].set_ylabel(str(yAxStr + '(spikes/s)'));
+
+      if i == 0: # linear...
+        sfsAx[c_plt_ind, i].set_ylim((0, 1.5*maxResp));
+      elif i == 1: # log
+        sfsAx[c_plt_ind, i].set_yscale('log');
+        sfsAx[c_plt_ind, i].set_ylim((minResp_toPlot, 300));
+
 
 saveName = "/cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'sfTuning/'));
