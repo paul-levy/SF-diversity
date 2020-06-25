@@ -47,9 +47,12 @@ def PDFmerge(pdfs, output):
       pdfReader = PyPDF2.PdfFileReader(f);
       #number_of_pages = pdfReader.getNumPages();
       #print(number_of_pages);
-      curr_page = pdfReader.getPage(0); # first page
-      pdfWriter.addPage(curr_page);
-         
+      try: # try to get the page
+        curr_page = pdfReader.getPage(0); # first page [0]; second page [1]; etc
+        pdfWriter.addPage(curr_page);
+      except: # but it's ok if we have to skip (e.g. PDF with fewer conditions/pages)
+        pass;
+    
     # writing combined pdf to output pdf file
     with open(output, 'wb') as f:
         pdfWriter.write(f)
@@ -60,7 +63,8 @@ def PDFwrapper(folder, output):
     to_merge = [];
     hid_file = '.';
     for f in all_files:
-        if 'cell_' in f and f[0] != hid_file and 'simulate' not in f:
+        # vvv adjust here!!! vvv
+        if 'cell' in f and f[0] != hid_file and 'simulate' not in f: # allCons_log
             to_merge.append(str(folder + f));
 
     PDFmerge(to_merge, str(folder + output));
