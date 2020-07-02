@@ -1296,11 +1296,14 @@ def chiSq(data_resps, model_resps, stimDur=1, kMult = 0.10):
 def get_c50(rvcMod, params):
   ''' get the c50 for a given rvcModel and parameter list
   '''
-  # first, find the maximum response
-  if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
-    c50 = params[3];
-  elif rvcMod == 0: # i.e. movshon form
-    c50 = params[2]
+  try:
+    if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
+      c50 = params[3];
+    elif rvcMod == 0: # i.e. movshon form
+      c50 = params[2]
+  except:
+    c50 = numpy.nan;
+    
   return c50;
 
 def c50_empirical(rvcMod, params):

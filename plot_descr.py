@@ -69,8 +69,8 @@ save_loc = loc_base + expDir + 'figures/';
 ### DATALIST
 expName = hf.get_datalist(expDir);
 ### DESCRLIST
-#descrBase = 'descrFits_191023';
-descrBase = 'descrFits_200507';
+descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
+#descrBase = 'descrFits_200507'; # for altExp
 #descrBase = 'descrFits_190503';
 #descrBase = 'descrFits_191003';
 #descrBase = 'descrFits_191201';
@@ -300,6 +300,8 @@ pdfSv.close();
 fDisp = []; dispAx = [];
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
+
+minResp_toPlot = 1e-0;
   
 for d in range(nDisps):
     
@@ -457,7 +459,7 @@ for d in range(nDisps):
     n_v_sfs = len(v_sf_inds);
     n_rows = int(np.ceil(n_v_sfs/np.floor(np.sqrt(n_v_sfs)))); # make this close to a rectangle/square in arrangement (cycling through sfs)
     n_cols = int(np.ceil(n_v_sfs/n_rows));
-    fCurr, rvcCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*10, n_rows*10), sharex = True, sharey = 'col');
+    fCurr, rvcCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*10, n_rows*10)); #
     fRVC.append(fCurr);
     rvcAx.append(rvcCurr);
     
@@ -479,8 +481,15 @@ for d in range(nDisps):
 	# organize (measured) responses
         resp_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
         var_curr  = np.reshape([respVar[d, sf_ind, v_cons]], (n_cons, ));
-        #rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(resp_curr, 0.1), '-', clip_on=False, label='data', color=dataClr);
-        rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], np.maximum(resp_curr, 0.1), var_curr, fmt='o', linestyle='-', clip_on=False, label='data', color=dataClr);
+
+        if forceLog == 1:
+          if baseline_resp is not None:
+            to_sub = baseline_resp;
+          else:
+            to_sub = np.array(0);
+          resp_curr = resp_curr - to_sub;
+
+        rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons][resp_curr>minResp_toPlot], resp_curr[resp_curr>minResp_toPlot], var_curr[resp_curr>minResp_toPlot], fmt='o', linestyle='-', clip_on=False, label='data', markersize=9, color=dataClr);
 
  	# RVC descr model - TODO: Fix this discrepancy between f0 and f1 rvc structure? make both like descrFits?
         # NOTE: changing split of accessing rvcFits based on rvcAdj
@@ -493,27 +502,37 @@ for d in range(nDisps):
           rvcResps = hf.naka_rushton(cons_plot, prms_curr)
         elif rvcMod == 0: # i.e. movshon form
           rvcResps = rvcModel(*prms_curr, cons_plot);
-        # TODO: do you want to do the max(x, 0.1)???
-        rvcAx[plt_x][plt_y].plot(cons_plot, np.maximum(rvcResps, 0.1), color=modClr, \
+
+        if forceLog == 1:
+           rvcResps = rvcResps - to_sub;
+        val_inds = np.where(rvcResps>minResp_toPlot)[0];
+
+        rvcAx[plt_x][plt_y].plot(cons_plot[val_inds], rvcResps[val_inds], color=modClr, \
           alpha=0.7, clip_on=False, label=modTxt);
-        rvcAx[plt_x][plt_y].plot(c50, 0.1, 'v', label='c50', color=modClr, clip_on=False);
+        rvcAx[plt_x][plt_y].plot(c50, 1.5*minResp_toPlot, 'v', label='c50', color=modClr, clip_on=False);
         # now, let's also plot the baseline, if complex cell
-        if baseline_resp is not None: # i.e. complex cell
+        if baseline_resp is not None and forceLog != 1: # i.e. complex cell
           rvcAx[plt_x][plt_y].axhline(baseline_resp, color='k', linestyle='dashed');
 
         rvcAx[plt_x][plt_y].set_xscale('log', basex=10); # was previously symlog, linthreshx=0.01
         if col_ind == 0:
-          rvcAx[plt_x][plt_y].set_xlim([0.01, 1]);
           rvcAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
           rvcAx[plt_x][plt_y].set_ylabel('response (spikes/s)', fontsize='medium');
           rvcAx[plt_x][plt_y].legend();
-        
+
+        # set axis limits...
+        rvcAx[plt_x][plt_y].set_xlim([0.01, 1]);
+        if forceLog == 1:
+          rvcAx[plt_x][plt_y].set_ylim((minResp_toPlot, 1.25*maxResp));
+          rvcAx[plt_x][plt_y].set_yscale('log'); # double log
+          rvcAx[plt_x][plt_y].set_aspect('equal');
+     
         rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         sns.despine(ax = rvcAx[plt_x][plt_y], offset = 10, trim=False);
-        rvcAx[plt_x][plt_y].tick_params(labelsize=25, width=2, length=16, direction='out');
-        rvcAx[plt_x][plt_y].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+        rvcAx[plt_x][plt_y].tick_params(labelsize=lblSize, width=majWidth, direction='out');
+        rvcAx[plt_x][plt_y].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
 
 saveName = "/cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'CRF%s%s/' % (rvcSuff, rvcFlag)));
@@ -541,7 +560,7 @@ for d in range(nDisps):
     n_v_sfs = len(v_sf_inds);
 
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
-    minResp_plot = 5e-1;
+    minResp_plot = 1e-0;
 
     lines_log = [];
     for sf in range(n_v_sfs):
@@ -561,7 +580,7 @@ for d in range(nDisps):
           plot_resp = plot_resp - to_sub;
 
         line_curr, = crfAx[d][0].plot(all_cons[v_cons][plot_resp>minResp_plot], plot_resp[plot_resp>minResp_plot], '-o', color=col, \
-                                      clip_on=False, label=con_str);
+                                      clip_on=False, markersize=9, label=con_str);
         lines_log.append(line_curr);
 
         # now RVC model [1]
@@ -573,7 +592,9 @@ for d in range(nDisps):
           rvcResps = rvcModel(*prms_curr, cons_plot);
         elif rvcMod == 1 or rvcMod == 2: # naka-rushton (or modified version)
           rvcResps = hf.naka_rushton(cons_plot, prms_curr)
-        crfAx[d][1].plot(cons_plot, np.maximum(rvcResps-to_sub, 0.1), color=col, \
+
+        rvcRespsAdj = rvcResps-to_sub;
+        crfAx[d][1].plot(cons_plot[rvcRespsAdj>minResp_plot], rvcRespsAdj[rvcRespsAdj>minResp_plot], color=col, \
                          clip_on=False, label = con_str);
 
     for i in range(len(crfCurr)):
@@ -581,8 +602,9 @@ for d in range(nDisps):
       if expDir == 'LGN/' or forceLog == 1: # then plot as double-log
         crfAx[d][i].set_xscale('log');
         crfAx[d][i].set_yscale('log');
-        #crfAx[d][i].set_ylim([minResp_plot, 1.1*maxResp]);
-        dispAx[d][i].set_ylim((minResp_plot, 300)); # common y axis for ALL plots
+        crfAx[d][i].set_ylim((minResp_plot, 1.5*maxResp));
+        crfAx[d][i].set_aspect('equal');
+        #crfAx[d][i].set_ylim((minResp_plot, 300)); # common y axis for ALL plots
         logSuffix = 'log_';
       else:
         crfAx[d][i].set_xlim([-0.1, 1]);
@@ -591,8 +613,8 @@ for d in range(nDisps):
       crfAx[d][i].set_xlabel('contrast');
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
-      crfAx[d][i].tick_params(labelsize=15, width=1, length=8, direction='out');
-      crfAx[d][i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
+      crfAx[d][i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
+      crfAx[d][i].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
       sns.despine(ax = crfAx[d][i], offset=10, trim=False);
 
       crfAx[d][i].set_ylabel('resp above baseline (sps)');
