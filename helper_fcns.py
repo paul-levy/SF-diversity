@@ -1247,6 +1247,7 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
 
 def var_explained(data_resps, modParams, sfVals, dog_model = 2):
   ''' given a set of responses and model parameters, compute the variance explained by the model 
+      UPDATE: If sfVals is None, then modParams is actually modResps, so we can just skip to the end...
   '''
   np = numpy;
   resp_dist = lambda x, y: np.sum(np.square(x-y))/np.maximum(len(x), len(y))
@@ -1255,13 +1256,16 @@ def var_explained(data_resps, modParams, sfVals, dog_model = 2):
   # organize data responses (adjusted)
   data_mean = np.mean(data_resps) * np.ones_like(data_resps);
 
-  # compute model responses
-  if dog_model == 0:
-    mod_resps = flexible_Gauss(modParams, stim_sf=sfVals);
-  if dog_model == 1:
-    mod_resps = DoGsach(*modParams, stim_sf=sfVals)[0];
-  if dog_model == 2:
-    mod_resps = DiffOfGauss(*modParams, stim_sf=sfVals)[0];
+  if sfVals is None:
+    mod_resps = modParams;
+  else:
+    # compute model responses
+    if dog_model == 0:
+      mod_resps = flexible_Gauss(modParams, stim_sf=sfVals);
+    if dog_model == 1:
+      mod_resps = DoGsach(*modParams, stim_sf=sfVals)[0];
+    if dog_model == 2:
+      mod_resps = DiffOfGauss(*modParams, stim_sf=sfVals)[0];
 
   return var_expl(mod_resps, data_resps, data_mean);
 
@@ -2923,7 +2927,7 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False):
       rateCo = None;
 
     # Analyze the stimulus-driven responses for the spatial frequency mixtures
-    if expInd == 1: # have to do separate work, since the original V1 experiment has tricker stimuli (i.e. not just sfMix, but also ori and rvc measurements done separately)
+    if expInd == 1: # have to do separate work, since the original V1 experiment has trickier stimuli (i.e. not just sfMix, but also ori and rvc measurements done separately)
       # TODO: handle non-"none" mask in v1_hf.organize_modResp!
       v1_dir = exper.dir.replace('/', '.');
       v1_hf = il.import_module(v1_dir + 'helper_fcns');

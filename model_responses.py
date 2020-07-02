@@ -1036,8 +1036,6 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         #etime = timeit.timeit(stmt=E, globals={'structureSFM': structureSFM, 'excChannel': excChannel, 'expInd': expInd, 'excType': excType, 'SFMSimpleResp': SFMSimpleResp}, number=15);
         #ePartime = timeit.timeit(stmt=Epar, globals={'structureSFM': structureSFM, 'excChannel': excChannel, 'expInd': expInd, 'excType': excType, 'SFMSimpleResp_par': SFMSimpleResp_par}, number=15);
 
-        #pdb.set_trace();
-
         # Extract simple cell response (half-rectified linear filtering)
         Lexc = E['simpleResp']; # [nFrames x nTrials]
 
@@ -1094,6 +1092,19 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         if maskIn is not None:
           mask = maskIn; # overwrite the mask with the one we've passed in!
 
+        # organize responses so that we can package them for evaluating varExpl...
+        _, _, expByCond, expAll = hf.organize_resp(spikeCount, structureSFM['sfm']['exp']['trial'], expInd, mask);
+        _, _, modByCond, modAll = hf.organize_resp(respModel, structureSFM['sfm']['exp']['trial'], expInd, mask);
+        # - and now compute varExpl - first for SF tuning curves, then for RVCs...
+        nDisp, nSf, nCon = expByCond.shape;
+        vE_SF = numpy.nan * numpy.zeros((nDisp, nCon));
+        vE_con = numpy.nan * numpy.zeros((nDisp, nSf));
+        for dI in numpy.arange(nDisp):
+          for sI in numpy.arange(nSf):
+             vE_con[dI, sI] = hf.var_explained(hf.nan_rm(expByCond[dI, sI, :]), hf.nan_rm(modByCond[dI, sI, :]), None);
+          for cI in numpy.arange(nCon):
+             vE_SF[dI, cI] = hf.var_explained(hf.nan_rm(expByCond[dI, :, cI]), hf.nan_rm(modByCond[dI, :, cI]), None);
+ 
         if lossType == 1:
           # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
           # sqrt - now handles negative responses by first taking abs, sqrt, then re-apply the sign 
@@ -1101,12 +1112,13 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           #lsq = numpy.square(numpy.add(numpy.sqrt(respModel[mask]), -numpy.sqrt(spikeCount[mask])));
           NLL = numpy.mean(lsq);
           nll_notSum = numpy.square(numpy.add(numpy.sign(respModel)*numpy.sqrt(numpy.abs(respModel)), -numpy.sign(spikeCount)*numpy.sqrt(numpy.abs(spikeCount))));
- 
+          #varExpl_split = [hf.var_explained(dr, mr, None) for dr, mr in zip(exp_responses[0], mod_responses[0])];
         elif lossType == 2:
           poiss_llh = numpy.log(poisson.pmf(spikeCount[mask], respModel[mask]));
           nll_notSum = poiss_llh;
           NLL = numpy.mean(-poiss_llh);
           nll_notSum = -numpy.log(poisson.pmf(spikeCount, respModel));
+          varExpl_split = [];
         elif lossType == 3:
           # Get predicted spike count distributions
           mu  = numpy.maximum(.01, respModel[mask]); # The predicted mean spike count; respModel[iR]
@@ -1115,20 +1127,20 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           p   = r/(r + mu);
           llh = nbinom.pmf(spikeCount[mask], r, p); # Likelihood for each pass under doubly stochastic model
           NLL = numpy.mean(-numpy.log(llh)); # The negative log-likelihood of the whole data-set; [iR]
+          nll_notSum = numpy.nan; # FIX/TODO
+          varExpl_split = [];
         elif lossType == 4: #chi squared
-          _, _, expByCond, expAll = hf.organize_resp(spikeCount, structureSFM['sfm']['exp']['trial'], expInd, mask);
           exp_responses = [expByCond.flatten(), numpy.nanvar(expAll, axis=3).flatten()];
-          _, _, modByCond, modAll = hf.organize_resp(respModel, structureSFM['sfm']['exp']['trial'], expInd, mask);
           mod_responses = [modByCond.flatten(), numpy.nanvar(modAll, axis=3).flatten()];
           NLL, nll_notSum = hf.chiSq(exp_responses, mod_responses, kMult = kMult);
-
+  
     if trackSteps == True:
       global params_glob, loss_glob, resp_glob;
       params_glob.append(params);
       loss_glob.append(NLL);
       resp_glob.append(respModel);
 
-    return NLL, respModel, nll_notSum;
+    return NLL, respModel, nll_notSum, vE_SF, vE_con; # add varExpl stuff here...
 
 def SFMsimulateNew(params, structureSFM, disp, con, sf_c, normType=1, expInd=1, nRepeats=None, excType=1):
   ''' New version of SFMsimulate...19.05.13 create date
