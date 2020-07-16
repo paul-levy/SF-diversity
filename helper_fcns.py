@@ -1112,7 +1112,7 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False,
    all_opts = []; all_loss = [];
    all_conGain = [];
    n_amps = len(amps);
-   
+  
    for i in range(n_amps):
      curr_amps = amps[i];
      curr_cons = cons[i];
@@ -1594,9 +1594,9 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel):
     mu_init = valSfVals[max_sf_index];
 
     if max_sf_index == 0: # i.e. smallest SF center gives max response...
-        range_mu = (mu_init/2, valSfVals[max_sf_index + 3]);
+        range_mu = (mu_init/2, valSfVals[max_sf_index + np.minimum(3, len(valSfVals)-1)]);
     elif max_sf_index+1 == len(valSfVals): # i.e. highest SF center is max
-        range_mu = (valSfVals[max_sf_index-3], mu_init);
+        range_mu = (valSfVals[max_sf_index-np.minimum(3, len(valSfVals)-1)], mu_init);
     else:
         range_mu = (valSfVals[max_sf_index-1], valSfVals[max_sf_index+1]); # go +-1 indices from center
 

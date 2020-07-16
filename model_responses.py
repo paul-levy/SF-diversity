@@ -12,9 +12,15 @@ import pdb
 
 fft = numpy.fft
 
-cellNum      = int(sys.argv[1]);
+try:
+  cellNum      = int(sys.argv[1]);
+except:
+  cellNum = numpy.nan;
+try:
+  dataListName = hf.get_datalist(sys.argv[2]); # argv[2] is expDir
+except:
+  dataListName = None;
 
-dataListName = hf.get_datalist(sys.argv[2]); # argv[2] is expDir
 modRecov = 0;
 
 #rvcBaseName = 'rvcFits_191023'; # a base set of RVC fits used for initializing c50 in opt...(full name, except .npy
@@ -895,7 +901,7 @@ def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None, normType=2, trialArtifi
 
   return respByFr;
 
-def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None, trackSteps=False, overwriteSpikes=None, kMult = 0.10, cellNum=cellNum, excType=1):
+def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, maskOri=True, maskIn=None, expInd=1, rvcFits=None, trackSteps=False, overwriteSpikes=None, kMult = 0.10, cellNum=cellNum, excType=1, compute_varExpl=0):
     '''
     Computes the negative log likelihood for the LN-LN model
        Optional arguments: //note: true means include in mask, false means exclude
@@ -1099,12 +1105,14 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         nDisp, nSf, nCon = expByCond.shape;
         vE_SF = numpy.nan * numpy.zeros((nDisp, nCon));
         vE_con = numpy.nan * numpy.zeros((nDisp, nSf));
-        for dI in numpy.arange(nDisp):
-          for sI in numpy.arange(nSf):
-             vE_con[dI, sI] = hf.var_explained(hf.nan_rm(expByCond[dI, sI, :]), hf.nan_rm(modByCond[dI, sI, :]), None);
-          for cI in numpy.arange(nCon):
-             vE_SF[dI, cI] = hf.var_explained(hf.nan_rm(expByCond[dI, :, cI]), hf.nan_rm(modByCond[dI, :, cI]), None);
- 
+        
+        if compute_varExpl == 1:
+          for dI in numpy.arange(nDisp):
+            for sI in numpy.arange(nSf):
+               vE_con[dI, sI] = hf.var_explained(hf.nan_rm(expByCond[dI, sI, :]), hf.nan_rm(modByCond[dI, sI, :]), None);
+            for cI in numpy.arange(nCon):
+               vE_SF[dI, cI] = hf.var_explained(hf.nan_rm(expByCond[dI, :, cI]), hf.nan_rm(modByCond[dI, :, cI]), None);
+          
         if lossType == 1:
           # alternative loss function: just (sqrt(modResp) - sqrt(neurResp))^2
           # sqrt - now handles negative responses by first taking abs, sqrt, then re-apply the sign 
