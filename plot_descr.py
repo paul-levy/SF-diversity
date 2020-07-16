@@ -57,7 +57,7 @@ if len(sys.argv) > 8:
 else:
   respVar = 1;
 if len(sys.argv) > 9:
-  forceLog = 1; # used for byDisp/allCons_... (sf plots)
+  forceLog = int(sys.argv[9]); # used for byDisp/allCons_... (sf plots)
 else:
   forceLog = 0;
 
@@ -69,7 +69,8 @@ save_loc = loc_base + expDir + 'figures/';
 ### DATALIST
 expName = hf.get_datalist(expDir);
 ### DESCRLIST
-descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
+descrBase = 'descrFits_200714';
+#descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
 #descrBase = 'descrFits_200507'; # for altExp
 #descrBase = 'descrFits_190503';
 #descrBase = 'descrFits_191003';
@@ -78,7 +79,8 @@ if descrJnt == 1:
   descrBase = '%s_joint' % descrBase;
 ### RVCFITS
 #rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
-rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
+#rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
+rvcBase = 'rvcFits_200714'; # direc flag & '.npy' are adde
 
 ##################
 ### Spatial frequency
@@ -129,9 +131,13 @@ if rvcAdj == 0:
 else:
   rvcFlag = '';
   force_dc = False;
+if expDir == 'LGN/' and force_dc is False:
+  force_f1 = True;
+else:
+  force_f1 = False;
 rvcSuff = hf.rvc_mod_suff(rvcMod);
 rvcBase = '%s%s' % (rvcBase, rvcFlag);
-spikes_rate = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcBase, rvcMod=rvcMod, descrFitName_f0 = fLname, baseline_sub=False, force_dc=force_dc);
+spikes_rate = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcBase, rvcMod=rvcMod, descrFitName_f0 = fLname, baseline_sub=False, force_dc=force_dc, force_f1=force_f1);
 # let's also get the baseline
 if f1f0rat < 1 and expDir != 'LGN/': # i.e. if we're in LGN, DON'T get baseline, even if f1f0 < 1 (shouldn't happen)
   baseline_resp = hf.blankResp(trialInf, expInd, spikes=spikes_rate, spksAsRate=True)[0];
