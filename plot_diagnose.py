@@ -171,10 +171,13 @@ rvcCurr = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvc
 stimOr = np.vstack(expData['sfm']['exp']['trial']['ori']);
 mask = np.isnan(np.sum(stimOr, 0)); # sum over all stim components...if there are any nans in that trial, we know
 # - now compute SFMGiveBof!
+modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask, compute_varExpl=1) for fit, norm in zip(modFits, normTypes)];
 
-#modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=1, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask) for fit, norm in zip(modFits, normTypes)];
-modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask) for fit, norm in zip(modFits, normTypes)];
-
+# unpack the model fits!
+varExplSF_flat = modResps[0][3];
+varExplSF = modResps[1][3];
+varExplCon_flat = modResps[0][4];
+varExplCon = modResps[1][4];
 lossByCond_flat = modResps[0][2];
 lossByCond = modResps[1][2]; # We only care about weighted...
 modResps = [x[1] for x in modResps]; # 1st return output (x[0]) is NLL (don't care about that here)
@@ -273,12 +276,20 @@ for d in range(nDisps):
           all_trials = [hf.get_valid_trials(expData, d, v_cons[c], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in sfs_to_check];
           # first weighted
           all_loss_all = np.array([lossByCond[x] for x in all_trials]);
-          all_loss = np.mean(all_loss_all, axis=1); # for error per SF condition
-          curr_loss = np.sum(all_loss_all)
+          try:
+            all_loss = np.mean(all_loss_all, axis=1); # for error per SF condition
+            curr_loss = np.sum(all_loss_all)
+          except: # in case all_loss_all has unequal length arrays (and is therefeore dtype=Object, not just a np.array)
+            all_loss = np.array([np.mean(x) for x in all_loss_all]);
+            curr_loss = np.sum([np.sum(x) for x in all_loss_all]);
           # then flat
           all_loss_all_flat = np.array([lossByCond_flat[x] for x in all_trials]);
-          all_loss_flat = np.mean(all_loss_all_flat, axis=1); # for error per SF condition
-          curr_loss_flat = np.sum(all_loss_all_flat);
+          try:
+            all_loss_flat = np.mean(all_loss_all_flat, axis=1); # for error per SF condition
+            curr_loss_flat = np.sum(all_loss_all_flat);
+          except: # in case all_loss_all_flat has unequal length arrays (and is therefeore dtype=Object, not just a np.array)
+            all_loss_flat = np.array([np.mean(x) for x in all_loss_all_flat]);
+            curr_loss_flat = np.sum([np.sum(x) for x in all_loss_all_flat]);
         elif lossType == 4: # must add for lossType == 1||2 (handled the same way)...
           # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
           sfs_to_check = np.where(v_sfs)[0];
@@ -288,6 +299,9 @@ for d in range(nDisps):
           # then flat
           all_loss_flat = np.array([lossByCond_flat[x] for x in all_conds]);
           curr_loss_flat = np.sum(all_loss_flat);
+        else:
+          curr_loss = np.nan; curr_loss_flat = np.nan;
+          all_loss = np.nan; all_loss_flat = np.nan;
 
         for i in range(2): # i = 0 (lin-y); i = 1 (log-y)
 
@@ -344,7 +358,9 @@ for d in range(nDisps):
           else:
             if i == 0:
               dispAx[d][c_plt_ind, i].set_ylim((0, 1.5*maxResp));
-              dispAx[d][c_plt_ind, i].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True, fontsize=25);
+              if np.array_equal(all_loss, np.nan):
+                dispAx[d][c_plt_ind, i].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True, fontsize=25);
+              dispAx[d][c_plt_ind, i].text(min(all_sfs), 0.8*maxResp, '%.2f, %.2f' % (varExplSF[d, v_cons[c]], varExplSF_flat[d, v_cons[c]]), ha='left', wrap=True, fontsize=25);
             else:
               dispAx[d][c_plt_ind, i].set_yscale('symlog');
               dispAx[d][c_plt_ind, i].set_ylim((1.1*minResp, 1.5*maxResp));
@@ -462,12 +478,20 @@ for d in range(nDisps):
           all_trials = [hf.get_valid_trials(expData, d, v_cons[c], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in sfs_to_check];
           # first, wghtd
           all_loss_all = np.array([lossByCond[x] for x in all_trials]);
-          all_loss = np.mean(all_loss_all, axis=1); # for error per SF condition
-          curr_loss = np.sum(all_loss_all)
+          try:
+            all_loss = np.mean(all_loss_all, axis=1); # for error per SF condition
+            curr_loss = np.sum(all_loss_all)
+          except:
+            all_loss = np.array([np.mean(x) for x in all_loss_all]);
+            curr_loss = np.sum([np.sum(x) for x in all_loss_all]);
           # then flat
           all_loss_all_flat = np.array([lossByCond_flat[x] for x in all_trials]);
-          all_loss_flat = np.mean(all_loss_all_flat, axis=1); # for error per SF condition
-          curr_loss_flat = np.sum(all_loss_all_flat);
+          try:
+            all_loss_flat = np.mean(all_loss_all_flat, axis=1); # for error per SF condition
+            curr_loss_flat = np.sum(all_loss_all_flat);
+          except:
+            all_loss_flat = np.array([np.mean(x) for x in all_loss_all_flat]);
+            curr_loss_flat = np.sum([np.sum(x) for x in all_loss_all_flat]);
         if lossType == 4: # must add for lossType == 1||2 (handled the same way)...
           sfs_to_check = np.where(v_sfs)[0];
           all_conds = [np.ravel_multi_index([d, sf, v_cons[c]], [nDisps, nSfs, nCons]) for sf in sfs_to_check];
@@ -476,6 +500,9 @@ for d in range(nDisps):
           # then flat
           all_loss_flat = np.array([lossByCond_flat[x] for x in all_conds]);
           curr_loss_flat = np.sum(all_loss_flat);
+        else:
+          curr_loss = np.nan; curr_loss_flat = np.nan;
+          all_loss = np.nan; all_loss_flat = np.nan;
 
         sfMixAx[c_plt_ind, d].set_title('con: %s (l_w %.1f, l_f %.1f)' % (str(np.round(all_cons[v_cons[c]], 2)), curr_loss, curr_loss_flat));
         # plot data
@@ -510,7 +537,9 @@ for d in range(nDisps):
         else:
           sfMixAx[c_plt_ind, d].set_ylim((0, 1.5*maxResp));
 
-        sfMixAx[c_plt_ind, d].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True, fontsize=10);
+        if np.array_equal(all_loss, np.nan):
+          sfMixAx[c_plt_ind, d].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True, fontsize=10);
+        sfMixAx[c_plt_ind, d].text(min(all_sfs), 0.8*maxResp, '%.2f, %.2f' % (varExplSF[d, v_cons[c]], varExplSF_flat[d, v_cons[c]]), ha='left', wrap=True, fontsize=25);
 
         sfMixAx[c_plt_ind, d].set_xscale('log');
         sfMixAx[c_plt_ind, d].set_xlabel('sf (c/deg)');
@@ -791,6 +820,8 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
           # accompanying legend/comments
           rvcAx[d+1][row_ind, col_ind].legend((expPts[0], sepPlt[0], allPlt[0]), ('data', 'model fits'), fontsize='large', loc='center left')
           '''
+
+          rvcAx[plt_x][plt_y].text(min(all_cons[v_cons]), 0.8*maxResp, '%.2f, %.2f' % (varExplCon[d, sf_ind], varExplCon_flat[d, sf_ind]), ha='left', wrap=True, fontsize=25);
 
           rvcAx[plt_x][plt_y].set_xscale('log', basex=10); # was previously symlog, linthreshx=0.01
           if col_ind == 0:
