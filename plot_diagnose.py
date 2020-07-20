@@ -59,6 +59,9 @@ if len(sys.argv) > 10:
 else:
   respVar = 1;
 
+# TODO: make this a command line input:
+lgnFrontOn = 1;
+
 ## used for interpolation plot
 sfSteps  = 45; # i.e. how many steps between bounds of interest
 conSteps = -1;
@@ -96,6 +99,9 @@ elif excType == 2:
 
 if lossType == 4: # chiSq...
   fitBase = '%s%s' % (fitBase, hf.chiSq_suffix(kMult));
+
+if lgnFrontEnd == 1:
+  fL_name = '%s_LGN' % fL_name
 
 ### RVCFITS
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
@@ -171,7 +177,7 @@ rvcCurr = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvc
 stimOr = np.vstack(expData['sfm']['exp']['trial']['ori']);
 mask = np.isnan(np.sum(stimOr, 0)); # sum over all stim components...if there are any nans in that trial, we know
 # - now compute SFMGiveBof!
-modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask, compute_varExpl=1) for fit, norm in zip(modFits, normTypes)];
+modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask, compute_varExpl=1, lgnFrontEnd=lgnFrontOn) for fit, norm in zip(modFits, normTypes)];
 
 # unpack the model fits!
 varExplSF_flat = modResps[0][3];

@@ -1127,7 +1127,7 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False,
      if var:
        loss_weights = np.divide(1, var[i]);
      else:
-       loss_weights = np.ones_like(var[i]);
+       loss_weights = np.ones_like(curr_amps);
      if mod == 0:
        obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - rvc_model(params[0], params[1], params[2], curr_cons))));
      elif mod == 1:
@@ -3557,13 +3557,13 @@ def setNormTypeArr(params, normTypeArr = []):
 
   return normTypeArr;
 
-def getConstraints(fitType, excType = 1):
+def getConstraints(fitType, excType = 1, lgnFrontEnd = 0):
         #   00 = preferred spatial frequency   (cycles per degree) || [>0.05]
         #   if excType == 1:
           #   01 = derivative order in space || [>0.1]
         #   elif excType == 2:
           #   01 = sigma for SF lower than sfPref
-          #   -1 = sigma for SF higher than sfPref
+          #   -1-lgnFrontEnd = sigma for SF higher than sfPref
         #   02 = normalization constant (log10 basis) || unconstrained
         #   03 = response exponent || >1
         #   04 = response scalar || >1e-3
@@ -3581,6 +3581,8 @@ def getConstraints(fitType, excType = 1):
         # if fitType == 4
         #   08 = mean of normalization weights gaussian || [>-2]
         #   09, 10 = std left/right ... || >1e-3 or >5e-1
+        # USED ONLY IF lgnFrontEnd == 1
+        # -1 = mWeight (with pWeight = 1-mWeight)
 
     np = numpy;
 
@@ -3599,21 +3601,22 @@ def getConstraints(fitType, excType = 1):
     five = (0, 1); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
     six = (0.01, None); # if always positive, then no hard thresholding to ensure rate (strictly) > 0
     seven = (1e-3, None);
+    minusOne = (0, 1); # mWeight must be bounded between 0 and 1
     if fitType == 1:
       eight = (0, 0); # flat normalization (i.e. no tilt)
       if excType == 1:
-        return (zero,one,two,three,four,five,six,seven,eight);
+        return (zero,one,two,three,four,five,six,seven,eight,minusOne);
       elif excType == 2:
         nine = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
-        return (zero,one,two,three,four,five,six,seven,eight,nine);
+        return (zero,one,two,three,four,five,six,seven,eight,nine,minusOne);
     if fitType == 2:
       eight = (-2, None);
       nine = (5e-1, None);
       if excType == 1:
-        return (zero,one,two,three,four,five,six,seven,eight,nine);
+        return (zero,one,two,three,four,five,six,seven,eight,nine,minusOne);
       elif excType == 2:
         ten = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
-        return (zero,one,two,three,four,five,six,seven,eight,nine,ten);
+        return (zero,one,two,three,four,five,six,seven,eight,nine,ten,minusOne);
     elif fitType == 3:
       eight = (0, 0.75);
       nine = (1e-1, None);
