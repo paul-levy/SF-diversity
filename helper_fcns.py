@@ -3586,7 +3586,7 @@ def getConstraints(fitType, excType = 1, lgnFrontEnd = 0):
 
     np = numpy;
 
-    zero = (0.05, None);
+    zero = (0.05, 15);
     if excType == 1:
       one = (0.1, None);
     elif excType == 2:
