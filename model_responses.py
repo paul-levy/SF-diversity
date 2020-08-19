@@ -110,7 +110,7 @@ def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
     filt = fft.fftshift(fft.ifft2(fft.ifftshift(ffilt)));
     return filt.real;
 
-def SFMSimpleResp_trial(trNum, channel, trialInf, stimParams = [], expInd = 1, excType = 1, lgnFrontEnd=0):
+def SFMSimpleResp_trial(trNum, channel, trialInf, stimParams = [], expInd = 1, excType = 1, lgnFrontParams=None):
   ''' Will be used for parallelizing SFMSimpleResp - compute the response for one frame
   '''
   p = trNum; # just for ease of typing
@@ -139,7 +139,7 @@ def SFMSimpleResp_trial(trNum, channel, trialInf, stimParams = [], expInd = 1, e
   if excType == 2:
     sigLow = channel['sigLow'];
     sigHigh = channel['sigHigh'];
-  # unpack the LGN weights, but we'll only use if lgnFrontEnd==1
+  # unpack the LGN weights, but we'll only use if lgnFrontEnd>0
   mWeight = channel['mWeight'];
   pWeight = 1-mWeight;
 
@@ -173,10 +173,14 @@ def SFMSimpleResp_trial(trNum, channel, trialInf, stimParams = [], expInd = 1, e
   ### NEW: 20.07.16: LGN filtering stage
   ### Assumptions: No interaction between SF/con -- which we know is not true...
   # - first, SF tuning: model 2 (Tony)
-  if lgnFrontEnd == 1:
-    DoGmodel = 2;
-    dog_m = [1, 3, 0.3, 0.4]; # k, f_c, k_s, j_s
-    dog_p = [1, 9, 0.5, 0.4];
+  try: # if these fields are not in lgnFrontParams, then we weren't trying to have an lgnFrontParams
+    DoGmodel = lgnFrontParams['dogModel'];
+    dog_m = lgnFrontParams['dog_m'];
+    dog_p = lgnFrontParams['dog_p'];
+    rvcMod = lgnFrontParams['rvcModel'];
+    params_m = lgnFrontParams['rvc_m'];
+    params_p = lgnFrontParams['rvc_p'];
+
     resps_m = hf.get_descrResp(dog_m, stimSf, DoGmodel, minThresh=0.1)
     resps_p = hf.get_descrResp(dog_p, stimSf, DoGmodel, minThresh=0.1)
     # -- make sure we normalize by the true max response:
@@ -187,14 +191,13 @@ def SFMSimpleResp_trial(trNum, channel, trialInf, stimParams = [], expInd = 1, e
     selSf_m = numpy.divide(resps_m, max_m);
     selSf_p = numpy.divide(resps_p, max_p);
     # - then RVC response: # rvcMod 0 (Movshon)
-    rvcMod = 0;
-    params_m = [0, 12.5, 0.05];
-    params_p = [0, 17.5, 0.50];
     rvc_mod = hf.get_rvc_model();
     selCon_m = rvc_mod(*params_m, stimCo)
     selCon_p = rvc_mod(*params_p, stimCo)
     # -- then here's our final responses per component for the current stimulus
     lgnSel = mWeight*(selSf_m*selCon_m) + pWeight*(selSf_p*selCon_p);
+  except:
+    lgnSel = np.ones_like(stimSf);
 
   if excType == 1:
     # Compute spatial frequency tuning - Deriv. order Gaussian
@@ -245,11 +248,7 @@ def SFMSimpleResp_trial(trNum, channel, trialInf, stimParams = [], expInd = 1, e
 
     framesDiv = numpy.arange(nFrames)/float(nFrames); # used in stimPos calc, but same regardless of loop
     for c in range(nStimComp): # there are up to nine stimulus components
-      if lgnFrontEnd == 1:
-        selSi = selSf[c] * lgnSel[c];
-      else:
-        selSi = selSf[c]; # filter sensitivity for the sinusoid in the frequency domain
-
+      selSi = selSf[c] * lgnSel[c]; # lgnSel will be 1 if we're not using the front end
 
       if selSi != 0 and stimCo[c] != 0:
         computeSum = 1;
@@ -329,7 +328,7 @@ def SFMSimpleResp_par(S, channel, stimParams = [], expInd = 1, trialInf = None, 
     if excType == 2:
       sigLow = channel['sigLow'];
       sigHigh = channel['sigHigh'];
-    # unpack the LGN weights, but we'll only use if lgnFrontEnd==1
+    # unpack the LGN weights, but we'll only use if lgnFrontEnd>0
     mWeight = channel['mWeight'];
 
     # Get aspect ratio in space - removed 7/18/17
@@ -373,16 +372,35 @@ def SFMSimpleResp_par(S, channel, stimParams = [], expInd = 1, trialInf = None, 
     trialInfSlim['sf'] = trialInf['sf'];
     trialInfSlim['num'] = trialInf['num'];
 
+    DoGmodel = 2;
+    if lgnFrontEnd == 1:
+      dog_m = [1, 3, 0.3, 0.4]; # k, f_c, k_s, j_s
+      dog_p = [1, 9, 0.5, 0.4];
+    elif lgnFrontEnd == 2:
+      dog_m = [1, 6, 0.3, 0.4]; # k, f_c, k_s, j_s
+      dog_p = [1, 9, 0.5, 0.4];
+    if lgnFrontEnd > 0:
+      # specify rvc parameters
+      rvcMod = 0;
+      params_m = [0, 12.5, 0.05];
+      params_p = [0, 17.5, 0.50];
+      # save everything for use later
+      M['dogModel'] = 2;
+      M['dog_m'] = dog_m;
+      M['dog_p'] = dog_p;
+      M['rvcModel'] = rvcMod;
+      M['rvc_m'] = params_m;
+      M['rvc_p'] = params_p;
+
     # Compute simple cell response for all trials
     # HERE we multiprocess!
     from functools import partial
-    fn_perTi = partial(SFMSimpleResp_trial, channel=channel, trialInf=trialInfSlim, expInd=expInd, excType=excType, stimParams=[]);
-    #fn_perTi = lambda ti: SFMSimpleResp_trial(trNum=ti, S, channel, expInd=expInd, excType=excType);
+    fn_perTi = partial(SFMSimpleResp_trial, channel=channel, trialInf=trialInfSlim, expInd=expInd, excType=excType, stimParams=[], lgnFrontParams=lgnFrontParams);
     nCpu = mp.cpu_count();
     with mp.Pool(processes = nCpu) as pool:
       simpleAsList = pool.map(fn_perTi, range(nTrials));
     #simpleAsList = [fn_perTi(ti) for ti in range(nTrials)];
-    M['simpleResp'] = numpy.transpose(numpy.vstack(simpleAsList));    
+    M['simpleResp'] = numpy.transpose(numpy.vstack(simpleAsList));
 
     return M;
 
@@ -430,7 +448,7 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excT
     if excType == 2:
       sigLow = channel['sigLow'];
       sigHigh = channel['sigHigh'];
-    # unpack the LGN weights, but we'll only use if lgnFrontEnd==1
+    # unpack the LGN weights, but we'll only use if lgnFrontEnd > 0
     mWeight = channel['mWeight'];
     pWeight = 1-mWeight;
 
@@ -474,6 +492,26 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excT
     # set it zero
     M['simpleResp'] = numpy.zeros((nFrames, nTrials));
 
+    DoGmodel = 2;
+    if lgnFrontEnd == 1:
+      dog_m = [1, 3, 0.3, 0.4]; # k, f_c, k_s, j_s
+      dog_p = [1, 9, 0.5, 0.4];
+    elif lgnFrontEnd == 2:
+      dog_m = [1, 6, 0.3, 0.4]; # k, f_c, k_s, j_s
+      dog_p = [1, 9, 0.5, 0.4];
+    if lgnFrontEnd > 0:
+      # specify rvc parameters
+      rvcMod = 0;
+      params_m = [0, 12.5, 0.05];
+      params_p = [0, 17.5, 0.50];
+      # save everything for use later
+      M['dogModel'] = 2;
+      M['dog_m'] = dog_m;
+      M['dog_p'] = dog_p;
+      M['rvcModel'] = rvcMod;
+      M['rvc_m'] = params_m;
+      M['rvc_p'] = params_p;
+
     # Compute simple cell response for all trials
     for p in range(nTrials): 
     
@@ -511,10 +549,7 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excT
         ### NEW: 20.07.16: LGN filtering stage
         ### Assumptions: No interaction between SF/con -- which we know is not true...
         # - first, SF tuning: model 2 (Tony)
-        if lgnFrontEnd == 1:
-          DoGmodel = 2;
-          dog_m = [1, 3, 0.3, 0.4]; # k, f_c, k_s, j_s
-          dog_p = [1, 9, 0.5, 0.4];
+        if lgnFrontEnd > 0:
           resps_m = hf.get_descrResp(dog_m, stimSf, DoGmodel, minThresh=0.1)
           resps_p = hf.get_descrResp(dog_p, stimSf, DoGmodel, minThresh=0.1)
           # -- make sure we normalize by the true max response:
@@ -525,9 +560,6 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excT
           selSf_m = numpy.divide(resps_m, max_m);
           selSf_p = numpy.divide(resps_p, max_p);
           # - then RVC response: # rvcMod 0 (Movshon)
-          rvcMod = 0;
-          params_m = [0, 12.5, 0.05];
-          params_p = [0, 17.5, 0.50];
           rvc_mod = hf.get_rvc_model();
           selCon_m = rvc_mod(*params_m, stimCo)
           selCon_p = rvc_mod(*params_p, stimCo)
@@ -584,7 +616,7 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excT
             for c in range(nStimComp): # there are up to nine stimulus components
                 #selSi = selSf[c]; # filter sensitivity for the sinusoid in the frequency domain
                 # NEW: 20.07.16 -- why divide by 2 for the LGN stage? well, if selectivity is at peak for M and P, sum will be 2 (both are already normalized) // could also just sum...
-                if lgnFrontEnd == 1:
+                if lgnFrontEnd > 0:
                   selSi = selSf[c] * lgnSel[c]; # filter sensitivity for the sinusoid in the frequency domain
                 else:
                   selSi = selSf[c]
@@ -942,7 +974,7 @@ def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None, overwrite
 
     return M;
 
-def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None, normType=2, trialArtificial = None):
+def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None, normType=2, trialArtificial=None, lgnFrontParams=None):
   ''' A simplified version of the normalization response, in effect, without filters
     The contrast of each stimulus component will be squared and weighted with the same 
     weighting function typically applied (whether that be flat or tuned)
@@ -957,10 +989,7 @@ def SimpleNormResp(S, expInd, gs_mean=None, gs_std=None, normType=2, trialArtifi
   cons = np.vstack([comp for comp in trialInf['con']]);
   consSq = np.square(cons);
   # cons (and wghts) will be (nComps x nTrials) 
-  if trialArtificial is not None:
-    wghts = hf.genNormWeightsSimple(S, gs_mean, gs_std, normType, trialInf);
-  else:
-    wghts = hf.genNormWeightsSimple(S, gs_mean, gs_std, normType);
+  wghts = hf.genNormWeightsSimple(S, gs_mean, gs_std, normType, trialInf, lgnFrontParams);
 
   # now put it all together
   resp = np.multiply(wghts, consSq);
@@ -1014,7 +1043,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     # if fitType == 4 (gaussian-weighted (flexible/two-halved) normalization responses)
     #   08 = mean of normalization weights gaussian
     #   09/10 = std (left/right) of ...
-    # USED ONLY IF lgnFrontEnd == 1
+    # USED ONLY IF lgnFrontEnd > 0
     # -1 = mWeight (with pWeight = 1-mWeight)
 
     T = structureSFM['sfm'];
@@ -1027,7 +1056,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
       dord = {'sp': params[1], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
       excChannel = {'pref': pref, 'dord': dord, 'mWeight': mWeight};
     elif excType == 2:
-      sigLow = params[1]; sigHigh = params[-1-lgnFrontEnd]; # if lgnFrontEnd == 1, then it's the 2nd last param; otherwise, it's the last one
+      sigLow = params[1]; sigHigh = params[-1-numpy.sign(lgnFrontEnd)]; # if lgnFrontEnd > 0, then it's the 2nd last param; otherwise, it's the last one
       dord = {'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
       excChannel = {'pref': pref, 'dord': dord, 'sigLow': sigLow, 'sigHigh': sigHigh, 'mWeight': mWeight};
 
@@ -1036,7 +1065,6 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
 
     # Other (nonlinear) model components
     sigma    = pow(10, params[2]); # normalization constant
-    #respExp  = 2; # response exponent
     respExp  = params[3]; # response exponent
     scale    = params[4]; # response scalar
 
@@ -1102,6 +1130,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     for iR in range(1): #range(len(structureSFM['sfm'])): # why 1 for now? We don't have S.sfm as array (just one)
         T = structureSFM['sfm']; # [iR]
 
+        # the lgn params (lgnPass) will be specified in SFMSimpleResp[_par] if lgnFrontEnd > 0
         E = SFMSimpleResp(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd);
         #E = SFMSimpleResp_par(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd);
 
@@ -1119,7 +1148,11 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
 
         # Get inhibitory response (pooled responses of complex cells tuned to wide range of spatial frequencies, square root to bring everything in linear contrast scale again)
         #Linh = numpy.sqrt((inhWeightMat*T['mod']['normalization']['normResp']).sum(1)).transpose();
-        Linh = SimpleNormResp(structureSFM, expInd, gs_mean, gs_std, normType); # [nFrames x nTrials]
+        if lgnFrontEnd > 0:
+          lgnPass = E;
+        else:
+          lgnPass = None;
+        Linh = SimpleNormResp(structureSFM, expInd, gs_mean, gs_std, normType, lgnFrontParams=lgnPass); # [nFrames x nTrials]
  
         # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
         numerator     = noiseEarly + Lexc;
@@ -1240,7 +1273,7 @@ def SFMsimulateNew(params, structureSFM, disp, con, sf_c, normType=1, expInd=1, 
     dord = {'sp': params[1], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
     excChannel = {'pref': pref, 'dord': dord};
   elif excType == 2:
-    sigLow = params[1]; sigHigh = params[-1-lgnFrontEnd]; # if lgnFrontEnd == 1, then it's the 2nd last param; otherwise, it's the last one
+    sigLow = params[1]; sigHigh = params[-1-numpy.sign(lgnFrontEnd)]; # if lgnFrontEnd>0, then it's the 2nd last param; otherwise, it's the last one (i.e. -1 - [sign(0)=0] = -1)
     dord = {'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
     excChannel = {'pref': pref, 'dord': dord, 'sigLow': sigLow, 'sigHigh': sigHigh};
 
@@ -1342,19 +1375,18 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
     # Get parameter values
     # Excitatory channel
     pref = {'sf': params[0]};
-    if lgnFrontEnd==1:
+    if lgnFrontEnd > 0:
       mWeight = params[-1];
     if excType == 1:
       dord = {'sp': params[1], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
       excChannel = {'pref': pref, 'dord': dord, 'mWeight': mWeight};
     elif excType == 2:
-      sigLow = params[1]; sigHigh = params[-1-lgnFrontEnd]; # if lgnFrontEnd == 1, then it's the 2nd last param; otherwise, it's the last one
+      sigLow = params[1]; sigHigh = params[-1-numpy.sign(lgnFrontEnd)]; # if lgnFrontEnd>0, then it's the 2nd last param; otherwise, it's the last one
       dord = {'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
       excChannel = {'pref': pref, 'dord': dord, 'sigLow': sigLow, 'sigHigh': sigHigh, 'mWeight': mWeight};
 
     # Other (nonlinear) model components
     sigma    = pow(10, params[2]); # normalization constant
-    # respExp  = 2; # response exponent
     respExp  = params[3]; # response exponent
     scale    = params[4]; # response scalar
 
@@ -1444,7 +1476,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
 
     return respModel, Linh, Lexc, normResp['normResp'], denominator;
 
-def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBaseName, rvcMod=1, dataListName=dataListName, kMult=0.1, excType=1, lgnFrontEnd=0):
+def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBaseName, rvcMod=1, dataListName=dataListName, kMult=0.1, excType=1, lgnFrontEnd=0, fixRespExp=None):
     # Given just a cell number, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
     #
     # lossType
@@ -1494,8 +1526,13 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     if lossType == 4: # chiSq...
       fL_name = '%s%s' % (fL_name, hf.chiSq_suffix(kMult));
 
+    if fixRespExp is not None:
+      fL_name = '%s_re%d' % (fL_name, np.round(fixRespExp*10)); # suffix to indicate that the response exponent is fixed...
+
     if lgnFrontEnd == 1:
-      fL_name = '%s_LGN' % fL_name
+      fL_name = '%s_LGN' % fL_name # implicit "a" at the end of LGN...
+    if lgnFrontEnd == 2:
+      fL_name = '%s_LGNb' % fL_name
 
     np = numpy;
 
@@ -1618,7 +1655,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       dOrdSp = np.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
     elif excType == 2:
       sigLow = np.random.uniform(1, 4) if initFromCurr==0 else curr_params[1];
-      sigHigh = np.random.uniform(0.1, 2) if initFromCurr==0 else curr_params[-1-lgnFrontEnd]; # if lgnFrontEnd == 0, then it's the last param; otherwise it's the 2nd to last param
+      sigHigh = np.random.uniform(0.1, 2) if initFromCurr==0 else curr_params[-1-numpy.sign(lgnFrontEnd)]; # if lgnFrontEnd == 0, then it's the last param; otherwise it's the 2nd to last param
     normConst = normConst if initFromCurr==0 else curr_params[2];
     #respExp = 1 if initFromCurr==0 else curr_params[3];
     respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
@@ -1626,7 +1663,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     noiseEarly = np.random.uniform(0.001, 0.01) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
     noiseLate = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[6];
     varGain = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
-    if lgnFrontEnd == 1:
+    if lgnFrontEnd > 0:
       # Now, the LGN weighting 
       mWeight = np.random.uniform(0.25, 0.75) if initFromCurr==0 else curr_params[-1];
 
@@ -1660,8 +1697,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
             pref_sf,dOrdSp,normConst,respExp,respScalar,noiseEarly,noiseLate,varGain = altParams[0:8];
           elif excType == 2:
             pref_sf,sigLow,normConst,respExp,respScalar,noiseEarly,noiseLate,varGain = altParams[0:8];
-            sigHigh = altParams[-1-lgnFrontEnd]; # if lgnFrontEnd == 1, then it's the 2nd last param; otherwise, it's the last one
-          if lgnFrontEnd == 1:
+            sigHigh = altParams[-1-np.sign(lgnFrontEnd)]; # if lgnFrontEnd > 0, then it's the 2nd last param; otherwise, it's the last one
+          if lgnFrontEnd > 0:
             mWeight = altParams[-1];
           else:
             mWeight = np.nan;
@@ -1726,13 +1763,13 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
         param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, mWeight);
       elif excType == 2:
         param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, sigHigh, mWeight);
-    ### TODO: add excType = [1/2] and mWeight (lgnFrontEnd==1) to fitType == 3/4 sections 
+    ### TODO: add excType = [1/2] and mWeight (lgnFrontEnd>0) to fitType == 3/4 sections 
     ### TODO: -- and adjust hf.getConstraints accordingly
     elif fitType == 3:
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, sigOffset, stdLeft, stdRight, sigPeak, mWeight);
     elif fitType == 4:
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStdL, normStdR, mWeight);
-    all_bounds = hf.getConstraints(fitType, excType);
+    all_bounds = hf.getConstraints(fitType, excType, fixRespExp);
     if lgnFrontEnd == 0: # then we'll trim off the last constraint, which is mWeight bounds (and the last param, which is mWeight)
       param_list = param_list[0:-1];
       all_bounds = all_bounds[0:-1];
@@ -1830,8 +1867,15 @@ if __name__ == '__main__':
     else:
       rvcMod = 1; # default (naka-rushton)
 
+    if len(sys.argv) > 11:
+      fixRespExp = float(sys.argv[11]);
+      if fixRespExp <= 0: # this is the code to not fix the respExp
+        fixRespExp = None;
+    else:
+      fixRespExp = None; # default (see modCompare.ipynb for details)
+
     import time
     start = time.process_time();
-    setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod, excType=excType, lgnFrontEnd=lgnFrontOn);
+    setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod, excType=excType, lgnFrontEnd=lgnFrontOn, fixRespExp=fixRespExp);
     enddd = time.process_time();
     print('Took %d time -- NO par!!!' % (enddd-start));
