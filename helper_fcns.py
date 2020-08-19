@@ -3377,7 +3377,7 @@ def getNormParams(params, normType):
     inhAsym = 0;
     return inhAsym;
 
-def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2, trialInf = None):
+def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2, trialInf = None, lgnFrontParams = None):
   ''' simply evaluates the usual normalization weighting but at the frequencies of the stimuli directly
   i.e. in effect, we are eliminating the bank of filters in the norm. pool
   '''
@@ -3386,19 +3386,53 @@ def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2, tr
   if trialInf is not None:
     trialInf = trialInf;
     sfs = np.vstack([comp for comp in trialInf['sf']]); # [nComps x nTrials]
+    cons = np.vstack([comp for comp in trialInf['con']]);
+    consSq = np.square(cons);
   else:
     try:
       trialInf = cellStruct['sfm']['exp']['trial'];
       sfs = np.vstack([comp for comp in trialInf['sf']]); # [nComps x nTrials]
+      cons = np.vstack([comp for comp in trialInf['con']]);
     except: # we allow cellStruct to simply be an array of sfs...
       sfs = cellStruct;
+      warnings.warn('Your first argument is simply an array of spatial frequencies - it should include the full trial information, including SF and CON values');
+      cons = np.ones_like(sfs);
+
+  # apply LGN stage, if specified - we apply equal M and P weight, since this is across a population of neurons, not just the one one uron under consideration
+  if lgnFrontParams is not None:
+    mod = lgnFrontParams['dogModel'];
+    dog_m = lgnFrontParams['dog_m'];
+    dog_p = lgnFrontParams['dog_p'];
+
+    resps_m = get_descrResp(dog_m, sfs, mod, minThresh=0.1)
+    resps_p = get_descrResp(dog_p, sfs, mod, minThresh=0.1)
+    # -- make sure we normalize by the true max response:
+    sfTest = np.geomspace(0.1, 10, 1000);
+    max_m = np.max(get_descrResp(dog_m, sfTest, mod, minThresh=0.1));
+    max_p = np.max(get_descrResp(dog_p, sfTest, mod, minThresh=0.1));
+    # -- then here's our selectivity per component for the current stimulus
+    selSf_m = np.divide(resps_m, max_m);
+    selSf_p = np.divide(resps_p, max_p);
+    # - then RVC response: # rvcMod 0 (Movshon)
+    params_m = lgnFrontParams['rvc_m'];
+    params_p = lgnFrontParams['rvc_p'];
+    rvc_mod = get_rvc_model();
+    selCon_m = rvc_mod(*params_m, cons)
+    selCon_p = rvc_mod(*params_p, cons)
+    # now, sum the responses and divide by the sum of the max possible M and P responses
+    # -- note that those values are just the max of the CRF/RVC, since the Sf is normalized already...
+    lgnStage = np.divide(selSf_m*selCon_m + selSf_p*selCon_p, np.nanmax(selCon_m)+np.nanmax(selCon_p));
+  else:
+    lgnStage = np.ones_like(sfs);
 
   if gs_mean is None or gs_std is None: # we assume inhAsym is 0
     inhAsym = 0;
     new_weights = 1 + inhAsym*(np.log(sfs) - np.nanmean(np.log(sfs)));
+    new_weights = np.multiply(lgnStage, new_weights);
   elif normType == 2:
     log_sfs = np.log(sfs);
     new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
+    new_weights = np.multiply(lgnStage, new_weights);
   elif normType == 4:
     log_sfs = np.log(sfs);
     sfs_l = log_sfs[log_sfs<gs_mean];
@@ -3411,6 +3445,7 @@ def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2, tr
     new_weights = np.zeros_like(log_sfs);
     new_weights[lt.mask]  = wts_l;
     new_weights[gte.mask] = wts_r;
+    new_weights = np.multiply(lgnStage, new_weights);
 
   return new_weights;
 
@@ -3557,7 +3592,7 @@ def setNormTypeArr(params, normTypeArr = []):
 
   return normTypeArr;
 
-def getConstraints(fitType, excType = 1, lgnFrontEnd = 0):
+def getConstraints(fitType, excType = 1, lgnFrontEnd = 0, fixRespExp = None):
         #   00 = preferred spatial frequency   (cycles per degree) || [>0.05]
         #   if excType == 1:
           #   01 = derivative order in space || [>0.1]
@@ -3595,7 +3630,10 @@ def getConstraints(fitType, excType = 1, lgnFrontEnd = 0):
       one = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
     two = (None, None);
     #three = (2.0, 2.0); # fix at 2 (addtl suffix B)
-    three = (0.25, None); # trying, per conversation with Tony (03.01.19)
+    if fixRespExp is None:
+      three = (0.25, None); # trying, per conversation with Tony (03.01.19)
+    else:
+      three = (fixRespExp, fixRespExp); # fix at the value passed in (e.g. usually 2, or 1)
     #three = (1, None);
     four = (1e-3, None);
     five = (0, 1); # why? if this is always positive, then we don't need to set awkward threshold (See ratio = in GiveBof)
