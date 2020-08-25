@@ -1497,6 +1497,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     #   which condition should we hold out from the dataset
     #   note that it is passed in as list of lists  
 
+    np = numpy;
+
     ########
     # Load cell
     ########
@@ -1533,8 +1535,6 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       fL_name = '%s_LGN' % fL_name # implicit "a" at the end of LGN...
     if lgnFrontEnd == 2:
       fL_name = '%s_LGNb' % fL_name
-
-    np = numpy;
 
     fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType);
     # get the name for the stepList name, regardless of whether or not we run this now
@@ -1769,7 +1769,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, sigOffset, stdLeft, stdRight, sigPeak, mWeight);
     elif fitType == 4:
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStdL, normStdR, mWeight);
-    all_bounds = hf.getConstraints(fitType, excType, fixRespExp);
+    all_bounds = hf.getConstraints(fitType, excType, fixRespExp=fixRespExp);
     if lgnFrontEnd == 0: # then we'll trim off the last constraint, which is mWeight bounds (and the last param, which is mWeight)
       param_list = param_list[0:-1];
       all_bounds = all_bounds[0:-1];

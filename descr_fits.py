@@ -17,12 +17,13 @@ expName = hf.get_datalist(sys.argv[3]); # sys.argv[3] is experiment dir
 #df_f0 = 'descrFits_190503_sach_flex.npy';
 df_f0 = None;
 #dogName =  'descrFits_191023';
-dogName =  'descrFits_200507';
-#phAdvName = 'phaseAdvanceFits_200507'
-phAdvName = 'phaseAdvanceFits_191023'
+#dogName =  'descrFits_200507';
+dogName =  'descrFits_200714';
+phAdvName = 'phaseAdvanceFits_200714'
+#phAdvName = 'phaseAdvanceFits_191023'
 rvcName_f0   = 'rvcFits_200507_f0' # .npy will be added later, as will suffix assoc. w/particular RVC model
-rvcName_f1   = 'rvcFits_191023' # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-#rvcName_f1   = 'rvcFits_200507' # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+#rvcName_f1   = 'rvcFits_191023' # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f1   = 'rvcFits_200714' # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 ## model recovery???
 modelRecov = 0;
 if modelRecov == 1:

@@ -3592,7 +3592,7 @@ def setNormTypeArr(params, normTypeArr = []):
 
   return normTypeArr;
 
-def getConstraints(fitType, excType = 1, lgnFrontEnd = 0, fixRespExp = None):
+def getConstraints(fitType, excType = 1, fixRespExp = None):
         #   00 = preferred spatial frequency   (cycles per degree) || [>0.05]
         #   if excType == 1:
           #   01 = derivative order in space || [>0.1]
