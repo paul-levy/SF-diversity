@@ -49,18 +49,16 @@ cellNum  = int(sys.argv[1]);
 excType  = int(sys.argv[2]);
 lossType = int(sys.argv[3]);
 expDir   = sys.argv[4]; 
-rvcAdj   = int(sys.argv[5]); # if 1, then let's load rvcFits to adjust responses to F1
-rvcMod   = int(sys.argv[6]); # 0/1/2 (see hf.rvc_fit_name)
-diffPlot = int(sys.argv[7]);
-intpMod  = int(sys.argv[8]);
-kMult  = float(sys.argv[9]);
-if len(sys.argv) > 10:
-  respVar = int(sys.argv[10]);
+lgnFrontEnd = int(sys.argv[5]);
+rvcAdj   = int(sys.argv[6]); # if 1, then let's load rvcFits to adjust responses to F1
+rvcMod   = int(sys.argv[7]); # 0/1/2 (see hf.rvc_fit_name)
+diffPlot = int(sys.argv[8]);
+intpMod  = int(sys.argv[9]);
+kMult  = float(sys.argv[10]);
+if len(sys.argv) > 11:
+  respVar = int(sys.argv[11]);
 else:
   respVar = 1;
-
-# TODO: make this a command line input:
-lgnFrontOn = 1;
 
 ## used for interpolation plot
 sfSteps  = 45; # i.e. how many steps between bounds of interest
@@ -100,8 +98,13 @@ elif excType == 2:
 if lossType == 4: # chiSq...
   fitBase = '%s%s' % (fitBase, hf.chiSq_suffix(kMult));
 
+if fixRespExp is not None:
+  fitBase = '%s_re%d' % (fitBase, np.round(fixRespExp*10)); # suffix to indicate that the response exponent is fixed...
+
 if lgnFrontEnd == 1:
-  fL_name = '%s_LGN' % fL_name
+  fitBase = '%s_LGN' % fitBase
+elif lgnFrontEnd == 2:
+  fitBase = '%s_LGNb' % fitBase
 
 ### RVCFITS
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
@@ -177,7 +180,7 @@ rvcCurr = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvc
 stimOr = np.vstack(expData['sfm']['exp']['trial']['ori']);
 mask = np.isnan(np.sum(stimOr, 0)); # sum over all stim components...if there are any nans in that trial, we know
 # - now compute SFMGiveBof!
-modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask, compute_varExpl=1, lgnFrontEnd=lgnFrontOn) for fit, norm in zip(modFits, normTypes)];
+modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask, compute_varExpl=1, lgnFrontEnd=lgnFrontEnd) for fit, norm in zip(modFits, normTypes)];
 
 # unpack the model fits!
 varExplSF_flat = modResps[0][3];
@@ -551,9 +554,13 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].set_xlabel('sf (c/deg)');
         sfMixAx[c_plt_ind, d].set_ylabel('resp (imp/s)');
 
+if lgnFrontEnd > 0:
+  lgnStr = ' mWt=%.2f|%.2f' % (modFits[0][-1], modFits[1][-1]);
+else:
+  lgnStr = '';
 
 f.legend();
-f.suptitle('%s #%d (%s), loss %.2f|%.2f' % (cellType, cellNum, cellName, fitList_fl[cellNum-1]['NLL'], fitList_wg[cellNum-1]['NLL']));
+f.suptitle('%s #%d (%s), loss %.2f|%.2f%s' % (cellType, cellNum, cellName, fitList_fl[cellNum-1]['NLL'], fitList_wg[cellNum-1]['NLL'], lgnStr));
 	        
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc

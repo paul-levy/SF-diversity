@@ -62,6 +62,8 @@ resp_glob = [];
 # TODO?: get_normPrms   - get the parameters for the normalization pool, depending on normType
 # oriFilt               - used only in plotting to create 2D image of receptive field/filter
 
+# setEvalMask - given a structureSFM, mask the trials that won't be used for fitting
+
 # SFMSimpleResp_trial   - SFMSimpleResp, but per trial
 # SFMSimpleResp_par     - uses ..._trial to fully replicate SFMSimpleResp
 # SFMSimpleResp  - compute the response of the cell's linear filter to a given (set of) stimuli
@@ -109,6 +111,36 @@ def oriFilt(imSizeDeg, pixSizeDeg, prefSf, prefOri, dOrder, aRatio):
     
     filt = fft.fftshift(fft.ifft2(fft.ifftshift(ffilt)));
     return filt.real;
+
+def setEvalMask(trial_inf, expInd):
+  # given the trialInf and expInd, create the appropriate mask
+  np = numpy;
+  stimOr = np.vstack(trial_inf['ori']);
+
+  mask = np.isnan(np.sum(stimOr, 0)); # sum over all stim components...if there are any nans in that trial, we know
+
+  # then, if expInd is 1, get mask the orientation tuning curve trials
+  if expInd == 1:
+    # get rid of orientation tuning curve trials
+    oriBlockIDs = np.hstack((np.arange(131, 155+1, 2), np.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
+
+    oriInds = np.empty((0,));
+    for iB in oriBlockIDs:
+        indCond = np.where(trial_inf['blockID'] == iB);
+        if len(indCond[0]) > 0:
+            oriInds = np.append(oriInds, indCond);
+
+    # get rid of CRF trials, too? Not yet...
+    conBlockIDs = np.arange(138, 156+1, 2);
+    conInds = np.empty((0,));
+    for iB in conBlockIDs:
+       indCond = np.where(trial_inf['blockID'] == iB);
+       if len(indCond[0]) > 0:
+           conInds = np.append(conInds, indCond);
+
+    mask[oriInds.astype(np.int64)] = True; # as in, don't include those trials either!
+
+  return mask;
 
 def SFMSimpleResp_trial(trNum, channel, trialInf, stimParams = [], expInd = 1, excType = 1, lgnFrontParams=None):
   ''' Will be used for parallelizing SFMSimpleResp - compute the response for one frame
@@ -408,7 +440,7 @@ def SFMSimpleResp_par(S, channel, stimParams = [], expInd = 1, trialInf = None, 
 
 
 # SFMSimpleResp - Used in Robbe V1 model - excitatory, linear filter response
-def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excType = 1, lgnFrontEnd = 0):
+def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excType = 1, lgnFrontEnd = 0, allParams=None):
     # returns object (class?) with simpleResp and other things
 
     # SFMSimpleResp       Computes response of simple cell for sfmix experiment
@@ -499,6 +531,10 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excT
     elif lgnFrontEnd == 2:
       dog_m = [1, 6, 0.3, 0.4]; # k, f_c, k_s, j_s
       dog_p = [1, 9, 0.5, 0.4];
+    elif lgnFrontEnd == 99: # 99 is code for fitting an LGN front end which is common across all cells in the dataset...
+      # parameters are passed as [..., m_fc, p_fc, m_ks, p_ks, m_js, p_js]
+      dog_m = [1, allParams[-6], allParams[-4], allParams[-2]];
+      dog_p = [1, allParams[-6]*allParams[-5], allParams[-3], allParams[-1]];
     if lgnFrontEnd > 0:
       # specify rvc parameters
       rvcMod = 0;
@@ -1049,14 +1085,18 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     T = structureSFM['sfm'];
 
     # Get parameter values
+    nParams = hf.nParamsByType(normType, excType, lgnFrontEnd)
     # Excitatory channel
     pref = {'sf': params[0]};
-    mWeight = params[-1];
+    if lgnFrontEnd == 99:
+      mWeight = params[nParams-1]
+    else:
+      mWeight = params[-1];
     if excType == 1:
       dord = {'sp': params[1], 'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
       excChannel = {'pref': pref, 'dord': dord, 'mWeight': mWeight};
     elif excType == 2:
-      sigLow = params[1]; sigHigh = params[-1-numpy.sign(lgnFrontEnd)]; # if lgnFrontEnd > 0, then it's the 2nd last param; otherwise, it's the last one
+      sigLow = params[1]; sigHigh = params[nParams-1-numpy.sign(lgnFrontEnd)]; # if lgnFrontEnd > 0, then it's the 2nd last param; otherwise, it's the last one
       dord = {'ti': 0.25}; # deriv order in temporal domain = 0.25 ensures broad tuning for temporal frequency
       excChannel = {'pref': pref, 'dord': dord, 'sigLow': sigLow, 'sigHigh': sigHigh, 'mWeight': mWeight};
 
@@ -1131,7 +1171,12 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         T = structureSFM['sfm']; # [iR]
 
         # the lgn params (lgnPass) will be specified in SFMSimpleResp[_par] if lgnFrontEnd > 0
-        E = SFMSimpleResp(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd);
+        if lgnFrontEnd == 99: # i.e. joint lgn for all cells
+          allParams = params;
+        else:
+          allParams = None;
+
+        E = SFMSimpleResp(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd, allParams=allParams); # here, we pass in the parameter list IF needed for getting the right LGN front end...
         #E = SFMSimpleResp_par(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd);
 
         #timing/debugging parallelization
@@ -1254,6 +1299,52 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
       resp_glob.append(respModel);
 
     return NLL, respModel, nll_notSum, vE_SF, vE_con; # add varExpl stuff here...
+
+def sfmToPartial(ind, cellN, sfm, rvc, eInd, mask, params, lgn_params, n_params, normType, lossType, trackSteps, overwriteSpikes, kMult, excType, compute_varExpl, lgnFrontEnd):
+  np = numpy;
+
+  start_ind = ind*n_params
+  params_spec = params[start_ind:(start_ind+n_params)];
+  params_curr = np.hstack((params_spec, lgn_params))
+  return SFMGiveBof(params_curr, sfm, normType, lossType, maskIn=~mask, expInd=eInd, rvcFits=rvc, trackSteps=trackSteps, overwriteSpikes=overwriteSpikes, kMult=kMult, cellNum=cellN, excType=excType, compute_varExpl=compute_varExpl, lgnFrontEnd=lgnFrontEnd)[0];
+
+
+def SFMGiveBof_joint(cells, structuresSFM, rvcFits, expInds, masksIn, params, normType=1, lossType=1, trackSteps=False, overwriteSpikes=None, kMult = 0.10, excType=1, compute_varExpl=0, lgnFrontEnd=0, toPar=False):
+
+  np = numpy;
+
+  n_params = hf.nParamsByType(normType, excType, lgnFrontEnd);
+  lgn_params = params[len(cells)*n_params:]
+
+  #pdb.set_trace();
+
+  import timeit
+  import textwrap
+  if toPar:
+
+    from functools import partial
+    sfmPart = partial(sfmToPartial, params=params, lgn_params=lgn_params, n_params=n_params, normType=normType, lossType=lossType, trackSteps=trackSteps, overwriteSpikes=overwriteSpikes, kMult=kMult, excType=excType, compute_varExpl=compute_varExpl, lgnFrontEnd=lgnFrontEnd)
+    nCpu = mp.cpu_count()
+    with mp.Pool(processes = nCpu) as pool:
+      nllAsList = pool.starmap(sfmPart, zip(range(len(cells)), cells, structuresSFM, rvcFits, expInds, masksIn))
+    cell_NLL = np.array(nllAsList)
+    total_NLL = np.sum(nllAsList)
+
+  else: # if NOT parallelized
+    total_NLL = 0;
+    cell_NLL = np.nan * np.zeros((len(cells), ));
+
+    for (ind, cellNum), structureSFM, rvcFit, expInd, maskIn in zip(enumerate(cells), structuresSFM, rvcFits, expInds, masksIn):
+      # unwrap parameters...
+      start_ind = ind*n_params
+      params_spec = params[start_ind:(start_ind+n_params)]
+      params_curr = np.hstack((params_spec, lgn_params))
+      part_NLL = SFMGiveBof(params_curr, structureSFM, normType, lossType, maskIn=~maskIn, expInd=expInd, rvcFits=rvcFit, trackSteps=trackSteps, overwriteSpikes=overwriteSpikes, kMult=kMult, cellNum=cellNum, excType=excType, compute_varExpl=compute_varExpl, lgnFrontEnd=lgnFrontEnd)[0]
+      cell_NLL[ind] = part_NLL
+      total_NLL += part_NLL
+    print(total_NLL);
+
+  return total_NLL, cell_NLL;
 
 def SFMsimulateNew(params, structureSFM, disp, con, sf_c, normType=1, expInd=1, nRepeats=None, excType=1):
   ''' New version of SFMsimulate...19.05.13 create date
@@ -1535,6 +1626,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       fL_name = '%s_LGN' % fL_name # implicit "a" at the end of LGN...
     if lgnFrontEnd == 2:
       fL_name = '%s_LGNb' % fL_name
+    if lgnFrontEnd == 99:
+      fL_name = '%s_jLGN' % fL_name
 
     fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType);
     # get the name for the stepList name, regardless of whether or not we run this now
@@ -1646,7 +1739,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     except:
       nll_history = np.array([]);
 
-    if numpy.any(numpy.isnan(curr_params)): # if there are nans, we need to ignore...
+    if numpy.any(numpy.isnan(curr_params)): # if there are nans, we need to ignore...and make sure we generate the init params
       curr_params = [];
       initFromCurr = 0;
 
@@ -1841,6 +1934,381 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
 
     return NLL, opt_params, holdoutNLL;
 
+############ NEW
+
+def setModel_joint(cellNums, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBaseName, rvcMod=1, dataListName=dataListName, kMult=0.1, excType=1, lgnFrontEnd=0, fixRespExp=None, toPar=False):
+    # Given a list of cell numbers, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
+    # NOTE: Should be used ONLY for fits with an LGN front end (since the front end parameters are precisely what is jointly optimized
+    #
+    # lossType
+    #   1 - loss := square(sqrt(resp) - sqrt(pred))
+    #   2 - loss := poissonProb(spikes | modelRate)
+    #   3 - loss := modPoiss model (a la Goris, 2014)
+    #   4 - loss := chi squared (a la Cavanaugh, 2002)
+    #
+    # fitType - what is the model formulation?
+    #   1 := flat normalization
+    #   2 := gaussian-weighted normalization responses
+    #   3 := gaussian-weighted c50/norm "constant"
+    #   4 := gaussian-weighted (flexible/two-halved) normalization responses
+    #
+    # excType - 1 (deriv. ord of gauss); 2 (flex. gauss)
+    #
+    # holdOutCondition - [[d, c, sf]*N] or None
+    #   which condition should we hold out from the dataset
+    #   note that it is passed in as list of lists  
+
+    np = numpy;
+
+    ########
+    # Load cell
+    ########
+    loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory
+    loc_data = loc_base + expDir + 'structures/';
+
+    if 'pl1465' in loc_base:
+      loc_str = 'HPC';
+    else:
+      loc_str = '';
+    if fL_name is None: # otherwise, it's already defined...
+      if modRecov == 1:
+        fL_name = 'mr_fitList%s_190516cA' % loc_str
+      else:
+        #fL_name = 'fitList%s_200417%s' % (loc_str, hf.chiSq_suffix(kMult));
+        #fL_name = 'fitList%s_200418%s' % (loc_str, hf.chiSq_suffix(kMult));
+        #fL_name = 'fitList%s_200507%s' % (loc_str, hf.chiSq_suffix(kMult));
+        #fL_name = 'fitList%s_200418%s_TNC' % (loc_str, hf.chiSq_suffix(kMult));
+        #fL_name = 'fitList%s_190321c' % loc_str
+        if excType == 1:
+          fL_name = 'fitList%s_200417' % (loc_str);
+        elif excType == 2:
+          fL_name = 'fitList%s_200507' % (loc_str);
+        #fL_name = 'fitList%s_200519%s' % (loc_str, hf.chiSq_suffix(kMult));
+        #fL_name = 'fitList%s_200522%s' % (loc_str, hf.chiSq_suffix(kMult));
+
+    if lossType == 4: # chiSq...
+      fL_name = '%s%s' % (fL_name, hf.chiSq_suffix(kMult));
+
+    if fixRespExp is not None:
+      fL_name = '%s_re%d' % (fL_name, np.round(fixRespExp*10)); # suffix to indicate that the response exponent is fixed...
+
+    if lgnFrontEnd == 1:
+      fL_name = '%s_LGN' % fL_name # implicit "a" at the end of LGN...
+    if lgnFrontEnd == 2:
+      fL_name = '%s_LGNb' % fL_name
+    if lgnFrontEnd == 99:
+      fL_name = '%s_jLGN' % fL_name # j is for joint fit across all cells
+
+    fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType);
+    # get the name for the stepList name, regardless of whether or not we run this now
+    stepListName = str(fitListName.replace('.npy', '_details.npy'));
+
+    print('\nFitList: %s' % fitListName);
+
+    if os.path.isfile(loc_data + fitListName):
+      fitList = hf.np_smart_load(str(loc_data + fitListName));
+    else:
+      fitList = dict();
+
+    dataList = hf.np_smart_load(str(loc_data + dataListName));
+    dataNames = dataList['unitName'];
+
+    dfits = hf.np_smart_load(loc_data + descrFitName);
+
+    # AND, the parameters for the joint LGN
+    # - for now, let's fix the specify rvc parameters
+    rvcMod = 0;
+    params_m = [0, 12.5, 0.05];
+    params_p = [0, 17.5, 0.50];
+    # - M and P diff. of gauss
+    m_k = 1; p_k = 1; # will not optimize
+    # curr_params - just load any placeholder, all fits will have same LGN params
+    try:
+      curr_params = fitList[0]['params']; # load parameters from the fitList
+    except:
+      initFromCurr = 0;
+    m_fc = np.random.uniform(2, 6) if initFromCurr==0 else curr_params[-6];
+    # --- note that p_fc is parameterized RELATIVE to m_fc...
+    p_fc = np.random.uniform(1.25, 2.5) if initFromCurr==0 else curr_params[-5];
+    m_ks = np.random.uniform(0.2, 0.4) if initFromCurr==0 else curr_params[-4];
+    p_ks = np.random.uniform(0.4, 0.6) if initFromCurr==0 else curr_params[-3];
+    m_js = np.random.uniform(0.15, 0.65) if initFromCurr==0 else curr_params[-2];
+    p_js = np.random.uniform(0.15, 0.65) if initFromCurr==0 else curr_params[-1];
+
+    SFMs, rvcs, expInds, masksIn = [], [], [], [];
+    nParams = hf.nParamsByType(fitType=fitType, excType=excType, lgnType=lgnFrontEnd);
+    nParamsTot = len(cellNums)*nParams + hf.nParamsLGN_joint();
+    all_init_params = np.nan * np.zeros((nParamsTot, ));
+    # add the lgn parameters...
+    lgn_param_start = len(cellNums)*nParams;
+    all_init_params[-6:] = [m_fc, p_fc, m_ks, p_ks, m_js, p_js]
+
+    for ind, cellNum in enumerate(cellNums):
+      #print('Cell #%d is index %d -- will access %d-1' % (ind, cellNum, cellNum));
+      expInd = hf.exp_name_to_ind(dataList['expType'][cellNum-1]);
+      expInds.append(expInd);
+
+      print('loading data structure from %s...' % loc_data);
+      S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy')); # why -1? 0 indexing...
+      SFMs.append(S);
+      print('...finished loading');
+      trial_inf = S['sfm']['exp']['trial'];
+
+      ## Is this a model recovery fit?
+      recovSpikes = None;
+      if modRecov is not None: # Not very clean, but it will have to do for now
+        if modRecov == 1:
+          try:
+            recovSpikes = hf.get_recovInfo(S, normType)[1];
+          except:
+            warnings.warn('You are not set up to run model recovery analysis with this norm type!\nSetting recovery spikes to None');
+      ## Now, start getting initial parameters!
+      # get prefSfEst
+      try: 
+        hiCon = -1;
+        prefSfEst = dfits[cellNum-1]['prefSf'][0][hiCon]; # get high contrast, single grating prefSf
+        sigLo, sigHi = dfits[cellNum-1]['params'][0, hiCon, 3:5]; # parameter locations for sigmaLow/High
+      except:
+        if expInd == 1:
+          prefOrEst = mode(trial_inf['ori'][1]).mode;
+          trialsToCheck = trial_inf['con'][0] == 0.01;
+          prefSfEst = mode(trial_inf['sf'][0][trialsToCheck==True]).mode;
+        else:
+          prefOrEst = 0;
+          allSfs    = np.unique(trial_inf['sf'][0]);
+          allSfs    = allSfs[~np.isnan(allSfs)]; # remove NaN...
+          prefSfEst = np.median(allSfs);
+
+      # load RVC fits, then get normConst estimate
+      rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
+      rvcs.append(rvcFits);
+      try: 
+        peakSf = prefSfEst; # just borrow from above
+        stimVals = hf.tabulate_responses(S, expInd)[1];
+        all_sfs = stimVals[2];
+        # now, get the index corresponding to that peak SF and get the c50 from the corresponding RVC fit
+        prefSfInd = np.argmin(np.abs(all_sfs - peakSf));
+        # get the c50, but take log10 (we optimize in that space rather than in contrast)
+        c50_est = np.log10(hf.c50_empirical(rvcMod, rvcFits[0]['params'][prefSfInd])[0]);
+        normConst = np.minimum(c50_est, np.log10(0.25)); # don't let a c50 value larger than X as the starting point
+      except:
+        # why -1? Talked with Tony, he suggests starting with lower sigma rather than higher/non-saturating one
+        normConst = -2; # i.e. c50 = 0.01 (1% contrast); yes, it's low...
+
+      ########
+      # 00 = preferred spatial frequency   (cycles per degree)
+      # if excType == 1:
+        # 01 = derivative order in space
+      # elif excType == 2:
+        # 01 = sigma for SF lower than sfPref
+        # -1-lgnFrontEnd = sigma for SF higher than sfPref (i.e. the last parameter)
+      # 02 = normalization constant        (log10 basis)
+      # 03 = response exponent
+      # 04 = response scalar
+      # 05 = early additive noise
+      # 06 = late additive noise
+      # 07 = variance of response gain - only used if lossType = 3
+      # if fitType == 2
+      # 08 = mean of (log)gaussian for normalization weights
+      # 09 = std of (log)gaussian for normalization weights
+      # if fitType == 3
+      # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 1]
+      # 09 = standard deviation of the gaussian to the left of the peak || >0.1
+      # 10 = "" to the right "" || >0.1
+      # 11 = peak of offset curve
+      # if fitType == 4
+      # 08 = mean of (log)gaussian for normalization weights
+      # 09/10 = std of (log)gaussian (to left/right) for normalization weights
+      # USED ONLY IF lgnFrontEnd == 1
+      # -1 = mWeight (with pWeight = 1-mWeight)
+
+      if cellNum-1 in fitList:
+        try:
+          curr_params = fitList[cellNum-1]['params']; # load parameters from the fitList! this is what actually gets updated...
+          currNLL = fitList[cellNum-1]['NLL']; # exists - either from real fit or as placeholder
+        except:
+          curr_params = [];
+          currNLL = 1e7;
+          initFromCurr = 0; # override initFromCurr so that we just go with default parameters
+          fitList[cellNum-1] = dict();
+          fitList[cellNum-1]['NLL'] = 1e7; # large initial value...
+          fitList[cellNum-1]['NLL_cell'] = 1e4; # large initial value...
+      else: # set up basic fitList structure...
+        curr_params = [];
+        currNLL = 1e7;
+        initFromCurr = 0; # override initFromCurr so that we just go with default parameters
+        fitList[cellNum-1] = dict();
+        fitList[cellNum-1]['NLL'] = 1e7; # large initial value...
+        fitList[cellNum-1]['NLL_cell'] = 1e4; # large initial value...
+      # get the list of NLL per run
+      try:
+        nll_history = fitList[cellNum-1]['nll_history'];
+      except:
+        nll_history = np.array([]);
+
+      if numpy.any(numpy.isnan(curr_params)): # if there are nans, we need to ignore...
+        curr_params = [];
+        initFromCurr = 0;
+
+      pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
+      if excType == 1:
+        dOrdSp = np.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
+      elif excType == 2:
+        sigLow = np.random.uniform(1, 4) if initFromCurr==0 else curr_params[1];
+        sigHigh = np.random.uniform(0.1, 2) if initFromCurr==0 else curr_params[nParams-1-numpy.sign(lgnFrontEnd)]; # if lgnFrontEnd == 0, then it's the last param; otherwise it's the 2nd to last param
+      normConst = normConst if initFromCurr==0 else curr_params[2];
+      #respExp = 1 if initFromCurr==0 else curr_params[3];
+      respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
+      respScalar = np.random.uniform(10, 200) if initFromCurr==0 else curr_params[4];
+      noiseEarly = np.random.uniform(0.001, 0.01) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
+      noiseLate = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[6];
+      varGain = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
+      if lgnFrontEnd > 0:
+        # Now, the LGN weighting 
+        mWeight = np.random.uniform(0.25, 0.75) if initFromCurr==0 else curr_params[nParams-1];
+
+      if fitType == 1:
+        inhAsym = 0; 
+      if fitType == 2:
+        normMean = np.log10(pref_sf) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
+        normStd = 1.5 if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
+      if fitType == 3:
+        sigOffset = np.random.uniform(0, 0.05) if initFromCurr==0 else curr_params[8];
+        stdLeft = np.random.uniform(1, 5) if initFromCurr==0 else curr_params[9];
+        stdRight = np.random.uniform(1, 5) if initFromCurr==0 else curr_params[10];
+        sigPeak = float(prefSfEst) if initFromCurr==0 else curr_params[11];
+      if fitType == 4:
+        normMean = np.log10(pref_sf) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
+        normStdL = 1.5 if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
+        normStdR = 1.5 if initFromCurr==0 else curr_params[10]; # start at high value (i.e. broad)
+
+      ### Now, if we want to initialize the core paramers with the other fit type...
+      if initFromCurr == -1 and (fitType==1 or fitType==2 or fitType == 4): # then initialize from the opposite case...
+        if fitType==1:
+          altType = 2; # TODO? Decide whether alt for flat is wght or flex?
+        elif fitType==2 or fitType == 4:
+          altType = 1;
+        altFL = hf.fitList_name(base=fL_name, fitType=altType, lossType=lossType);
+        try:
+          altFits = hf.np_smart_load(loc_data + altFL);
+          if cellNum-1 in altFits:
+            altParams = altFits[cellNum-1]['params'];
+            if excType == 1:
+              pref_sf,dOrdSp,normConst,respExp,respScalar,noiseEarly,noiseLate,varGain = altParams[0:8];
+            elif excType == 2:
+              pref_sf,sigLow,normConst,respExp,respScalar,noiseEarly,noiseLate,varGain = altParams[0:8];
+              sigHigh = altParams[nParams-1-np.sign(lgnFrontEnd)]; # if lgnFrontEnd > 0, then it's the 2nd last param; otherwise, it's the last one
+            if lgnFrontEnd > 0:
+              mWeight = altParams[nParams-1];
+            else:
+              mWeight = np.nan;
+        except:
+          warnings.warn('Could not initialize with alternate-fit parameters; defaulting to typical process');
+
+      if excType == 1:
+        print('Initial parameters:\n\tsf: ' + str(pref_sf)  + '\n\td.ord: ' + str(dOrdSp) + '\n\tnormConst: ' + str(normConst));
+      elif excType == 2:
+        print('Initial parameters:\n\tsf: ' + str(pref_sf)  + '\n\tsigLow: ' + str(sigLow) + '\n\tsigHigh: ' + str(sigHigh) + '\n\tnormConst: ' + str(normConst));
+      print('\n\trespExp ' + str(respExp) + '\n\trespScalar ' + str(respScalar) + '\n\tmagnoWeight: ' + str(mWeight));
+
+      #########
+      # Now get all the data we need
+      #########    
+      #purge of NaNs...
+      mask = setEvalMask(trial_inf, expInd);
+      # hold out a condition if we have specified, and adjust the mask accordingly  
+      if holdOutCondition is not None:
+        for cond in holdOutCondition: # i.e. we pass in as array of [disp, con, sf] combinations
+          val_trials = hf.get_valid_trials(S, cond[0], cond[1], cond[2], expInd)[0];
+          mask[val_trials] = True; # as in, don't include those trials either!
+
+      masksIn.append(mask);
+
+      # Set up model here - get the parameters and parameter bounds
+      # -- note that we automatically add mWeight to the paramlist, but we'll trim it off if needed (eaiser to do in terms of code logic)
+      if fitType == 1:
+        if excType == 1:
+          param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym, mWeight);
+        elif excType == 2:
+          param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym, sigHigh, mWeight);
+      elif fitType == 2:
+        if excType == 1:
+          param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, mWeight);
+        elif excType == 2:
+          param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, sigHigh, mWeight);
+      ### TODO: add excType = [1/2] and mWeight (lgnFrontEnd>0) to fitType == 3/4 sections 
+      ### TODO: -- and adjust hf.getConstraints accordingly
+      elif fitType == 3:
+        param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, sigOffset, stdLeft, stdRight, sigPeak, mWeight);
+      elif fitType == 4:
+        param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStdL, normStdR, mWeight);
+
+      start_ind = ind*nParams;
+      all_init_params[start_ind:(start_ind+nParams)] = param_list;
+
+    all_bounds = hf.getConstraints_joint(len(cellNums), fitType, excType, fixRespExp=fixRespExp);
+
+    ## NOW: set up the objective function
+    obj = lambda params: SFMGiveBof_joint(cellNums, SFMs, rvcs, expInds, masksIn, params, normType=fitType, lossType=lossType, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult, excType=excType, lgnFrontEnd=lgnFrontEnd, toPar=toPar)[0];
+
+    print('...now minimizing!'); 
+    if 'TNC' in fL_name:
+      tomin = opt.minimize(obj, all_init_params, bounds=all_bounds, method='TNC');
+    else:
+      tomin = opt.minimize(obj, all_init_params, bounds=all_bounds);
+
+    opt_params = tomin['x'];
+    NLL = tomin['fun'];
+
+    if os.path.exists(loc_data + fitListName):
+      fitList = hf.np_smart_load(str(loc_data + fitListName));
+      try: # well, even if fitList loads, we might not have currNLL, so we have to have an exception here
+        currNLL = fitList[cellNum-1]['NLL']; # exists - either from real fit or as placeholder
+      except:
+        pass; # we've already defined the currNLL...
+
+    ### SAVE: Now we save the results
+    print('...finished. Current NLL (%.2f) vs. previous NLL (%.2f)' % (NLL, currNLL)); 
+    # reload fitlist in case changes have been made with the file elsewhere!
+    if os.path.exists(loc_data + fitListName):
+      fitList = hf.np_smart_load(str(loc_data + fitListName));
+    # else, nothing to reload!!!
+    # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
+    # now, if the NLL is now the best, update this
+    if NLL < currNLL:
+      # get NLL for each cell separately be re-evaluating the obj
+      nll_byCell = SFMGiveBof_joint(cellNums, SFMs, rvcs, expInds, masksIn, opt_params, normType=fitType, lossType=lossType, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult, excType=excType, lgnFrontEnd=lgnFrontEnd, toPar=toPar)[1];
+      # get the LGN parameters, which are common across all cells
+      lgn_params = opt_params[len(cellNums)*nParams:]
+
+      for ind, cellNum in enumerate(cellNums):
+        if cellNum-1 not in fitList:
+          fitList[cellNum-1] = dict();
+
+        fitList[cellNum-1]['NLL'] = NLL;
+        # unwrap parameters...
+        start_ind = ind*nParams
+        params_spec = opt_params[start_ind:(start_ind+nParams)];
+        params_curr = np.hstack((params_spec, lgn_params))
+        fitList[cellNum-1]['params'] = params_curr;
+        fitList[cellNum-1]['NLL_cell'] = nll_byCell[ind];
+        # NEW: Also save whether or not fit was success, exit message (18.12.01)
+        fitList[cellNum-1]['success'] = tomin['success'];
+        fitList[cellNum-1]['message'] = tomin['message'];
+        fitList[cellNum-1]['time'] = datetime.datetime.now();
+        fitList[cellNum-1]['opt'] = tomin;
+    else:
+      print('new NLL not less than currNLL, not saving result, but updating overall fit list (i.e. tracking each fit)');
+
+    numpy.save(loc_data + fitListName, fitList);
+
+    holdoutNLL = [];
+
+    return NLL, opt_params, holdoutNLL;
+
+#############
+
+
 if __name__ == '__main__':
 
     if len(sys.argv) < 9:
@@ -1874,8 +2342,23 @@ if __name__ == '__main__':
     else:
       fixRespExp = None; # default (see modCompare.ipynb for details)
 
+    if len(sys.argv) > 12:
+      toPar = int(sys.argv[12]); # 1 for True, 0 for False
+    else:
+      toPar = False;
+
     import time
     start = time.process_time();
-    setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod, excType=excType, lgnFrontEnd=lgnFrontOn, fixRespExp=fixRespExp);
+    if cellNum >= 0:
+      setModel(cellNum, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod, excType=excType, lgnFrontEnd=lgnFrontOn, fixRespExp=fixRespExp);
+    elif cellNum == -1:
+      loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory
+      loc_data = loc_base + expDir + 'structures/';
+      dataList = hf.np_smart_load(str(loc_data + dataListName));
+      dataNames = dataList['unitName'];
+      cellNums = numpy.arange(1, 1+len(dataNames));
+
+      setModel_joint(cellNums, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod, excType=excType, lgnFrontEnd=lgnFrontOn, fixRespExp=fixRespExp, toPar=toPar);
+
     enddd = time.process_time();
     print('Took %d time -- NO par!!!' % (enddd-start));

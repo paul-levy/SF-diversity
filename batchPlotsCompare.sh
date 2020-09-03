@@ -26,13 +26,13 @@ do
   #python3.6 plot_compare.py $run 1 4 altExp/ 1 1 0 1 & # original (simple), interpolated
   #python3.6 plot_compare.py $run 1 4 V1_orig/ 0 1 0 1 & # diff plots
 
-  python3.6 plot_compare.py $run 2 1 V1/ 1 1 0 0 0.1 1 & # no diff, not interpolated
-  python3.6 plot_compare.py $run 2 1 altExp/ 1 1 0 0 0.1 1 & # no diff, not interpolated
-  python3.6 plot_compare.py $run 2 1 V1_orig/ 1 1 0 0 0.1 1 & # no diff, not interpolated
+  python3.6 plot_compare.py $run 2 3 V1/ 1 1 0 0 0.1 1 & # no diff, not interpolated
+  python3.6 plot_compare.py $run 2 3 altExp/ 1 1 0 0 0.1 1 & # no diff, not interpolated
+  python3.6 plot_compare.py $run 2 3 V1_orig/ 1 1 0 0 0.1 1 & # no diff, not interpolated
 
-  python3.6 plot_compare.py $run 1 1 V1/ 1 1 0 0 0.1 1 & # no diff, not interpolated
-  python3.6 plot_compare.py $run 1 1 altExp/ 1 1 0 0 0.1 1 & # no diff, not interpolated
-  python3.6 plot_compare.py $run 1 1 V1_orig/ 1 1 0 0 0.1 1 & # no diff, not interpolated
+  python3.6 plot_compare.py $run 1 3 V1/ 1 1 0 0 0.1 1 & # no diff, not interpolated
+  python3.6 plot_compare.py $run 1 3 altExp/ 1 1 0 0 0.1 1 & # no diff, not interpolated
+  python3.6 plot_compare.py $run 1 3 V1_orig/ 1 1 0 0 0.1 1 & # no diff, not interpolated
 
   #python3.6 plot_compare.py $run 2 4 V1/ 1 1 0 1 1 & # no diff, YES interpolated
   #python plot_compare.py $run 1 4 V1/ 1 0 2 1 1 & # interpolated

@@ -134,6 +134,7 @@ import warnings
 # evalSigmaFilter - evaluate an arbitrary filter at a set of spatial frequencies to determine c50 (semisaturation contrast)
 # setNormTypeArr - create the normTypeArr used in SFMGiveBof/Simulate to determine the type of normalization and corresponding parameters; DEPRECATED?
 # getConstraints - return the constraints used in model optimization
+# getConstraints_joint - return the constraints used in model optimization
 
 #######
 ## VI. fitting/analysis for basic characterizations (i.e. NON sfMix* programs, like ori16, etc)
@@ -3349,14 +3350,18 @@ def makeStimulus(stimFamily, conLevel, sf_c, template, expInd=1):
     
     return {'Ori': Or, 'Tf' : Tf, 'Con': Co, 'Ph': Ph, 'Sf': Sf, 'trial_used': trial_used}
 
-def getNormParams(params, normType):
+def getNormParams(params, normType, forceAsymZero=True):
   ''' pass in param list, normType (1=original "tilt'; 2=gaussian weighting (wght); 3=con-dep sigma)
   '''
   if normType == 1:
     if len(params) > 8:
       inhAsym = params[8];
     else:
-      inhAsym = 0; 
+      inhAsym = 0;
+
+    if forceAsymZero == True: # overwrite any value passed in...
+      inhAsym = 0;
+
     return inhAsym;
   elif normType == 2:
     gs_mean = params[8];
@@ -3592,6 +3597,31 @@ def setNormTypeArr(params, normTypeArr = []):
 
   return normTypeArr;
 
+def nParamsLGN_joint(): # how many front end lgn parameters are there in joint fitting?
+  # As of 20.08.26, we are using a fixed RVC set, and only fitting:
+  # f_c, k_s, j_s for M & P each
+  return 6;
+
+def nParamsByType(fitType, excType, lgnType=0):
+  # 9, 10, 11, 10 -- before excType == 2, before any lgnType
+  try:
+    if fitType == 1:
+      nParams = 9; 
+    elif fitType == 2 or fitType == 4:
+      nParams = 10;
+    elif fitType == 3:
+      nParams = 11;
+    # add one extra parameter if it's excType == 2
+    if excType == 2:
+      nParams += 1;
+    # add one extra parameter if there's an LGN front end (mWeight)
+    if lgnType > 0:
+      nParams += 1;
+  except:
+    nParams = numpy.nan;
+
+  return nParams;
+
 def getConstraints(fitType, excType = 1, fixRespExp = None):
         #   00 = preferred spatial frequency   (cycles per degree) || [>0.05]
         #   if excType == 1:
@@ -3668,6 +3698,26 @@ def getConstraints(fitType, excType = 1, fixRespExp = None):
       return (zero,one,two,three,four,five,six,seven,eight,nine,ten);
     else: # mistake!
       return [];
+
+def getConstraints_joint(nCells, fitType, excType = 1, fixRespExp = None):
+        # NOTE: The LGN front end constraints will be at the END of the list
+        # AS OF 20.08.06, we will optimize the following LGN parameters:
+        #   lgn0 - m_fc (characteristic frequency of the magno center) || [2, 10]
+        #   lgn1 - p_fc (RELATIVE TO M, characteristic frequency of the parvo center) || [1,4]
+        #   lgn2 - m_ks (relative gain of magno surround) || [0.1, 0.8]
+        #   lgn3 - p_ks (relative gain of parvo surround) || [0.1, 0.8]
+        #   lgn4 - m_js (relative char. freq of magno surround) || [0.1, 0.8]
+        #   lgn5 - p_js (relative char. freq of magno surround) || [0.1, 0.8]
+
+  all_constr = getConstraints(fitType, excType, fixRespExp) * nCells;
+  # THEN, tack on the LGN constraints
+  lgn0 = (2, 10);
+  lgn1 = (1, 4);
+  lgn2 = (1e-3, 0.9);
+  lgn3 = (1e-3, 0.9);
+  lgn4 = (0.1, 0.9);
+  lgn5 = (0.1, 0.9);
+  return all_constr + (lgn0, lgn1, lgn2, lgn3, lgn4, lgn5);
 
 ##################################################################
 ##################################################################

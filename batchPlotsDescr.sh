@@ -37,7 +37,7 @@ source activate lcv-python
 
 for run in {1..77}
 do  
-  python plot_descr.py $run LGN/ 0 2 0 1 0 1 1 &
+  python plot_descr.py $run LGN/ 0 2 0 1 0 1 0 &
   #python plot_descr.py $run LGN/ 1 4 0 1 0 1 1 &
   #python plot_descr.py $run V1/ 0 2 0 1 1 1 1 &
   #python plot_descr.py $run altExp/ 0 2 0 0 1 1 1 &

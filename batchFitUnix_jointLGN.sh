@@ -36,6 +36,7 @@
 #      1 - naka-rushton [default]
 #      2 - peirce
 #   fixRespExp - (default is None, meaning a free resp. exp; otherwise, specify a value; use value <= 0 to make it None)
+#   [toPar - default is not, but currently if 1, we'll paralellize (over cells) the fitting if doing joint LGN frontend]
 
 #### see model_responses.py for additional details
 
@@ -60,21 +61,19 @@ source activate lcv-python
 #################
 #################
 
-for run in {1..8}; do
-  # run 
-  python3.6 model_responses.py $run V1/ 2 1 2 0 -1 0 0.10 1 -1 & 
-  python3.6 model_responses.py $run V1/ 2 1 1 1 -1 0 0.10 1 -1 & # lgn (type a)
-  python3.6 model_responses.py $run V1/ 2 1 1 2 -1 0 0.10 1 -1 & # lgn type B
+python3.6 model_responses.py -1 altExp/ 2 1 1 99 0 0 0.10 1 -1 1 
+python3.6 model_responses.py -1 altExp/ 2 1 1 99 0 0 0.10 1 1 1 
+python3.6 model_responses.py -1 altExp/ 2 1 1 99 0 0 0.10 1 2 1 
 
-  python3.6 model_responses.py $run V1_orig/ 2 1 2 0 -1 0 0.10 1 -1 &
-  python3.6 model_responses.py $run V1_orig/ 2 1 1 1 -1 0 0.10 1 -1 &
-  python3.6 model_responses.py $run V1_orig/ 2 1 1 2 -1 0 0.10 1 -1 &
 
-  python3.6 model_responses.py $run altExp/ 2 1 2 0 -1 0 0.10 1 -1 &
-  python3.6 model_responses.py $run altExp/ 2 1 1 1 -1 0 0.10 1 -1 &
-  python3.6 model_responses.py $run altExp/ 2 1 1 2 -1 0 0.10 1 -1 &
+python3.6 model_responses.py -1 V1_orig/ 2 1 1 99 0 0 0.10 1 -1 1 
+python3.6 model_responses.py -1 V1/ 2 1 1 99 0 0 0.10 1 -1 1 
 
-done
+python3.6 model_responses.py -1 V1/ 2 1 1 99 0 0 0.10 1 1 1
+python3.6 model_responses.py -1 V1_orig/ 2 1 1 99 0 0 0.10 1 1 1
+
+python3.6 model_responses.py -1 V1/ 2 1 1 99 0 0 0.10 1 2 1
+python3.6 model_responses.py -1 V1_orig/ 2 1 1 99 0 0 0.10 1 2 1
 
 # for model recovery
 #for run in {11..15}; do

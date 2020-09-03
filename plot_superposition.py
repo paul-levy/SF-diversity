@@ -47,9 +47,9 @@ dMod_num, dLoss_num = 1, 4; # see hf.descrFit_name/descrMod_name/etc for details
 if use_mod_resp == 1:
   rvcName = None; # Use NONE if getting model responses, only
   if excType == 1:
-    fitBase = 'fitList_200417c';
+    fitBase = 'fitList_200417';
   elif excType == 2:
-    fitBase = 'fitList_200507c';
+    fitBase = 'fitList_200507';
   lossType = 1; # sqrt
   fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
 # ^^^ EDIT rvc/descrFits/fitList names here; 
@@ -84,6 +84,10 @@ rcParams['font.size'] = 20;
 # load everything
 ############
 dataListNm = hf.get_datalist(expDir);
+#if expDir == 'V1/':
+#  dataListNm = 'dataList.npy';
+#else:
+#  dataListNm = 'dataList_glx.npy';
 descrFits_f0 = None;
 if expDir == 'V1/' or expDir == 'altExp/':
   rvcMod = 1;
@@ -96,7 +100,7 @@ descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, mode
 ## now, let it run
 dataPath = basePath + expDir + 'structures/'
 save_loc = basePath + expDir + 'figures/'
-save_locSuper = save_loc + 'superposition_200608/'
+save_locSuper = save_loc + 'superposition_200714/'
 if use_mod_resp == 1:
   save_locSuper = save_locSuper + '%s/' % fitBase
 

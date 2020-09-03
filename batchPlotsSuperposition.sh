@@ -15,15 +15,15 @@ source activate lcv-python
 ## - fitType (default is 2 [weighted]; use 1 for flat; etc)
 ## - excType (1 for gauss deriv [default]; 2 for flex. gauss)
 
-for run in {35..77}
+for run in {1..8}
 do
   #python3.6 plot_superposition.py $run altExp/ & # with data
-  python3.6 plot_superposition.py $run V1/ & # with data
-  python3.6 plot_superposition.py $run LGN/ & # with data
-  #python3.6 plot_superposition.py $run V1/ 1 1 2 & # model, flat, flex. gauss
-  #python3.6 plot_superposition.py $run V1/ 1 2 2 & # model, wght, flex. gauss
-  #python3.6 plot_superposition.py $run V1/ 1 1 1 & # model, flat, gauss deriv.
-  #python3.6 plot_superposition.py $run V1/ 1 2 1 & # model, wght, gauss deriv.
+  #python3.6 plot_superposition.py $run V1/ & # with data
+  #python3.6 plot_superposition.py $run LGN/ & # with data
+  python3.6 plot_superposition.py $run V1/ 1 1 2 & # model, flat, flex. gauss
+  python3.6 plot_superposition.py $run V1/ 1 2 2 & # model, wght, flex. gauss
+  python3.6 plot_superposition.py $run V1/ 1 1 1 & # model, flat, gauss deriv.
+  python3.6 plot_superposition.py $run V1/ 1 2 1 & # model, wght, gauss deriv.
 done
 
 #python3.6 plot_superposition.py 1 LGN/

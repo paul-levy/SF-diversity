@@ -116,6 +116,8 @@ if lgnFrontEnd == 1:
   fitBase_lgn = '%s_LGN' % fitBase_lgn
 elif lgnFrontEnd == 2:
   fitBase_lgn = '%s_LGNb' % fitBase_lgn
+elif lgnFrontEnd == 99:
+  fitBase_lgn = '%s_jLGN' % fitBase_lgn
 
 ### RVCFITS
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
