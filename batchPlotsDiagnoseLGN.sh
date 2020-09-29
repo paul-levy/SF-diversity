@@ -26,34 +26,31 @@ source activate lcv-python
 
 for run in {1..8}
 do
-  python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 99 1 1 0 0 0.05 -1 1 & # no diff, not interpolated
+  
+  # jointLGN plots
+  #python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 99 1 1 0 0 0.05 -1 1 & # no diff, not interpolated
   python3.6 plot_diagnose_vLGN.py $run 2 1 V1_orig/ 99 1 1 0 0 0.05 -1 1 & # no diff, not interpolated
-  python3.6 plot_diagnose_vLGN.py $run 2 1 altExp/ 99 1 1 0 0 0.05 -1 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose_vLGN.py $run 2 1 altExp/ 99 1 1 0 0 0.05 -1 1 & # no diff, not interpolated
 
-  python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 99 1 1 0 0 0.05 1 1 & # no diff, not interpolated
-  python3.6 plot_diagnose_vLGN.py $run 2 1 V1_orig/ 99 1 1 0 0 0.05 1 1 & # no diff, not interpolated
-  python3.6 plot_diagnose_vLGN.py $run 2 1 altExp/ 99 1 1 0 0 0.05 1 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 99 1 1 0 0 0.05 1 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose_vLGN.py $run 2 1 V1_orig/ 99 1 1 0 0 0.05 1 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose_vLGN.py $run 2 1 altExp/ 99 1 1 0 0 0.05 1 1 & # no diff, not interpolated
 
-  python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 99 1 1 0 0 0.05 2 1 & # no diff, not interpolated
-  python3.6 plot_diagnose_vLGN.py $run 2 1 V1_orig/ 99 1 1 0 0 0.05 2 1 & # no diff, not interpolated
-  python3.6 plot_diagnose_vLGN.py $run 2 1 altExp/ 99 1 1 0 0 0.05 2 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 99 1 1 0 0 0.05 2 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose_vLGN.py $run 2 1 V1_orig/ 99 1 1 0 0 0.05 2 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose_vLGN.py $run 2 1 altExp/ 99 1 1 0 0 0.05 2 1 & # no diff, not interpolated
+  '''
 
-  #python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 1 1 1 0 0 0.05 2 1 & # no diff, not interpolated
-  #python3.6 plot_diagnose_vLGN.py $run 2 1 V1_orig/ 1 1 1 0 0 0.05 2 1 & # no diff, not interpolated
-  #python3.6 plot_diagnose_vLGN.py $run 2 1 altExp/ 1 1 1 0 0 0.05 2 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run 2 4 V1/ 1 1 1 0 0 0.05 2 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run 2 4 V1_orig/ 1 1 1 0 0 0.05 2 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run 2 4 altExp/ 1 1 1 0 0 0.05 2 1 & # no diff, not interpolated
 
-  #python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 2 1 1 0 0 0.05 2 1 & # no diff, not interpolated
-  #python3.6 plot_diagnose_vLGN.py $run 2 1 V1_orig/ 2 1 1 0 0 0.05 2 1 & # no diff, not interpolated
-  #python3.6 plot_diagnose_vLGN.py $run 2 1 altExp/ 2 1 1 0 0 0.05 2 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run 2 4 V1/ 2 1 1 0 0 0.05 2 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run 2 4 V1_orig/ 2 1 1 0 0 0.05 2 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run 2 4 altExp/ 2 1 1 0 0 0.05 2 1 & # no diff, not interpolated
 
+  '''
 
-  #python3.6 plot_diagnose.py $run 2 1 V1/ 1 1 0 0 1 & # no diff, not interpolated
-  #python3.6 plot_diagnose.py $run 2 1 altExp/ 1 1 0 0 1 & # no diff, not interpolated
-  #python3.6 plot_diagnose.py $run 2 1 V1_orig/ 1 1 0 0 1 & # no diff, not interpolated
-
-  #python3.6 plot_diagnose.py $run 1 1 V1/ 1 1 0 0 1 & # no diff, not interpolated
-  #python3.6 plot_diagnose.py $run 1 1 altExp/ 1 1 0 0 1 & # no diff, not interpolated
-  #python3.6 plot_diagnose.py $run 1 1 V1_orig/ 1 1 0 0 1 & # no diff, not interpolated
 done
 
 # leave a blank line at the end
