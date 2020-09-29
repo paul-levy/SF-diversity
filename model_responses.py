@@ -1320,12 +1320,13 @@ def SFMGiveBof_joint(cells, structuresSFM, rvcFits, expInds, masksIn, params, no
 
   import timeit
   import textwrap
+
   if toPar:
 
     from functools import partial
     sfmPart = partial(sfmToPartial, params=params, lgn_params=lgn_params, n_params=n_params, normType=normType, lossType=lossType, trackSteps=trackSteps, overwriteSpikes=overwriteSpikes, kMult=kMult, excType=excType, compute_varExpl=compute_varExpl, lgnFrontEnd=lgnFrontEnd)
-    nCpu = mp.cpu_count()
-    with mp.Pool(processes = nCpu) as pool:
+    #pdb.set_trace();
+    with _globalPool as pool:
       nllAsList = pool.starmap(sfmPart, zip(range(len(cells)), cells, structuresSFM, rvcFits, expInds, masksIn))
     cell_NLL = np.array(nllAsList)
     total_NLL = np.sum(nllAsList)
@@ -1342,7 +1343,7 @@ def SFMGiveBof_joint(cells, structuresSFM, rvcFits, expInds, masksIn, params, no
       part_NLL = SFMGiveBof(params_curr, structureSFM, normType, lossType, maskIn=~maskIn, expInd=expInd, rvcFits=rvcFit, trackSteps=trackSteps, overwriteSpikes=overwriteSpikes, kMult=kMult, cellNum=cellNum, excType=excType, compute_varExpl=compute_varExpl, lgnFrontEnd=lgnFrontEnd)[0]
       cell_NLL[ind] = part_NLL
       total_NLL += part_NLL
-    print(total_NLL);
+    #print(total_NLL);
 
   return total_NLL, cell_NLL;
 
@@ -2344,6 +2345,10 @@ if __name__ == '__main__':
 
     if len(sys.argv) > 12:
       toPar = int(sys.argv[12]); # 1 for True, 0 for False
+      # Then, create the pool globally
+      if toPar == 1:
+        nCpu = mp.cpu_count()
+        _globalPool = mp.Pool(processes = nCpu)
     else:
       toPar = False;
 

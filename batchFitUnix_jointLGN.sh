@@ -61,19 +61,18 @@ source activate lcv-python
 #################
 #################
 
-python3.6 model_responses.py -1 altExp/ 2 1 1 99 0 0 0.10 1 -1 1 
-python3.6 model_responses.py -1 altExp/ 2 1 1 99 0 0 0.10 1 1 1 
-python3.6 model_responses.py -1 altExp/ 2 1 1 99 0 0 0.10 1 2 1 
+python3.6 model_responses.py -1 V1_orig/ 2 1 1 99 0 0 0.10 1 -1 0 &
+python3.6 model_responses.py -1 V1/ 2 1 1 99 0 0 0.10 1 -1 0 &
 
+python3.6 model_responses.py -1 V1/ 2 1 1 99 0 0 0.10 1 1 0 &
+python3.6 model_responses.py -1 V1_orig/ 2 1 1 99 0 0 0.10 1 1 0 &
 
-python3.6 model_responses.py -1 V1_orig/ 2 1 1 99 0 0 0.10 1 -1 1 
-python3.6 model_responses.py -1 V1/ 2 1 1 99 0 0 0.10 1 -1 1 
+python3.6 model_responses.py -1 V1/ 2 1 1 99 0 0 0.10 1 2 0 &
+python3.6 model_responses.py -1 V1_orig/ 2 1 1 99 0 0 0.10 1 2 0 &
 
-python3.6 model_responses.py -1 V1/ 2 1 1 99 0 0 0.10 1 1 1
-python3.6 model_responses.py -1 V1_orig/ 2 1 1 99 0 0 0.10 1 1 1
-
-python3.6 model_responses.py -1 V1/ 2 1 1 99 0 0 0.10 1 2 1
-python3.6 model_responses.py -1 V1_orig/ 2 1 1 99 0 0 0.10 1 2 1
+python3.6 model_responses.py -1 altExp/ 2 1 1 99 0 0 0.10 1 -1 0 &
+python3.6 model_responses.py -1 altExp/ 2 1 1 99 0 0 0.10 1 1 0 &
+python3.6 model_responses.py -1 altExp/ 2 1 1 99 0 0 0.10 1 2 0 &
 
 # for model recovery
 #for run in {11..15}; do

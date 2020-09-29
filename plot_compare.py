@@ -171,6 +171,9 @@ rvcCurr = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvc
 stimOr = np.vstack(expData['sfm']['exp']['trial']['ori']);
 mask = np.isnan(np.sum(stimOr, 0)); # sum over all stim components...if there are any nans in that trial, we know
 # - now compute SFMGiveBof!
+# ----
+modRespWght = mod_resp.SFMGiveBof(modFits[1], expData, normType=normTypes[1], lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask);
+# ----
 modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask) for fit, norm in zip(modFits, normTypes)];
 
 modResps = [x[1] for x in modResps]; # 1st return output (x[0]) is NLL (don't care about that here)
@@ -198,6 +201,7 @@ else:
   rvcFlag = '_f0';
   rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
   asRates = False;
+  # TODO: maybe should make asRates=True here, too, right? Since get_adjusted_spikerate always gives us a rate? Should check...
 # rvcMod=-1 tells the function call to treat rvcName as the fits, already (we loaded above!)
 spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=rvcFits, rvcMod=-1, descrFitName_f0=None, baseline_sub=False);
 _, _, respOrg, respAll = hf.organize_resp(spikes_rate, expData, expInd, respsAsRate=asRates);
