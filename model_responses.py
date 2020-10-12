@@ -438,6 +438,7 @@ def SFMSimpleResp_par(S, channel, stimParams = [], expInd = 1, trialInf = None, 
 
 ##########
 
+def SFMSimpleResp_matMul(S, channel, stimParams = [], expInd = 1, trialInf = None, excType = 1, lgnFrontEnd = 0, allParams=None):
 
 # SFMSimpleResp - Used in Robbe V1 model - excitatory, linear filter response
 def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excType = 1, lgnFrontEnd = 0, allParams=None):
@@ -550,7 +551,8 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excT
 
     # Compute simple cell response for all trials
     for p in range(nTrials): 
-    
+
+        ####
         # Set stim parameters
         if make_own_stim == 1:
 
@@ -568,17 +570,24 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excT
             stimCo = numpy.empty((nStimComp,));
             stimPh = numpy.empty((nStimComp,));
             stimSf = numpy.empty((nStimComp,));
-            
+
             for iC in range(nStimComp):
                 stimOr[iC] = z['ori'][iC][p] * numpy.pi/180; # in radians
                 stimTf[iC] = z['tf'][iC][p];          # in cycles per second
                 stimCo[iC] = z['con'][iC][p];         # in Michelson contrast
                 stimPh[iC] = z['ph'][iC][p] * numpy.pi/180;  # in radians
                 stimSf[iC] = z['sf'][iC][p];          # in cycles per degree
-                
+
+          # For future: do for all trials, components into [nTrials x nComps]
+          #stimOr = (np.pi/180) * np.transpose(np.vstack(z['ori']), (1,0)) # in radians
+          # ..etc
+
+
         if numpy.count_nonzero(numpy.isnan(stimOr)): # then this is a blank stimulus, no computation to be done
             continue;
-                
+
+        #pdb.set_trace();
+
         # I. Orientation, spatial frequency and temporal frequency
         # Compute orientation tuning - removed 17.18.7
 
@@ -646,7 +655,7 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excT
             linR2 = numpy.zeros((nFrames*factor, nStimComp));
             linR3 = numpy.zeros((nFrames*factor, nStimComp));
             linR4 = numpy.zeros((nFrames*factor, nStimComp));
-            
+
             computeSum = 0; # important constant: if stimulus contrast or filter sensitivity equals zero there is no point in computing the response
 
             for c in range(nStimComp): # there are up to nine stimulus components
@@ -658,12 +667,11 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excT
                   selSi = selSf[c]
                 if selSi != 0 and stimCo[c] != 0:
                     computeSum = 1;
-                                   
+
                     # Use the effective number of frames displayed/stimulus duration
                     stimPos = numpy.asarray(range(nFrames))/float(nFrames) + \
                                             stimPh[c] / (2*numpy.pi*stimTf[c]); # nFrames + the appropriate phase-offset
                     P3Temp  = numpy.full_like(P[:, 1], stimPos);
-                    #P3Temp  = repmat(stimPos, 1, len(xCo));
                     P[:,2]  = 2*numpy.pi*P3Temp; # P(:,2) describes relative location of the filters in time.
 
                     omegas = numpy.vstack((omegaX[c], omegaY[c], omegaT[c])); # make this a 3 x len(omegaX) array
