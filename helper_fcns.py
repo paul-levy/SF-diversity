@@ -259,6 +259,8 @@ def get_datalist(expDir):
   elif expDir == 'V1/':
     return 'dataList_glx_200507.npy'; # limited set of data
     #return 'dataList_glx.npy';
+  elif expDir == 'V1_BB/':
+    return 'dataList.npy';
 
 def exp_name_to_ind(expName):
     ''' static mapping from name of experiment to expInd
@@ -1910,10 +1912,34 @@ def flexible_Gauss(params, stim_sf, minThresh=0.1):
                 
     return [max(minThresh, respFloor + respRelFloor*x) for x in shape];
 
+def flexible_Gauss_np(params, stim_sf, minThresh=0.1):
+    # REPLACEMENT for flexible_Gauss in numpy
+    # The descriptive model used to fit cell tuning curves - in this way, we
+    # can read off preferred SF, octave bandwidth, and response amplitude
+
+    respFloor       = params[0];
+    respRelFloor    = params[1];
+    sfPref          = params[2];
+    sigmaLow        = params[3];
+    sigmaHigh       = params[4];
+
+    np = numpy;
+    # Tuning function
+    sf0   = np.divide(stim_sf, sfPref);
+
+    sigma = np.full_like(sf0, sigmaLow);
+    whereSigHigh = np.where(sf0>1);
+    sigma[whereSigHigh] = sigmaHigh;
+
+    shape = np.exp(-np.divide(np.square(np.log(sf0)), 2*np.square(sigma)))
+                
+    return np.maximum(minThresh, respFloor + respRelFloor*shape);
+
 def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
   # returns only pred_spikes
   if DoGmodel == 0:
-    pred_spikes = flexible_Gauss(params, stim_sf=stim_sf, minThresh=minThresh);
+    #pred_spikes = flexible_Gauss(params, stim_sf=stim_sf, minThresh=minThresh);
+    pred_spikes = flexible_Gauss_np(params, stim_sf=stim_sf, minThresh=minThresh);
   elif DoGmodel == 1:
     pred_spikes, _ = DoGsach(*params, stim_sf=stim_sf);
   elif DoGmodel == 2:
@@ -4041,6 +4067,9 @@ def rvcTune(rvcVals, rvcResps, rvcResps_std, rvcMod=1):
 
 def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None):
   ''' wrapper function used to get the derived measures for the basic characterizations
+      - basicPaths [the full path to each of the basic tuning program files (xml)]
+      - basicProgNames [what order and name for the tunings]
+      - forceSimple [1 to get F1, 0 to get DC, leave as None to get resp. based on F1/F0 ratio]
   '''
 
   from build_basics_list import prog_name
@@ -4062,7 +4091,7 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None):
     sf_resp_ind = 1;
   if forceSimple is not None:
     sf_resp_ind = forceSimple;
-
+ 
   for curr_name, prog in zip(basicPaths, basicProgNames):
     try:
       prog_curr = prog_name(curr_name);
