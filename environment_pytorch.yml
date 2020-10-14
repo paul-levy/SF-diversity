@@ -1,0 +1,21 @@
+name: pytorch-lcv
+channels:
+  - defaults
+dependencies:
+  - python=>3.6.3
+  - anaconda
+  - pip
+  - jupyter
+  - jupyterlab
+  - ipykernel
+  - numpy
+  - matplotlib
+  - scipy
+  - scikit-learn>=0.22
+  - scikit-image
+  - seaborn
+  - statsmodels
+  - pandas
+  - pytorch
+  - torchvision
+
