@@ -66,6 +66,7 @@ resp_glob = [];
 
 # SFMSimpleResp_trial   - SFMSimpleResp, but per trial
 # SFMSimpleResp_par     - uses ..._trial to fully replicate SFMSimpleResp
+# SFMSimpleResp_matMul  - done with smarter numpy operations -- matrix ops instead
 # SFMSimpleResp  - compute the response of the cell's linear filter to a given (set of) stimuli
 
 # SFMNormResp_trial    - as for SFMSimpleResp_trial, but for normalization pool response
@@ -439,6 +440,219 @@ def SFMSimpleResp_par(S, channel, stimParams = [], expInd = 1, trialInf = None, 
 ##########
 
 def SFMSimpleResp_matMul(S, channel, stimParams = [], expInd = 1, trialInf = None, excType = 1, lgnFrontEnd = 0, allParams=None):
+    # returns object with simpleResp and other things
+    # --- Created 20.10.12 --- provides ~4x speed up compared to SFMSimpleResp() without need to explicit parallelization
+
+    # SFMSimpleResp_matMul       Computes response of simple cell for sfmix experiment
+
+    # SFMSimpleResp_matMul(varargin) returns a complex cell response for the
+    # mixture stimuli used in sfMix. The cell's receptive field is the n-th
+    # derivative of a 2-D Gaussian that need not be circularly symmetric.
+
+    # 1/23/17 - Edits: Added stimParams, make_own_stim so that I can set what
+    # stimuli I want when simulating from model
+
+    np = numpy;
+
+    make_own_stim = 0;
+    if stimParams: # i.e. if we actually have non-empty stimParams
+        make_own_stim = 1;
+        if not 'template' in stimParams:
+            stimParams['template'] = S;
+        if not 'repeats' in stimParams:
+            stimParams['repeats'] = 10; # why 10? To match experimental #repetitions
+
+    # Load the data structure
+    T = S['sfm'];
+    if trialInf is None: # otherwise, we've passed in explicit trial information!
+      trialInf = T['exp']['trial'];
+
+    # Get preferred stimulus values
+    prefSf = channel['pref']['sf'];                              # in cycles per degree
+    # CHECK LINE BELOW
+    prefTf = round(np.nanmean(trialInf['tf'][0]));     # in cycles per second
+
+    # Get directional selectivity - removed 7/18/17
+
+    # Get derivative order in space and time
+    dOrdTi = channel['dord']['ti'];
+    if excType == 1:
+      dOrdSp = channel['dord']['sp'];
+    # (or, if needed get sigmaLow/High)
+    if excType == 2:
+      sigLow = channel['sigLow'];
+      sigHigh = channel['sigHigh'];
+    # unpack the LGN weights, but we'll only use if lgnFrontEnd > 0
+    mWeight = channel['mWeight'];
+    pWeight = 1-mWeight;
+
+    # Get aspect ratio in space - removed 7/18/17
+
+    # Get spatial coordinates
+    xCo = 0;                                                              # in visual degrees, centered on stimulus center
+    yCo = 0;                                                              # in visual degrees, centered on stimulus center
+
+    # Store some results in M
+    M = dict();
+    pref = dict();
+    dord = dict();
+    pref.setdefault('sf', prefSf);
+    pref.setdefault('tf', prefTf);
+    pref.setdefault('xCo', xCo);
+    pref.setdefault('yCo', yCo);
+    if excType == 1:
+      dord.setdefault('sp', dOrdSp);
+    dord.setdefault('ti', dOrdTi);
+    
+    M.setdefault('pref', pref);
+    M.setdefault('dord', dord);
+    if excType == 2:
+      M.setdefault('sig', (sigLow, sigHigh));
+
+    # Pre-allocate memory
+    z             = trialInf;
+    nStimComp     = hf.get_exp_params(expInd).nStimComp;
+    nFrames       = hf.num_frames(expInd);
+    if make_own_stim == 1:
+        nTrials = stimParams['repeats']; # to keep consistent with number of repetitions used for each stim. condition
+    else: # CHECK THIS GUY BELOW
+        try:
+          nTrials = len(z['num']);
+        except:
+          nTrials = len(z['con'][0]); 
+          # if we've defined our own stimuli, then we won't have "num"; just get number of trials from stim components
+    
+    # set it zero
+    M['simpleResp'] = np.zeros((nFrames, nTrials));
+
+    DoGmodel = 2;
+    if lgnFrontEnd == 1:
+      dog_m = [1, 3, 0.3, 0.4]; # k, f_c, k_s, j_s
+      dog_p = [1, 9, 0.5, 0.4];
+    elif lgnFrontEnd == 2:
+      dog_m = [1, 6, 0.3, 0.4]; # k, f_c, k_s, j_s
+      dog_p = [1, 9, 0.5, 0.4];
+    elif lgnFrontEnd == 99: # 99 is code for fitting an LGN front end which is common across all cells in the dataset...
+      # parameters are passed as [..., m_fc, p_fc, m_ks, p_ks, m_js, p_js]
+      dog_m = [1, allParams[-6], allParams[-4], allParams[-2]];
+      dog_p = [1, allParams[-6]*allParams[-5], allParams[-3], allParams[-1]];
+    if lgnFrontEnd > 0:
+      # specify rvc parameters
+      rvcMod = 0;
+      params_m = [0, 12.5, 0.05];
+      params_p = [0, 17.5, 0.50];
+      # save everything for use later
+      M['dogModel'] = 2;
+      M['dog_m'] = dog_m;
+      M['dog_p'] = dog_p;
+      M['rvcModel'] = rvcMod;
+      M['rvc_m'] = params_m;
+      M['rvc_p'] = params_p;
+
+    ####
+    # Set stim parameters
+    if make_own_stim == 1:
+
+      all_stim = hf.makeStimulus(stimParams['stimFamily'], stimParams['conLevel'], \
+                                                              stimParams['sf_c'], stimParams['template'], expInd=expInd);
+
+      stimOr = all_stim['Ori'];
+      stimTf = all_stim['Tf'];
+      stimCo = all_stim['Con'];
+      stimPh = all_stim['Ph'];
+      stimSf = all_stim['Sf'];
+    else: # make all stim [nTr x nComp]
+      stimOr = (np.pi/180) * np.transpose(np.vstack(z['ori']), (1,0)) # in radians
+      stimTf = np.transpose(np.vstack(z['tf']), (1,0)) # in radians
+      stimCo = np.transpose(np.vstack(z['con']), (1,0)) # in radians
+      stimPh = (np.pi/180) * np.transpose(np.vstack(z['ph']), (1,0)) # in radians
+      stimSf = np.transpose(np.vstack(z['sf']), (1,0)) # in radians
+
+    # I. Orientation, spatial frequency and temporal frequency
+    # Compute orientation tuning - removed 17.18.7
+
+    ### NEW: 20.07.16: LGN filtering stage
+    ### Assumptions: No interaction between SF/con -- which we know is not true...
+    # - first, SF tuning: model 2 (Tony)
+    if lgnFrontEnd > 0:
+      resps_m = hf.get_descrResp(dog_m, stimSf, DoGmodel, minThresh=0.1)
+      resps_p = hf.get_descrResp(dog_p, stimSf, DoGmodel, minThresh=0.1)
+      # -- make sure we normalize by the true max response:
+      sfTest = np.geomspace(0.1, 10, 1000);
+      max_m = np.max(hf.get_descrResp(dog_m, sfTest, DoGmodel, minThresh=0.1));
+      max_p = np.max(hf.get_descrResp(dog_p, sfTest, DoGmodel, minThresh=0.1));
+      # -- then here's our selectivity per component for the current stimulus
+      selSf_m = np.divide(resps_m, max_m);
+      selSf_p = np.divide(resps_p, max_p);
+      # - then RVC response: # rvcMod 0 (Movshon)
+      rvc_mod = hf.get_rvc_model();
+      selCon_m = rvc_mod(*params_m, stimCo)
+      selCon_p = rvc_mod(*params_p, stimCo)
+      # -- then here's our final responses per component for the current stimulus
+      lgnSel = np.add(np.multiply(mWeight, np.multiply(selSf_m, selCon_m)), np.multiply(pWeight, np.multiply(selSf_p, selCon_p)));
+
+    if excType == 1:
+      # Compute spatial frequency tuning - Deriv. order Gaussian
+      sfRel = np.divide(stimSf, prefSf);
+      s     = np.power(stimSf, dOrdSp) * np.exp(-dOrdSp/2 * np.power(sfRel, 2));
+      sMax  = np.power(prefSf, dOrdSp) * np.exp(-dOrdSp/2);
+      selSf   = np.divide(s, sMax);
+    elif excType == 2:
+      selSf = hf.flexible_Gauss_np([0,1,prefSf,sigLow,sigHigh], stimSf, minThresh=0);
+
+    # Compute temporal frequency tuning - removed 19.05.13
+
+    # II. Phase, space and time
+    omegaX = np.multiply(stimSf, np.cos(stimOr)); # the stimulus in frequency space
+    omegaY = np.multiply(stimSf, np.sin(stimOr));
+    omegaT = stimTf;
+
+    P = np.empty((nTrials, nFrames, nStimComp, 3)); # nTrials x nFrames for number of frames x nStimComp x [two for x and y coordinate, one for time]
+    P[:,:,:,0] = np.full((nTrials, nFrames, nStimComp), 2*np.pi*xCo);  # P is the matrix that contains the relative location of each filter in space-time (expressed in radians)
+    P[:,:,:,1] = np.full((nTrials, nFrames, nStimComp), 2*np.pi*yCo);  # P(:,0) and p(:,1) describe location of the filters in space
+
+    respSimple = np.zeros((nTrials,nFrames,));
+
+    # NEW: 20.07.16 -- why divide by 2 for the LGN stage? well, if selectivity is at peak for M and P, sum will be 2 (both are already normalized) // could also just sum...
+    if lgnFrontEnd > 0:
+      selSi = np.multiply(selSf, lgnSel); # filter sensitivity for the sinusoid in the frequency domain
+    else:
+      selSi = selSf;
+
+    # Use the effective number of frames displayed/stimulus duration
+    # phase calculation -- 
+    stimFr = np.divide(np.arange(nFrames), float(nFrames));
+    phOffset = np.divide(stimPh, np.multiply(2*np.pi, stimTf));
+    # slow way?
+    phOffsetTile = np.transpose(np.tile(phOffset, [nFrames, 1, 1]), [1,0,2]); # output is [nFrames x nTrials x nStimComp], so trans.
+    stimPosTile = np.transpose(np.tile(stimFr, [nTrials, nStimComp, 1]), [0,2,1]); # output is [nTrials x nStimComp x nFrames], so trans.
+    P3slow = np.add(phOffsetTile, stimPosTile);
+    # fast way?
+    P3Temp = np.transpose(np.add.outer(phOffset, stimFr), [0,2,1]); # result is [nTrials x nFrames x nStimComp], so transpose
+    P[:,:,:,2]  = 2*np.pi*P3Temp; # P(:,2) describes relative location of the filters in time.
+
+    omegas = np.stack((omegaX, omegaY, omegaT),axis=-1); # make this [nTr x nSC x nFr x 3]
+    dotprod = np.einsum('ijkl,ikl->ijk',P,omegas); # dotproduct over the "3" to get [nTr x nSC x nFr]
+    # - AxB where A is the overall stimulus selectivity ([nTr x nStimComp]), B is Fourier ph/space calc. [nTr x nFr x nStimComp]
+    rComplex = np.einsum('ij,ikj->ik', np.multiply(selSi,stimCo), np.exp(np.multiply(1j,dotprod))) # mult. to get [nTr x nFr] response
+    # The above line takes care of summing over stimulus components
+
+    # four filters placed in quadrature
+    respSimple1 = np.maximum(0, rComplex.real); # half-wave rectification,...
+    respSimple2 = np.maximum(0, np.multiply(-1,rComplex.real));
+    respSimple3 = np.maximum(0, rComplex.imag);
+    respSimple4 = np.maximum(0, np.multiply(-1,rComplex.imag));
+
+    # if channel is tuned, it is phase selective...
+    # NOTE: 19.05.14 - made response always complex...(wow)! See git for previous version
+    respComplex = np.power(respSimple1, 2) + np.power(respSimple2, 2) \
+        + np.power(respSimple3, 2) + np.power(respSimple4, 2); 
+    respSimple = np.sqrt(np.divide(respComplex, 4)); # div by 4 to avg across all filters
+
+    # Store response in desired format - which is actually [nFr x nTr], so transpose it!
+    M['simpleResp'] = np.transpose(respSimple);
+        
+    return M;
 
 # SFMSimpleResp - Used in Robbe V1 model - excitatory, linear filter response
 def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excType = 1, lgnFrontEnd = 0, allParams=None):
@@ -614,19 +828,13 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excT
         if excType == 1:
           # Compute spatial frequency tuning - Deriv. order Gaussian
           sfRel = stimSf / prefSf;
-          s     = pow(stimSf, dOrdSp) * numpy.exp(-dOrdSp/2 * pow(sfRel, 2));
-          sMax  = pow(prefSf, dOrdSp) * numpy.exp(-dOrdSp/2);
+          s     = np.power(stimSf, dOrdSp) * numpy.exp(-dOrdSp/2 * np.power(sfRel, 2));
+          sMax  = np.power(prefSf, dOrdSp) * numpy.exp(-dOrdSp/2);
           sNl   = s/sMax;
           selSf = sNl;
         elif excType == 2:
           # Compute spatial frequency tuning - flexible Gauss
-          sfRel = numpy.divide(stimSf, prefSf);
-          # - set the sigma appropriately, depending on what the stimulus SF is
-          sigma = numpy.multiply(sigLow, [1]*len(sfRel));
-          sigma[[x for x in range(len(sfRel)) if sfRel[x] > 1]] = sigHigh;
-          # - now, compute the responses (automatically normalized, since max gaussian value is 1...)
-          s     = [numpy.exp(-numpy.divide(numpy.square(numpy.log(x)), 2*numpy.square(y))) for x,y in zip(sfRel, sigma)];
-          selSf = s; 
+          selSf = hf.flexible_Gauss_np([0,1,prefSf,sigLow,sigHigh], stimSf, minThresh=0);
 
         # Compute temporal frequency tuning - removed 19.05.13
 
@@ -1184,17 +1392,12 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         else:
           allParams = None;
 
-        E = SFMSimpleResp(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd, allParams=allParams); # here, we pass in the parameter list IF needed for getting the right LGN front end...
-        #E = SFMSimpleResp_par(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd);
-
-        #timing/debugging parallelization
-        # Get simple cell response for excitatory channel
-        #E = '''SFMSimpleResp(structureSFM, excChannel, expInd=expInd, excType=excType);'''
-        #Epar = '''SFMSimpleResp_par(structureSFM, excChannel, expInd=expInd, excType=excType);'''
+        E = SFMSimpleResp_matMul(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd, allParams=allParams);
+        #E = SFMSimpleResp(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd, allParams=allParams); # here, we pass in the parameter list IF needed for getting the right LGN front end...
 
         #import timeit
-        #etime = timeit.timeit(stmt=E, globals={'structureSFM': structureSFM, 'excChannel': excChannel, 'expInd': expInd, 'excType': excType, 'SFMSimpleResp': SFMSimpleResp}, number=15);
-        #ePartime = timeit.timeit(stmt=Epar, globals={'structureSFM': structureSFM, 'excChannel': excChannel, 'expInd': expInd, 'excType': excType, 'SFMSimpleResp_par': SFMSimpleResp_par}, number=15);
+        #etime = timeit.timeit(stmt=E, globals={'structureSFM': structureSFM, 'excChannel': excChannel, 'expInd': expInd, 'excType': excType, 'SFMSimpleResp': SFMSimpleResp, 'lgnFrontEnd': lgnFrontEnd, 'allParams': allParams}, number=25);
+        #eMMime = timeit.timeit(stmt=Emm, globals={'structureSFM': structureSFM, 'excChannel': excChannel, 'expInd': expInd, 'excType': excType, 'SFMSimpleResp_matMul': SFMSimpleResp_matMul, 'lgnFrontEnd': lgnFrontEnd, 'allParams': allParams}, number=25);
 
         # Extract simple cell response (half-rectified linear filtering)
         Lexc = E['simpleResp']; # [nFrames x nTrials]
