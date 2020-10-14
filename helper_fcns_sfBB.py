@@ -5,6 +5,15 @@ import pdb
 
 ### Similar to helper_fcns, but meant specifically for the sfBB_* series of experiments
 
+### Organizing ###
+# get_baseOnly_resp - get the response to the base stimulus ONLY
+# get_mask_resp - get the response to the mask OR mask+base at either the base or mask TF
+
+### Anaylsis ###
+# compute_f1f0
+
+### ORGANIZING ###
+
 def get_baseOnly_resp(expInfo):
   ''' returns the distribution of responses, mean/s.e.m. and unique sfXcon for each base stimulus in the sfBB_* series
   '''
@@ -36,12 +45,13 @@ def get_baseOnly_resp(expInfo):
   return [baseResp_dc, baseResp_f1], [baseSummary_dc, baseSummary_f1], unique_pairs;
 
 
-def get_mask_resp(expInfo, withBase=0, maskF1 = 1):
+def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0):
   ''' return the DC, F1 matrices [mean, s.e.m.] for responses to the mask only in the sfBB_* series 
       For programs (e.g. sfBB_varSF) with multiple base conditions, the order returned here is guaranteed
       to be the same as the unique base conditions given in get_baseOnly_resp
   '''
 
+  maxTr = 20; # we assume that the max # of trials in any condition will be this value
   conDig = 3; # round contrast to nearest thousandth (i.e. 0.001)
   byTrial = expInfo['trial'];
 
@@ -61,8 +71,7 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1):
     nBase = len(baseConds);
 
   maskResp_dc = []; maskResp_f1 = [];
-
-  #pdb.set_trace();
+  maskResp_dcAll = []; maskResp_f1All = [];
 
   for up in np.arange(nBase):
 
@@ -70,6 +79,8 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1):
     maskCon, maskSf = np.unique(np.round(expInfo['maskCon'], conDig)), expInfo['maskSF'];
     respMatrixDC = np.nan * np.zeros((len(maskCon), len(maskSf), 2));
     respMatrixF1 = np.nan * np.zeros((len(maskCon), len(maskSf), 2));
+    respMatrixDCall = np.nan * np.zeros((len(maskCon), len(maskSf), maxTr));
+    respMatrixF1all = np.nan * np.zeros((len(maskCon), len(maskSf), maxTr));
 
     if withBase == 1: # then subset based on the particular base condition
       # we have the unique pairs, now cycle through and do the same thing here we did with the other base stimulus....
@@ -87,18 +98,77 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1):
             trialsOk = np.logical_and(currTr, np.logical_and(conOk, sfOk));
 
             currDC = expInfo['spikeCounts'][trialsOk];
+            nTr = len(currDC);
+
             if maskF1 == 1:
               currF1 = expInfo['f1_mask'][trialsOk];
             else:
               currF1 = expInfo['f1_base'][trialsOk];
+
+            respMatrixDCall[mcI, msI, 0:nTr] = currDC;            
+            respMatrixF1all[mcI, msI, 0:nTr] = currF1;
+
             dcMean, f1Mean = np.mean(currDC), np.mean(currF1)
             respMatrixDC[mcI, msI, :] = [dcMean, np.std(currDC)/len(currDC)]
             respMatrixF1[mcI, msI, :] = [f1Mean, np.std(currF1)/len(currF1)]
 
     maskResp_dc.append(respMatrixDC); maskResp_f1.append(respMatrixF1);
+    maskResp_dcAll.append(respMatrixDCall); maskResp_f1All.append(respMatrixF1all);
 
-  if nBase == 1:
-    return maskResp_dc[0], maskResp_f1[0];
-  else:
-    return maskResp_dc, maskResp_f1;
+  if returnByTr == 0:
+    if nBase == 1:
+      return maskResp_dc[0], maskResp_f1[0];
+    else:
+      return maskResp_dc, maskResp_f1;
+  elif returnByTr == 1:
+    if nBase == 1:
+      return maskResp_dc[0], maskResp_f1[0], maskResp_dcAll[0], maskResp_f1All[0];
+    else:
+      return maskResp_dc, maskResp_f1, maskResp_dcAll, maskResp_f1All;
 
+
+### ANALYSIS ###
+
+def compute_f1f0(trial_inf):
+  ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio
+      This will be used to determine simple versus complex
+  '''
+  stimDur = 1; # for now, all sfBB_* experiments have a 1 second stim dur
+
+  ######
+  # why are we keeping the trials with max response at F0 (always) and F1 (if present)? Per discussion with Tony, 
+  # we should evaluate F1/F0 at the SF  which has the highest response as determined by comparing F0 and F1, 
+  # i.e. F1 might be greater than F0 AND have a different than F0 - in the case, we ought to evalaute at the peak F1 frequency
+  ######
+  ## first, get F0 responses (mask only)
+  f0_counts, f1_rates, f0_all, f1_rates_all = get_mask_resp(trial_inf, withBase=0, maskF1=1, returnByTr=1);
+  f0_blank = trial_inf['blank']['mean'];
+  f0_rates = np.divide(f0_counts - f0_blank, stimDur);
+  f0_rates_all = np.divide(f0_all - f0_blank, stimDur);
+
+  # get prefSfEst
+  all_rates = [f0_rates, f1_rates]
+  prefSfEst_ind = np.array([np.argmax(resps[-1, :, 0]) for resps in all_rates]); # get peak resp for f0 and f1
+  all_sfs = trial_inf['maskSF'];
+  prefSfEst = all_sfs[prefSfEst_ind];
+
+  ######
+  # make the comparisons 
+  ######
+  f0f1_highCon = [f0_rates[-1,:,0], f1_rates[-1,:,0]];
+  f0f1_highConAll = [f0_rates_all[-1,:,:], f1_rates_all[-1,:,:]];
+  # determine which of the peakInd X F0/F1 combinations has the highest overall response
+  peakRespInd = np.argmax([np.nanmean(x[y]) for x,y in zip(f0f1_highCon, prefSfEst_ind)]);
+  # then get the true peak ind
+  indToAnalyze = prefSfEst_ind[peakRespInd];
+ 
+  f0rate, f1rate = [x[indToAnalyze] for x in f0f1_highCon];
+  f0all, f1all = [x[indToAnalyze, :] for x in f0f1_highConAll];
+  # note: the below lines will help us avoid including trials for which the f0 is negative (after baseline subtraction!)
+  # i.e. we will not include trials with below-baseline f0 responses in our f1f0 calculation
+  val_inds = np.logical_and(~np.isnan(f0all), ~np.isnan(f1all));
+  f0rate_posInd = np.where(np.logical_and(val_inds, f0rate>0))[0];
+  f0rate_pos = f0all[f0rate_posInd];
+  f1rate_pos = f1all[f0rate_posInd];
+
+  return np.nanmean(np.divide(f1rate_pos, f0rate_pos)), f0all, f1all, f0_rates, f1_rates;
