@@ -157,14 +157,15 @@ import warnings
 ##################################################################
 
 
-def np_smart_load(file_path, encoding_str='latin1'):
+def np_smart_load(file_path, encoding_str='latin1', allow_pickle=True):
+   # added allow_pickle=True to handle different numpy version in pytorch env. compared to lcv-python env.
 
    if not os.path.isfile(file_path):
      return [];
    loaded = [];
    while(True):
      try:
-         loaded = numpy.load(file_path, encoding=encoding_str).item();
+         loaded = numpy.load(file_path, encoding=encoding_str, allow_pickle=True).item();
          break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
         sleep_time = random_in_range([5, 15])[0];
