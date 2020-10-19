@@ -342,8 +342,8 @@ def SFMSimpleResp_par(S, channel, stimParams = [], expInd = 1, trialInf = None, 
             stimParams['repeats'] = 10; # why 10? To match experimental #repetitions
 
     # Load the data structure
-    T = S['sfm'];
     if trialInf is None: # otherwise, we've passed in explicit trial information!
+      T = S['sfm'];
       trialInf = T['exp']['trial'];
 
     # Get preferred stimulus values
@@ -463,8 +463,8 @@ def SFMSimpleResp_matMul(S, channel, stimParams = [], expInd = 1, trialInf = Non
             stimParams['repeats'] = 10; # why 10? To match experimental #repetitions
 
     # Load the data structure
-    T = S['sfm'];
     if trialInf is None: # otherwise, we've passed in explicit trial information!
+      T = S['sfm'];
       trialInf = T['exp']['trial'];
 
     # Get preferred stimulus values
@@ -624,9 +624,6 @@ def SFMSimpleResp_matMul(S, channel, stimParams = [], expInd = 1, trialInf = Non
     stimFr = np.divide(np.arange(nFrames), float(nFrames));
     phOffset = np.divide(stimPh, np.multiply(2*np.pi, stimTf));
     # slow way?
-    phOffsetTile = np.transpose(np.tile(phOffset, [nFrames, 1, 1]), [1,0,2]); # output is [nFrames x nTrials x nStimComp], so trans.
-    stimPosTile = np.transpose(np.tile(stimFr, [nTrials, nStimComp, 1]), [0,2,1]); # output is [nTrials x nStimComp x nFrames], so trans.
-    P3slow = np.add(phOffsetTile, stimPosTile);
     # fast way?
     P3Temp = np.transpose(np.add.outer(phOffset, stimFr), [0,2,1]); # result is [nTrials x nFrames x nStimComp], so transpose
     P[:,:,:,2]  = 2*np.pi*P3Temp; # P(:,2) describes relative location of the filters in time.
@@ -676,8 +673,8 @@ def SFMSimpleResp(S, channel, stimParams = [], expInd = 1, trialInf = None, excT
             stimParams['repeats'] = 10; # why 10? To match experimental #repetitions
 
     # Load the data structure
-    T = S['sfm'];
     if trialInf is None: # otherwise, we've passed in explicit trial information!
+      T = S['sfm'];
       trialInf = T['exp']['trial'];
 
     # Get preferred stimulus values
