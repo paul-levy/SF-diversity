@@ -7,6 +7,7 @@ import multiprocessing as mp
 import datetime
 import sys
 import warnings
+from functools import partial
 
 import pdb
 
@@ -57,6 +58,7 @@ else:
 params_glob = [];
 loss_glob = [];
 resp_glob = [];
+loss_perCell_glob = [];
 
 ###
 # TODO?: get_normPrms   - get the parameters for the normalization pool, depending on normType
@@ -427,7 +429,6 @@ def SFMSimpleResp_par(S, channel, stimParams = [], expInd = 1, trialInf = None, 
 
     # Compute simple cell response for all trials
     # HERE we multiprocess!
-    from functools import partial
     fn_perTi = partial(SFMSimpleResp_trial, channel=channel, trialInf=trialInfSlim, expInd=expInd, excType=excType, stimParams=[], lgnFrontParams=lgnFrontParams);
     nCpu = mp.cpu_count();
     with mp.Pool(processes = nCpu) as pool:
@@ -472,8 +473,6 @@ def SFMSimpleResp_matMul(S, channel, stimParams = [], expInd = 1, trialInf = Non
     # CHECK LINE BELOW
     prefTf = round(np.nanmean(trialInf['tf'][0]));     # in cycles per second
 
-    # Get directional selectivity - removed 7/18/17
-
     # Get derivative order in space and time
     dOrdTi = channel['dord']['ti'];
     if excType == 1:
@@ -485,8 +484,6 @@ def SFMSimpleResp_matMul(S, channel, stimParams = [], expInd = 1, trialInf = Non
     # unpack the LGN weights, but we'll only use if lgnFrontEnd > 0
     mWeight = channel['mWeight'];
     pWeight = 1-mWeight;
-
-    # Get aspect ratio in space - removed 7/18/17
 
     # Get spatial coordinates
     xCo = 0;                                                              # in visual degrees, centered on stimulus center
@@ -522,7 +519,7 @@ def SFMSimpleResp_matMul(S, channel, stimParams = [], expInd = 1, trialInf = Non
           nTrials = len(z['con'][0]); 
           # if we've defined our own stimuli, then we won't have "num"; just get number of trials from stim components
     
-    # set it zero
+    # set it zero by default
     M['simpleResp'] = np.zeros((nFrames, nTrials));
 
     DoGmodel = 2;
@@ -623,7 +620,6 @@ def SFMSimpleResp_matMul(S, channel, stimParams = [], expInd = 1, trialInf = Non
     # phase calculation -- 
     stimFr = np.divide(np.arange(nFrames), float(nFrames));
     phOffset = np.divide(stimPh, np.multiply(2*np.pi, stimTf));
-    # slow way?
     # fast way?
     P3Temp = np.transpose(np.add.outer(phOffset, stimFr), [0,2,1]); # result is [nTrials x nFrames x nStimComp], so transpose
     P[:,:,:,2]  = 2*np.pi*P3Temp; # P(:,2) describes relative location of the filters in time.
@@ -1295,7 +1291,14 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
     # USED ONLY IF lgnFrontEnd > 0
     # -1 = mWeight (with pWeight = 1-mWeight)
 
-    T = structureSFM['sfm'];
+    if 'sfm' in structureSFM: # then we passed in top-level dictionary for single cells
+      T = structureSFM['sfm'];
+      trialInf = T['exp']['trial'];
+      stimDur = hf.get_exp_params(expInd).stimDur;
+    # then we've passed in just the trial info -- building this to handle multiple cells!
+    elif 'ori' in structureSFM:
+      trialInf = structureSFM;
+      stimDur = hf.get_exp_params(expInd).stimDur;
 
     # Get parameter values
     nParams = hf.nParamsByType(normType, excType, lgnFrontEnd)
@@ -1390,11 +1393,11 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
           allParams = None;
 
         E = SFMSimpleResp_matMul(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd, allParams=allParams);
-        #E = SFMSimpleResp(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd, allParams=allParams); # here, we pass in the parameter list IF needed for getting the right LGN front end...
+        #Eslow = '''SFMSimpleResp(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd, allParams=allParams);''' # here, we pass in the parameter list IF needed for getting the right LGN front end...
 
         #import timeit
-        #etime = timeit.timeit(stmt=E, globals={'structureSFM': structureSFM, 'excChannel': excChannel, 'expInd': expInd, 'excType': excType, 'SFMSimpleResp': SFMSimpleResp, 'lgnFrontEnd': lgnFrontEnd, 'allParams': allParams}, number=25);
-        #eMMime = timeit.timeit(stmt=Emm, globals={'structureSFM': structureSFM, 'excChannel': excChannel, 'expInd': expInd, 'excType': excType, 'SFMSimpleResp_matMul': SFMSimpleResp_matMul, 'lgnFrontEnd': lgnFrontEnd, 'allParams': allParams}, number=25);
+        #time = timeit.timeit(stmt=Eslow, globals={'structureSFM': structureSFM, 'excChannel': excChannel, 'expInd': expInd, 'excType': excType, 'SFMSimpleResp': SFMSimpleResp, 'lgnFrontEnd': lgnFrontEnd, 'allParams': allParams}, number=25);
+        #eMMtime = timeit.timeit(stmt=E, globals={'structureSFM': structureSFM, 'excChannel': excChannel, 'expInd': expInd, 'excType': excType, 'SFMSimpleResp_matMul': SFMSimpleResp_matMul, 'lgnFrontEnd': lgnFrontEnd, 'allParams': allParams}, number=25);
 
         # Extract simple cell response (half-rectified linear filtering)
         Lexc = E['simpleResp']; # [nFrames x nTrials]
@@ -1418,7 +1421,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         rateModel     = respModel / T['exp']['trial']['duration'];
         # and get the spike count
         if overwriteSpikes is not None:
-          spikeCount = hf.get_spikes(T['exp']['trial'], rvcFits=rvcFits, expInd=expInd, overwriteSpikes=overwriteSpikes);
+          spikeCount = hf.get_spikes(trialInf, rvcFits=rvcFits, expInd=expInd, overwriteSpikes=overwriteSpikes);
         else:
           f1f0_rat = hf.compute_f1f0(T['exp']['trial'], cellNum, expInd, loc_data=None)[0];
           # TODO: should add line forcing F1 if LGN experiment...
@@ -1524,20 +1527,23 @@ def SFMGiveBof_joint(cells, structuresSFM, rvcFits, expInds, masksIn, params, no
   n_params = hf.nParamsByType(normType, excType, lgnFrontEnd);
   lgn_params = params[len(cells)*n_params:]
 
-  #pdb.set_trace();
-
   import timeit
   import textwrap
 
   if toPar:
 
-    from functools import partial
     sfmPart = partial(sfmToPartial, params=params, lgn_params=lgn_params, n_params=n_params, normType=normType, lossType=lossType, trackSteps=trackSteps, overwriteSpikes=overwriteSpikes, kMult=kMult, excType=excType, compute_varExpl=compute_varExpl, lgnFrontEnd=lgnFrontEnd)
-    #pdb.set_trace();
-    with _globalPool as pool:
+
+    nCpu = mp.cpu_count();
+    _currPool = mp.Pool(processes = nCpu)
+
+    with _currPool as pool:
       nllAsList = pool.starmap(sfmPart, zip(range(len(cells)), cells, structuresSFM, rvcFits, expInds, masksIn))
     cell_NLL = np.array(nllAsList)
     total_NLL = np.sum(nllAsList)
+    if trackSteps == True:
+      global loss_perCell_glob;
+      loss_perCell_glob.append(cell_NLL);
 
   else: # if NOT parallelized
     total_NLL = 0;
@@ -1961,7 +1967,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     normConst = normConst if initFromCurr==0 else curr_params[2];
     #respExp = 1 if initFromCurr==0 else curr_params[3];
     respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
-    respScalar = np.random.uniform(10, 200) if initFromCurr==0 else curr_params[4];
+    # easier to start with a small scalar and work up, rather than work down
+    respScalar = np.random.uniform(0.05, 0.25) if initFromCurr==0 else curr_params[4];
     noiseEarly = np.random.uniform(0.001, 0.01) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
     noiseLate = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[6];
     varGain = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
@@ -1970,7 +1977,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
       mWeight = np.random.uniform(0.25, 0.75) if initFromCurr==0 else curr_params[-1];
 
     if fitType == 1:
-      inhAsym = 0; 
+      inhAsym = 0;
     if fitType == 2:
       normMean = np.log10(pref_sf) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
       normStd = 1.5 if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
@@ -2304,32 +2311,8 @@ def setModel_joint(cellNums, expDir, lossType = 1, fitType = 1, initFromCurr = 1
         # why -1? Talked with Tony, he suggests starting with lower sigma rather than higher/non-saturating one
         normConst = -2; # i.e. c50 = 0.01 (1% contrast); yes, it's low...
 
-      ########
-      # 00 = preferred spatial frequency   (cycles per degree)
-      # if excType == 1:
-        # 01 = derivative order in space
-      # elif excType == 2:
-        # 01 = sigma for SF lower than sfPref
-        # -1-lgnFrontEnd = sigma for SF higher than sfPref (i.e. the last parameter)
-      # 02 = normalization constant        (log10 basis)
-      # 03 = response exponent
-      # 04 = response scalar
-      # 05 = early additive noise
-      # 06 = late additive noise
-      # 07 = variance of response gain - only used if lossType = 3
-      # if fitType == 2
-      # 08 = mean of (log)gaussian for normalization weights
-      # 09 = std of (log)gaussian for normalization weights
-      # if fitType == 3
-      # 08 = the offset of the c50 tuning curve which is bounded between [v_sigOffset, 1] || [0, 1]
-      # 09 = standard deviation of the gaussian to the left of the peak || >0.1
-      # 10 = "" to the right "" || >0.1
-      # 11 = peak of offset curve
-      # if fitType == 4
-      # 08 = mean of (log)gaussian for normalization weights
-      # 09/10 = std of (log)gaussian (to left/right) for normalization weights
-      # USED ONLY IF lgnFrontEnd == 1
-      # -1 = mWeight (with pWeight = 1-mWeight)
+      ######## PARAMETER ORDER
+      ### see SFMGiveBof
 
       if cellNum-1 in fitList:
         try:
@@ -2368,7 +2351,8 @@ def setModel_joint(cellNums, expDir, lossType = 1, fitType = 1, initFromCurr = 1
       normConst = normConst if initFromCurr==0 else curr_params[2];
       #respExp = 1 if initFromCurr==0 else curr_params[3];
       respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
-      respScalar = np.random.uniform(10, 200) if initFromCurr==0 else curr_params[4];
+      # easier to start with a small scalar and work up, rather than work down
+      respScalar = np.random.uniform(0.05, 0.25) if initFromCurr==0 else curr_params[4];
       noiseEarly = np.random.uniform(0.001, 0.01) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
       noiseLate = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[6];
       varGain = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
@@ -2460,6 +2444,13 @@ def setModel_joint(cellNums, expDir, lossType = 1, fitType = 1, initFromCurr = 1
     ## NOW: set up the objective function
     obj = lambda params: SFMGiveBof_joint(cellNums, SFMs, rvcs, expInds, masksIn, params, normType=fitType, lossType=lossType, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult, excType=excType, lgnFrontEnd=lgnFrontEnd, toPar=toPar)[0];
 
+    noPar = '''SFMGiveBof_joint(cellNums, SFMs, rvcs, expInds, masksIn, params, normType=fitType, lossType=lossType, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult, excType=excType, lgnFrontEnd=lgnFrontEnd, toPar=0)[0];'''
+    par = '''SFMGiveBof_joint(cellNums, SFMs, rvcs, expInds, masksIn, params, normType=fitType, lossType=lossType, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult, excType=excType, lgnFrontEnd=lgnFrontEnd, toPar=1)[0];'''
+
+    import timeit
+    timePar = timeit.timeit(stmt=noPar, globals={'cellNums': cellNums, 'SFMs': SFMs, 'rvcs': rvcs, 'expInds': expInds, 'masksIn': masksIn, 'params': all_init_params, 'fitType': fitType, 'lossType':lossType, 'trackSteps': trackSteps, 'recovSpikes': recovSpikes, 'kMult': kMult, 'excType': excType, 'lgnFrontEnd': lgnFrontEnd, 'SFMGiveBof_joint': SFMGiveBof_joint}, number=2);
+    timeNo = timeit.timeit(stmt=par, globals={'cellNums': cellNums, 'SFMs': SFMs, 'rvcs': rvcs, 'expInds': expInds, 'masksIn': masksIn, 'params': all_init_params, 'fitType': fitType, 'lossType':lossType, 'trackSteps': trackSteps, 'recovSpikes': recovSpikes, 'kMult': kMult, 'excType': excType, 'lgnFrontEnd': lgnFrontEnd, 'SFMGiveBof_joint': SFMGiveBof_joint}, number=2);
+
     print('...now minimizing!'); 
     if 'TNC' in fL_name:
       tomin = opt.minimize(obj, all_init_params, bounds=all_bounds, method='TNC');
@@ -2508,6 +2499,17 @@ def setModel_joint(cellNums, expDir, lossType = 1, fitType = 1, initFromCurr = 1
         fitList[cellNum-1]['opt'] = tomin;
     else:
       print('new NLL not less than currNLL, not saving result, but updating overall fit list (i.e. tracking each fit)');
+      if trackSteps:
+        if os.path.exists(loc_data + stepListName):
+          stepList = hf.np_smart_load(str(loc_data + stepListName));
+        else:
+          stepList = dict();
+        stepList[cellNum-1] = dict();
+        stepList[cellNum-1]['params'] = params_glob;
+        stepList[cellNum-1]['loss'] = loss_glob; 
+        stepList[cellNum-1]['loss_byCell'] = loss_perCell_glob;
+        stepList[cellNum-1]['resp'] = resp_glob;
+        numpy.save(loc_data + stepListName, stepList);
 
     numpy.save(loc_data + fitListName, fitList);
 
@@ -2556,7 +2558,7 @@ if __name__ == '__main__':
       # Then, create the pool globally
       if toPar == 1:
         nCpu = mp.cpu_count()
-        _globalPool = mp.Pool(processes = nCpu)
+        #_globalPool = mp.Pool(processes = nCpu)
     else:
       toPar = False;
 

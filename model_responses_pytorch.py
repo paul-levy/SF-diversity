@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from torch.utils import data as torchdata
+
 import numpy as np
 
 import helper_fcns as hf
@@ -13,7 +15,7 @@ import seaborn as sns
 torch.autograd.set_detect_anomaly(True)
 
 #
-globalMin = 1e-4
+globalMin = 1e-4 # what do we "cut off" the model response at? should be >0 but small
 
 ### Helper -- from Billy
 def _cast_as_tensor(x, device='cpu', dtype=torch.float32):
@@ -91,8 +93,44 @@ def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
 
 ### Datawrapper/loader
 
-class dataWrapper(torchdata.Dataset):   
+def process_data(coreExp, expInd, respMeasure=0, respOverwrite=None):
+  trInf = dict();
+
+  ### first, process the raw data such that trInf is [nTr x nComp]
+  if expInd == -1: # i.e. sfBB
+    trialInf = coreExp['trial'];
+    whereNotBlank = np.where(np.logical_or(trialInf['maskOn'], trialInf['baseOn']))[0]
+    if respMeasure == 0:
+      resp = coreExp['spikeCounts'][whereNotBlank];
+    elif respMeasure == 1: # then we're getting F1 -- first at baseTF, then maskTF
+      resp = np.vstack((coreExp['f1_base'], coreExp['f1_mask'])).transpose().shape;
+  elif expInd >= 0: # i.e. sfMix*
+    trialInf = coreExp['sfm']['exp']['trial'];
+    whereNotBlank = np.where(~np.isnan(np.sum(trialInf['ori'], 0)))[0];
+    # TODO -- put in the proper responses...
+    if respOverwrite is not None:
+      spikes = respOverwrite;
+    else:
+      if respMeasure == 0:
+        spikes = trialInf['spikeCount'];
+      elif respMeasure == 1:
+        spikes = trialInf['f1'];
+    resp = spikes[whereNan];
+
+  trInf['num'] = whereNotBlank;
+  trInf['ori'] = np.transpose(np.vstack(trialInf['ori']), (1,0))[whereNotBlank, :]
+  trInf['tf'] = np.transpose(np.vstack(trialInf['tf']), (1,0))[whereNotBlank, :]
+  trInf['ph'] = np.transpose(np.vstack(trialInf['ph']), (1,0))[whereNotBlank, :]
+  trInf['sf'] = np.transpose(np.vstack(trialInf['sf']), (1,0))[whereNotBlank, :]
+  trInf['con'] = np.transpose(np.vstack(trialInf['con']), (1,0))[whereNotBlank, :]
+
+  return trInf, resp;
+
+class dataWrapper(torchdata.Dataset):
     def __init__(self, trInf, resp, device='cpu'):
+        # if respMeasure == 0, then we're getting DC; otherwise, F1
+        # respOverwrite means overwrite the responses; used only for expInd>=0 for now
+
         super().__init__();
 
         self.trInf = trInf;
@@ -401,7 +439,7 @@ class sfNormMod(torch.nn.Module):
 
     return respPerTr; # will be [nTrials] -- later, will ensure right output size during operation
 
-  def forward(self, trialInf):
+  def respPerCell(self, trialInf):
     # excitatory filter, first
     Lexc = self.simpleResp_matMul(trialInf); # [nFrames x nTrials]
     #perTrial = torch.clamp(resps.mean(0), min=globalMin); # nF
@@ -422,11 +460,16 @@ class sfNormMod(torch.nn.Module):
 
     return respModel;
 
+  def forward(self, trialInf):
+    respModel = self.respPerCell(trialInf);
+
+    return respModel;
+
 ### End of class (sfNormMod)
     
 def loss_sfNormMod(respModel, respData, lossType=1):
 
-  if lossType == 1:
+  if lossType == 1: # sqrt
       #mask = (~torch.isnan(respModel)) & (~torch.isnan(respData));
       #lsq = torch.pow(torch.sign(respModel[mask])*torch.sqrt(torch.abs(respModel[mask])) - torch.sign(respData[mask])*torch.sqrt(torch.abs(respData[mask])), 2);
       
@@ -434,4 +477,113 @@ def loss_sfNormMod(respModel, respData, lossType=1):
 
       NLL = torch.mean(lsq);
 
+  if lossType == 2: # poiss
+      poiss_llh = numpy.log(poisson.pmf(spikeCount[mask], respModel[mask]));
+      nll_notSum = poiss_llh;
+      NLL = torch.mean(-poiss_llh);
+
   return NLL;
+
+### Now, actually do the optimization!
+
+### Now, the optimization
+# - what to specify...
+def setParams():
+  ''' Set the parameters of the model '''
+
+def setModel(max_epochs=1e3, learning_rate=1e-2, batch_size=200):
+ 
+  ### set parameters
+  # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
+  prefSfEst = 1;
+  normConst = -2;
+  if fitType == 1:
+    inhAsym = 0;
+  if fitType == 2:
+    normMean = np.log10(prefSfEst) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
+    normStd = 1.5 if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
+
+  # --- then, set up each parameter
+  pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
+  if excType == 1:
+    dOrdSp = np.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
+  elif excType == 2:
+    sigLow = np.random.uniform(1, 4) if initFromCurr==0 else curr_params[1];
+    sigHigh = np.random.uniform(0.1, 2) if initFromCurr==0 else curr_params[-1-numpy.sign(lgnFrontEnd)]; # if lgnFrontEnd == 0, then it's the last param; otherwise it's the 2nd to last param
+  normConst = normConst if initFromCurr==0 else curr_params[2];
+  respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
+  # easier to start with a small scalar and work up, rather than work down
+  respScalar = np.random.uniform(0.05, 0.25) if initFromCurr==0 else curr_params[4];
+  noiseEarly = np.random.uniform(0.001, 0.01) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
+  noiseLate = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[6];
+  varGain = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
+  if lgnFrontEnd > 0:
+    # Now, the LGN weighting 
+    mWeight = np.random.uniform(0.25, 0.75) if initFromCurr==0 else curr_params[-1];
+  else:
+    mWeight = np.nan
+
+  # --- finally, actually create the parameter list
+  if fitType == 1:
+    if excType == 1:
+      param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym, mWeight);
+    elif excType == 2:
+      param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym, sigHigh, mWeight);
+  elif fitType == 2:
+    if excType == 1:
+      param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, mWeight);
+    elif excType == 2:
+      param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, sigHigh, mWeight);
+
+  ### define model, grab training parameters
+  model = mrpt.sfNormMod(param_list, expInd, excType=excType, normType=normType, lossType=lossType, lgnFrontEnd=lgnFrontEnd)
+
+  training_parameters = [p for p in model.parameters() if p.requires_grad]
+
+  ###  data wrapping
+  dw = dataWrapper(expInfo);
+  dataloader = torchdata.DataLoader(dw, batch_size)
+
+  ### then set up the optimization
+  # optimizer = torch.optim.SGD(training_parameters, lr=learning_rate)
+  optimizer = torch.optim.Adam(training_parameters, amsgrad=True, lr=learning_rate, )
+  # - then data
+  # - predefine some arrays for tracking loss
+  loss_history = []
+  start_time = time.time()
+  time_history = []
+  model_history = []
+  hessian_history = []
+
+  first_pred = model(trInf);
+  # print(first_pred)
+
+  for t in range(max_epochs):
+      optimizer.zero_grad()
+
+      loss_history.append([])
+      time_history.append([])
+
+      for bb, (feature, target) in enumerate(dataloader):
+          predictions = model(feature)
+          loss_curr = mrpt.loss_sfNormMod(predictions, target, model.lossType)
+
+          if np.mod(t,100)==0 and bb==0:
+              print('\n****** STEP %d *********' % t)
+              prms = model.named_parameters()
+              [print(x, '\n') for x in prms];
+              print(loss_curr.item())
+              print(loss_curr.grad)
+
+          loss_history[t].append(loss_curr.item())
+          time_history[t].append(time.time() - start_time)
+          if np.isnan(loss_curr.item()) or np.isinf(loss_curr.item()):
+              # we raise an exception here and then try again.
+              raise Exception("Loss is nan or inf on epoch %s, batch %s!" % (t, 0))
+
+  #         loss_curr.backward()
+          loss_curr.backward(retain_graph=True)
+          optimizer.step()
+
+      model.eval()
+      model.train()
