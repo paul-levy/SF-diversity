@@ -62,17 +62,17 @@ source activate lcv-python
 
 for run in {1..8}; do
   # run 
-  python3.6 model_responses.py $run V1/ 2 1 2 0 -1 0 0.10 1 -1 & 
-  python3.6 model_responses.py $run V1/ 2 1 1 1 -1 0 0.10 1 -1 & # lgn (type a)
-  python3.6 model_responses.py $run V1/ 2 1 1 2 -1 0 0.10 1 -1 & # lgn type B
+  python3.6 model_responses.py $run V1/ 2 2 2 0 0 0 0.10 1 -1 & 
+  python3.6 model_responses.py $run V1/ 2 2 1 1 0 0 0.10 1 -1 & # lgn (type a)
+  python3.6 model_responses.py $run V1/ 2 2 1 2 0 0 0.10 1 -1 & # lgn type B
 
-  python3.6 model_responses.py $run V1_orig/ 2 1 2 0 -1 0 0.10 1 -1 &
-  python3.6 model_responses.py $run V1_orig/ 2 1 1 1 -1 0 0.10 1 -1 &
-  python3.6 model_responses.py $run V1_orig/ 2 1 1 2 -1 0 0.10 1 -1 &
+  python3.6 model_responses.py $run V1_orig/ 2 2 2 0 0 0 0.10 1 -1 &
+  python3.6 model_responses.py $run V1_orig/ 2 2 1 1 0 0 0.10 1 -1 &
+  python3.6 model_responses.py $run V1_orig/ 2 2 1 2 0 0 0.10 1 -1 &
 
-  python3.6 model_responses.py $run altExp/ 2 1 2 0 -1 0 0.10 1 -1 &
-  python3.6 model_responses.py $run altExp/ 2 1 1 1 -1 0 0.10 1 -1 &
-  python3.6 model_responses.py $run altExp/ 2 1 1 2 -1 0 0.10 1 -1 &
+  python3.6 model_responses.py $run altExp/ 2 2 2 0 0 0 0.10 1 -1 &
+  python3.6 model_responses.py $run altExp/ 2 2 1 1 0 0 0.10 1 -1 &
+  python3.6 model_responses.py $run altExp/ 2 2 1 2 0 0 0.10 1 -1 &
 
 done
 

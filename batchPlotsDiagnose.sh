@@ -18,23 +18,24 @@
 # 8 param is diffPlot (i.e. plot everything relative to flat model prediction)
 # 9 param is interpModel (i.e. interpolate model?)
 # 10th param is kMult (0.01, 0.05, 0.10, usually...)
-# 11th param is std/sem as variance measure: (1 sem (default))
+# 11th param is fixRespExp (None is default, pass in negative number for None)
+# 12th param is std/sem as variance measure: (1 sem (default))
 
 source activate lcv-python
 
 for run in {1..8}
 do
-  python3.6 plot_diagnose.py $run 1 1 V1/ 0 1 1 0 0 0.10 1 & # no diff, not interpolated
-  python3.6 plot_diagnose.py $run 1 1 V1_orig/ 0 1 1 0 0 0.10 1 & # no diff, not interpolated
-  python3.6 plot_diagnose.py $run 1 1 altExp/ 0 1 1 0 0 0.10 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose.py $run 1 1 V1/ 0 1 1 0 0 0.10 -1 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose.py $run 1 1 V1_orig/ 0 1 1 0 0 0.10 -1 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose.py $run 1 1 altExp/ 0 1 1 0 0 0.10 -1 1 & # no diff, not interpolated
 
-  python3.6 plot_diagnose.py $run 2 1 V1/ 0 1 1 0 0 0.10 1 & # no diff, not interpolated
-  python3.6 plot_diagnose.py $run 2 1 V1_orig/ 0 1 1 0 0 0.10 1 & # no diff, not interpolated
-  python3.6 plot_diagnose.py $run 2 1 altExp/ 0 1 1 0 0 0.10 1 & # no diff, not interpolated
+  python3.6 plot_diagnose.py $run 2 1 V1/ 0 1 1 0 0 0.10 -1 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose.py $run 2 1 V1_orig/ 0 1 1 0 0 0.10 -1 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose.py $run 2 1 altExp/ 0 1 1 0 0 0.10 -1 1 & # no diff, not interpolated
 
-  python3.6 plot_diagnose.py $run 2 1 V1/ 1 1 1 0 0 0.10 1 & # no diff, not interpolated
-  python3.6 plot_diagnose.py $run 2 1 V1_orig/ 1 1 1 0 0 0.10 1 & # no diff, not interpolated
-  python3.6 plot_diagnose.py $run 2 1 altExp/ 1 1 1 0 0 0.10 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose.py $run 2 1 V1/ 1 1 1 0 0 0.10 -1 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose.py $run 2 1 V1_orig/ 1 1 1 0 0 0.10 -1 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose.py $run 2 1 altExp/ 1 1 1 0 0 0.10 -1 1 & # no diff, not interpolated
 
   #python3.6 plot_diagnose.py $run 2 1 V1/ 1 1 0 0 1 & # no diff, not interpolated
   #python3.6 plot_diagnose.py $run 2 1 altExp/ 1 1 0 0 1 & # no diff, not interpolated

@@ -339,6 +339,17 @@ def get_exp_params(expInd, forceDir=None):
             self.stimDur   = 1; # in seconds
           elif expInd == 5: # V1 "halfInt" - same as expInd = 4, but with halfinteger TFs
             self.stimDur   = 2; # in seconds
+        ### sfBB
+        elif expInd == -1: # sfBB for now...
+          self.nStimComp = 2;
+          self.nFamilies = -1; # does not apply here...
+          self.comps     = [2]
+          self.nCons     = 7;
+          self.nSfs      = 7;
+          self.nCells    = 1;
+          self.dir       = 'V1_BB/'
+          self.fps       = 120; # frame rate (in Hz, i.e. frames per second)
+          self.stimDur   = 1; # in seconds
 
         if forceDir is not None:
           self.dir       = forceDir;
