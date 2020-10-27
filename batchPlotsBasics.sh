@@ -10,9 +10,12 @@ source activate lcv-python
 # altExp   - standard, 8 cells
 # LGN/ - standard, 77 cells
 
-for run in {1..59}
+### expDir/ compareSfMix forceSimple
+
+for run in {1..20}
 do
-  python plot_basics.py $run V1_orig/ &
+  python plot_basics.py $run V1_BB/ 0 0 &
+  python plot_basics.py $run V1_BB/ 0 1 &
 done
 
 # leave a blank line at the end
