@@ -36,6 +36,11 @@ rcParams['font.style'] = 'oblique';
 
 cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2];
+compareSfMix = int(sys.argv[3]);
+if len(sys.argv) > 4:
+  forceSimple = int(sys.argv[4]);
+else:
+  forceSimple = None;
 
 rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
 rvcMod = 1; # naka rushton (1); 
@@ -61,47 +66,52 @@ except:
 nrow, ncol = 3, 2;
 f, ax = plt.subplots(nrow, ncol, figsize=(ncol*10, nrow*10));
 
-#############
-### Let's load the sfMix responses, just for comparison (we can compare sf and rvc responses)
-#############
+if compareSfMix == 1:
 
-S = hf.np_smart_load(data_loc + cellName + '_sfm.npy')
-expData = S['sfm']['exp']['trial'];
+  #############
+  ### Let's load the sfMix responses, just for comparison (we can compare sf and rvc responses)
+  #############
 
-### compute f1f0 ratio, and load the corresponding F0 or F1 responses
-f1f0_rat = hf.compute_f1f0(expData, cellNum, expInd, data_loc)[0];
+  S = hf.np_smart_load(data_loc + cellName + '_sfm.npy')
+  expData = S['sfm']['exp']['trial'];
 
-if f1f0_rat > 1 or expDir == 'LGN/': # i.e. if we're looking at a simple cell, then let's get F1
-  if rvcName is not None:
-    rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcName, rvcMod=rvcMod);
-  else:
-    rvcFits = None
-  spikes_byComp = hf.get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
-  spikes = np.array([np.sum(x) for x in spikes_byComp]);
-  rates = True; # when we get the spikes from rvcFits, they've already been converted into rates (in hf.get_all_fft)
-  baseline_sfMix = None; # f1 has no "DC", yadig?
-else: # otherwise, if it's complex, just get F0
-  spikes = hf.get_spikes(expData, get_f0=1, rvcFits=None, expInd=expInd);
-  rates = False; # get_spikes without rvcFits is directly from spikeCount, which is counts, not rates!
-  baseline_sfMix = hf.blankResp(expData, expInd)[0]; # we'll plot the spontaneous rate
-  # why mult by stimDur? well, spikes are not rates but baseline is, so we convert baseline to count (i.e. not rate, too)
-  spikes = spikes - baseline_sfMix*hf.get_exp_params(expInd).stimDur; 
+  ### compute f1f0 ratio, and load the corresponding F0 or F1 responses
+  f1f0_rat = hf.compute_f1f0(expData, cellNum, expInd, data_loc)[0];
 
-_, _, respOrg, respAll = hf.organize_resp(spikes, expData, expInd);
-resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates);
-predResps = resps[2];
+  if f1f0_rat > 1 or expDir == 'LGN/': # i.e. if we're looking at a simple cell, then let's get F1
+    if rvcName is not None:
+      rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcName, rvcMod=rvcMod);
+    else:
+      rvcFits = None
+    spikes_byComp = hf.get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
+    spikes = np.array([np.sum(x) for x in spikes_byComp]);
+    rates = True; # when we get the spikes from rvcFits, they've already been converted into rates (in hf.get_all_fft)
+    baseline_sfMix = None; # f1 has no "DC", yadig?
+  else: # otherwise, if it's complex, just get F0
+    spikes = hf.get_spikes(expData, get_f0=1, rvcFits=None, expInd=expInd);
+    rates = False; # get_spikes without rvcFits is directly from spikeCount, which is counts, not rates!
+    baseline_sfMix = hf.blankResp(expData, expInd)[0]; # we'll plot the spontaneous rate
+    # why mult by stimDur? well, spikes are not rates but baseline is, so we convert baseline to count (i.e. not rate, too)
+    spikes = spikes - baseline_sfMix*hf.get_exp_params(expInd).stimDur; 
 
-respMean = resps[0]; # equivalent to resps[0];
-respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
-# compute SEM, too
-findNaN = np.isnan(respAll);
-nonNaN  = np.sum(findNaN == False, axis=-1);
-respSem = np.nanstd(respAll, -1) / np.sqrt(nonNaN);
+  _, _, respOrg, respAll = hf.organize_resp(spikes, expData, expInd);
+  resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates);
+  predResps = resps[2];
 
-# organize stimulus values
-all_disps = stimVals[0];
-all_cons = stimVals[1];
-all_sfs = stimVals[2];
+  respMean = resps[0]; # equivalent to resps[0];
+  respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
+  # compute SEM, too
+  findNaN = np.isnan(respAll);
+  nonNaN  = np.sum(findNaN == False, axis=-1);
+  respSem = np.nanstd(respAll, -1) / np.sqrt(nonNaN);
+
+  # organize stimulus values
+  all_disps = stimVals[0];
+  all_cons = stimVals[1];
+  all_sfs = stimVals[2];
+else:
+  f1f0_rat = np.nan;
+  baseline_sfMix = None;
 
 #############
 ### Load the "basics" information
@@ -112,7 +122,6 @@ all_sfs = stimVals[2];
 #  forceSimple = 1;
 #else:
 #  forceSimple = 0;
-forceSimple = None; # otherwise, determined per cell, distinct from sfMix simple/complex classification
 ###
 
 basic_names, basic_order = dataList['basicProgName'][cellNum-1], dataList['basicProgOrder']
@@ -131,10 +140,14 @@ except:
     pass
 
 ### get the sfRef and rvcRef - i.e. single grating, high contrast/prefSf SF/RVC tuning
-sfRef = hf.nan_rm(respMean[0, :, -1]); # high contrast tuning
-sfRefSEM = hf.nan_rm(respSem[0, :, -1]);
-sfPeak = np.argmax(sfRef); # stupid/simple, but just get the rvc for the max response
-rvcRef_sf = all_sfs[sfPeak];
+if compareSfMix == 1:
+  sfRef = hf.nan_rm(respMean[0, :, -1]); # high contrast tuning
+  sfRefSEM = hf.nan_rm(respSem[0, :, -1]);
+  sfPeak = np.argmax(sfRef); # stupid/simple, but just get the rvc for the max response
+  rvcRef_sf = all_sfs[sfPeak];
+else:
+  sfPeak = None;
+  rvcRef_sf = None;
 # now, get the rvcRef, if possible
 try:
   rvc10_sf = np.unique(rvc['rvc_exp']['byTrial']['sf']);
@@ -145,10 +158,12 @@ except:
   sfComp = None;
   rvcComp_sf = np.nan;
 # now, let's get two RVCs - one at nearest sf to what was used in rvc10, one at peak sfMix response 
-rvcRef_sfs = [rvcRef_sf, rvcComp_sf];
-v_cons_single = val_con_by_disp[0]
-rvcRefs = [hf.nan_rm(respMean[0, sfInd, v_cons_single]) for sfInd in (sfPeak, sfComp)];
-rvcRefsSEM = [hf.nan_rm(respSem[0, sfInd, v_cons_single]) for sfInd in (sfPeak, sfComp)];
+if compareSfMix == 1:
+  rvcRef_sfs = [rvcRef_sf, rvcComp_sf];
+  v_cons_single = val_con_by_disp[0]
+  rvcRefs = [hf.nan_rm(respMean[0, sfInd, v_cons_single]) for sfInd in (sfPeak, sfComp)];
+  rvcRefsSEM = [hf.nan_rm(respSem[0, sfInd, v_cons_single]) for sfInd in (sfPeak, sfComp)];
+# otherwise, we'll ignore these values later on...
 rvcRefsColor = ['r', 'b']
   
 f.suptitle('%s [%s]: f1f0 basic|sfMix (%.2f|%.2f)' % (cellType, cellName, f1f0_basic, f1f0_rat));
@@ -247,9 +262,10 @@ if sf is not None:
   ax[1, 1].semilogx(plt_sfs, mod_resp, 'k-')
   ax[1, 1].set_title('SF: Peak %.1f cyc/deg, bw %.1f oct' % (sf['sfPref'], sf['sfBW_oct']))
   ax[1, 1].set_xlabel('spatial frequency (cyc/sec)');
-# also plot the sfMix high contrast, single grating sf tuning
-### plot reference tuning [row 1 (i.e. 2nd row)]
-ax[1, 1].errorbar(all_sfs, sfRef, sfRefSEM, color='r', fmt='o', label='ref. tuning (d0, high con)', clip_on=False)
+if compareSfMix == 1:
+  # also plot the sfMix high contrast, single grating sf tuning
+  ### plot reference tuning [row 1 (i.e. 2nd row)]
+  ax[1, 1].errorbar(all_sfs, sfRef, sfRefSEM, color='r', fmt='o', label='ref. tuning (d0, high con)', clip_on=False)
 ax[1, 1].legend();
 
 #############
@@ -297,7 +313,14 @@ sns.despine(fig=f, offset=10);
 #############
 ### Finally, save
 #############
-saveName = "/cell_%03d.pdf" % (cellNum)
+if forceSimple is None:
+  suff = '';
+elif forceSimple == 0:
+  suff ='_DC';
+elif forceSimple == 1:
+  suff = '_F1';
+
+saveName = "/cell_%03d%s.pdf" % (cellNum, suff)
 full_save = os.path.dirname(str(save_loc + 'basics/'));
 if not os.path.exists(full_save):
   os.makedirs(full_save);

@@ -55,8 +55,16 @@ rvcMod   = int(sys.argv[7]); # 0/1/2 (see hf.rvc_fit_name)
 diffPlot = int(sys.argv[8]);
 intpMod  = int(sys.argv[9]);
 kMult  = float(sys.argv[10]);
+
 if len(sys.argv) > 11:
-  respVar = int(sys.argv[11]);
+  fixRespExp = float(sys.argv[11]);
+  if fixRespExp <= 0: # this is the code to not fix the respExp
+    fixRespExp = None;
+else:
+  fixRespExp = None; # default (see modCompare.ipynb for details)
+
+if len(sys.argv) > 12:
+  respVar = int(sys.argv[12]);
 else:
   respVar = 1;
 
