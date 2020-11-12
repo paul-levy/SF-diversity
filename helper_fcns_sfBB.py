@@ -6,6 +6,8 @@ import pdb
 ### Similar to helper_fcns, but meant specifically for the sfBB_* series of experiments
 
 ### Organizing ###
+# get_resp_str - return 'dc' or 'f1' depending in which response measure we're using
+# get_mask_base_inds - the answer is in the name! 0 index for mask, 1 for base (when array is [...,2]
 # get_baseOnly_resp - get the response to the base stimulus ONLY
 # get_mask_resp - get the response to the mask OR mask+base at either the base or mask TF
 
@@ -14,9 +16,35 @@ import pdb
 
 ### ORGANIZING ###
 
-def get_baseOnly_resp(expInfo):
-  ''' returns the distribution of responses, mean/s.e.m. and unique sfXcon for each base stimulus in the sfBB_* series
+def get_resp_str(respMeasure): 
+  # return 'dc' or 'f1' depending in which response measure we're using
+  if respMeasure == 0:
+    return 'dc';
+  elif respMeasure == 1:
+    return 'f1';
+  else:
+    return 'ERROR';
+
+def get_mask_base_inds():
+  return 0,1; # we return responses as mask (i.e. [:,0]), then base (i.e. [:,1])
+
+def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None):
+  ''' returns the distribution of responses, mean/s.e.m. and unique sfXcon for each base stimulus in the sfBB_* serie
+      -- dc_resp; f1_base --> use to overwrite the spikes in expInfo (e.g. model responses)
+      ---- if passing in the above, should also include val_trials (list of valid trial indices), since
+           the model is not evaulated for all trials
   '''
+
+  if dc_resp is not None:
+    dc_resp = dc_resp;
+  else:
+    dc_resp = expInfo['spikeCounts']
+  if f1_base is not None:
+    f1_base = f1_base;
+  else:
+    f1_base = expInfo['f1_base'];
+  if val_trials is None: # otherwise, we've defined which trials matter
+    val_trials = np.arange(expInfo['trial']['con'].shape[1]); # i.e. how many trials
 
   byTrial = expInfo['trial'];
 
@@ -33,9 +61,12 @@ def get_baseOnly_resp(expInfo):
 
       # we have the unique pairs, now cycle through and do the same thing here we did with the other base stimulus....
       baseSf_curr, baseCon_curr = up;
-      baseOnly_curr = np.logical_and(baseOnlyTr, np.logical_and(byTrial['sf'][1,:]==baseSf_curr,
-                                                               byTrial['con'][1,:]==baseCon_curr))
-      baseDC, baseF1 = expInfo['spikeCounts'][baseOnly_curr], expInfo['f1_base'][baseOnly_curr];
+      base_match = np.logical_and(byTrial['sf'][1,:]==baseSf_curr,
+                                           byTrial['con'][1,:]==baseCon_curr);
+
+      # NOTE: We do all indexing in logicals until the end, where we align it into the length of val_trials
+      baseOnly_curr = np.where(np.logical_and(baseOnlyTr, base_match)[val_trials])[0];
+      baseDC, baseF1 = dc_resp[baseOnly_curr], f1_base[baseOnly_curr];
 
       baseResp_dc.append(baseDC); baseResp_f1.append(baseF1);
 
@@ -45,11 +76,29 @@ def get_baseOnly_resp(expInfo):
   return [baseResp_dc, baseResp_f1], [baseSummary_dc, baseSummary_f1], unique_pairs;
 
 
-def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0):
+def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None):
   ''' return the DC, F1 matrices [mean, s.e.m.] for responses to the mask only in the sfBB_* series 
       For programs (e.g. sfBB_varSF) with multiple base conditions, the order returned here is guaranteed
       to be the same as the unique base conditions given in get_baseOnly_resp
+      -- dc_resp; f1_base/mask --> use to overwrite the spikes in expInfo (e.g. model responses)
+      ---- if passing in the above, should also include val_trials (list of valid trial indices), since
+           the model is not evaulated for all trials
   '''
+
+  if dc_resp is not None:
+    dc_resp = dc_resp;
+  else:
+    dc_resp = expInfo['spikeCounts']
+  if f1_base is not None:
+    f1_base = f1_base;
+  else:
+    f1_base = expInfo['f1_base'];
+  if f1_mask is not None:
+    f1_mask = f1_mask;
+  else:
+    f1_mask = expInfo['f1_mask'];
+  if val_trials is None: # otherwise, we've defined which trials matter
+    val_trials = np.arange(expInfo['trial']['con'].shape[1]); # i.e. how many trials
 
   maxTr = 20; # we assume that the max # of trials in any condition will be this value
   conDig = 3; # round contrast to nearest thousandth (i.e. 0.001)
@@ -85,27 +134,27 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0):
     if withBase == 1: # then subset based on the particular base condition
       # we have the unique pairs, now cycle through and do the same thing here we did with the other base stimulus....
       baseSf_curr, baseCon_curr = baseConds[up];
-      currTr = np.logical_and(baseMatch, np.logical_and(byTrial['sf'][1,:]==baseSf_curr, 
-                                                        byTrial['con'][1,:]==baseCon_curr));
+      currTr = np.logical_and(baseMatch, np.logical_and(byTrial['sf'][1,:]==baseSf_curr,
+                                                                             byTrial['con'][1,:]==baseCon_curr));
     else:
       currTr = baseMatch;
-
 
     for mcI, mC in enumerate(maskCon):
         conOk = (np.round(byTrial['con'][0,:], conDig) == mC)
         for msI, mS in enumerate(maskSf):
             sfOk = (byTrial['sf'][0,:] == mS)
-            trialsOk = np.logical_and(currTr, np.logical_and(conOk, sfOk));
+            # NOTE: We do all indexing in logicals until the end, where we align it into the length of val_trials
+            trialsOk = np.where(np.logical_and(currTr, np.logical_and(conOk, sfOk))[val_trials])[0];
 
-            currDC = expInfo['spikeCounts'][trialsOk];
+            currDC = dc_resp[trialsOk];
             nTr = len(currDC);
 
             if maskF1 == 1:
-              currF1 = expInfo['f1_mask'][trialsOk];
+              currF1 = f1_mask[trialsOk];
             else:
-              currF1 = expInfo['f1_base'][trialsOk];
+              currF1 = f1_base[trialsOk];
 
-            respMatrixDCall[mcI, msI, 0:nTr] = currDC;            
+            respMatrixDCall[mcI, msI, 0:nTr] = currDC;
             respMatrixF1all[mcI, msI, 0:nTr] = currF1;
 
             dcMean, f1Mean = np.mean(currDC), np.mean(currF1)
@@ -172,3 +221,6 @@ def compute_f1f0(trial_inf):
   f1rate_pos = f1all[f0rate_posInd];
 
   return np.nanmean(np.divide(f1rate_pos, f0rate_pos)), f0all, f1all, f0_rates, f1_rates;
+
+#def organize_modResp(modParams):
+
