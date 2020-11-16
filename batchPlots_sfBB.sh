@@ -27,6 +27,7 @@ do
   # --------------------------e-l--dir----dif--kmul---sem-----
   # ------------------------------------lgn-inp----rExp-------
   python3.6 plot_sfBB.py $run 2 1 V1_BB/ 1 0 0 0.05 -1 1 & # no diff, not interpolated
+  python3.6 plot_sfBB.py $run 2 2 V1_BB/ 1 0 0 0.05 -1 1 & # no diff, not interpolated
 
 done
 

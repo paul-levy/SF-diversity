@@ -98,9 +98,11 @@ else:
 expName = hf.get_datalist(expDir);
 ### FITLIST
 if excType == 1:
-  fitBase = 'fitList_pyt_200417'; # excType 1
+  #fitBase = 'fitList_pyt_200417'; # excType 1
+  fitBase = 'fitList_pyt_201017'; # excType 1
 elif excType == 2:
-  fitBase = 'fitList_pyt_200507'; # excType 2
+  #fitBase = 'fitList_pyt_200507'; # excType 2
+  fitBase = 'fitList_pyt_201107'; # excType 2
 else:
   fitBase = None;
 
@@ -525,6 +527,8 @@ pdfSv.close()
 ## var* (if applicable)
 #######################
 
+'''
+
 ### TODO: Must make fits to sfBB_var* expts...
 
 # first, load the sfBB_core experiment to get reference tuning
@@ -770,3 +774,5 @@ for wV in whichVar: # if len(whichVar) == 0, nothing will happen
         pdfSv.savefig(f)
         plt.close(f)
         pdfSv.close()
+
+'''

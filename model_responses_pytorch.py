@@ -24,7 +24,8 @@ torch.autograd.set_detect_anomaly(True)
 # Some global things...
 fall2020_adj = 1;
 if fall2020_adj:
-  globalMin = 1e-1 # what do we "cut off" the model response at? should be >0 but small
+  globalMin = 1e-6 # what do we "cut off" the model response at? should be >0 but small
+  #globalMin = 1e-1 # what do we "cut off" the model response at? should be >0 but small
 else:
   globalMin = 1e-6 # what do we "cut off" the model response at? should be >0 but small
 modRecov = 0;
@@ -188,7 +189,8 @@ def process_data(coreExp, expInd, respMeasure=0, respOverwrite=None):
     if respMeasure == 0:
       resp = np.expand_dims(coreExp['spikeCounts'][whereNotBlank], axis=1); # make (nTr, 1)
     elif respMeasure == 1: # then we're getting F1 -- first at baseTF, then maskTF
-      resp = np.vstack((coreExp['f1_base'][whereNotBlank], coreExp['f1_mask'][whereNotBlank])).transpose();
+      # NOTE: CORRECTED TO MASK, then BASE on 20.11.15
+      resp = np.vstack((coreExp['f1_mask'][whereNotBlank], coreExp['f1_base'][whereNotBlank])).transpose();
   elif expInd >= 0: # i.e. sfMix*
     trialInf = coreExp['sfm']['exp']['trial'];
     whereNotBlank = np.where(~np.isnan(np.sum(trialInf['ori'], 0)))[0];
@@ -483,13 +485,14 @@ class sfNormMod(torch.nn.Module):
     # The above line takes care of summing over stimulus components
 
     # four filters placed in quadrature (only if self.newMethod == 0, which is default)
-    respSimple1 = torch.max(_cast_as_tensor(globalMin), rComplex[...,0]); # half-wave rectification,...
 
     # Store response in desired format - which is actually [nFr x nTr], so transpose it!
     if self.newMethod == 1:
-      return torch.transpose(respSimple1, 0, 1); #, respSimple2, respSimple3, respSimple4, torch.transpose(respSimple, 0, 1);
+      respSimple1 = rComplex[...,0]; # we'll keep the half-wave rectification for the end...
+      return torch.transpose(respSimple1, 0, 1);
     else:
       # the remaining filters in quadrature
+      respSimple1 = torch.max(_cast_as_tensor(globalMin), rComplex[...,0]); # half-wave rectification,...
       respSimple2 = torch.max(_cast_as_tensor(globalMin), torch.mul(_cast_as_tensor(-1),rComplex[...,0]));
       respSimple3 = torch.max(_cast_as_tensor(globalMin), rComplex[...,1]);
       respSimple4 = torch.max(_cast_as_tensor(globalMin), torch.mul(_cast_as_tensor(-1),rComplex[...,1]));
@@ -563,12 +566,15 @@ class sfNormMod(torch.nn.Module):
   def respPerCell(self, trialInf, debug=0):
     # excitatory filter, first
     simpleResp = self.simpleResp_matMul(trialInf);
-    Lexc = torch.div(simpleResp, torch.max(simpleResp)); # [nFrames x nTrials]
     normResp = self.SimpleNormResp(trialInf); # [nFrames x nTrials]
-    #Linh = normResp; # un-normalized...
-    Linh = torch.div(normResp, torch.max(normResp)); # normalize the normResp...
+    if self.newMethod == 1:
+      Lexc = simpleResp; # [nFrames x nTrials]
+      Linh = normResp; # un-normalized...
+    else:
+      Lexc = torch.div(simpleResp, torch.max(simpleResp)); # [nFrames x nTrials]
+      Linh = torch.div(normResp, torch.max(normResp)); # normalize the normResp...
 
-    # the below line assumes normType != 3 (which was only briefly tried, anyway...)
+    # the below line assumes normType != 3 (which was only briefly used/explored, anyway...)
     sigmaFilt = torch.pow(torch.pow(_cast_as_tensor(10), self.sigma), 2); # i.e. square the normalization constant
 
     if debug:
@@ -598,8 +604,8 @@ class sfNormMod(torch.nn.Module):
       return respModel
 
     # then, get the base & mask TF
-    baseTf, maskTf = trialInf['tf'][0, 0], trialInf['tf'][0, 1] # relies on tf being same for all trials (i.e. baseTf always same, maskTf always same)!
-    tfAsInts = np.array([int(baseTf), int(maskTf)]);
+    baseTf, maskTf = trialInf['tf'][0, 0], trialInf['tf'][0, 1] # relies on tf being same for all trials (i.e. maskTf always same, baseTf always same)!
+    tfAsInts = np.array([int(maskTf), int(baseTf)]);
     stimDur = hf.get_exp_params(expInd).stimDur
     nFrames = len(respModel)/stimDur;
     # important to transpose the respModel before passing in to spike_fft
@@ -660,9 +666,9 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
       if excType == 1:
-        fL_name = 'fitList%s_pyt_201007' % (loc_str); # pyt for pytorch
+        fL_name = 'fitList%s_pyt_200417' % (loc_str); # pyt for pytorch
       elif excType == 2:
-        fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
+        fL_name = 'fitList%s_pyt_200507' % (loc_str); # pyt for pytorch
 
   if lossType == 4: # chiSq...
     fL_name = '%s%s' % (fL_name, hf.chiSq_suffix(kMult));
@@ -710,7 +716,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     inhAsym = 0;
   if fitType == 2:
     normMean = np.log10(prefSfEst) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
-    normStd = 1.5 if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
+    normStd = 0.5 if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
 
   # --- then, set up each parameter
   pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
@@ -727,7 +733,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     respScalar = np.random.uniform(200, 700) if initFromCurr==0 else curr_params[4];
     noiseEarly = -0.1 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
   else:
-    respScalar = np.random.uniform(2, 5) if initFromCurr==0 else curr_params[4];
+    respScalar = np.random.uniform(0.01, 0.05) if initFromCurr==0 else curr_params[4];
     noiseEarly = 1e-3 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
   noiseLate = 0 if initFromCurr==0 else curr_params[6];
   varGain = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
