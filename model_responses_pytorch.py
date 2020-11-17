@@ -24,7 +24,7 @@ torch.autograd.set_detect_anomaly(True)
 # Some global things...
 fall2020_adj = 1;
 if fall2020_adj:
-  globalMin = 1e-6 # what do we "cut off" the model response at? should be >0 but small
+  globalMin = 1e-10 # what do we "cut off" the model response at? should be >0 but small
   #globalMin = 1e-1 # what do we "cut off" the model response at? should be >0 but small
 else:
   globalMin = 1e-6 # what do we "cut off" the model response at? should be >0 but small
@@ -156,7 +156,7 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3):
     '''
 
     full_fourier = [torch.rfft(x, signal_ndim=1, onesided=False) for x in psth];
-    epsil = 1e-6;
+    epsil = 1e-10;
     full_fourier = [torch.sqrt(epsil + torch.add(torch.pow(x[:,:,0], 2), torch.pow(x[:,:,1], 2))) for x in full_fourier]; # just get the amplitude
     #spectrum = full_fourier; # bypassing this func for now...
     spectrum = fft_amplitude(full_fourier, stimDur);
@@ -190,6 +190,7 @@ def process_data(coreExp, expInd, respMeasure=0, respOverwrite=None):
       resp = np.expand_dims(coreExp['spikeCounts'][whereNotBlank], axis=1); # make (nTr, 1)
     elif respMeasure == 1: # then we're getting F1 -- first at baseTF, then maskTF
       # NOTE: CORRECTED TO MASK, then BASE on 20.11.15
+      # -- the tranpose turns it from [2, nTr] to [nTr, 2], but keeps [:,0] as mask; [:,1] as base
       resp = np.vstack((coreExp['f1_mask'][whereNotBlank], coreExp['f1_base'][whereNotBlank])).transpose();
   elif expInd >= 0: # i.e. sfMix*
     trialInf = coreExp['sfm']['exp']['trial'];
@@ -227,7 +228,7 @@ class dataWrapper(torchdata.Dataset):
         self.device = device;
         
     def get_single_item(self, idx):
-        # NOTE: THis assumes that trInf['ori', 'tf', etc...] are already [nTr, nStimComp]
+        # NOTE: This assumes that trInf['ori', 'tf', etc...] are already [nTr, nStimComp]
         feature = dict();
         feature['ori'] = _cast_as_tensor(self.trInf['ori'][idx, :])
         feature['tf'] = _cast_as_tensor(self.trInf['tf'][idx, :])
@@ -238,9 +239,9 @@ class dataWrapper(torchdata.Dataset):
         
         target = dict();
         target['resp'] = _cast_as_tensor(self.resp[idx, :]);
-        # mask is in ,0; base is in ,1
-        target['maskCon'] = _cast_as_tensor(self.trInf['con'][idx, 0])
-        target['baseCon'] = _cast_as_tensor(self.trInf['con'][idx, 1])
+        maskInd, baseInd = hf_sfBB.get_mask_base_inds();
+        target['maskCon'] = _cast_as_tensor(self.trInf['con'][idx, maskInd])
+        target['baseCon'] = _cast_as_tensor(self.trInf['con'][idx, baseInd])
         
         return (feature, target);
 
@@ -583,10 +584,16 @@ class sfNormMod(torch.nn.Module):
     numerator     = torch.add(self.noiseEarly, Lexc); # [nFrames x nTrials]
     denominator   = torch.pow(sigmaFilt + torch.pow(Linh, 2), 0.5); # nTrials
     rawResp       = torch.div(numerator, denominator.unsqueeze(0)); # unsqueeze(0) to account for the missing leading dimension (nFrames)
+    # half-wave rectification??? we add a squaring after the max, then respExp will do what it does...
+    #ratio         = torch.pow(torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), 2), self.respExp);
+    # just rectify, forget the squaring
     ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), self.respExp);
+    # just rectify, don't even add the power
+    #ratio = torch.max(_cast_as_tensor(globalMin), rawResp);
     # we're now skipping the averaging across frames...
     if self.newMethod == 1:
       if fall2020_adj:
+        #respModel     = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, torch.pow(torch.mul(self.scale, ratio), self.respExp)));
         respModel     = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, torch.mul(self.scale, ratio)));
       else:
         respModel     = torch.add(self.noiseLate, torch.mul(self.scale, ratio));
@@ -604,13 +611,13 @@ class sfNormMod(torch.nn.Module):
       return respModel
 
     # then, get the base & mask TF
-    baseTf, maskTf = trialInf['tf'][0, 0], trialInf['tf'][0, 1] # relies on tf being same for all trials (i.e. maskTf always same, baseTf always same)!
+    maskInd, baseInd = hf_sfBB.get_mask_base_inds();
+    maskTf, baseTf = trialInf['tf'][0, maskInd], trialInf['tf'][0, baseInd] # relies on tf being same for all trials (i.e. maskTf always same, baseTf always same)!
     tfAsInts = np.array([int(maskTf), int(baseTf)]);
     stimDur = hf.get_exp_params(expInd).stimDur
     nFrames = len(respModel)/stimDur;
     # important to transpose the respModel before passing in to spike_fft
     amps, rel_amps, full_fourier = spike_fft([respModel], tfs=[tfAsInts], stimDur=stimDur, binWidth=1.0/nFrames)
-    #amps, rel_amps, full_fourier = spike_fft([torch.transpose(respModel, 1, 0)], tfs=[tfAsInts], stimDur=stimDur, binWidth=1.0/nFrames)
 
     if returnPsth == 1:
       if respMeasure == 1: # i.e. F1
@@ -648,7 +655,7 @@ def loss_sfNormMod(respModel, respData, lossType=1):
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=1250, learning_rate=0.001, batch_size=200, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0):
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=500, learning_rate=0.001, batch_size=200, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0):
 
   ### Load the cell, set up the naming
   ########
@@ -689,24 +696,36 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   print('\nFitList: %s' % fitListName);
 
-  if os.path.isfile(loc_data + fitListName):
-    fitList = hf.np_smart_load(str(loc_data + fitListName));
-  else:
-    fitList = dict();
-  respStr = hf_sfBB.get_resp_str(respMeasure);
-
+  # Load datalist, then specific cell
   dataList = hf.np_smart_load(str(loc_data + dataListName));
   dataNames = dataList['unitName'];
-
+  print('loading data structure from %s...' % loc_data);
   try:
-    expInd = hf.exp_name_to_ind(dataList['expType'][cellNum-1]);
+    expInd = hf.exp_name_to_ind(dataList[expType][cellNum-1]);
   except:
     expInd = -1; # for sfBB
-
-  print('loading data structure from %s...' % loc_data);
+  # - then cell
   S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfBB.npy')); # why -1? 0 indexing...
   expInfo = S['sfBB_core']; # TODO: generalize...
   trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure); 
+
+
+  respStr = hf_sfBB.get_resp_str(respMeasure);
+  if os.path.isfile(loc_data + fitListName):
+    fitList = hf.np_smart_load(str(loc_data + fitListName));
+    try:
+      curr_params = fitList[cellNum-1][respStr]['params'];
+      # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
+      testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd)
+      trInf, resp = process_data(expInfo, expInd, respMeasure)
+      predictions = testModel.forward(trInf, respMeasure=respMeasure);
+      loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(resp.flatten()), testModel.lossType)
+      if np.isnan(loss_test.item()):
+        initFromCurr = 0; # then we've saved bad parameters -- force new ones!
+    except:
+      initFromCurr = 0; # force the old parameters
+  else:
+    fitList = dict();
 
   ### set parameters
   # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
@@ -731,11 +750,11 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   if newMethod == 0:
     # easier to start with a small scalar and work up, rather than work down
     respScalar = np.random.uniform(200, 700) if initFromCurr==0 else curr_params[4];
-    noiseEarly = -0.1 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
+    noiseEarly = -1 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
   else:
     respScalar = np.random.uniform(0.01, 0.05) if initFromCurr==0 else curr_params[4];
     noiseEarly = 1e-3 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
-  noiseLate = 0 if initFromCurr==0 else curr_params[6];
+  noiseLate = 1e-1 if initFromCurr==0 else curr_params[6];
   varGain = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
   if lgnFrontEnd > 0:
     # Now, the LGN weighting 
@@ -787,19 +806,20 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       for bb, (feature, target) in enumerate(dataloader):
           predictions = model.forward(feature, respMeasure=respMeasure)
           if respMeasure == 1:
-              target['resp'][target['maskCon']==0, 0] = 0 # force F1 = 0 if con of that stim is 0
-              target['resp'][target['baseCon']==0, 1] = 0 # force F1 = 0 if con of that stim is 0
-              target = target['resp'].flatten();
-          if respMeasure == 0:
-              target = target['resp'].flatten(); # since it's [nTr, 1], just make it [nTr]
-          predictions = predictions.flatten(); # since it's [nTr, 1], just make it [nTr]
+              maskInd, baseInd = hf_sfBB.get_mask_base_inds();
+              target['resp'][target['maskCon']==0,0] = 1e-6 # force F1 ~= 0 if con of that stim is 0
+              target['resp'][target['baseCon']==0,1] = 1e-6 # force F1 ~= 0 if con of that stim is 0
+              predictions[target['maskCon']==0,0] = 1e-6 # force F1 ~= 0 if con of that stim is 0
+              predictions[target['baseCon']==0,1] = 1e-6 # force F1 ~= 0 if con of that stim is 0
+          target = target['resp'].flatten(); # since it's [nTr, 1], just make it [nTr]
+          predictions = predictions.flatten(); # either [nTr,2] to [2*nTr] or [nTr,1] to [nTr]
           loss_curr = loss_sfNormMod(predictions, target, model.lossType)
 
           if np.mod(t,100)==0 and bb==0:
-              #print('\n****** STEP %d *********' % t)
+              print('\n****** STEP %d *********' % t)
               prms = model.named_parameters()
               #[print(x, '\n') for x in prms];
-              #print(loss_curr.item())
+              print(loss_curr.item())
               #print(loss_curr.grad)
 
           loss_history[t].append(loss_curr.item())
@@ -853,7 +873,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     print('%s did not exist yet' % respStr);
     fitList[cellNum-1][respStr] = dict();
   else:
-    print('we will be overwriting %s' % respStr);
+    print('we will be overwriting %s (if updating)' % respStr);
   # now, if the NLL is now the best, update this
   if NLL < currNLL:
     fitList[cellNum-1][respStr]['NLL'] = NLL;
@@ -868,7 +888,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     optInfo['learning_rate'] = learning_rate;
     fitList[cellNum-1][respStr]['opt'] = optInfo;
   else:
-    print('new NLL not less than currNLL, not saving result, but updating ovreal fit list (i.e. tracking each fit)');
+    print('new NLL not less than currNLL, not saving result, but updating overall fit list (i.e. tracking each fit)');
   fitList[cellNum-1][respStr]['nll_history'] = np.append(nll_history, NLL);
   np.save(loc_data + fitListName, fitList);
   # now the step list, if needed

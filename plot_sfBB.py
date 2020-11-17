@@ -98,11 +98,11 @@ else:
 expName = hf.get_datalist(expDir);
 ### FITLIST
 if excType == 1:
-  #fitBase = 'fitList_pyt_200417'; # excType 1
-  fitBase = 'fitList_pyt_201017'; # excType 1
+  fitBase = 'fitList_pyt_200417'; # excType 1
+  #fitBase = 'fitList_pyt_201017'; # excType 1
 elif excType == 2:
-  #fitBase = 'fitList_pyt_200507'; # excType 2
-  fitBase = 'fitList_pyt_201107'; # excType 2
+  fitBase = 'fitList_pyt_200507'; # excType 2
+  #fitBase = 'fitList_pyt_201107'; # excType 2
 else:
   fitBase = None;
 
@@ -166,9 +166,9 @@ if fitBase is not None:
   newMethod = 1;
 
   mod_V1_dc  = mrpt.sfNormMod(modFit_V1_dc, expInd=expInd, excType=excType, normType=2, lossType=lossType, lgnFrontEnd=0, newMethod=newMethod)
-  mod_LGN_dc = mrpt.sfNormMod(modFit_lgn_dc, expInd=expInd, excType=excType, normType=1, lossType=lossType, lgnFrontEnd=0, newMethod=newMethod)
+  mod_LGN_dc = mrpt.sfNormMod(modFit_lgn_dc, expInd=expInd, excType=excType, normType=1, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod)
   mod_V1_f1  = mrpt.sfNormMod(modFit_V1_f1, expInd=expInd, excType=excType, normType=2, lossType=lossType, lgnFrontEnd=0, newMethod=newMethod)
-  mod_LGN_f1 = mrpt.sfNormMod(modFit_lgn_f1, expInd=expInd, excType=excType, normType=1, lossType=lossType, lgnFrontEnd=0, newMethod=newMethod)
+  mod_LGN_f1 = mrpt.sfNormMod(modFit_lgn_f1, expInd=expInd, excType=excType, normType=1, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod)
 
 else: # we will just plot the data
   fitList_fl = None;
@@ -475,10 +475,10 @@ for measure in [0,1]:
     for (j,ylim),txt in zip(enumerate(ylim_diffs), diff_endings):
         ax[3+j, 2*measure].set_xscale('log');
         ax[3+j, 2*measure].set_xlabel('SF (c/deg)')
-        ax[3+j, 2*measure].set_ylabel('Difference (R(m+b) - R(b)%s (spks/s) [%s]' % (txt,lbl))
         if measure==1: # Abramov/Levine sub. -- only DC has this analysis
             pass;
         else:
+            ax[3+j, 2*measure].set_ylabel('Difference (R(m+b) - R(b)%s (spks/s) [%s]' % (txt,lbl))
             ax[3+j, 2*measure].axhline(0, color='k', linestyle='--')
         ax[3+j, 2*measure].legend(fontsize='small');
 
