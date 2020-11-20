@@ -282,7 +282,6 @@ class sfNormMod(torch.nn.Module):
       self.mWeight = _cast_as_param(modParams[-1]);
     else:
       self.mWeight = _cast_as_tensor(modParams[-1]); # then it's NOT a parameter
-    self.pWeight = 1-self.mWeight;
 
     self.prefSf = _cast_as_param(modParams[0]);
     if self.excType == 1:
@@ -343,6 +342,7 @@ class sfNormMod(torch.nn.Module):
       self.M_fc = _cast_as_param(self.modParams[-6]);
       self.M_ks = _cast_as_param(self.modParams[-4]);
       self.M_js = _cast_as_param(self.modParams[-2]);
+      ## TODO: Will need to update P_fc in the code rather than rely on this one-time writing of self.P_fc (since self.M_fc will update)
       self.P_fc = torch.mul(self.M_fc, _cast_as_param(self.modParams[-5]));
       self.P_ks = _cast_as_param(self.modParams[-3]);
       self.P_js = _cast_as_param(self.modParams[-1]);
@@ -428,7 +428,8 @@ class sfNormMod(torch.nn.Module):
       selCon_m = get_rvc_model(self.rvc_m, stimCo);
       selCon_p = get_rvc_model(self.rvc_p, stimCo);
       # -- then here's our final responses per component for the current stimulus
-      lgnSel = torch.add(torch.mul(self.mWeight, torch.mul(selSf_m, selCon_m)), torch.mul(self.pWeight, torch.mul(selSf_p, selCon_p)));
+      # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
+      lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
 
     if self.excType == 1:
       # Compute spatial frequency tuning - Deriv. order Gaussian
@@ -531,7 +532,7 @@ class sfNormMod(torch.nn.Module):
       selCon_m = get_rvc_model(self.rvc_m, cons);
       selCon_p = get_rvc_model(self.rvc_p, cons);
       # -- then here's our final responses per component for the current stimulus
-      lgnStage = torch.add(torch.mul(self.mWeight, torch.mul(selSf_m, selCon_m)), torch.mul(self.pWeight, torch.mul(selSf_p, selCon_p)));
+      lgnStage = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
     else:
       lgnStage = torch.ones_like(sfs);
 
@@ -594,13 +595,13 @@ class sfNormMod(torch.nn.Module):
     if self.newMethod == 1:
       if fall2020_adj:
         #respModel     = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, torch.pow(torch.mul(self.scale, ratio), self.respExp)));
-        respModel     = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, torch.mul(self.scale, ratio)));
+        respModel     = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, torch.mul(torch.abs(self.scale), ratio)));
       else:
-        respModel     = torch.add(self.noiseLate, torch.mul(self.scale, ratio));
+        respModel     = torch.add(self.noiseLate, torch.mul(torch.abs(self.scale), ratio));
       return torch.transpose(respModel, 1, 0);
     else:
       meanRate      = ratio.mean(0);
-      respModel     = torch.add(self.noiseLate, torch.mul(self.scale, meanRate));
+      respModel     = torch.add(self.noiseLate, torch.mul(torch.abs(self.scale), meanRate));
       return respModel; # I don't think we need to transpose here...
 
   def forward(self, trialInf, respMeasure=0, returnPsth=0, expInd=-1, debug=0): # expInd=-1 for sfBB
@@ -655,7 +656,7 @@ def loss_sfNormMod(respModel, respData, lossType=1):
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=500, learning_rate=0.001, batch_size=200, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0):
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=1000, learning_rate=0.001, batch_size=200, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0): # batch_size = 200...
 
   ### Load the cell, set up the naming
   ########
@@ -673,9 +674,9 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
       if excType == 1:
-        fL_name = 'fitList%s_pyt_200417' % (loc_str); # pyt for pytorch
+        fL_name = 'fitList%s_pyt_201017' % (loc_str); # pyt for pytorch
       elif excType == 2:
-        fL_name = 'fitList%s_pyt_200507' % (loc_str); # pyt for pytorch
+        fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
 
   if lossType == 4: # chiSq...
     fL_name = '%s%s' % (fL_name, hf.chiSq_suffix(kMult));
@@ -725,6 +726,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     except:
       initFromCurr = 0; # force the old parameters
   else:
+    initFromCurr = 0;
     fitList = dict();
 
   ### set parameters
@@ -797,6 +799,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   hessian_history = []
 
   first_pred = model(trInf, respMeasure=respMeasure);
+  accum = 0; # keep track of accumulator
   for t in range(max_epochs):
       optimizer.zero_grad()
 
@@ -815,11 +818,18 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           predictions = predictions.flatten(); # either [nTr,2] to [2*nTr] or [nTr,1] to [nTr]
           loss_curr = loss_sfNormMod(predictions, target, model.lossType)
 
-          if np.mod(t,100)==0 and bb==0:
-              print('\n****** STEP %d *********' % t)
+          if np.mod(t,100)==0: # and bb==0:
+              if bb == 0:
+                print('\n****** STEP %d [%s] [prev loss: %.2f] *********' % (t, respStr, accum))
+                #print('\n****** STEP %d [%s] [prev loss: %.2f] *********' % (t, respStr, accum))
+                accum = 0;
               prms = model.named_parameters()
               #[print(x, '\n') for x in prms];
-              print(loss_curr.item())
+              curr_loss = loss_curr.item();
+              accum += curr_loss;
+              #print('\t%.3f' % curr_loss);
+              #print('\t%.3f' % loss_curr.item());
+              #print(loss_curr.item())
               #print(loss_curr.grad)
 
           loss_history[t].append(loss_curr.item())
@@ -842,6 +852,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   opt_params = model.return_params(); # check this...
   curr_resp = model.forward(dw.trInf, respMeasure=respMeasure);
   gt_resp = _cast_as_tensor(dw.resp);
+  # fix up responses if respMeasure == 1 (i.e. if mask or base con is 0, match the data & model responses...)
+  if respMeasure == 1:
+      maskInd, baseInd = hf_sfBB.get_mask_base_inds();
+      curr_resp[dw.trInf['con'][:,maskInd]==0, maskInd] = 1e-6 # force F1 ~= 0 if con of that stim is 0
+      curr_resp[dw.trInf['con'][:,baseInd]==0, baseInd] = 1e-6 # force F1 ~= 0 if con of that stim is 0
+      gt_resp[dw.trInf['con'][:,maskInd]==0, maskInd] = 1e-6 # force F1 ~= 0 if con of that stim is 0
+      gt_resp[dw.trInf['con'][:,baseInd]==0, baseInd] = 1e-6 # force F1 ~= 0 if con of that st
   NLL = loss_sfNormMod(curr_resp, gt_resp, model.lossType).detach().numpy();
 
   ## we've finished optimization, so reload again to make sure that this  NLL is better than the currently saved one
