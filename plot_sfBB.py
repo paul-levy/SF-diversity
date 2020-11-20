@@ -29,28 +29,32 @@ import pdb
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
 from matplotlib import rcParams
-# TODO: migrate this to actual .mplstyle sheet
-rcParams['font.size'] = 20;
-rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['lines.linewidth'] = 2.5;
-rcParams['lines.markeredgewidth'] = 0; # remove edge??
-rcParams['axes.linewidth'] = 1.5;
-rcParams['lines.markersize'] = 12; # 8 is the default
-rcParams['font.style'] = 'oblique';
 
-rcParams['xtick.major.size'] = 25
-rcParams['xtick.minor.size'] = 12
-rcParams['ytick.major.size'] = 25
-rcParams['ytick.minor.size'] = 0; # i.e. don't have minor ticks on y...
+###
+for i in range(2):
+    # must run twice for changes to take effect?
+    from matplotlib import rcParams, cm
+    rcParams['font.family'] = 'sans-serif'
+    # rcParams['font.sans-serif'] = ['Helvetica']
+    rcParams['font.style'] = 'oblique'
+    rcParams['font.size'] = 30;
+    rcParams['pdf.fonttype'] = 3 # should be 42, but there are kerning issues
+    rcParams['ps.fonttype'] = 3 # should be 42, but there are kerning issues
+    rcParams['lines.linewidth'] = 3;
+    rcParams['lines.markeredgewidth'] = 0; # remove edge??                                                                                                                               
+    rcParams['axes.linewidth'] = 3;
+    rcParams['lines.markersize'] = 12; # 8 is the default                                                                                                                                
+    rcParams['font.style'] = 'oblique';
 
-rcParams['xtick.major.width'] = 2
-rcParams['xtick.minor.width'] = 2
-rcParams['ytick.major.width'] = 2
-rcParams['ytick.minor.width'] = 0
+    rcParams['xtick.major.size'] = 25
+    rcParams['xtick.minor.size'] = 12
+    rcParams['ytick.major.size'] = 25
+    rcParams['ytick.minor.size'] = 0; # i.e. don't have minor ticks on y...                                                                                                              
 
-minorWid, minorLen = 2, 12;
-majorWid, majorLen = 5, 25;
+    rcParams['xtick.major.width'] = 2
+    rcParams['xtick.minor.width'] = 2
+    rcParams['ytick.major.width'] = 2
+    rcParams['ytick.minor.width'] = 0
 
 cellNum  = int(sys.argv[1]);
 excType  = int(sys.argv[2]);
@@ -101,8 +105,8 @@ if excType == 1:
   fitBase = 'fitList_pyt_200417'; # excType 1
   #fitBase = 'fitList_pyt_201017'; # excType 1
 elif excType == 2:
-  fitBase = 'fitList_pyt_200507'; # excType 2
-  #fitBase = 'fitList_pyt_201107'; # excType 2
+  #fitBase = 'fitList_pyt_200507'; # excType 2
+  fitBase = 'fitList_pyt_201107'; # excType 2
 else:
   fitBase = None;
 

@@ -68,11 +68,13 @@ for run in {1..20}; do
   #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 0 1 0.10 1 1 -1 & # lgn (type a)
   #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 2 0 1 0.10 1 1 -1 # lgn type B
 
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 2 0 0 1 0.10 1 1 -1 &
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 1 1 0 1 0.10 1 1 -1 &
+  # --- LGN flat, V1 wght, init, Poiss loss
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 2 0 1 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 1 1 1 1 0.10 1 1 -1 & 
 
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 0 1 1 0.10 1 1 -1 &
-  python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 1 1 0.10 1 1 -1 &
+  # --- LGN flat, V1 wght, init, sqrt loss
+  python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 0 1 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 1 1 0.10 1 1 -1 &
   # py ---------fun---------------------#----dir---e-l-f---i-t--k----rvc-------  
 
 
