@@ -562,7 +562,8 @@ def make_psth(spikeTimes, binWidth=1e-3, stimDur=1):
     # given an array of arrays of spike times, create the PSTH for a given bin width and stimulus duration
     # i.e. spikeTimes has N arrays, each of which is an array of spike times
 
-    binEdges = numpy.linspace(0, stimDur, 1+stimDur/binWidth);
+    # -- added int(*) to ensure the # of steps is an int (required for newer np versions)
+    binEdges = numpy.linspace(0, stimDur, 1+int(stimDur/binWidth));
     
     all = [numpy.histogram(x, bins=binEdges) for x in spikeTimes]; 
     psth = [x[0] for x in all];
