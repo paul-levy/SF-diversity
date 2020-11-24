@@ -12,6 +12,8 @@ import pdb
 # get_mask_resp - get the response to the mask OR mask+base at either the base or mask TF
 
 ### Anaylsis ###
+# --- Computing F1 response (including phase), computing F1::F0 ratio, etc
+# get_true_phase
 # compute_f1f0
 
 ### ORGANIZING ###
@@ -177,6 +179,14 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
 
 
 ### ANALYSIS ###
+
+def get_true_phase(trial_inf, val_trials, dir=-1, psth_binWidth=1e-3):
+    ''' Returns resp-phase-rel-to-stim, stimulus phase, response phase, and stimulus tf
+        Given the data and the set of valid trials, first compute the response phase
+        and stimulus phase - then determine the response phase relative to the stimulus phase
+    '''
+    # TODO
+    return phase_rel_stim, stim_phase, resp_phase, all_tf;
 
 def compute_f1f0(trial_inf):
   ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio

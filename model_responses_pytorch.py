@@ -142,7 +142,7 @@ def fft_amplitude(fftSpectrum, stimDur):
     return correctFFT;   
 
 
-def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3):
+def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
     ''' given a psth (and optional list of component TFs), compute the fourier transform of the PSTH
         if the component TFs are given, return the FT power at the DC, and at all component TFs
         NOTE: spectrum, rel_amp are rates (spks/s)
@@ -157,6 +157,11 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3):
 
     full_fourier = [torch.rfft(x, signal_ndim=1, onesided=False) for x in psth];
     epsil = 1e-10;
+    if inclPhase:
+      # NOTE: I have checked that the amplitudes (i.e. just "R" in polar coordinates, 
+      # -- computed as sqrt(x^2 + y^2)) are ...
+      # -- equivalent when derived from with_phase as in spectrum, below
+      with_phase = fft_amplitude(full_fourier, stimDur); # passing in while still keeping the imaginary component (so that we can back out phase)
     full_fourier = [torch.sqrt(epsil + torch.add(torch.pow(x[:,:,0], 2), torch.pow(x[:,:,1], 2))) for x in full_fourier]; # just get the amplitude
     #spectrum = full_fourier; # bypassing this func for now...
     spectrum = fft_amplitude(full_fourier, stimDur);
@@ -171,7 +176,10 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3):
     else:
       rel_amp = [];
 
-    return spectrum, rel_amp, full_fourier;
+    if inclPhase:
+      return spectrum, rel_amp, full_fourier, with_phase;
+    else:
+      return spectrum, rel_amp, full_fourier;
 
 ### Datawrapper/loader
 
