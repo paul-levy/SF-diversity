@@ -4,6 +4,9 @@ V1_orig/figures/*
 V1/structures/**
 V1/structures/m*
 V1/figures/*
+V1_BB/structures/**
+V1_BB/structures/m*
+V1_BB/figures/*
 altExp/figures/**
 altExp/structures/m*
 **/.ipynb_checkpoints/**
