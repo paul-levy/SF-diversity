@@ -855,11 +855,12 @@ def get_true_phase(data, val_trials, expInd, dir=-1, psth_binWidth=1e-3):
 
     return phase_rel_stim, stim_phase, resp_phase, all_tf;
 
-def polar_vec_mean(amps, phases):
+def polar_vec_mean(amps, phases, sem=0):
    ''' Given a set of amplitudes ("r") and phases ("theta"; in degrees) for a given stimulus condition (or set of conditions)
        RETURN the mean amplitude and phase (in degrees) computed by vector summation/averaging
        Note: amps/phases must be passed in as arrays of arrays, so that we can compute the vec mean for multiple different
              stimulus conditions just by calling this function once
+       --- IF sem=1, then we give s.e.m. rather than std for "r"
    '''
    np = numpy;
   
@@ -889,6 +890,8 @@ def polar_vec_mean(amps, phases):
      # now compute (and return) r and theta
      r = np.sqrt(np.square(x_avg) + np.square(y_avg));
      r_std = np.sqrt(np.square(x_std) + np.square(y_std));
+     if sem:
+        r_std = r_std/len(x_polar); # now it's not really "std" --> it's s.e.m.
      # now the angle
      theta = angle_xy([x_avg], [y_avg])[0]; # just get the one value (will be packed in list)
      theta_var = circ_var(curr_phis); # compute on the original phases
