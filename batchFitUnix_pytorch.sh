@@ -32,10 +32,7 @@
 #   trackSteps - [1/0] save the steps in the optimization procedure
 #   kMult - if using the chiSq loss function, what is the multiplier (see model_responses/helper_fcns)
 #   newMethod - default is "old" method; 1 is new method (actually compute, work with PSTH rather than averaged)
-#   rvcMod - which model of RVC are we using?
-#      0 - movshon (see hf for details)
-#      1 - naka-rushton [default]
-#      2 - peirce
+#   vecCorrected - make vector math adjustments for F1 responses? Yes [1], No [0; default]
 #   fixRespExp - (default is None, meaning a free resp. exp; otherwise, specify a value; use value <= 0 to make it None)
 
 #### see model_responses.py for additional details
@@ -62,22 +59,22 @@ source activate pytorch-lcv
 #################
 
 for run in {1..20}; do
-  # py ---------fun---------------------#----dir---e-l-f---i-t--k----rvc-------
+  # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------
   #-----------------------------------------------------LGN--------nm--fixExp--
   #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 0 0 1 0.10 1 1 -1 &
   #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 0 1 0.10 1 1 -1 & # lgn (type a)
   #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 2 0 1 0.10 1 1 -1 # lgn type B
 
   # --- LGN flat, V1 wght, init, Poiss loss
-  python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 2 0 0 1 0.10 1 1 -1 & ### V1
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 1 1 1 1 0.10 1 1 -1 & 
-  # py ---------fun---------------------#----dir---e-l-f---i-t--k----rvc-------  
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 2 0 1 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 1 1 0 1 0.10 1 1 -1 & 
+  # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------  
   #-----------------------------------------------------LGN--------nm--fixExp--
 
   # --- LGN flat, V1 wght, init, sqrt loss
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 0 0 1 0.10 1 1 -1 & ### V1
+  python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 0 1 1 0.10 1 1 -1 & ### V1
   #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 1 1 0.10 1 1 -1 &
-  # py ---------fun---------------------#----dir---e-l-f---i-t--k----rvc-------  
+  # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------  
   #-----------------------------------------------------LGN--------nm--fixExp--
 
   #python3.6 model_responses_pytorch.py $run V1_BB/ 1 1 2 0 0 1 0.10 1 1 -1 & 

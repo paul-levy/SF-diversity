@@ -64,16 +64,17 @@ lgnFrontEnd = int(sys.argv[5]);
 diffPlot = int(sys.argv[6]);
 intpMod  = int(sys.argv[7]);
 kMult  = float(sys.argv[8]);
+vecCorrected = int(sys.argv[9]);
 
-if len(sys.argv) > 9:
-  fixRespExp = float(sys.argv[9]);
+if len(sys.argv) > 10:
+  fixRespExp = float(sys.argv[10]);
   if fixRespExp <= 0: # this is the code to not fix the respExp
     fixRespExp = None;
 else:
   fixRespExp = None; # default (see modCompare.ipynb for details)
 
-if len(sys.argv) > 10:
-  respVar = int(sys.argv[10]);
+if len(sys.argv) > 11:
+  respVar = int(sys.argv[11]);
 else:
   respVar = 1;
 
@@ -111,6 +112,8 @@ else:
   fitBase = None;
 
 if fitBase is not None:
+  if vecCorrected:
+    fitBase = '%s_vecF1' % fitBase;
   if lossType == 4: # chiSq...
     fitBase = '%s%s' % (fitBase, hf.chiSq_suffix(kMult));
 
@@ -154,6 +157,14 @@ if fitBase is not None:
 
   fitList = hf.np_smart_load(data_loc + fitName); # V1 only
   fitList_lgn = hf.np_smart_load(data_loc + fitName_lgn); # with LGN, no tuned gain control
+
+  try:
+    fit_details = hf.np_smart_load(data_loc + fitName.replace('.npy', '_details.npy'));
+    fit_details_lgn = hf.np_smart_load(data_loc + fitName_lgn.replace('.npy', '_details.npy'));
+    fit_details = fit_details[cellNum-1];
+    fit_details_lgn = fit_details_lgn[cellNum-1];
+  except:
+    fit_details = None; fit_details_lgn = None;
 
   dc_str = hf_sf.get_resp_str(respMeasure=0);
   f1_str = hf_sf.get_resp_str(respMeasure=1);
@@ -249,28 +260,40 @@ if fitBase is not None:
   _, respMatrix_LGN_f1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=resp_LGN_dc, f1_base=resp_LGN_f1[:,baseInd], f1_mask=resp_LGN_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
 
 ### Get the responses - base only, mask+base [base F1], mask only (mask F1)
-baseDistrs, _, baseConds = hf_sf.get_baseOnly_resp(expInfo);
+baseDistrs, baseSummary, baseConds = hf_sf.get_baseOnly_resp(expInfo);
 # - unpack DC, F1 distribution of responses per trial
 baseDC, baseF1 = baseDistrs;
 baseDC_mn, baseF1_mn = np.mean(baseDC), np.mean(baseF1);
+if vecCorrected:
+    baseDistrs, baseSummary, _ = hf_sf.get_baseOnly_resp(expInfo, vecCorrectedF1=1);
+    baseF1_mn = baseSummary[1][0][0,:]; # [1][0][0,:] is r,phi mean
+    baseF1_var = baseSummary[1][0][1,:]; # [1][0][0,:] is r,phi std/(circ.) var
+    baseF1_r, baseF1_phi = baseDistrs[1][0][0], baseDistrs[1][0][1];
 # - unpack the SF x CON of the base (guaranteed to have only one set for sfBB_core)
 baseSf_curr, baseCon_curr = baseConds[0];
 # now get the mask+base response (f1 at base TF)
-respMatrixDC, respMatrixF1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0); # i.e. get the base response for F1
+respMatrixDC, respMatrixF1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, vecCorrectedF1=vecCorrected); # i.e. get the base response for F1
 # and get the mask only response (f1 at mask TF)
-respMatrixDC_onlyMask, respMatrixF1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1); # i.e. get the maskONLY response
+respMatrixDC_onlyMask, respMatrixF1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, vecCorrectedF1=vecCorrected); # i.e. get the maskONLY response
 # and get the mask+base response (but f1 at mask TF)
-_, respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1); # i.e. get the maskONLY response
+_, respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, vecCorrectedF1=vecCorrected); # i.e. get the maskONLY response
+# -- if vecCorrected, let's just take the "r" elements, not the phi information
+if vecCorrected:
+    respMatrixF1 = respMatrixF1[:,:,0,:]; # just take the "r" information (throw away the phi)
+    respMatrixF1_onlyMask = respMatrixF1_onlyMask[:,:,0,:]; # just take the "r" information (throw away the phi)
+    respMatrixF1_maskTf = respMatrixF1_maskTf[:,:,0,:]; # just take the "r" information (throw away the phi)
 
 ## Reference tuning...
-refDC, refF1 = hf_sf.get_mask_resp(expInfo, withBase=0); # i.e. mask only, at mask TF
+refDC, refF1 = hf_sf.get_mask_resp(expInfo, withBase=0, vecCorrectedF1=vecCorrected); # i.e. mask only, at mask TF
 maskSf, maskCon = expInfo['maskSF'], expInfo['maskCon'];
 # - get DC tuning curves
 refDC_sf = refDC[-1, :, :]; # highest contrast
 prefSf_ind = np.argmax(refDC_sf[:, 0]);
 prefSf_DC = maskSf[prefSf_ind];
 refDC_rvc = refDC[:, prefSf_ind, :];
-# - get F1 tuning curves
+# - get F1 tuning curves (adjust for vecCorrected?)
+if vecCorrected: # get only r, not phi
+    refF1 = refF1[:,:,0,:];
 refF1_sf = refF1[-1, :, :];
 prefSf_ind = np.argmax(refF1_sf[:, 0]);
 prefSf_F1 = maskSf[prefSf_ind];
@@ -329,7 +352,10 @@ for measure in [0,1]:
         data = respMatrixF1_maskTf;
         data_baseTf = respMatrixF1;
         maskOnly = respMatrixF1_onlyMask;
-        baseOnly = baseF1;
+        if vecCorrected:
+            mean_r, mean_phi = baseF1_mn;
+            std_r, var_phi = baseF1_var;
+            vec_r, vec_phi = baseF1_r, baseF1_phi;
         refAll = refF1[:,:,0];
         refSf = refF1_sf;
         refRVC = refF1_rvc;
@@ -348,29 +374,38 @@ for measure in [0,1]:
 
     # Now, subtract the baseOnly response from the base+mask response (only used if measure=0, i.e. DC)
     # -- but store it separately 
-    data_sub = np.copy(data);
-    data_sub[:,:,0] = data[:,:,0]-np.mean(baseOnly);
-    if fitBase is not None:
-      data_V1_sub = np.copy(data_V1);
-      data_V1_sub[:,:,0] = data_V1[:,:,0] - mod_mean_V1;
-      data_LGN_sub = np.copy(data_LGN);
-      data_LGN_sub[:,:,0] = data_LGN[:,:,0] - mod_mean_LGN;
+    if measure == 0:
+        data_sub = np.copy(data);
+        data_sub[:,:,0] = data[:,:,0]-np.mean(baseOnly);
+        if fitBase is not None:
+            data_V1_sub = np.copy(data_V1);
+            data_V1_sub[:,:,0] = data_V1[:,:,0] - mod_mean_V1;
+            data_LGN_sub = np.copy(data_LGN);
+            data_LGN_sub[:,:,0] = data_LGN[:,:,0] - mod_mean_LGN;
 
     ### first, just the distribution of base responses
     ax[0, measure] = plt.subplot(nrow, 2, 1+measure); # pretend there are only 2 columns
+    if vecCorrected == 1 and measure == 1:
+        plt.subplot(nrow, 2, 1+measure, projection='polar')
+        [plt.plot([0, np.deg2rad(phi)], [0, r], 'o--k', alpha=0.3) for r,phi in zip(vec_r, vec_phi)]
+        plt.plot([0, np.deg2rad(mean_phi)], [0, mean_r], 'o-k')
+        #, label=r'$ mu(r,\phi) = (%.1f, %.0f)$' % (mean_r, mean_phi)
+        plt.title(r'[%s] $(R,\phi) = (%.1f,%.0f)$ & -- $(sem,circVar) = (%.1f, %.1f)$' % (lbl, mean_r, mean_phi, std_r, var_phi))
+        # still need to define base_mn, since it's used later on in plots
+        base_mn = mean_r;
+    else:
+        sns.distplot(baseOnly, ax=ax[0, measure], kde=False);
+        base_mn, base_sem = np.mean(baseOnly), np.std(baseOnly)/len(baseOnly);
 
-    sns.distplot(baseOnly, ax=ax[0, measure], kde=False);
-    base_mn, base_sem = np.mean(baseOnly), np.std(baseOnly)/len(baseOnly);
-
-    ax[0, measure].set_xlim(xlim_base)
-    ax[0, measure].set_title('[%s] mn|sem = %.2f|%.2f' % (lbl, base_mn, base_sem))
-    if measure == 0:
-        ax[0, measure].axvline(baseline, linestyle='--', color='b',label='blank')
-    if fitBase is not None:
-        ax[0, measure].axvline(np.mean(baseOnly), linestyle='--', color='k',label='data mean')
-        ax[0, measure].axvline(mod_mean_V1, linestyle='--', color=modColors[0], label='%s mean' % modLabels[0])
-        ax[0, measure].axvline(mod_mean_LGN, linestyle='--', color=modColors[1], label='%s mean' % modLabels[1])
-    ax[0, measure].legend(fontsize='small');
+        ax[0, measure].set_xlim(xlim_base)
+        ax[0, measure].set_title('[%s] mn|sem = %.2f|%.2f' % (lbl, base_mn, base_sem))
+        if measure == 0:
+            ax[0, measure].axvline(baseline, linestyle='--', color='b',label='blank')
+        if fitBase is not None:
+            ax[0, measure].axvline(np.mean(baseOnly), linestyle='--', color='k',label='data mean')
+            ax[0, measure].axvline(mod_mean_V1, linestyle='--', color=modColors[0], label='%s mean' % modLabels[0])
+            ax[0, measure].axvline(mod_mean_LGN, linestyle='--', color=modColors[1], label='%s mean' % modLabels[1])
+        ax[0, measure].legend(fontsize='small');
 
     # SF tuning with contrast
     resps = [maskOnly, data, data_baseTf]; #need to plot data_baseTf for f1
@@ -447,14 +482,24 @@ for measure in [0,1]:
         ax[1+ii, 1+2*measure].legend(fontsize='small');
 
     ### joint tuning (mask only)
-    ax[4, measure] = plt.subplot(nrow, 2, 2*nrow-1+measure); # pretend there are only 2 columns
+    #ax[4, measure] = plt.subplot(nrow, 2, 2*nrow-1+measure); # pretend there are only 2 columns
 
-    ax[4, measure].contourf(maskSf, maskCon, refAll)
-    ax[4, measure].set_xlabel('Spatial frequency (c/deg)');
-    ax[4, measure].set_ylabel('Contrast (%)');
-    ax[4, measure].set_xscale('log');
-    ax[4, measure].set_yscale('log');
-    ax[4, measure].set_title('Joint REF tuning (%s)' % lbl)
+    # temp try...plot contour and trajectory of best fit...
+    ax[4, 2*measure].contourf(maskSf, maskCon, refAll)
+    ax[4, 2*measure].set_xlabel('Spatial frequency (c/deg)');
+    ax[4, 2*measure].set_ylabel('Contrast (%)');
+    ax[4, 2*measure].set_xscale('log');
+    ax[4, 2*measure].set_yscale('log');
+    ax[4, 2*measure].set_title('Joint REF tuning (%s)' % lbl)
+    try:
+      curr_str = hf_sf.get_resp_str(respMeasure=measure);
+      ax[4, 1+2*measure].loglog(fit_details[curr_str]['loss'], color=modColors[0]);
+      ax[4, 1+2*measure].loglog(fit_details_lgn[curr_str]['loss'], color=modColors[1]);
+      ax[4, 1+2*measure].set_xlabel('Optimization epoch');
+      ax[4, 1+2*measure].set_ylabel('Loss');
+      ax[4, 1+2*measure].set_title('Optimization progress (%s)' % lbl)
+    except:
+      ax[4, 1+2*measure].axis('off');
 
     ### SF tuning with R(m+b) - R(m) - R(b) // for DC only
     nCons = len(maskCon);
@@ -514,7 +559,7 @@ for measure in [0,1]:
             ax[3+j, 1+2*measure].axhline(0, color='k', linestyle='--')
         ax[3+j, 1+2*measure].legend(fontsize='small');
 
-sns.despine(offset=10)
+#sns.despine(offset=10)
 f.tight_layout(rect=[0, 0.03, 1, 0.95])
 
 saveName = "/cell_%03d_both.pdf" % (cellNum)

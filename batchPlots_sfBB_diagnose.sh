@@ -14,20 +14,21 @@
 	# 4 - chi squared
 # 4 param is expDir (e.g. altExp/ or LGN/)
 # 5 param is lgnFrontEnd (choose LGN type; will be comparing against non-LGN type)
-# 6 param is diffPlot (i.e. plot everything relative to flat model prediction)
-# 7 param is interpModel (i.e. interpolate model?)
-# 8th param is kMult (0.01, 0.05, 0.10, usually...)
-# 9th param is respExpFixed (-1 for not fixed, then specific value for a fit with fixed respExp [e.g. 1 or 2])
-# 10th param is std/sem as variance measure: (1 sem (default))
+# 6th param is kMult (0.01, 0.05, 0.10, usually...)
+# 7th param - which plots (-1 for "usual" plots; 1 for phase adjustments only; 0 for both)
+# 8th param is respExpFixed (-1 for not fixed, then specific value for a fit with fixed respExp [e.g. 1 or 2])
+# 9th param is std/sem as variance measure: (1 sem (default))
 
 source activate pytorch-lcv
 
 for run in {1..20}
 do
-  # -----------------------------------e-l--dir-----kmul---sem-----
-  # ---------------------------------------------lgn-----rExp-------
-  python3.6 plot_diagnose_sfBB.py $run 2 1 V1_BB/ 1 0.05 -1 1 & # no diff, not interpolated
-  python3.6 plot_diagnose_sfBB.py $run 2 2 V1_BB/ 1 0.05 -1 1 & # no diff, not interpolated
+  # -----------------------------------e-l--dir-----kmul--rExp------
+  # ---------------------------------------------lgn----plt--sem-----
+  #python3.6 plot_diagnose_sfBB.py $run 2 1 V1_BB/ 1 0.05 -1 -1 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose_sfBB.py $run 2 2 V1_BB/ 1 0.05 -1 -1 1 & # no diff, not interpolated
+  # ONLY DATA & ONLY PHASE CORRECTION
+  python3.6 plot_diagnose_sfBB.py $run -1 2 V1_BB/ 1 0.05 1 -1 1 & # no diff, not interpolated
 
 done
 
