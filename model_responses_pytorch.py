@@ -162,6 +162,7 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
       # -- computed as sqrt(x^2 + y^2)) are ...
       # -- equivalent when derived from with_phase as in spectrum, below
       with_phase = fft_amplitude(full_fourier, stimDur); # passing in while still keeping the imaginary component (so that we can back out phase)
+
     full_fourier = [torch.sqrt(epsil + torch.add(torch.pow(x[:,:,0], 2), torch.pow(x[:,:,1], 2))) for x in full_fourier]; # just get the amplitude
     #spectrum = full_fourier; # bypassing this func for now...
     spectrum = fft_amplitude(full_fourier, stimDur);
@@ -183,26 +184,31 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
 
 ### Datawrapper/loader
 
-def process_data(coreExp, expInd, respMeasure=0, respOverwrite=None):
+def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTrials=None):
   ''' Process the trial-by-trial stimulus information for ease of use with the model
       Specifically, we stack the stimuli to be [nTr x nStimComp], where 
       - [:,0] is base, [:,1] is mask, respectively for sfBB
+      - If respOverwrite is not None, it will overwrite the responses from coreExp
   '''
   trInf = dict();
 
   ### first, process the raw data such that trInf is [nTr x nComp]
   if expInd == -1: # i.e. sfBB
     trialInf = coreExp['trial'];
-    whereNotBlank = np.where(np.logical_or(trialInf['maskOn'], trialInf['baseOn']))[0]
+    if whichTrials is None: # if whichTrials is None, then we're using ALL non-blank trials (i.e. fitting 100% of data)
+      whichTrials = np.where(np.logical_or(trialInf['maskOn'], trialInf['baseOn']))[0]
     if respMeasure == 0:
-      resp = np.expand_dims(coreExp['spikeCounts'][whereNotBlank], axis=1); # make (nTr, 1)
+      resp = np.expand_dims(coreExp['spikeCounts'][whichTrials], axis=1); # make (nTr, 1)
     elif respMeasure == 1: # then we're getting F1 -- first at baseTF, then maskTF
       # NOTE: CORRECTED TO MASK, then BASE on 20.11.15
       # -- the tranpose turns it from [2, nTr] to [nTr, 2], but keeps [:,0] as mask; [:,1] as base
-      resp = np.vstack((coreExp['f1_mask'][whereNotBlank], coreExp['f1_base'][whereNotBlank])).transpose();
+      resp = np.vstack((coreExp['f1_mask'][whichTrials], coreExp['f1_base'][whichTrials])).transpose();
+      # NOTE: Here, if spikeCount == 0 for that trial, then f1_mask/base will be NaN -- replace with zero
+      to_repl = np.where(coreExp['spikeCounts'][whichTrials] == 0)[0];
+      resp[to_repl, :] = 0;
   elif expInd >= 0: # i.e. sfMix*
     trialInf = coreExp['sfm']['exp']['trial'];
-    whereNotBlank = np.where(~np.isnan(np.sum(trialInf['ori'], 0)))[0];
+    whichTrials = np.where(~np.isnan(np.sum(trialInf['ori'], 0)))[0];
     # TODO -- put in the proper responses...
     if respOverwrite is not None:
       spikes = respOverwrite;
@@ -214,22 +220,22 @@ def process_data(coreExp, expInd, respMeasure=0, respOverwrite=None):
     resp = spikes[whereNan];
 
   # mask, then base
-  trInf['num'] = whereNotBlank;
-  trInf['ori'] = np.transpose(np.vstack(trialInf['ori']), (1,0))[whereNotBlank, :]
-  trInf['tf'] = np.transpose(np.vstack(trialInf['tf']), (1,0))[whereNotBlank, :]
-  trInf['ph'] = np.transpose(np.vstack(trialInf['ph']), (1,0))[whereNotBlank, :]
-  trInf['sf'] = np.transpose(np.vstack(trialInf['sf']), (1,0))[whereNotBlank, :]
-  trInf['con'] = np.transpose(np.vstack(trialInf['con']), (1,0))[whereNotBlank, :]
+  trInf['num'] = whichTrials;
+  trInf['ori'] = np.transpose(np.vstack(trialInf['ori']), (1,0))[whichTrials, :]
+  trInf['tf'] = np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :]
+  trInf['ph'] = np.transpose(np.vstack(trialInf['ph']), (1,0))[whichTrials, :]
+  trInf['sf'] = np.transpose(np.vstack(trialInf['sf']), (1,0))[whichTrials, :]
+  trInf['con'] = np.transpose(np.vstack(trialInf['con']), (1,0))[whichTrials, :]
 
   return trInf, resp;
 
 class dataWrapper(torchdata.Dataset):
-    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu'):
+    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None):
         # if respMeasure == 0, then we're getting DC; otherwise, F1
         # respOverwrite means overwrite the responses; used only for expInd>=0 for now
 
         super().__init__();
-        trInf, resp = process_data(expInfo, expInd, respMeasure)
+        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials)
 
         self.trInf = trInf;
         self.resp = resp;
@@ -664,13 +670,15 @@ def loss_sfNormMod(respModel, respData, lossType=1):
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=1000, learning_rate=0.001, batch_size=200, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0): # batch_size = 200...
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=1500, learning_rate=0.001, batch_size=200, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 200...
 
   ### Load the cell, set up the naming
   ########
   # Load cell
   ########
-  loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory
+  # NOTE: TEMPORARILY ADDED replace(...) since we're debugging and running from .../pytorch/ directory
+  loc_base = os.getcwd() + '/';
+  #loc_base = os.getcwd().replace('pytorch', '') # + '/'; # ensure there is a "/" after the final directory
   loc_data = loc_base + expDir + 'structures/';
 
   if 'pl1465' in loc_base:
@@ -685,6 +693,12 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         fL_name = 'fitList%s_pyt_201017' % (loc_str); # pyt for pytorch
       elif excType == 2:
         fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
+
+  if vecCorrected:
+    fL_name = '%s_vecF1' % fL_name;
+
+  if whichTrials is not None: # meaning we're going to hold out some trials!
+    fL_name = '%s_CV' % fL_name; # i.e. we're doing cross-validation...
 
   if lossType == 4: # chiSq...
     fL_name = '%s%s' % (fL_name, hf.chiSq_suffix(kMult));
@@ -706,7 +720,11 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   print('\nFitList: %s' % fitListName);
 
   # Load datalist, then specific cell
-  dataList = hf.np_smart_load(str(loc_data + dataListName));
+  try:
+    dataList = hf.np_smart_load(str(loc_data + dataListName));
+  except:
+    dataListName = hf.get_datalist(expDir);
+    dataList = hf.np_smart_load(str(loc_data + dataListName));
   dataNames = dataList['unitName'];
   print('loading data structure from %s...' % loc_data);
   try:
@@ -716,8 +734,12 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   # - then cell
   S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfBB.npy')); # why -1? 0 indexing...
   expInfo = S['sfBB_core']; # TODO: generalize...
-  trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure); 
-
+  if vecCorrected:
+    # Overwrite f1 spikes
+    vec_corr_mask, vec_corr_base = hf_sfBB.adjust_f1_byTrial(expInfo);
+    expInfo['f1_mask'] = vec_corr_mask;
+    expInfo['f1_base'] = vec_corr_base;
+  trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials);
 
   respStr = hf_sfBB.get_resp_str(respMeasure);
   if os.path.isfile(loc_data + fitListName):
@@ -726,9 +748,9 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       curr_params = fitList[cellNum-1][respStr]['params'];
       # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
       testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd)
-      trInf, resp = process_data(expInfo, expInd, respMeasure)
-      predictions = testModel.forward(trInf, respMeasure=respMeasure);
-      loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(resp.flatten()), testModel.lossType)
+      trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure)
+      predictions = testModel.forward(trInfTemp, respMeasure=respMeasure);
+      loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType)
       if np.isnan(loss_test.item()):
         initFromCurr = 0; # then we've saved bad parameters -- force new ones!
     except:
@@ -806,7 +828,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   model_history = []
   hessian_history = []
 
-  first_pred = model(trInf, respMeasure=respMeasure);
+  first_pred = model.forward(trInf, respMeasure=respMeasure);
   accum = 0; # keep track of accumulator
   for t in range(max_epochs):
       optimizer.zero_grad()
@@ -890,6 +912,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     fitList = hf.np_smart_load(str(loc_data + fitListName));
   # else, nothing to reload!!!
   # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
+  # TODO: Make this smarter for doing cross-validation...
   if cellNum-1 not in fitList:
     print('cell did not exist yet');
     fitList[cellNum-1] = dict();
@@ -922,8 +945,15 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       stepList = hf.np_smart_load(str(loc_data + stepListName));
     else:
       stepList = dict();
-    stepList[cellNum-1] = dict();
-    stepList[cellNum-1][respStr] = dict();
+    if cellNum-1 not in stepList:
+      print('[steplist] cell did not exist yet');
+      stepList[cellNum-1] = dict();
+      stepList[cellNum-1][respStr] = dict();
+    elif stepList not in stepList[cellNum-1]:
+      print('%s did not exist yet' % respStr);
+      stepList[cellNum-1][respStr] = dict();
+    else:
+      print('we will be overwriting %s (if updating)' % respStr);
     stepList[cellNum-1][respStr]['loss'] = loss_history;
     stepList[cellNum-1][respStr]['time'] = time_history;
     np.save(loc_data + stepListName, stepList);
@@ -960,9 +990,9 @@ if __name__ == '__main__':
       newMethod = 0; # default
 
     if len(sys.argv) > 11:
-      rvcMod = float(sys.argv[11]);
+      vecCorrected = int(sys.argv[11]);
     else:
-      rvcMod = 1; # default (naka-rushton)
+      vecCorrected = 0;
 
     if len(sys.argv) > 12:
       fixRespExp = float(sys.argv[12]);
@@ -981,8 +1011,8 @@ if __name__ == '__main__':
 
     start = time.process_time();
     if cellNum >= 0:
-      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod); # first do DC
-      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod); # then F1
+      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected); # first do DC
+      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected); # then F1
 
     elif cellNum == -1:
       loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory
