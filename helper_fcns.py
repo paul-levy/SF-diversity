@@ -662,7 +662,7 @@ def manual_fft(psth, tfs, onsetTransient=None, stimDur=1, binWidth=1e-3):
       asFFT[1+i] = true_coeffs[start_ind + 2*i] + 1j* true_coeffs[start_ind + 2*i+1]; # * j to ensure the complex component...
       amplitudes[1+i] = np.abs(asFFT[1+i]);
 
-    return true_coeffs, asFFT, amplitudes;
+    return input_mat, true_coeffs, asFFT, amplitudes;
 
 def fft_amplitude(fftSpectrum, stimDur):
     ''' given an fftSpectrum (and assuming all other normalization has taken place), we double the non-DC frequencies and return

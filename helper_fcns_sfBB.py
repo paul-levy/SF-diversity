@@ -126,18 +126,24 @@ def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecC
                                            byTrial['con'][1,:]==baseCon_curr);
 
       # NOTE: We do all indexing in logicals until the end, where we align it into the length of val_trials
-      baseOnly_curr = np.where(np.logical_and(baseOnlyTr, base_match)[val_trials])[0];
+      baseOnly_curr = np.intersect1d(np.where(np.logical_and(baseOnlyTr, base_match))[0], val_trials);
+      #baseOnly_curr = np.where(np.logical_and(baseOnlyTr, base_match)[val_trials])[0];
       baseDC, baseF1 = dc_resp[baseOnly_curr], f1_base[baseOnly_curr];
 
       if vecCorrectedF1: # overwrite baseF1 from above...
         vec_means, vec_byTrial, _, _, _, _ = get_vec_avg_response(expInfo, baseOnly_curr);
         _, baseInd = get_mask_base_inds(); # we know we're getting base response...
-        # NOTE: If vecCorrectedF1, we return baseResp_f1 --> length 2, [0] is R, [1] is phi in polar coordinates
-        baseResp_f1.append(np.vstack((vec_byTrial[0][:, baseInd], vec_byTrial[1][:, baseInd])));
-        # NOTE: If vecCorrectedF1, we return means [r, phi] in [ii, 0];
-        # -------------------------------- sem/var [r, phi] in [ii, 1];
-        baseSummary_f1[ii, 0, :] = [vec_means[0][baseInd], vec_means[1][baseInd]];
-        baseSummary_f1[ii, 1, :] = [vec_means[2][baseInd], vec_means[3][baseInd]];
+        try:
+          # NOTE: If vecCorrectedF1, we return baseResp_f1 --> length 2, [0] is R, [1] is phi in polar coordinates
+          baseResp_f1.append(np.vstack((vec_byTrial[0][:, baseInd], vec_byTrial[1][:, baseInd])));
+          # NOTE: If vecCorrectedF1, we return means [r, phi] in [ii, 0];
+          # -------------------------------- sem/var [r, phi] in [ii, 1];
+          baseSummary_f1[ii, 0, :] = [vec_means[0][baseInd], vec_means[1][baseInd]];
+          baseSummary_f1[ii, 1, :] = [vec_means[2][baseInd], vec_means[3][baseInd]];
+        except: # why? If there were not valid trials for this condition...
+          baseResp_f1.append(np.vstack(([], [])));
+          baseSummary_f1[ii, 0, :] = [np.nan, np.nan]
+          baseSummary_f1[ii, 1, :] = [np.nan, np.nan]
       else:
         baseResp_f1.append(baseF1);
         baseSummary_f1[ii, :] = [np.mean(baseF1), np.std(baseF1)/len(baseF1)];
@@ -222,7 +228,11 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
         for msI, mS in enumerate(maskSf):
             sfOk = (byTrial['sf'][0,:] == mS)
             # NOTE: We do all indexing in logicals until the end, where we align it into the length of val_trials
-            trialsOk = np.where(np.logical_and(currTr, np.logical_and(conOk, sfOk))[val_trials])[0];
+            trialsOk = np.intersect1d(np.where(np.logical_and(currTr, np.logical_and(conOk, sfOk)))[0], val_trials);
+            #trialsOk = np.where(np.logical_and(currTr, np.logical_and(conOk, sfOk))[val_trials])[0];
+
+            #if len(val_trials)<200 and len(trialsOk) > 0:
+            #  pdb.set_trace();
 
             currDC = dc_resp[trialsOk];
             nTr = len(currDC);
@@ -237,13 +247,16 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
               else:
                 whichInd = baseInd;
               vec_means, vec_byTrial, _, _, _, _ = get_vec_avg_response(expInfo, trialsOk);
-              # NOTE: vec_byTrial is list: R [0] and phi [1] (relative to stim onset)
-              respMatrixF1all[mcI, msI, 0:nTr, 0] = vec_byTrial[0][:, whichInd];
-              respMatrixF1all[mcI, msI, 0:nTr, 1] = vec_byTrial[1][:, whichInd];
-              # NOTE: If vecCorrectedF1, we return r [mean, sem] in [..., 0, :];
-              # ---------------------------------phi [mean, circVar] in [..., 1, :];
-              respMatrixF1[mcI, msI, 0, :] = [vec_means[0][whichInd], vec_means[2][whichInd]]
-              respMatrixF1[mcI, msI, 1, :] = [vec_means[1][whichInd], vec_means[3][whichInd]];
+              try:
+                # NOTE: vec_byTrial is list: R [0] and phi [1] (relative to stim onset)
+                respMatrixF1all[mcI, msI, 0:nTr, 0] = vec_byTrial[0][:, whichInd];
+                respMatrixF1all[mcI, msI, 0:nTr, 1] = vec_byTrial[1][:, whichInd];
+                # NOTE: If vecCorrectedF1, we return r [mean, sem] in [..., 0, :];
+                # ---------------------------------phi [mean, circVar] in [..., 1, :];
+                respMatrixF1[mcI, msI, 0, :] = [vec_means[0][whichInd], vec_means[2][whichInd]]
+                respMatrixF1[mcI, msI, 1, :] = [vec_means[1][whichInd], vec_means[3][whichInd]];
+              except: # we'll end up here if the condition we're analyzing in a "subset of data" case has NO valid trials
+                pass; # we're already pre-populated with NaN
             else:
               if maskF1 == 1:
                 currF1 = f1_mask[trialsOk];
@@ -344,8 +357,11 @@ def get_vec_avg_response(expInfo, val_trials, dir=-1, psth_binWidth=1e-3, stimDu
   resp_phase = np.array([np.angle(full_fourier[x][tfAsInts[x, :]], True) for x in range(len(full_fourier))]); # true --> in degrees
   resp_amp = np.array([amps[tfAsInts[ind, :]] for ind, amps in enumerate(amps)]); # after correction of amps (19.08.06)
   stimPhs = np.zeros_like(resp_amp);
-  stimPhs[:, maskInd] = maskPh
-  stimPhs[:, baseInd] = basePh
+  try:
+    stimPhs[:, maskInd] = maskPh
+    stimPhs[:, baseInd] = basePh
+  except: # why would this happen? If we passed in val_trials for "subset of the data analysis" and this condition is empty...
+    pass;
 
   phase_rel_stim = np.mod(np.multiply(dir, np.add(resp_phase, stimPhs)), 360);
   r_mean, phi_mean, r_sem, phi_var = hf.polar_vec_mean(np.transpose(resp_amp), np.transpose(phase_rel_stim), sem=1) # return s.e.m. rather than std (default)
