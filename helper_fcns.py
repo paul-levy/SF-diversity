@@ -649,7 +649,8 @@ def manual_fft(psth, tfs, onsetTransient=None, stimDur=1, binWidth=1e-3):
       lower_bounds.append(-np.inf); upper_bounds.append(np.inf); # cos/sin coefficients are unbounded
       lower_bounds.append(-np.inf); upper_bounds.append(np.inf); # cos/sin coefficients are unbounded
 
-    coeffs = opt.lsq_linear(np.transpose(input_mat), psth, bounds=(tuple(lower_bounds), tuple(upper_bounds)));
+    input_mat = np.transpose(input_mat);
+    coeffs = opt.lsq_linear(input_mat, psth, bounds=(tuple(lower_bounds), tuple(upper_bounds)));
     sampFreq = len(psth)/stimDur; # how many samples per second?
 
     # Get the coefficients, and pack them as Fourier coefficients
@@ -662,7 +663,7 @@ def manual_fft(psth, tfs, onsetTransient=None, stimDur=1, binWidth=1e-3):
       asFFT[1+i] = true_coeffs[start_ind + 2*i] + 1j* true_coeffs[start_ind + 2*i+1]; # * j to ensure the complex component...
       amplitudes[1+i] = np.abs(asFFT[1+i]);
 
-    return input_mat, true_coeffs, asFFT, amplitudes;
+    return input_mat, coeffs['x'], asFFT, amplitudes;
 
 def fft_amplitude(fftSpectrum, stimDur):
     ''' given an fftSpectrum (and assuming all other normalization has taken place), we double the non-DC frequencies and return
