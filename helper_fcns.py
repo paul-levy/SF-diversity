@@ -46,6 +46,9 @@ import warnings
 ### II. fourier, and repsonse-phase adjustment
 
 # make_psth - create a psth for a given spike train
+# make_psth_slide - create a sliding psth (not vectorized)
+# fit_onset_transient - make a fit to the onset transient of a PSTH 
+# manual_fft - "Manual" FFT, including (optional) onset transient
 # fft_amplitude - adjust the FFT amplitudes as needed for a real signal (i.e. double non-DC amplitudes)
 # spike_fft - compute the FFT for a given PSTH, extract the power at a given set of frequencies 
 # compute_f1f0 - compute the ratio of F1::F0 for the stimulus closest to optimal
@@ -569,6 +572,97 @@ def make_psth(spikeTimes, binWidth=1e-3, stimDur=1):
     psth = [x[0] for x in all];
     bins = [x[1] for x in all];
     return psth, bins;
+
+def make_psth_slide(spikeTimes, binWidth=25e-3, stimDur=1, binSlide=1e-3, debug=0):
+    ''' binWidth in S will be x +/- binWidth s; each bin will be centered binSlide s away (default is 1e-3, i.e. 1ms)
+        NOTE: This assumes all spikeTimes will be of same stimDur and we use common slide/width values
+    '''
+    np = numpy;
+
+    spikeTimes = [sorted(x) for x in spikeTimes]; # to use searchsorted, each spikeTimes array must be sorted!
+    time_centers = np.linspace(0, stimDur, 1+int(stimDur/binSlide));
+    idx1 = [np.array([np.searchsorted(spikeTimesCurr,tc-binWidth,'right') for tc in time_centers]) for spikeTimesCurr in spikeTimes];
+    idx2 = [np.array([np.searchsorted(spikeTimesCurr,tc+binWidth,'left') for tc in time_centers]) for spikeTimesCurr in spikeTimes];
+
+    # Using the lower/upper bounds of each bin, determine how many S of each time bin are valid times (i.e. between [0, stimDur])
+    binLow = time_centers - binWidth;
+    binHigh = time_centers + binWidth;
+    full_width = 2*binWidth;
+    binLow[binLow>0] = 0
+    binHigh = binHigh-stimDur;
+    binHigh[binHigh<0] = 0
+    div_factor = full_width - (binHigh-binLow)
+    counts = [np.divide(idx2Curr-idx1Curr, 1e3*div_factor) for idx2Curr,idx1Curr in zip(idx2,idx1)];
+
+    if debug:
+        return counts, time_centers, idx1, idx2, div_factor
+    else:
+        return counts, time_centers
+
+def fit_onset_transient(psth, bins, onsetWidth=100, stimDur=1, whichMod=1, toNorm=1):
+   ''' psth, bins should be from the make_psth_slide call
+       onsetWidth is in mS, stimDur is in S
+   '''
+   np = numpy;
+
+   onsetInd = int((1e-3*onsetWidth/stimDur)*len(psth));
+   onset_rate, onset_bins = psth[0:onsetInd], bins[0:onsetInd]
+   onset_toFit = onset_rate - np.min(psth);
+   # make the fit to the onset transient...
+   if whichMod == 1:
+      oy = np.polyfit(onset_bins, onset_toFit, deg=10);
+      asMod = np.poly1d(oy); # make a callable function given the fit
+      full_transient = np.zeros_like(bins[1:]);
+      full_transient[0:onsetInd] = asMod(onset_bins);
+      if toNorm == 1:
+         full_transient = np.divide(full_transient, np.max(full_transient));
+   else: # make other methods...
+      full_transient = None;
+
+   return full_transient;
+
+def manual_fft(psth, tfs, onsetTransient=None, stimDur=1, binWidth=1e-3):
+    ''' Compute the FFT in a manual way - must pass in np.array of TF values (as integer)
+        - If you pass in onsetTransient (should be same length as psth), will include transient coefficient, too
+    '''
+    np = numpy;
+    n_coeff = 1 + 2*len(tfs); # DC, onset transient, sin&cos for the two stim TFs
+    if onsetTransient is not None:
+      n_coeff += 1; # make sure we account for an extra column...
+
+    input_mat = np.ones((n_coeff, len(psth))); # this way we don't need to manually enter the DC term...
+    lower_bounds = []; upper_bounds = [];
+    lower_bounds.append(0); upper_bounds.append(np.inf); # bounds for DC
+    if onsetTransient is not None:
+      input_mat[1,:] = onsetTransient #np.divide(full_transient, np.max(full_transient));
+      start_ind = 2;
+      lower_bounds.append(0); upper_bounds.append(np.inf); # bounds for transient (ensure it's >= 0)
+    else:
+      start_ind = 1;
+    ### -- get the cos/sin?
+    samps = np.linspace(0,stimDur, len(psth)) 
+    cos_samp = lambda f: np.cos(2*np.pi*f*samps)
+    sin_samp = lambda f: np.sin(2*np.pi*f*samps)
+    for i,tf in enumerate(tfs):
+      input_mat[start_ind + 2*i, :] = cos_samp(tf);
+      input_mat[start_ind + 2*i+1, :] = -sin_samp(tf); # why negative? That's how np.fft has it, based on their coefficients...
+      lower_bounds.append(-np.inf); upper_bounds.append(np.inf); # cos/sin coefficients are unbounded
+      lower_bounds.append(-np.inf); upper_bounds.append(np.inf); # cos/sin coefficients are unbounded
+
+    coeffs = opt.lsq_linear(np.transpose(input_mat), psth, bounds=(tuple(lower_bounds), tuple(upper_bounds)));
+    sampFreq = len(psth)/stimDur; # how many samples per second?
+
+    # Get the coefficients, and pack them as Fourier coefficients
+    true_coeffs = coeffs['x']*sampFreq;
+    asFFT = np.zeros((1+len(tfs), 1), dtype='complex');
+    asFFT[0] = true_coeffs[0];
+    amplitudes = np.zeros_like(asFFT, dtype='float32');
+    amplitudes[0] = true_coeffs[0]; # FFT coefficient here as same as amplitude...
+    for i,tf in enumerate(tfs):
+      asFFT[1+i] = true_coeffs[start_ind + 2*i] + 1j* true_coeffs[start_ind + 2*i+1]; # * j to ensure the complex component...
+      amplitudes[1+i] = np.abs(asFFT[1+i]);
+
+    return true_coeffs, asFFT, amplitudes;
 
 def fft_amplitude(fftSpectrum, stimDur):
     ''' given an fftSpectrum (and assuming all other normalization has taken place), we double the non-DC frequencies and return
