@@ -16,6 +16,9 @@
 # 5 param is lgnFrontEnd (choose LGN type; will be comparing against non-LGN type)
 # 6th param is kMult (0.01, 0.05, 0.10, usually...)
 # 7th param - which plots (-1 for "usual" plots; 1 for phase adjustments only; 0 for both)
+# ------------- note: "2" now means the phase adjustment only BUT with the manual FFT/onset transient adjustment
+# -------------       "3" will mean "2" AND do PSTH
+# ------------- -- if doing this, make sure to specify the onset transient parameters (in plot_diagnose_sfBB.py, towards top)
 # 8th param is respExpFixed (-1 for not fixed, then specific value for a fit with fixed respExp [e.g. 1 or 2])
 # 9th param is std/sem as variance measure: (1 sem (default))
 
@@ -28,7 +31,7 @@ do
   #python3.6 plot_diagnose_sfBB.py $run 2 1 V1_BB/ 1 0.05 -1 -1 1 & # no diff, not interpolated
   #python3.6 plot_diagnose_sfBB.py $run 2 2 V1_BB/ 1 0.05 -1 -1 1 & # no diff, not interpolated
   # ONLY DATA & ONLY PHASE CORRECTION
-  python3.6 plot_diagnose_sfBB.py $run -1 2 V1_BB/ 1 0.05 1 -1 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_sfBB.py $run -1 2 V1_BB/ 1 0.05 3 -1 1 & # no diff, not interpolated
 
 done
 

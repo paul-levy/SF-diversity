@@ -29,6 +29,8 @@ newMethod = 1;
 modStrs = ['V1', 'LGN'];
 nMods = len(modStrs);
 typeClrs = ['k', 'r']; # for data, model, respectively
+onsetDur = 200; # in mS, how much of the initial PSTH to we model as part of the onset transient
+halfWidth = 15; # in mS, how wide (in one direction) is the smooth/sliding PSTH window (usually 15 or 25)
 
 ###
 for i in range(2):
@@ -365,7 +367,7 @@ if fitBase is not None:
 # This, we can do regardless of fitBase
 if whichPlots >= 0:
   ##############
-  # Response adjustment plots (only if plotPhase)
+  # Response adjustment plots (only if plotPhase, i.e. whichPlots >= 0)
   ##############
   ### We'll go through and get all trials of the same condition...
   # fixed
@@ -373,6 +375,19 @@ if whichPlots >= 0:
   stimDur = 1
   conDig = 2
   maskInd, baseInd = hf_sf.get_mask_base_inds();
+
+  if whichPlots >= 2: # e.g. if it's 2
+    allOnsets = hf.np_smart_load(data_loc + 'onset_transients.npy'); # here's the set of all onset transients
+    onsetKey = (onsetDur, halfWidth);
+    onsetTransient = allOnsets[cellNum-1][onsetKey]['transient'];
+    str_onset = '_wOnset';
+    str_onsetPrms = '_%03d_%03d' % (onsetDur, halfWidth);
+    nrow = 2;
+  else:
+    onsetTransient = None;
+    str_onset = '';
+    str_onsetPrms = '';
+    nrow = 1;
 
   # Gather all possible stimulus conditions
   maskSfs = expInfo['maskSF'];
@@ -407,8 +422,7 @@ if whichPlots >= 0:
 
           max_r = 10*np.ceil(np.max(resp_amp)/10) # round to the nearest multiple of 10
 
-          # Plot spike times, cycle averaged PSTH
-          nrow = 1; ncol = 2;
+          ncol = 2; # always 2 columns, but nrow is specified with the onset transient...
           f, ax = plt.subplots(nrow, ncol, figsize=(ncol*20, nrow*20));
 
           f.suptitle('mask (%d @ %d Hz, %.2f cpd, %d%%); base (%d @ %d Hz, %.2f cpd, %d%%)' % (maskOn, np.unique(maskTf), np.unique(maskSf)[0], np.unique(np.round(100*maskCon))[0], 
@@ -432,6 +446,32 @@ if whichPlots >= 0:
           plt.ylim([0, max_r])
           plt.legend(fontsize='medium');
 
+          if onsetTransient is not None:
+            vec_avgs, vec_byTrial, rel_amps, _, _, _ = hf_sf.get_vec_avg_response(expInfo, val_trials, dir=dir, stimDur=stimDur, onsetTransient=onsetTransient);
+            # - unpack the vec_avgs, and per trial
+            mean_r, mean_phi = vec_avgs[0], vec_avgs[1];
+            resp_amp, phase_rel_stim = vec_byTrial[0], vec_byTrial[1];
+            # -- average the uncorrected amplitudes...
+            uncorr_r = np.mean(rel_amps, axis=0);
+
+            # MASK (will do base component after)
+            plt.subplot(nrow,ncol,3, projection='polar');
+            [plt.plot([0, np.deg2rad(phi)], [0, r], 'o--k', alpha=0.3) for phi,r in zip(phase_rel_stim[:, maskInd], resp_amp[:, maskInd])]
+            curr_r, curr_phi = mean_r[maskInd], mean_phi[maskInd]
+            plt.plot([0, np.deg2rad(curr_phi)], [0, curr_r], 'o-k', label=r'$ mu(r,\phi) = (%.1f, %.0f)$ vs $r_0 = %.1f$' % (curr_r, curr_phi, uncorr_r[maskInd]))
+            plt.title('Mask -- Transient-correction (onset=%03dms, halfWidth=%03dms)' % (onsetDur, halfWidth))
+            plt.ylim([0, max_r])
+            plt.legend(fontsize='medium');
+
+            # BASE
+            plt.subplot(nrow,ncol,4, projection='polar');
+            [plt.plot([0, np.deg2rad(phi)], [0, r], 'o--k', alpha=0.3) for phi,r in zip(phase_rel_stim[:, baseInd], resp_amp[:, baseInd])]
+            curr_r, curr_phi = mean_r[baseInd], mean_phi[baseInd]
+            plt.plot([0, np.deg2rad(curr_phi)], [0, curr_r], 'o-k', label=r'$ mu(r,\phi) = (%.1f, %.0f)$ vs. $r_0 = %.1f$' % (curr_r, curr_phi, uncorr_r[baseInd]))
+            plt.title('Base -- Transient-correction')
+            plt.ylim([0, max_r])
+            plt.legend(fontsize='medium');
+
           saveName = "/cell_%03d_phaseCorr_sf%03d_con%03d.pdf" % (cellNum, np.int(100*np.unique(maskSf)), np.int(100*np.unique(maskCon)))
 
           if maskOn and baseOn:
@@ -441,7 +481,7 @@ if whichPlots >= 0:
           elif baseOn:
             subdir = 'baseOnly';
 
-          full_save = os.path.dirname(str(save_loc + 'phase_corr/%s/cell_%03d/%s/' % (expName, cellNum, subdir)));
+          full_save = os.path.dirname(str(save_loc + 'phase_corr%s/%s/cell_%03d%s/%s/' % (str_onset, expName, cellNum, str_onsetPrms, subdir)));
           if not os.path.exists(full_save):
               os.makedirs(full_save);
           print('Saving %s' % (full_save + saveName));
@@ -450,5 +490,69 @@ if whichPlots >= 0:
           plt.close(f)
           pdfSv.close()
 
+          ## Yes, still part of the same outer loop (didn't want to disturb the above plotting)
+          if whichPlots >= 3: # i.e. if it's greater than 2, then we'll plot PSTH
+            # get the mask/base TF values and cycle duration (in mS)
+            maskTf = np.unique(expInfo['trial']['tf'][maskInd,:])[0]
+            baseTf = np.unique(expInfo['trial']['tf'][baseInd,:])[0]
+            cycleDur_mask = 1e3/maskTf # guaranteed only one TF value
+            cycleDur_base = 1e3/baseTf # guaranteed only one TF value
 
+            # get the spikes
+            msTenthToS = 1e-4; # the spike times are in 1/10th ms, so multiply by 1e-4 to convert to S
+            spikeTimes = [expInfo['spikeTimes'][trNum]*msTenthToS for trNum in val_trials]
+
+            # -- compute PSTH
+            psth, bins = hf.make_psth(spikeTimes, stimDur=stimDur)
+            # -- compute FFT (manual), then start to unpack - [matrix, coeffs, spectrum, amplitudes]
+            man_fft = [hf.manual_fft(psth_curr, tfs=np.array([int(np.unique(maskTf)), int(np.unique(baseTf))]), onsetTransient=onsetTransient, stimDur=stimDur) for psth_curr in psth]
+            man_fft_noTransient = [hf.manual_fft(psth_curr, tfs=np.array([int(np.unique(maskTf)), int(np.unique(baseTf))]), onsetTransient=None, stimDur=stimDur) for psth_curr in psth]
+            # Now, plot!
+            nPlots = len(psth);
+            nrow = int(np.floor(np.sqrt(nPlots))); ncol = int(np.ceil(nPlots/nrow));
+            fPsth, axPsth = plt.subplots(nrow, ncol, figsize=(15*ncol, nrow*8));
+            psth_slide, bins_slide = hf.make_psth_slide(spikeTimes, binWidth=halfWidth*1e-3)
+
+            max_rate = np.max(psth_slide);
+
+            for ii, psth_curr in enumerate(psth_slide): # yes, it's a loop, but w/e...
+              # First, plot the (smoothed) psth
+              plot_ind = np.unravel_index(ii, (nrow, ncol));
+              axPsth[plot_ind].set_ylim([0, 1.2*max_rate]);
+              axPsth[plot_ind].plot(1e3*bins_slide, psth_curr);
+              # Next, plot the manual FFT "fits" - first with, then without the transient
+              curr_fft = man_fft[ii];
+              curr_fft_noTransient = man_fft_noTransient[ii];
+              axPsth[plot_ind].plot(1e3*bins_slide[0:-1], np.matmul(curr_fft[0], curr_fft[1]), 'k--', label='FFT++')
+              axPsth[plot_ind].plot(1e3*bins_slide[0:-1], np.matmul(curr_fft_noTransient[0], curr_fft_noTransient[1]), 'b--', label='FFT')
+              # and print the coefficients (DC, mask, base)
+              axPsth[plot_ind].text(cycleDur_mask*1.2, 1.125*max_rate, 'FFT: DC %.1f, mask %.1f, base %.2f' % (*curr_fft[3], ))
+              axPsth[plot_ind].text(cycleDur_mask*1.2, 1.025*max_rate, 'FFT++: DC %.1f, mask %.1f, base %.2f' % (*curr_fft_noTransient[3], ))
+              # - and plot the length of one mask/base cycle
+              axPsth[plot_ind].plot([0, cycleDur_mask], [1.125*max_rate, 1.125*max_rate], 'k-', label='Mask cycle')
+              axPsth[plot_ind].plot([0, cycleDur_base], [1.025*max_rate, 1.025*max_rate], 'r-', label='Base cycle')
+              if ii == 0: # only need the labels/legend once...
+                axPsth[plot_ind].set_ylabel('Spike rate');
+                axPsth[plot_ind].set_xlabel('Time (ms)');
+              if ii+1 == len(psth_slide): # i.e. we're at the last plot -- let's make the legend in an otherwise empty subplot...
+                plot_ind = np.unravel_index(ii+1, (nrow, ncol));
+                axPsth[plot_ind].plot(1e3*bins_slide[0:-1], np.matmul(curr_fft[0], curr_fft[1]), 'k--', label='FFT++')
+                axPsth[plot_ind].plot(1e3*bins_slide[0:-1], np.matmul(curr_fft_noTransient[0], curr_fft_noTransient[1]), 'b--', label='FFT')
+                axPsth[plot_ind].plot([0, cycleDur_mask], [1.125*max_rate, 1.125*max_rate], 'k-', label='Mask cycle')
+                axPsth[plot_ind].plot([0, cycleDur_base], [1.025*max_rate, 1.025*max_rate], 'r-', label='Base cycle')
+                axPsth[plot_ind].legend(fontsize='large');
+
+
+            sns.despine(offset=3);
+
+            full_save = os.path.dirname(str(save_loc + 'PSTH%s/%s/cell_%03d%s/%s/' % (str_onset, expName, cellNum, str_onsetPrms, subdir)));
+            saveName = "/cell_%03d_PSTH_sf%03d_con%03d.pdf" % (cellNum, np.int(100*np.unique(maskSf)), np.int(100*np.unique(maskCon)))
+
+            if not os.path.exists(full_save):
+                os.makedirs(full_save);
+            print('Saving %s' % (full_save + saveName));
+            pdfSv = pltSave.PdfPages(full_save + saveName);
+            pdfSv.savefig(fPsth)
+            plt.close(fPsth)
+            pdfSv.close()
 
