@@ -37,7 +37,7 @@ import warnings
 # descrMod_name   - returns string for descriptive model fit
 # descrLoss_name  - returns string for descriptive model loss type
 # descrFit_name   - name for descriptive fits
-# rvc_mod_suff    - what is the suffix for the given rvcModel (e.g. 'NR', 'peirce')b
+# rvc_mod_suff    - what is the suffix for the given rvcModel (e.g. 'NR', 'peirce')
 # rvc_fit_name    - name for rvcFits
 # angle_xy
 # flatten_list
@@ -576,6 +576,7 @@ def make_psth(spikeTimes, binWidth=1e-3, stimDur=1):
 def make_psth_slide(spikeTimes, binWidth=25e-3, stimDur=1, binSlide=1e-3, debug=0):
     ''' binWidth in S will be x +/- binWidth s; each bin will be centered binSlide s away (default is 1e-3, i.e. 1ms)
         NOTE: This assumes all spikeTimes will be of same stimDur and we use common slide/width values
+        -- Yes, this is vectorized
     '''
     np = numpy;
 

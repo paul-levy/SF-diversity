@@ -328,8 +328,11 @@ def adjust_f1_byTrial(expInfo):
 
 ### ANALYSIS ###
 
-def get_vec_avg_response(expInfo, val_trials, dir=-1, psth_binWidth=1e-3, stimDur=1):
+def get_vec_avg_response(expInfo, val_trials, dir=-1, psth_binWidth=1e-3, stimDur=1, onsetTransient=None):
   ''' Return [r_mean, phi_mean, r_std, phi_var], [resp_amp, phase_rel_stim], rel_amps, phase_rel_stim, stimPhs, resp_phase
+      -- Note that the above values are at mask/base TF, respectively (i.e. not DC)
+
+      If onsetTransient is not None, we'll do the manual FFT
 
       Given the data and the set of valid trials, first compute the response phase
       and stimulus phase - then determine the response phase relative to the stimulus phase
@@ -351,11 +354,19 @@ def get_vec_avg_response(expInfo, val_trials, dir=-1, psth_binWidth=1e-3, stimDu
   tfAsInts = np.zeros((len(val_trials),2), dtype='int32')
   tfAsInts[:, maskInd] = maskTf;
   tfAsInts[:, baseInd] = baseTf;
-  amps, rel_amps, full_fourier = hf.spike_fft(psth, tfs = tfAsInts, stimDur = stimDur)
+  if onsetTransient is None: # then just do this normally...
+    amps, rel_amps, full_fourier = hf.spike_fft(psth, tfs = tfAsInts, stimDur = stimDur)
+    # get the phase of the response
+    resp_phase = np.array([np.angle(full_fourier[x][tfAsInts[x, :]], True) for x in range(len(full_fourier))]); # true --> in degrees
+    resp_amp = np.array([amps[tfAsInts[ind, :]] for ind, amps in enumerate(amps)]); # after correction of amps (19.08.06)
+  else:
+    man_fft = [hf.manual_fft(psth_curr, tfs=np.array([int(np.unique(maskTf)), int(np.unique(baseTf))]), onsetTransient=onsetTransient, stimDur=stimDur) for psth_curr in psth]
+    # -- why [2]? That's the full spectrum; then [1:] is to get mask,base resp_phases respectively // [0] is DC
+    resp_phase = np.squeeze(np.array([np.angle(curr_fft[2][1:], True) for curr_fft in man_fft])); # true --> in degrees
+    # -- why [3]? That's the array of amplitudes; then [1:] is to get mask,base respectively // [0] is DC
+    resp_amp = np.squeeze(np.array([curr_fft[3][1:] for curr_fft in man_fft])); # true --> in degrees
+    rel_amps = np.copy(resp_amp); # they're the same...
 
-  # get the phase of the response
-  resp_phase = np.array([np.angle(full_fourier[x][tfAsInts[x, :]], True) for x in range(len(full_fourier))]); # true --> in degrees
-  resp_amp = np.array([amps[tfAsInts[ind, :]] for ind, amps in enumerate(amps)]); # after correction of amps (19.08.06)
   stimPhs = np.zeros_like(resp_amp);
   try:
     stimPhs[:, maskInd] = maskPh
