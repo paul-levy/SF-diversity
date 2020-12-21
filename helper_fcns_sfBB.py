@@ -1,5 +1,6 @@
 import numpy as np
 import helper_fcns as hf
+from scipy.stats import sem
 
 import pdb
 
@@ -81,12 +82,13 @@ def get_valid_trials(expInfo, maskOn, baseOn, whichCon=None, whichSf=None, baseC
 
 ### ORGANIZING RESPONSES ###
 
-def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecCorrectedF1=0):
-  ''' returns the distribution of responses, mean/s.e.m. and unique sfXcon for each base stimulus in the sfBB_* serie
+def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecCorrectedF1=0, onsetTransient=None):
+  ''' returns the distribution of responses, mean/s.e.m. and unique sfXcon for each base stimulus in the sfBB_* series
       -- dc_resp; f1_base --> use to overwrite the spikes in expInfo (e.g. model responses)
       ---- if passing in the above, should also include val_trials (list of valid trial indices), since
            the model is not evaulated for all trials
       -- vecCorrectedF1 --> Rather than averaging amplitudes, take vector mean/addition (correcting for responses with more varying phase, i.e. noise!)
+      -- if vecCorrectedF1 is on, and if onsetTransient is not None, we'll use the onset transient correction for compute F1 amplitudes
   '''
 
   # TODO: Replace the "val_trials" stuff here with get_valid_trials() func
@@ -103,6 +105,11 @@ def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecC
   if val_trials is None: # otherwise, we've defined which trials matter
     val_trials = np.arange(expInfo['trial']['con'].shape[1]); # i.e. how many trials
 
+  # now, check if val_trials is the same length as dc_resp and/or f1_base - if so, we'll need to handle the indexing differently
+  # - more ternary operator
+  dc_len_match = 1 if len(dc_resp) == len(val_trials) else 0;
+  f1_len_match = 1 if len(f1_base) == len(val_trials) else 0;
+  
   byTrial = expInfo['trial'];
 
   baseOnlyTr = np.logical_and(byTrial['baseOn'], ~byTrial['maskOn']) # baseON and maskOFF
@@ -126,12 +133,17 @@ def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecC
                                            byTrial['con'][1,:]==baseCon_curr);
 
       # NOTE: We do all indexing in logicals until the end, where we align it into the length of val_trials
+      # - unfortunately, need to do different indexing depending on if len(responses) = or not to len(val_trials)...
       baseOnly_curr = np.intersect1d(np.where(np.logical_and(baseOnlyTr, base_match))[0], val_trials);
-      #baseOnly_curr = np.where(np.logical_and(baseOnlyTr, base_match)[val_trials])[0];
-      baseDC, baseF1 = dc_resp[baseOnly_curr], f1_base[baseOnly_curr];
+      baseOnly_curr_match = np.where(np.logical_and(baseOnlyTr, base_match)[val_trials])[0];
+      # - ternary operator (should be straightforward)
+      dc_indexing = baseOnly_curr_match if dc_len_match else baseOnly_curr;
+      f1_indexing = baseOnly_curr_match if f1_len_match else baseOnly_curr;
+      # - then get the responses...
+      baseDC, baseF1 = dc_resp[dc_indexing], f1_base[f1_indexing];
 
       if vecCorrectedF1: # overwrite baseF1 from above...
-        vec_means, vec_byTrial, _, _, _, _ = get_vec_avg_response(expInfo, baseOnly_curr);
+        vec_means, vec_byTrial, _, _, _, _ = get_vec_avg_response(expInfo, baseOnly_curr, onsetTransient=onsetTransient);
         _, baseInd = get_mask_base_inds(); # we know we're getting base response...
         try:
           # NOTE: If vecCorrectedF1, we return baseResp_f1 --> length 2, [0] is R, [1] is phi in polar coordinates
@@ -146,15 +158,15 @@ def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecC
           baseSummary_f1[ii, 1, :] = [np.nan, np.nan]
       else:
         baseResp_f1.append(baseF1);
-        baseSummary_f1[ii, :] = [np.mean(baseF1), np.std(baseF1)/len(baseF1)];
+        baseSummary_f1[ii, :] = [np.mean(baseF1), sem(baseF1)];
 
       baseResp_dc.append(baseDC); 
-      baseSummary_dc[ii, :] = [np.mean(baseDC), np.std(baseDC)/len(baseDC)];
+      baseSummary_dc[ii, :] = [np.mean(baseDC), sem(baseDC)];
 
   return [baseResp_dc, baseResp_f1], [baseSummary_dc, baseSummary_f1], unique_pairs;
 
 
-def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=0):
+def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=0, onsetTransient=None):
   ''' return the DC, F1 matrices [mean, s.e.m.] for responses to the mask only in the sfBB_* series 
       For programs (e.g. sfBB_varSF) with multiple base conditions, the order returned here is guaranteed
       to be the same as the unique base conditions given in get_baseOnly_resp
@@ -179,6 +191,12 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
     f1_mask = expInfo['f1_mask'];
   if val_trials is None: # otherwise, we've defined which trials matter
     val_trials = np.arange(expInfo['trial']['con'].shape[1]); # i.e. how many trials
+
+  # now, check if val_trials is the same length as dc_resp and/or f1_base/mask - if so, we'll need to handle the indexing differently
+  # - more ternary operator
+  dc_len_match = 1 if len(dc_resp) == len(val_trials) else 0;
+  f1Base_len_match = 1 if len(f1_base) == len(val_trials) else 0;
+  f1Mask_len_match = 1 if len(f1_mask) == len(val_trials) else 0;
 
   maxTr = 20; # we assume that the max # of trials in any condition will be this value
   conDig = 3; # round contrast to nearest thousandth (i.e. 0.001)
@@ -228,25 +246,30 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
         for msI, mS in enumerate(maskSf):
             sfOk = (byTrial['sf'][0,:] == mS)
             # NOTE: We do all indexing in logicals until the end, where we align it into the length of val_trials
+            # - unfortunately, need to do different indexing depending on if len(responses) = or not to len(val_trials)...
             trialsOk = np.intersect1d(np.where(np.logical_and(currTr, np.logical_and(conOk, sfOk)))[0], val_trials);
-            #trialsOk = np.where(np.logical_and(currTr, np.logical_and(conOk, sfOk))[val_trials])[0];
+            trialsOk_match = np.where(np.logical_and(currTr, np.logical_and(conOk, sfOk))[val_trials])[0];
 
-            #if len(val_trials)<200 and len(trialsOk) > 0:
-            #  pdb.set_trace();
-
-            currDC = dc_resp[trialsOk];
+            # - ternary operator (should be straightforward)
+            dc_indexing = trialsOk_match if dc_len_match else baseOnly_curr;
+            f1Mask_indexing = trialsOk_match if f1Mask_len_match else baseOnly_curr;
+            f1Base_indexing = trialsOk_match if f1Base_len_match else baseOnly_curr;
+            ### then get the responses...DC, first
+            currDC = dc_resp[dc_indexing];
             nTr = len(currDC);
             respMatrixDCall[mcI, msI, 0:nTr] = currDC;
             dcMean = np.mean(currDC);
-            respMatrixDC[mcI, msI, :] = [dcMean, np.std(currDC)/len(currDC)]
+            respMatrixDC[mcI, msI, :] = [dcMean, sem(currDC)]
 
             if vecCorrectedF1:
               maskInd, baseInd = get_mask_base_inds();
               if maskF1 == 1:
                 whichInd = maskInd;
+                whichTrials = f1Mask_indexing;
               else:
                 whichInd = baseInd;
-              vec_means, vec_byTrial, _, _, _, _ = get_vec_avg_response(expInfo, trialsOk);
+                whichTrials = f1Base_indexing;
+              vec_means, vec_byTrial, _, _, _, _ = get_vec_avg_response(expInfo, whichTrials, onsetTransient=onsetTransient);
               try:
                 # NOTE: vec_byTrial is list: R [0] and phi [1] (relative to stim onset)
                 respMatrixF1all[mcI, msI, 0:nTr, 0] = vec_byTrial[0][:, whichInd];
@@ -259,11 +282,11 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
                 pass; # we're already pre-populated with NaN
             else:
               if maskF1 == 1:
-                currF1 = f1_mask[trialsOk];
+                currF1 = f1_mask[f1Mask_indexing];
               else:
-                currF1 = f1_base[trialsOk];
+                currF1 = f1_base[f1Base_indexing];
               respMatrixF1all[mcI, msI, 0:nTr] = currF1;
-              respMatrixF1[mcI, msI, :] = [np.mean(currF1), np.std(currF1)/len(currF1)]
+              respMatrixF1[mcI, msI, :] = [np.mean(currF1), sem(currF1)]
 
     maskResp_dc.append(respMatrixDC); maskResp_f1.append(respMatrixF1);
     maskResp_dcAll.append(respMatrixDCall); maskResp_f1All.append(respMatrixF1all);
@@ -279,7 +302,7 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
     else:
       return maskResp_dc, maskResp_f1, maskResp_dcAll, maskResp_f1All;
 
-def adjust_f1_byTrial(expInfo):
+def adjust_f1_byTrial(expInfo, onsetTransient=None):
   ''' Correct the F1 ampltiudes for each trial (in order) by:
       - Projecting the full, i.e. (r, phi) FT vector onto the (vector) mean phase
         across all trials of a given condition
@@ -315,7 +338,7 @@ def adjust_f1_byTrial(expInfo):
           # Choose which condition to consider
           val_trials, stimPh, stimTf = get_valid_trials(expInfo, maskOn, baseOn, whichCon, whichSf, returnStimConds=1);
           # Then get the vec avg'd responses, phase information, etc
-          vec_avgs, vec_byTrial, rel_amps, _, _, _ = get_vec_avg_response(expInfo, val_trials, dir=dir, stimDur=stimDur);
+          vec_avgs, vec_byTrial, rel_amps, _, _, _ = get_vec_avg_response(expInfo, val_trials, dir=dir, stimDur=stimDur, onsetTransient=onsetTransient);
           # - unpack the vec_avgs, and per trial
           mean_r, mean_phi = vec_avgs[0], vec_avgs[1];
           resp_amp, phase_rel_stim = vec_byTrial[0], vec_byTrial[1];
