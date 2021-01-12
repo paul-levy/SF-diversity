@@ -600,7 +600,7 @@ def make_psth_slide(spikeTimes, binWidth=25e-3, stimDur=1, binSlide=1e-3, debug=
     else:
         return counts, time_centers
 
-def fit_onset_transient(psth, bins, onsetWidth=100, stimDur=1, whichMod=1, toNorm=1):
+def fit_onset_transient(psth, bins, onsetWidth=100, stimDur=1, whichMod=0, toNorm=1):
    ''' psth, bins should be from the make_psth_slide call
        onsetWidth is in mS, stimDur is in S
    '''
@@ -610,15 +610,33 @@ def fit_onset_transient(psth, bins, onsetWidth=100, stimDur=1, whichMod=1, toNor
    onset_rate, onset_bins = psth[0:onsetInd], bins[0:onsetInd]
    onset_toFit = onset_rate - np.min(psth);
    # make the fit to the onset transient...
-   if whichMod == 1:
+   if whichMod == 0:
       oy = np.polyfit(onset_bins, onset_toFit, deg=10);
       asMod = np.poly1d(oy); # make a callable function given the fit
       full_transient = np.zeros_like(bins[1:]);
       full_transient[0:onsetInd] = asMod(onset_bins);
       if toNorm == 1:
          full_transient = np.divide(full_transient, np.max(full_transient));
-   else: # make other methods...
-      full_transient = None;
+   elif whichMod == 1: # make other methods...
+      # FIRST: create a filter which forces the onset to start from 0 and end at 0
+      # assume: 10% of onset to get to max, 10% to decay to 0 at end
+      nBins = len(onset_bins)
+      onsFilt = np.ones_like(onset_bins)
+      onCut = int(0.1*nBins);
+      onsFilt[0:onCut] = np.square(np.linspace(0,1,onCut))
+      onsFilt[nBins-onCut:nBins] = np.square(np.linspace(1,0,onCut))
+
+      # what form to fit? "trunc_norm" (i.e. a truncated gaussian)
+      from scipy.stats import truncnorm
+      a = 0; b = onsetWidth;
+      my_truncnorm = lambda amp,loc, scale, x: amp*truncnorm.pdf(x, (a-loc)/scale, (b-loc)/scale, loc=loc, scale=scale);
+      loss = lambda prms: np.sum(np.square(my_truncnorm(*prms, 1e3*onset_bins) - onset_toFit))
+      init_fit = [0.2,50,10]
+      best_fit = opt.minimize(loss, init_fit)
+      full_transient = np.zeros_like(bins[1:]);
+      full_transient[0:onsetInd] = onsFilt*my_truncnorm(*best_fit['x'], 1e3*onset_bins);
+      if toNorm == 1:
+         full_transient = np.divide(full_transient, np.max(full_transient));
 
    return full_transient;
 

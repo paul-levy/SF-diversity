@@ -42,16 +42,24 @@ expDir    = sys.argv[2];
 onsetDur  = int(sys.argv[3]); # in mS
 # -- how wide to make each averaged bin in the sliding PSTH
 halfWidth = int(sys.argv[4]); # in mS
-toPlot = int(sys.argv[5]);
+# -- which onset form...
+onsetMethod = int(sys.argv[5]); # original method is "0"; squared filter is "1"
+toPlot = int(sys.argv[6]);
 
+if onsetMethod == 0:
+  onsStr = '';
+elif onsetMethod == 1:
+  onsStr = '_zeros';
+
+### Directories
 loc_base = os.getcwd() + '/';
 
 data_loc = loc_base + expDir + 'structures/';
-save_loc = loc_base + expDir + 'figures/onset/';
+save_loc = loc_base + expDir + 'figures/onset%s/' % onsStr;
 
 ### Load datalist, cell, and "onset list"
 expName = hf.get_datalist(expDir);
-onsetName = 'onset_transients.npy';
+onsetName = 'onset_transients%s.npy' % onsStr;
 
 # auto...
 path = '%sstructures/' % expDir;
@@ -86,12 +94,12 @@ psth_slide = psth_slide[0];
 rate_slide = psth_slide/nTrials;
 
 # Fit onset transient...
-full_transient = hf.fit_onset_transient(rate_slide, bins_slide, onsetWidth=onsetDur, toNorm=0)
+full_transient = hf.fit_onset_transient(rate_slide, bins_slide, onsetWidth=onsetDur, whichMod=onsetMethod, toNorm=0)
 max_rate = np.max(rate_slide);
 onsetInd = int((1e-3*onsetDur/stimDur)*len(psth_slide));
 onset_rate, onset_bins = rate_slide[0:onsetInd], bins_slide[0:onsetInd]
 # do it again so we have the normalized version
-full_transient_norm = hf.fit_onset_transient(rate_slide, bins_slide, onsetWidth=onsetDur, toNorm=1)
+full_transient_norm = hf.fit_onset_transient(rate_slide, bins_slide, onsetWidth=onsetDur, whichMod=onsetMethod, toNorm=1)
 
 ### Load what we need to 
 curr_key = (onsetDur, halfWidth)
