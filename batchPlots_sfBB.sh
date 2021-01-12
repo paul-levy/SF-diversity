@@ -18,19 +18,20 @@
 # 7 param is interpModel (i.e. interpolate model?)
 # 8th param is kMult (0.01, 0.05, 0.10, usually...)
 # 9th param is whether (1) or not (0) to do vector correction F1...
-# 10th param is respExpFixed (-1 for not fixed, then specific value for a fit with fixed respExp [e.g. 1 or 2])
-# 11th param is std/sem as variance measure: (1 sem (default))
+# 10th param is whether to include the onset transient correction for F1 responses (use onsetDur in mS to use (e.g. 100); 0 to do without)
+# 11th param is respExpFixed (-1 for not fixed, then specific value for a fit with fixed respExp [e.g. 1 or 2])
+# 12th param is std/sem as variance measure: (1 sem (default))
 
 source activate pytorch-lcv
 
 for run in {1..20}
 do
-  # --------------------------e-l--dir----dif--kmul--rExp------
-  # ------------------------------------lgn-inp----corr-sem-------
-  python3.6 plot_sfBB.py $run 2 1 V1_BB/ 1 0 0 0.05 1 -1 1 & # no diff, not interpolated
-  python3.6 plot_sfBB.py $run 2 2 V1_BB/ 1 0 0 0.05 1 -1 1 & # no diff, not interpolated
+  # --------------------------e-l--dir----dif--kmul--onsr--sem-----
+  # ------------------------------------lgn-inp----cor-rExp-------
+  #python3.6 plot_sfBB.py $run 2 1 V1_BB/ 1 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
+  #python3.6 plot_sfBB.py $run 2 2 V1_BB/ 1 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
   # DATA ONLY, WITH PHASE CORRECTION  
-  #python3.6 plot_sfBB.py $run -1 2 V1_BB/ 1 0 0 0.05 1 -1 1 & # no diff, not interpolated
+  python3.6 plot_sfBB.py $run -1 2 V1_BB/ 1 0 0 0.05 1 80 -1 1 & # no diff, not interpolated
   # --------------------------e-l--dir----dif--kmul--rExp------
   # ------------------------------------lgn-inp----corr-sem-------
 done

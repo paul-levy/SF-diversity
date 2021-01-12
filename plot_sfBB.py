@@ -65,16 +65,18 @@ diffPlot = int(sys.argv[6]);
 intpMod  = int(sys.argv[7]);
 kMult  = float(sys.argv[8]);
 vecCorrected = int(sys.argv[9]);
+onsetTransient = int(sys.argv[10]);
+onsetMod = 1;
 
-if len(sys.argv) > 10:
-  fixRespExp = float(sys.argv[10]);
+if len(sys.argv) > 11:
+  fixRespExp = float(sys.argv[11]);
   if fixRespExp <= 0: # this is the code to not fix the respExp
     fixRespExp = None;
 else:
   fixRespExp = None; # default (see modCompare.ipynb for details)
 
-if len(sys.argv) > 11:
-  respVar = int(sys.argv[11]);
+if len(sys.argv) > 12:
+  respVar = int(sys.argv[12]);
 else:
   respVar = 1;
 
@@ -101,6 +103,23 @@ else:
 
 ### DATALIST
 expName = hf.get_datalist(expDir);
+### ONSETS
+if onsetTransient > 0:
+  onsetDur = onsetTransient;
+  halfWidth = 15; # by default, we'll just use 15 ms...
+  onset_key = (onsetDur, halfWidth);
+  try:
+    if onsetMod == 0:
+      onsetMod_str = '';
+    elif onsetMod == 1:
+      onsetMod_str = '_zeros'
+    onsetTransients = hf.np_smart_load(data_loc + 'onset_transients%s.npy' % onsetMod_str); # here's the set of all onset transients
+    onsetCurr = onsetTransients[cellNum-1][onset_key]['transient'];
+  except:
+    onsetCurr = None
+else:
+  onsetCurr = None;
+
 ### FITLIST
 if excType == 1:
   fitBase = 'fitList_pyt_200417'; # excType 1
@@ -190,6 +209,11 @@ else: # we will just plot the data
   fitList_wg = None;
 
 # set the save directory to save_loc, then create the save directory if needed
+if onsetCurr is None:
+  onsetStr = '';
+else:
+  onsetStr = '_onset%s_%03d_%03d' % (onsetMod_str, onsetDur, halfWidth)
+
 if fitBase is not None:
   if diffPlot == 1:
     compDir  = str(fitBase + '_diag' + lossSuf + '/diff');
@@ -265,18 +289,18 @@ baseDistrs, baseSummary, baseConds = hf_sf.get_baseOnly_resp(expInfo);
 baseDC, baseF1 = baseDistrs;
 baseDC_mn, baseF1_mn = np.mean(baseDC), np.mean(baseF1);
 if vecCorrected:
-    baseDistrs, baseSummary, _ = hf_sf.get_baseOnly_resp(expInfo, vecCorrectedF1=1);
+    baseDistrs, baseSummary, _ = hf_sf.get_baseOnly_resp(expInfo, vecCorrectedF1=1, onsetTransient=onsetCurr);
     baseF1_mn = baseSummary[1][0][0,:]; # [1][0][0,:] is r,phi mean
     baseF1_var = baseSummary[1][0][1,:]; # [1][0][0,:] is r,phi std/(circ.) var
     baseF1_r, baseF1_phi = baseDistrs[1][0][0], baseDistrs[1][0][1];
 # - unpack the SF x CON of the base (guaranteed to have only one set for sfBB_core)
 baseSf_curr, baseCon_curr = baseConds[0];
 # now get the mask+base response (f1 at base TF)
-respMatrixDC, respMatrixF1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, vecCorrectedF1=vecCorrected); # i.e. get the base response for F1
+respMatrixDC, respMatrixF1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, vecCorrectedF1=vecCorrected, onsetTransient=onsetCurr); # i.e. get the base response for F1
 # and get the mask only response (f1 at mask TF)
-respMatrixDC_onlyMask, respMatrixF1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, vecCorrectedF1=vecCorrected); # i.e. get the maskONLY response
+respMatrixDC_onlyMask, respMatrixF1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, vecCorrectedF1=vecCorrected, onsetTransient=onsetCurr); # i.e. get the maskONLY response
 # and get the mask+base response (but f1 at mask TF)
-_, respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, vecCorrectedF1=vecCorrected); # i.e. get the maskONLY response
+_, respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, vecCorrectedF1=vecCorrected, onsetTransient=onsetCurr); # i.e. get the maskONLY response
 # -- if vecCorrected, let's just take the "r" elements, not the phi information
 if vecCorrected:
     respMatrixF1 = respMatrixF1[:,:,0,:]; # just take the "r" information (throw away the phi)
@@ -284,7 +308,7 @@ if vecCorrected:
     respMatrixF1_maskTf = respMatrixF1_maskTf[:,:,0,:]; # just take the "r" information (throw away the phi)
 
 ## Reference tuning...
-refDC, refF1 = hf_sf.get_mask_resp(expInfo, withBase=0, vecCorrectedF1=vecCorrected); # i.e. mask only, at mask TF
+refDC, refF1 = hf_sf.get_mask_resp(expInfo, withBase=0, vecCorrectedF1=vecCorrected, onsetTransient=onsetCurr); # i.e. mask only, at mask TF
 maskSf, maskCon = expInfo['maskSF'], expInfo['maskCon'];
 # - get DC tuning curves
 refDC_sf = refDC[-1, :, :]; # highest contrast
@@ -390,15 +414,19 @@ for measure in [0,1]:
         [plt.plot([0, np.deg2rad(phi)], [0, r], 'o--k', alpha=0.3) for r,phi in zip(vec_r, vec_phi)]
         plt.plot([0, np.deg2rad(mean_phi)], [0, mean_r], 'o-k')
         #, label=r'$ mu(r,\phi) = (%.1f, %.0f)$' % (mean_r, mean_phi)
-        plt.title(r'[%s] $(R,\phi) = (%.1f,%.0f)$ & -- $(sem,circVar) = (%.1f, %.1f)$' % (lbl, mean_r, mean_phi, std_r, var_phi))
+        nResps = len(vec_r);
+        fano = np.square(std_r*np.sqrt(nResps))/mean_r; # we actually return s.e.m., so first convert to std, then square for variance
+        plt.title(r'[%s; fano=%.2f] $(R,\phi) = (%.1f,%.0f)$ & -- $(sem,circVar) = (%.1f, %.1f)$' % (lbl, fano, mean_r, mean_phi, std_r, var_phi))
         # still need to define base_mn, since it's used later on in plots
         base_mn = mean_r;
     else:
         sns.distplot(baseOnly, ax=ax[0, measure], kde=False);
-        base_mn, base_sem = np.mean(baseOnly), np.std(baseOnly)/len(baseOnly);
+        nResps = len(baseOnly[0]); # unpack the array for true length
+        base_mn, base_sem = np.mean(baseOnly), np.std(baseOnly)/np.sqrt(nResps); 
 
         ax[0, measure].set_xlim(xlim_base)
-        ax[0, measure].set_title('[%s] mn|sem = %.2f|%.2f' % (lbl, base_mn, base_sem))
+        fano = np.square(base_sem*np.sqrt(nResps))/base_mn; # we actually return s.e.m., so first convert to std, then square for variance
+        ax[0, measure].set_title('[%s; fano=%.2f] mn|sem = %.2f|%.2f' % (lbl, fano, base_mn, base_sem))
         if measure == 0:
             ax[0, measure].axvline(baseline, linestyle='--', color='b',label='blank')
         if fitBase is not None:
@@ -562,13 +590,263 @@ for measure in [0,1]:
 #sns.despine(offset=10)
 f.tight_layout(rect=[0, 0.03, 1, 0.95])
 
+#########
+# --- Plot secondary things - filter, normalization, nonlinearity, etc
+#########
+if fitBase is not None: # then we can plot some model details
+
+  fDetails = plt.figure();
+  fDetails.set_size_inches(w=40,h=25)
+
+  # make overall title
+  fDetails.suptitle('DC <---- |model details| ----> F1');
+
+  detailSize = (3, 4);
+  detailSize_filters = (3,2); # for the filters, we'll just pretend we have two columns
+
+  respTypes = [None, None]; # todo: [dcResps, f1Resps], figure out how to package, esp. with f1 having mask & base
+  colToAdd = [0, 2]; # we add +2 if doing f1 details
+  # ordering of labels/model parameters will be: V1/LGN (following form of modColors/modLabels from above)
+  whichModels = [[modFit_V1_dc, modFit_lgn_dc], [modFit_V1_f1, modFit_lgn_f1]];
+  for (i, resps), colAdd, currMods in zip(enumerate(respTypes), colToAdd, whichModels):
+
+    # TODO: poisson test - mean/var for each condition (i.e. sfXdispXcon)
+    '''
+    curr_ax = plt.subplot2grid(detailSize, (0, 0)); # set the current subplot location/size[default is 1x1]
+    sns.despine(ax=curr_ax, offset=5, trim=False);
+    val_conds = ~np.isnan(respMean);
+    gt0 = np.logical_and(respMean[val_conds]>0, respVar[val_conds]>0);
+    plt.loglog([0.01, 1000], [0.01, 1000], 'k--');
+    plt.loglog(respMean[val_conds][gt0], np.square(respVar[val_conds][gt0]), 'o');
+    # skeleton for plotting modulated poisson prediction
+    if lossType == 3: # i.e. modPoiss
+      mean_vals = np.logspace(-1, 2, 50);
+      varGains  = [x[7] for x in modFits];
+      [plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals)) for varGain in varGains];
+    plt.xlabel('Mean (imp/s)');
+    plt.ylabel('Variance (imp/s^2)');
+    plt.title('Super-poisson?');
+    plt.axis('equal');
+    '''
+
+    # response nonlinearity
+    modExps = [x[3] for x in currMods]; # respExp is in location [3]
+    curr_ax = plt.subplot2grid(detailSize, (0, 1+colAdd));
+    # Remove top/right axis, put ticks only on bottom/left
+    sns.despine(ax=curr_ax, offset=5);
+    plt.plot([-1, 1], [0, 0], 'k--')
+    plt.plot([0, 0], [-.1, 1], 'k--')
+    [plt.plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modExp), '%s-' % cc, label=s, linewidth=2) for modExp,cc,s in zip(modExps, modColors, modLabels)]
+    plt.plot(np.linspace(-1,1,100), np.maximum(0, np.linspace(-1,1,100)), 'k--', linewidth=1)
+    plt.xlim([-1, 1]);
+    plt.ylim([-.1, 1]);
+    plt.text(-0.5, 0.5, 'respExp: %.2f, %.2f' % (modExps[0], modExps[1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    plt.legend(fontsize='medium');
+
+    # plot model details - exc/suppressive components
+    omega = np.logspace(-2, 2, 1000);
+    sfExc = [];
+    for md, lgnOn in zip(currMods, lgnTypes):
+      prefSf = md[0];
+
+      if excType == 1:
+        ### deriv. gauss
+        dOrder = md[1];
+        sfRel = omega/prefSf;
+        s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
+        sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
+        sfExcCurr = s/sMax;
+      if excType == 2:
+        ### flex. gauss
+        sigLow = md[1];
+        sigHigh = md[-1-np.sign(lgnOn)]; # if we have an lgnFrontEnd, then mWeight is the last param, so we'll go back one more from end
+        sfRel = np.divide(omega, prefSf);
+        # - set the sigma appropriately, depending on what the stimulus SF is
+        sigma = np.multiply(sigLow, [1]*len(sfRel));
+        sigma[[x for x in range(len(sfRel)) if sfRel[x] > 1]] = sigHigh;
+        # - now, compute the responses (automatically normalized, since max gaussian value is 1...)
+        s     = [np.exp(-np.divide(np.square(np.log(x)), 2*np.square(y))) for x,y in zip(sfRel, sigma)];
+        sfExcCurr = s; 
+
+      sfExc.append(sfExcCurr);
+
+    # -- now the simple normalization
+    curr_ax = plt.subplot2grid(detailSize_filters, (1, 0+i));
+    # Remove top/right axis, put ticks only on bottom/left
+    sns.despine(ax=curr_ax, offset=5);
+    plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+    plt.semilogx([.01, .01], [-1.5, 1], 'k--')
+    plt.semilogx([.1, .1], [-1.5, 1], 'k--')
+    plt.semilogx([1, 1], [-1.5, 1], 'k--')
+    plt.semilogx([10, 10], [-1.5, 1], 'k--')
+    plt.semilogx([100, 100], [-1.5, 1], 'k--')
+    # now the real stuff
+    unwt_weights = np.sqrt(hf.genNormWeightsSimple(omega, None, None));
+    sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
+    gs_mean = currMods[0][8]; # currMods[0] is the V1 model - position 8/9 are norm mean/std 
+    gs_std = currMods[0][9];
+    wt_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
+    sfNormTuneSim = wt_weights/np.amax(np.abs(wt_weights));
+    sfNormsSimple = [sfNormTuneSim, sfNormSim]; # pack as wght, LGN
+    [plt.semilogx(omega, exc, '%s-' % cc, label='exc[%s]' % s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
+    [plt.semilogx(omega, norm, '%s--' % cc, label='inh[%s]' % s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
+    plt.xlim([omega[0], omega[-1]]);
+    plt.ylim([-0.1, 1.1]);
+    plt.xlabel('spatial frequency (c/deg)');
+    plt.ylabel('Normalized response (a.u.)');
+    plt.legend(fontsize='medium');
+
+    # print, in text, model parameters:
+    curr_ax = plt.subplot2grid(detailSize, (2, 0+colAdd));
+    plt.text(0.5, 0.6, 'order: %s, %s' % (*modLabels, ), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    plt.text(0.5, 0.5, 'prefSf: %.2f, %.2f' % (currMods[0][0], currMods[1][0]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    plt.text(0.5, 0.4, 'normSf: %.2f, %.2f' % (np.exp(currMods[0][8]), np.nan), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    if excType == 1:
+      plt.text(0.5, 0.3, 'derivative order: %.2f, %.2f' % (currMods[0][1], currMods[1][1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    elif excType == 2:
+      plt.text(0.5, 0.3, 'sig: %.2f|%.2f, %.2f|%.2f' % (currMods[0][1], currMods[0][-1], currMods[1][1], currMods[1][-1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    plt.text(0.5, 0.2, 'response scalar: %.2f, %.2f' % (currMods[0][4], currMods[1][4]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    plt.text(0.5, 0.1, 'sigma (con): %.2f, %.2f' % (np.power(10, currMods[0][2]), np.power(10, currMods[1][2])), fontsize=24, horizontalalignment='center', verticalalignment='center');
+
+
+  # at end, make tight layout
+  fDetails.tight_layout(pad=0.05)
+
+  '''
+
+  # plot model details - exc/suppressive components
+  omega = np.logspace(-2, 2, 1000);
+  sfExc = [];
+  for i in modFits:
+    prefSf = i[0];
+
+    if excType == 1:
+      ### deriv. gauss
+      dOrder = i[1];
+      sfRel = omega/prefSf;
+      s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
+      sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
+      sfExcCurr = s/sMax;
+    if excType == 2:
+      ### flex. gauss
+      sigLow = i[1];
+      sigHigh = i[-1];
+      sfRel = np.divide(omega, prefSf);
+      # - set the sigma appropriately, depending on what the stimulus SF is
+      sigma = np.multiply(sigLow, [1]*len(sfRel));
+      sigma[[x for x in range(len(sfRel)) if sfRel[x] > 1]] = sigHigh;
+      # - now, compute the responses (automatically normalized, since max gaussian value is 1...)
+      s     = [np.exp(-np.divide(np.square(np.log(x)), 2*np.square(y))) for x,y in zip(sfRel, sigma)];
+      sfExcCurr = s; 
+
+    sfExc.append(sfExcCurr);
+
+  inhSfTuning = hf.getSuppressiveSFtuning();
+
+  # Compute weights for suppressive signals
+  nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
+  nTrials =  inhSfTuning.shape[0];
+  inhWeight = hf.genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials, expInd);
+  inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
+  # first, tuned norm:
+  sfNormTune = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
+  sfNormTune = sfNormTune/np.amax(np.abs(sfNormTune));
+  # then, untuned norm:
+  inhAsym = 0;
+  inhWeight = [];
+  for iP in range(len(nInhChan)):
+      inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
+  sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
+  sfNorm = sfNorm/np.amax(np.abs(sfNorm));
+  sfNorms = [sfNorm, sfNormTune];
+
+  # just setting up lines
+  curr_ax = plt.subplot2grid(detailSize, (1, 1));
+  # Remove top/right axis, put ticks only on bottom/left
+  sns.despine(ax=curr_ax, offset=5);
+  plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+  plt.semilogx([.01, .01], [-1.5, 1], 'k--')
+  plt.semilogx([.1, .1], [-1.5, 1], 'k--')
+  plt.semilogx([1, 1], [-1.5, 1], 'k--')
+  plt.semilogx([10, 10], [-1.5, 1], 'k--')
+  plt.semilogx([100, 100], [-1.5, 1], 'k--')
+  # now the real stuff
+  [plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
+  [plt.semilogx(omega, -norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNorms, modColors, modLabels)]
+  plt.xlim([omega[0], omega[-1]]);
+  plt.ylim([-0.1, 1.1]);
+  plt.xlabel('spatial frequency (c/deg)', fontsize=12);
+  plt.ylabel('Normalized response (a.u.)', fontsize=12);
+
+  # SIMPLE normalization
+  curr_ax = plt.subplot2grid(detailSize, (2, 1));
+  # Remove top/right axis, put ticks only on bottom/left
+  sns.despine(ax=curr_ax, offset=5);
+  plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+  plt.semilogx([.01, .01], [-1.5, 1], 'k--')
+  plt.semilogx([.1, .1], [-1.5, 1], 'k--')
+  plt.semilogx([1, 1], [-1.5, 1], 'k--')
+  plt.semilogx([10, 10], [-1.5, 1], 'k--')
+  plt.semilogx([100, 100], [-1.5, 1], 'k--')
+  # now the real stuff
+  unwt_weights = np.sqrt(hf.genNormWeightsSimple(omega, None, None));
+  sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
+  wt_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
+  sfNormTuneSim = wt_weights/np.amax(np.abs(wt_weights));
+  sfNormsSimple = [sfNormSim, sfNormTuneSim]
+  [plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
+  [plt.semilogx(omega, norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
+  plt.xlim([omega[0], omega[-1]]);
+  plt.ylim([-0.1, 1.1]);
+  plt.xlabel('spatial frequency (c/deg)', fontsize=12);
+  plt.ylabel('Normalized response (a.u.)', fontsize=12);
+
+  # last but not least...and not last... response nonlinearity
+  modExps = [x[3] for x in modFits];
+  curr_ax = plt.subplot2grid(detailSize, (1, 2));
+  # Remove top/right axis, put ticks only on bottom/left
+  sns.despine(ax=curr_ax, offset=5);
+  plt.plot([-1, 1], [0, 0], 'k--')
+  plt.plot([0, 0], [-.1, 1], 'k--')
+  [plt.plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modExp), '%s-' % cc, label=s, linewidth=2) for modExp,cc,s in zip(modExps, modColors, modLabels)]
+  plt.plot(np.linspace(-1,1,100), np.maximum(0, np.linspace(-1,1,100)), 'k--', linewidth=1)
+  plt.xlim([-1, 1]);
+  plt.ylim([-.1, 1]);
+  plt.text(0.5, 1.1, 'respExp: %.2f, %.2f' % (modExps[0], modExps[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+
+  # print, in text, model parameters:
+  curr_ax = plt.subplot2grid(detailSize, (0, 4));
+  plt.text(0.5, 0.5, 'prefSf: %.3f, %.3f' % (modFits[0][0], modFits[1][0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+  if excType == 1:
+    plt.text(0.5, 0.4, 'derivative order: %.3f, %.3f' % (modFits[0][1], modFits[1][1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+  elif excType == 2:
+    plt.text(0.5, 0.4, 'sig: %.2f|%.2f, %.2f|%.2f' % (modFits[0][1], modFits[0][-1], modFits[1][1], modFits[1][-1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+  plt.text(0.5, 0.3, 'response scalar: %.3f, %.3f' % (modFits[0][4], modFits[1][4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+  plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, modFits[0][2]), np.power(10, modFits[1][2]), modFits[0][2], modFits[1][2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+
+  # Now, space out the subplots...
+  #f.tight_layout(pad=0.1)
+  fDetails.tight_layout(pad=0.1)
+
+  '''
+else:
+  fDetails = None
+  print('here');
+
+### now save all figures (incl model details, if specified)
 saveName = "/cell_%03d_both.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'core/'));
+full_save = os.path.dirname(str(save_loc + 'core%s/' % onsetStr));
 if not os.path.exists(full_save):
     os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
-pdfSv.savefig(f)
-plt.close(f)
+if fitBase is not None: # then we can plot some model details
+  allFigs = [f, fDetails];
+  for fig in allFigs:
+    pdfSv.savefig(fig)
+    plt.close(fig)
+else:
+  pdfSv.savefig(f);
+  plt.close(f);
 pdfSv.close()
 
 
@@ -692,7 +970,7 @@ for wV in whichVar: # if len(whichVar) == 0, nothing will happen
             ax[0, measure] = plt.subplot(nrow, 2, 1+measure); # pretend there are only 2 columns
 
             sns.distplot(baseOnly, ax=ax[0, measure], kde=False);
-            base_mn, base_sem = np.mean(baseOnly), np.std(baseOnly)/len(baseOnly);
+            base_mn, base_sem = np.mean(baseOnly), np.std(baseOnly)/np.sqrt(len(baseOnly));
 
             ax[0, measure].set_xlim(xlim_base)
             ax[0, measure].set_title('[%s] mn|sem = %.2f|%.2f' % (lbl, base_mn, base_sem))

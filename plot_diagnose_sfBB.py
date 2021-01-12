@@ -29,8 +29,10 @@ newMethod = 1;
 modStrs = ['V1', 'LGN'];
 nMods = len(modStrs);
 typeClrs = ['k', 'r']; # for data, model, respectively
-onsetDur = 200; # in mS, how much of the initial PSTH to we model as part of the onset transient
+# - set the onset parameters
+onsetDur = 100; # in mS, how much of the initial PSTH to we model as part of the onset transient
 halfWidth = 15; # in mS, how wide (in one direction) is the smooth/sliding PSTH window (usually 15 or 25)
+onsetMod = 1; # which onset model? 0 is for the first method (just polynomial fit); 1 is for "zeros", i.e. force the onset transient to start & end at zero with a squaring ramp/decay
 
 ###
 for i in range(2):
@@ -377,10 +379,14 @@ if whichPlots >= 0:
   maskInd, baseInd = hf_sf.get_mask_base_inds();
 
   if whichPlots >= 2: # e.g. if it's 2
-    allOnsets = hf.np_smart_load(data_loc + 'onset_transients.npy'); # here's the set of all onset transients
+    if onsetMod == 0:
+      onsetStr = '';
+    elif onsetMod == 1:
+      onsetStr = '_zeros'
+    allOnsets = hf.np_smart_load(data_loc + 'onset_transients%s.npy' % onsetStr); # here's the set of all onset transients
     onsetKey = (onsetDur, halfWidth);
     onsetTransient = allOnsets[cellNum-1][onsetKey]['transient'];
-    str_onset = '_wOnset';
+    str_onset = '_wOnset%s' % onsetStr;
     str_onsetPrms = '_%03d_%03d' % (onsetDur, halfWidth);
     nrow = 2;
   else:
@@ -473,6 +479,7 @@ if whichPlots >= 0:
             plt.legend(fontsize='medium');
 
           saveName = "/cell_%03d_phaseCorr_sf%03d_con%03d.pdf" % (cellNum, np.int(100*np.unique(maskSf)), np.int(100*np.unique(maskCon)))
+          #print('--saving %s with %d rows' % (saveName, nrow))
 
           if maskOn and baseOn:
             subdir = 'both';
@@ -484,7 +491,7 @@ if whichPlots >= 0:
           full_save = os.path.dirname(str(save_loc + 'phase_corr%s/%s/cell_%03d%s/%s/' % (str_onset, expName, cellNum, str_onsetPrms, subdir)));
           if not os.path.exists(full_save):
               os.makedirs(full_save);
-          print('Saving %s' % (full_save + saveName));
+          #print('Saving %s' % (full_save + saveName));
           pdfSv = pltSave.PdfPages(full_save + saveName);
           pdfSv.savefig(f)
           plt.close(f)
@@ -510,8 +517,19 @@ if whichPlots >= 0:
             # Now, plot!
             nPlots = len(psth);
             nrow = int(np.floor(np.sqrt(nPlots))); ncol = int(np.ceil(nPlots/nrow));
+            # -- make axes
             fPsth, axPsth = plt.subplots(nrow, ncol, figsize=(15*ncol, nrow*8));
             psth_slide, bins_slide = hf.make_psth_slide(spikeTimes, binWidth=halfWidth*1e-3)
+
+            all_dc   = np.array(expInfo['spikeCounts'][val_trials]);
+            # why x[3] - FFT ampltiudes are 4th return argument in hf.manual_fft? then we add 1 to base/maskInds, since first is the DC
+            all_base = np.array([x[3][1+baseInd] for x in man_fft])
+            all_mask = np.array([x[3][1+maskInd] for x in man_fft])
+            fano_dc   = np.var(all_dc) / np.mean(all_dc);
+            fano_base = np.var(all_base) / np.mean(all_base);
+            fano_mask = np.var(all_mask) / np.mean(all_mask);
+            #print('DC -- mean %.2f -- var %.2f' % (np.mean(all_dc), np.var(all_dc)));
+            fPsth.suptitle('Fano -- DC [%.2f]  - base [%.2f] - mask [%.2f]' % (fano_dc, fano_base, fano_mask));
 
             max_rate = np.max(psth_slide);
 
@@ -526,8 +544,8 @@ if whichPlots >= 0:
               axPsth[plot_ind].plot(1e3*bins_slide[0:-1], np.matmul(curr_fft[0], curr_fft[1]), 'k--', label='FFT++')
               axPsth[plot_ind].plot(1e3*bins_slide[0:-1], np.matmul(curr_fft_noTransient[0], curr_fft_noTransient[1]), 'b--', label='FFT')
               # and print the coefficients (DC, mask, base)
-              axPsth[plot_ind].text(cycleDur_mask*1.2, 1.125*max_rate, 'FFT: DC %.1f, mask %.1f, base %.2f' % (*curr_fft[3], ))
-              axPsth[plot_ind].text(cycleDur_mask*1.2, 1.025*max_rate, 'FFT++: DC %.1f, mask %.1f, base %.2f' % (*curr_fft_noTransient[3], ))
+              axPsth[plot_ind].text(cycleDur_mask*1.2, 1.125*max_rate, 'FFT++: DC %.1f, mask %.1f, base %.2f' % (*curr_fft[3], ))
+              axPsth[plot_ind].text(cycleDur_mask*1.2, 1.025*max_rate, 'FFT: DC %.1f, mask %.1f, base %.2f' % (*curr_fft_noTransient[3], ))
               # - and plot the length of one mask/base cycle
               axPsth[plot_ind].plot([0, cycleDur_mask], [1.125*max_rate, 1.125*max_rate], 'k-', label='Mask cycle')
               axPsth[plot_ind].plot([0, cycleDur_base], [1.025*max_rate, 1.025*max_rate], 'r-', label='Base cycle')
@@ -535,12 +553,15 @@ if whichPlots >= 0:
                 axPsth[plot_ind].set_ylabel('Spike rate');
                 axPsth[plot_ind].set_xlabel('Time (ms)');
               if ii+1 == len(psth_slide): # i.e. we're at the last plot -- let's make the legend in an otherwise empty subplot...
-                plot_ind = np.unravel_index(ii+1, (nrow, ncol));
-                axPsth[plot_ind].plot(1e3*bins_slide[0:-1], np.matmul(curr_fft[0], curr_fft[1]), 'k--', label='FFT++')
-                axPsth[plot_ind].plot(1e3*bins_slide[0:-1], np.matmul(curr_fft_noTransient[0], curr_fft_noTransient[1]), 'b--', label='FFT')
-                axPsth[plot_ind].plot([0, cycleDur_mask], [1.125*max_rate, 1.125*max_rate], 'k-', label='Mask cycle')
-                axPsth[plot_ind].plot([0, cycleDur_base], [1.025*max_rate, 1.025*max_rate], 'r-', label='Base cycle')
-                axPsth[plot_ind].legend(fontsize='large');
+                try:
+                  plot_ind = np.unravel_index(ii+1, (nrow, ncol));
+                  axPsth[plot_ind].plot(1e3*bins_slide[0:-1], np.matmul(curr_fft[0], curr_fft[1]), 'k--', label='FFT++')
+                  axPsth[plot_ind].plot(1e3*bins_slide[0:-1], np.matmul(curr_fft_noTransient[0], curr_fft_noTransient[1]), 'b--', label='FFT')
+                  axPsth[plot_ind].plot([0, cycleDur_mask], [1.125*max_rate, 1.125*max_rate], 'k-', label='Mask cycle')
+                  axPsth[plot_ind].plot([0, cycleDur_base], [1.025*max_rate, 1.025*max_rate], 'r-', label='Base cycle')
+                  axPsth[plot_ind].legend(fontsize='large');
+                except: # if # of plots happens to be evenly divided by rows/cols, then the extra won't fit - but it's ok, we don't need it so just pass
+                  pass
 
 
             sns.despine(offset=3);
