@@ -192,7 +192,7 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
   '''
   trInf = dict();
 
-  ### first, process the raw data such that trInf is [nTr x nComp]
+  ### first, find out which trials we should be analyzing
   if expInd == -1: # i.e. sfBB
     trialInf = coreExp['trial'];
     if whichTrials is None: # if whichTrials is None, then we're using ALL non-blank trials (i.e. fitting 100% of data)
@@ -206,20 +206,37 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
       # NOTE: Here, if spikeCount == 0 for that trial, then f1_mask/base will be NaN -- replace with zero
       to_repl = np.where(coreExp['spikeCounts'][whichTrials] == 0)[0];
       resp[to_repl, :] = 0;
-  elif expInd >= 0: # i.e. sfMix*
-    trialInf = coreExp['sfm']['exp']['trial'];
-    whichTrials = np.where(~np.isnan(np.sum(trialInf['ori'], 0)))[0];
-    # TODO -- put in the proper responses...
-    if respOverwrite is not None:
-      spikes = respOverwrite;
-    else:
-      if respMeasure == 0:
-        spikes = trialInf['spikeCount'];
-      elif respMeasure == 1:
-        spikes = trialInf['f1'];
-    resp = spikes[whereNan];
+  # --- first step, but for older experiments    
+  elif expInd == 1: # i.e. sfMix original
+    if whichTrials is None: # if whichTrials is None, then we're using ALL non-blank trials (i.e. fitting 100% of data)
+      mask = numpy.ones_like(coreExp['spikeCounts'], dtype=bool); # i.e. true
+      # and get rid of orientation tuning curve trials
+      oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
+      oriInds = numpy.empty((0,));
+      for iB in oriBlockIDs:
+          indCond = numpy.where(coreExp['blockID'] == iB);
+          if len(indCond[0]) > 0:
+              oriInds = numpy.append(oriInds, indCond);
+      mask[oriInds.astype(numpy.int64)] = False;
+      whichTrials = np.where(mask)[0];
+  elif expind >= 2: # the updated sfMix experiments
+    if whichTrials is None:
+      # start with all trials...
+      mask = numpy.ones_like(spikeCount, dtype=bool); # i.e. true
+      # BUT, if we pass in trialSubset, then use this as our mask (i.e. overwrite the above mask)
+      whichTrials = np.where(~np.isnan(np.sum(coreExp['trial']['ori'], 0)))[0];
+      # TODO -- put in the proper responses...
+      if respOverwrite is not None:
+        spikes = respOverwrite;
+      else:
+        if respMeasure == 0:
+          spikes = trialInf['spikeCount'];
+        elif respMeasure == 1:
+          spikes = trialInf['f1'];
+      resp = spikes[whereNan];
 
-  # mask, then base
+  # then, process the raw data such that trInf is [nTr x nComp]
+  # for expInd == -1, this means mask [ind=0], then base [ind=1]
   trInf['num'] = whichTrials;
   trInf['ori'] = np.transpose(np.vstack(trialInf['ori']), (1,0))[whichTrials, :]
   trInf['tf'] = np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :]

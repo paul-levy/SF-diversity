@@ -51,6 +51,8 @@ import warnings
 # manual_fft - "Manual" FFT, including (optional) onset transient
 # fft_amplitude - adjust the FFT amplitudes as needed for a real signal (i.e. double non-DC amplitudes)
 # spike_fft - compute the FFT for a given PSTH, extract the power at a given set of frequencies 
+# compute_f1_byTrial - returns amp, phase for each trial at the stimulus TFs (i.e. full F1, not just amplitude)
+# adjust_f1_byTrial  - akin to the same in hf_sfBB, returns vector-corrected amplitudes for each trial in order
 # compute_f1f0 - compute the ratio of F1::F0 for the stimulus closest to optimal
 
 ### III. phase/more psth
@@ -736,6 +738,48 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3):
       rel_amp = [];
 
     return spectrum, rel_amp, full_fourier;
+
+def compute_f1_byTrial(coreExp, expInd, whichSpikes=1, binWidth=1e-3):
+  ''' In the move to using the model code from model_responses.py to model_responses_pytorch.py, it's important
+      to have a simple way to get [COMPLEX/VECTOR ]F1 responses per stimulus component, per trial
+      This function does precisely that, returning the F1 response amp, phase as [nTr x nComp], each
+      - by default (whichSpikes=1), we use the sorted spike times, if available
+
+      Use: Will be used in conjunction with the adjust_f1_byTrial
+  '''
+  # first, make the PSTH for each trial (only extract output [0], which is the psth)
+  if whichSpikes == 1:
+    psth = make_psth(coreExp['trial']['spikeTimesGLX']['spikeTimes'], 1e-3, 2)[0];
+  else:
+    psth = make_psth(coreExp['trial']['spikeTimes'], 1e-3, 2)[0];
+  # then, get the stimulus TF values
+  all_tf = np.vstack(coreExp['trial']['tf']);
+  # with this, we can extract the F1 rates at those TF values
+  stimDur = get_exp_params(expInd).stimDur;
+  amps, _, full_fourier = spike_fft(psth, tfs = all_tf.transpose(), stimDur=stimDur);
+  # get the phase of the response
+  tf_as_ind = tf_to_ind(all_tf.transpose(), stimDur);
+  resp_phase = np.array([np.angle(full_fourier[x][tf_as_ind[x]], True) for x in range(len(full_fourier))]); # true --> in degrees
+  resp_amp = np.array([amps[tf_as_ind[ind]] for ind, amps in enumerate(amps)]); # after correction of amps (19.08.06)
+
+  return resp_amp.transpose(), resp_phase.transpose();
+
+def adjust_f1_byTrial(expInd, dir=-1):
+  ''' Correct the F1 ampltiudes for each trial (in order) by:
+      - Projecting the full, i.e. (r, phi) FT vector onto the (vector) mean phase
+        across all trials of a given condition
+      - NOTE: Will not work with expInd == 1, since we don't have integer cycles for computing F1, anyway
+
+      Return: retrurn [nTr, nComp] of scalar F1 rates after vector adjustment
+  '''
+  if expInd == 1:
+    warnings.warn('This function does not work with expInd=1, since that experiment does not have integer cycles for
+                   each stimulus component; thus, we will not analyze the F1 responses, anyway');
+  # PLAN:
+  # cycle through all possible conditions (a la TABULATE_RESPONSES(), unless something eaiser), get the corresponding phase/amp
+  # then, compute the vector sum across all trials
+  # next, after getting the mean vector, project all trial vectors along that mean direction in phase space
+  # finally, pass in those amplitudes to fill an [nTr x nComp] vector of corrected amplitudes
 
 def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, descrFitName_f1=None):
   ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio
