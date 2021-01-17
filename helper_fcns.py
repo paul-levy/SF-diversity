@@ -110,7 +110,7 @@ import warnings
 ######
 
 # blankResp - return mean/sem of blank responses (i.e. baseline firing rate) for sfMixAlt experiment
-# get_valid_trials - rutrn list of valid trials given disp/con/sf
+# get_valid_trials - return list of valid trials given disp/con/sf
 # get_valid_sfs - return list indices (into allSfs) of valid sfs for given disp/con
 
 # get_condition - trial-by-trial f0/f1 for given condition
@@ -739,7 +739,7 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3):
 
     return spectrum, rel_amp, full_fourier;
 
-def compute_f1_byTrial(coreExp, expInd, whichSpikes=1, binWidth=1e-3):
+def compute_f1_byTrial(cellStruct, expInd, whichSpikes=1, binWidth=1e-3):
   ''' In the move to using the model code from model_responses.py to model_responses_pytorch.py, it's important
       to have a simple way to get [COMPLEX/VECTOR ]F1 responses per stimulus component, per trial
       This function does precisely that, returning the F1 response amp, phase as [nTr x nComp], each
@@ -747,13 +747,23 @@ def compute_f1_byTrial(coreExp, expInd, whichSpikes=1, binWidth=1e-3):
 
       Use: Will be used in conjunction with the adjust_f1_byTrial
   '''
+  np = numpy;
+ 
+  if 'sfm' in cellStruct: 
+    data = cellStruct['sfm']['exp']['trial'];
+  else: # we've passed in sfm.exp.trial already
+    data = cellStruct;
+
   # first, make the PSTH for each trial (only extract output [0], which is the psth)
   if whichSpikes == 1:
-    psth = make_psth(coreExp['trial']['spikeTimesGLX']['spikeTimes'], 1e-3, 2)[0];
-  else:
-    psth = make_psth(coreExp['trial']['spikeTimes'], 1e-3, 2)[0];
+    try:
+      psth = make_psth(data['spikeTimesGLX']['spikeTimes'], 1e-3, 2)[0];
+    except:
+      whichSpikes = 0;
+  if whichSpikes == 0:
+    psth = make_psth(data['spikeTimes'], 1e-3, 2)[0];
   # then, get the stimulus TF values
-  all_tf = np.vstack(coreExp['trial']['tf']);
+  all_tf = np.vstack(data['tf']);
   # with this, we can extract the F1 rates at those TF values
   stimDur = get_exp_params(expInd).stimDur;
   amps, _, full_fourier = spike_fft(psth, tfs = all_tf.transpose(), stimDur=stimDur);
@@ -762,24 +772,62 @@ def compute_f1_byTrial(coreExp, expInd, whichSpikes=1, binWidth=1e-3):
   resp_phase = np.array([np.angle(full_fourier[x][tf_as_ind[x]], True) for x in range(len(full_fourier))]); # true --> in degrees
   resp_amp = np.array([amps[tf_as_ind[ind]] for ind, amps in enumerate(amps)]); # after correction of amps (19.08.06)
 
-  return resp_amp.transpose(), resp_phase.transpose();
+  return resp_amp, resp_phase;
 
-def adjust_f1_byTrial(expInd, dir=-1):
-  ''' Correct the F1 ampltiudes for each trial (in order) by:
+def adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3):
+  ''' Correct the F1 ampltiudes for each trial (in order) by: [akin to hf_sfBB.adjust_f1_byTrial)
       - Projecting the full, i.e. (r, phi) FT vector onto the (vector) mean phase
         across all trials of a given condition
       - NOTE: Will not work with expInd == 1, since we don't have integer cycles for computing F1, anyway
 
       Return: retrurn [nTr, nComp] of scalar F1 rates after vector adjustment
   '''
+  np = numpy;
+  conDig = 3; # round contrast to the thousandth
+
   if expInd == 1:
-    warnings.warn('This function does not work with expInd=1, since that experiment does not have integer cycles for
+    warnings.warn('This function does not work with expInd=1, since that experiment does not have integer cycles for\
                    each stimulus component; thus, we will not analyze the F1 responses, anyway');
-  # PLAN:
-  # cycle through all possible conditions (a la TABULATE_RESPONSES(), unless something eaiser), get the corresponding phase/amp
-  # then, compute the vector sum across all trials
-  # next, after getting the mean vector, project all trial vectors along that mean direction in phase space
-  # finally, pass in those amplitudes to fill an [nTr x nComp] vector of corrected amplitudes
+    return None;
+
+  if 'sfm' in cellStruct: 
+    data = cellStruct['sfm']['exp']['trial'];
+  else: # we've passed in sfm.exp.trial already
+    data = cellStruct;
+
+  # 0. Get the r, phi for all trials (i.e. amplitude & phase) - and the stimulus phases
+  r_byTrial, phi_byTrial = compute_f1_byTrial(data, expInd, whichSpikes, binWidth);
+  stimPhase = np.vstack(data['ph']).transpose(); # [nTr x nComp], in degrees
+
+  # 1. Get all possible stimulus conditions to cycle through
+
+  # - set up the array for responses
+  nTr = len(data['num']);
+  nComps = get_exp_params(expInd).nStimComp;
+  adjusted_f1_rate = np.nan * np.zeros((nTr, nComps));
+  # - get the conditions so that we can use get_valid_trials quickly
+  _, conds, _, val_by_stim_val, _ = tabulate_responses(data, expInd);
+
+  nDisps = len(conds[0]);
+  nCons = len(conds[1]);
+  nSfs = len(conds[2]);
+
+  for d in range(nDisps):
+    for con in range(nCons):
+      for sf in range(nSfs):
+        val_trials = get_valid_trials(data, d, con, sf, expInd, stimVals=conds, validByStimVal=val_by_stim_val)[0][0];
+
+        if np.all(np.unique(val_trials) == False):
+          continue;
+
+        phase_rel_stim = np.mod(np.multiply(dir, np.add(phi_byTrial[val_trials, :], stimPhase[val_trials, :])), 360);
+        r_mean, phi_mean, r_sem, phi_var = polar_vec_mean(r_byTrial[val_trials, :].transpose(), phase_rel_stim.transpose(), sem=1); # transpose to ensure we get the r/phi average across components, not trials
+        # finally, project the response as usual
+        resp_proj = np.multiply(r_byTrial[val_trials, :], np.cos(np.deg2rad(phi_mean) - np.deg2rad(phase_rel_stim)));
+
+        adjusted_f1_rate[val_trials, :] = resp_proj;
+
+  return adjusted_f1_rate;
 
 def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, descrFitName_f1=None):
   ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio
