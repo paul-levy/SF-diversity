@@ -188,8 +188,11 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
   ''' Process the trial-by-trial stimulus information for ease of use with the model
       Specifically, we stack the stimuli to be [nTr x nStimComp], where 
       - [:,0] is base, [:,1] is mask, respectively for sfBB
-      - If respOverwrite is not None, it will overwrite the responses from coreExp
+      - If respOverwrite is not None, it will overwrite the responses from coreExp (only used for expInd>=1)
+  
+      Note: for expInd>=1, pass in X['sfm']['exp']['trial']
   '''
+  ### TODO: Make sure you are consistent with returning either rates or counts (I think we should do counts, at least for DC)
   trInf = dict();
 
   ### first, find out which trials we should be analyzing
@@ -208,32 +211,45 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
       resp[to_repl, :] = 0;
   # --- first step, but for older experiments    
   elif expInd == 1: # i.e. sfMix original
+    trialInf = coreExp;
     if whichTrials is None: # if whichTrials is None, then we're using ALL non-blank trials (i.e. fitting 100% of data)
-      mask = numpy.ones_like(coreExp['spikeCounts'], dtype=bool); # i.e. true
+      mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
       # and get rid of orientation tuning curve trials
-      oriBlockIDs = numpy.hstack((numpy.arange(131, 155+1, 2), numpy.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
-      oriInds = numpy.empty((0,));
+      oriBlockIDs = np.hstack((np.arange(131, 155+1, 2), np.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
+      oriInds = np.empty((0,));
       for iB in oriBlockIDs:
-          indCond = numpy.where(coreExp['blockID'] == iB);
+          indCond = np.where(coreExp['blockID'] == iB);
           if len(indCond[0]) > 0:
-              oriInds = numpy.append(oriInds, indCond);
-      mask[oriInds.astype(numpy.int64)] = False;
+              oriInds = np.append(oriInds, indCond);
+      mask[oriInds.astype(np.int64)] = False;
       whichTrials = np.where(mask)[0];
-  elif expind >= 2: # the updated sfMix experiments
-    if whichTrials is None:
-      # start with all trials...
-      mask = numpy.ones_like(spikeCount, dtype=bool); # i.e. true
-      # BUT, if we pass in trialSubset, then use this as our mask (i.e. overwrite the above mask)
-      whichTrials = np.where(~np.isnan(np.sum(coreExp['trial']['ori'], 0)))[0];
-      # TODO -- put in the proper responses...
+      # now, finally get ths responses
       if respOverwrite is not None:
-        spikes = respOverwrite;
+        resp = respOverwrite;
       else:
         if respMeasure == 0:
-          spikes = trialInf['spikeCount'];
+          resp = coreExp['spikeCount'];
+        else:
+          resp = coreExp['f1'];
+        resp = np.expand_dims(resp, axis=1); # expand dimensions to make it (nTr, 1)
+      resp = resp[whichTrials];
+  elif expInd >= 2: # the updated sfMix experiments
+    trialInf = coreExp;
+    if whichTrials is None:
+      # start with all trials...
+      mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
+      # BUT, if we pass in trialSubset, then use this as our mask (i.e. overwrite the above mask)
+      whichTrials = np.where(~np.isnan(np.sum(coreExp['ori'], 0)))[0];
+      # TODO -- put in the proper responses...
+      if respOverwrite is not None:
+        resp = respOverwrite;
+      else:
+        if respMeasure == 0:
+          resp = coreExp['spikeCount'];
         elif respMeasure == 1:
-          spikes = trialInf['f1'];
-      resp = spikes[whereNan];
+          resp = coreExp['f1'];
+        resp = np.expand_dims(resp, axis=1);
+      resp = resp[whichTrials];
 
   # then, process the raw data such that trInf is [nTr x nComp]
   # for expInd == -1, this means mask [ind=0], then base [ind=1]
