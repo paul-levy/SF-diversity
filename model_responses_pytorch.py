@@ -141,7 +141,6 @@ def fft_amplitude(fftSpectrum, stimDur):
     
     return correctFFT;   
 
-
 def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
     ''' given a psth (and optional list of component TFs), compute the fourier transform of the PSTH
         if the component TFs are given, return the FT power at the DC, and at all component TFs
@@ -164,13 +163,18 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
       with_phase = fft_amplitude(full_fourier, stimDur); # passing in while still keeping the imaginary component (so that we can back out phase)
 
     full_fourier = [torch.sqrt(epsil + torch.add(torch.pow(x[:,:,0], 2), torch.pow(x[:,:,1], 2))) for x in full_fourier]; # just get the amplitude
-    #spectrum = full_fourier; # bypassing this func for now...
     spectrum = fft_amplitude(full_fourier, stimDur);
 
     if tfs is not None:
       try:
-        tf_as_ind = _cast_as_tensor(hf.tf_to_ind(tfs, stimDur), dtype=torch.long); # if 1s, then TF corresponds to index; if stimDur is 2 seconds, then we can resolve half-integer frequencies -- i.e. 0.5 Hz = 1st index, 1 Hz = 2nd index, ...; CAST to integer
-        rel_amp = [spectrum[i][:, tf_as_ind[i]] for i in range(len(tf_as_ind))];
+        if 'torch' in str(type(tfs)):
+          tf_as_ind = _cast_as_tensor(hf.tf_to_ind(tfs.numpy(), stimDur), dtype=torch.long); # if 1s, then TF corresponds to index; if stimDur is 2 seconds, then we can resolve half-integer frequencies -- i.e. 0.5 Hz = 1st index, 1 Hz = 2nd index, ...; CAST to integer
+        else:
+          tf_as_ind = _cast_as_tensor(hf.tf_to_ind(tfs, stimDur), dtype=torch.long); # if 1s, then TF corresponds to index; if stimDur is 2 seconds, then we can resolve half-integer frequencies -- i.e. 0.5 Hz = 1st index, 1 Hz = 2nd index, ...; CAST to integer
+        if len(spectrum[0]) == len(tf_as_ind): # i.e. we have separate tfs for each trial
+          rel_amp = [torch.stack([spectrum[0][i][tf_as_ind[i]] for i in range(len(tf_as_ind))])];
+        else: # i.e. it's just a fixed set of TFs that applies for all trials (expInd=-1)
+          rel_amp = [spectrum[i][:, tf_as_ind[i]] for i in range(len(tf_as_ind))];
       except:
         warnings.warn('In spike_fft: if accessing power at particular frequencies, you must also include the stimulation duration!');
         rel_amp = [];
@@ -222,13 +226,16 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
           if len(indCond[0]) > 0:
               oriInds = np.append(oriInds, indCond);
       mask[oriInds.astype(np.int64)] = False;
+      # and also blank/NaN trials
+      whereOriNan = np.where(np.isnan(coreExp['ori'][0]))[0];
+      mask[whereOriNan] = False;
       whichTrials = np.where(mask)[0];
       # now, finally get ths responses
       if respOverwrite is not None:
         resp = respOverwrite;
       else:
         if respMeasure == 0:
-          resp = coreExp['spikeCount'];
+          resp = coreExp['spikeCount'].astype(int); # cast as int, since some are as uint
         else:
           resp = coreExp['f1'];
         resp = np.expand_dims(resp, axis=1); # expand dimensions to make it (nTr, 1)
@@ -245,7 +252,7 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
         resp = respOverwrite;
       else:
         if respMeasure == 0:
-          resp = coreExp['spikeCount'];
+          resp = coreExp['spikeCount'].astype(int); # cast as int, since some are as uint
         elif respMeasure == 1:
           resp = coreExp['f1'];
         resp = np.expand_dims(resp, axis=1);
@@ -263,16 +270,17 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
   return trInf, resp;
 
 class dataWrapper(torchdata.Dataset):
-    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None):
+    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None, respOverwrite=None):
         # if respMeasure == 0, then we're getting DC; otherwise, F1
         # respOverwrite means overwrite the responses; used only for expInd>=0 for now
 
         super().__init__();
-        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials)
+        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite)
 
         self.trInf = trInf;
         self.resp = resp;
         self.device = device;
+        self.expInd = expInd;
         
     def get_single_item(self, idx):
         # NOTE: This assumes that trInf['ori', 'tf', etc...] are already [nTr, nStimComp]
@@ -286,9 +294,12 @@ class dataWrapper(torchdata.Dataset):
         
         target = dict();
         target['resp'] = _cast_as_tensor(self.resp[idx, :]);
-        maskInd, baseInd = hf_sfBB.get_mask_base_inds();
-        target['maskCon'] = _cast_as_tensor(self.trInf['con'][idx, maskInd])
-        target['baseCon'] = _cast_as_tensor(self.trInf['con'][idx, baseInd])
+        if self.expInd == -1:
+          maskInd, baseInd = hf_sfBB.get_mask_base_inds();
+          target['maskCon'] = _cast_as_tensor(self.trInf['con'][idx, maskInd])
+          target['baseCon'] = _cast_as_tensor(self.trInf['con'][idx, baseInd])
+        else:
+          target['cons'] = _cast_as_tensor(self.trInf['con'][idx, :]);
         
         return (feature, target);
 
@@ -651,21 +662,29 @@ class sfNormMod(torch.nn.Module):
       respModel     = torch.add(self.noiseLate, torch.mul(torch.abs(self.scale), meanRate));
       return respModel; # I don't think we need to transpose here...
 
-  def forward(self, trialInf, respMeasure=0, returnPsth=0, expInd=-1, debug=0): # expInd=-1 for sfBB
+  def forward(self, trialInf, respMeasure=0, returnPsth=0, debug=0): # expInd=-1 for sfBB
     # respModel is the psth! [nTr x nFr]
     respModel = self.respPerCell(trialInf, debug);
 
     if debug:
       return respModel
 
-    # then, get the base & mask TF
-    maskInd, baseInd = hf_sfBB.get_mask_base_inds();
-    maskTf, baseTf = trialInf['tf'][0, maskInd], trialInf['tf'][0, baseInd] # relies on tf being same for all trials (i.e. maskTf always same, baseTf always same)!
-    tfAsInts = np.array([int(maskTf), int(baseTf)]);
-    stimDur = hf.get_exp_params(expInd).stimDur
-    nFrames = len(respModel)/stimDur;
-    # important to transpose the respModel before passing in to spike_fft
-    amps, rel_amps, full_fourier = spike_fft([respModel], tfs=[tfAsInts], stimDur=stimDur, binWidth=1.0/nFrames)
+    stimDur = hf.get_exp_params(self.expInd).stimDur
+    nFrames = respModel.shape[1]/stimDur; # convert to frames per second...
+    # We bifurcate here based on sfBB experiment or not - why? I originally designed the code with only the sfBB experiments in mind
+    # - and it takes advantage of the TF for all (2) stimulus components being the same for all trials
+    # - for sfMix experiments, we have to handle it differently, but spike_fft works accordingly
+    if self.expInd == -1:
+      # then, get the base & mask TF
+      maskInd, baseInd = hf_sfBB.get_mask_base_inds();
+      maskTf, baseTf = trialInf['tf'][0, maskInd], trialInf['tf'][0, baseInd] # relies on tf being same for all trials (i.e. maskTf always same, baseTf always same)!
+      tfAsInts = np.array([int(maskTf), int(baseTf)]);
+      # important to transpose the respModel before passing in to spike_fft
+      amps, rel_amps, full_fourier = spike_fft([respModel], tfs=[tfAsInts], stimDur=stimDur, binWidth=1.0/nFrames)
+    else:
+      tfAsInts = trialInf['tf']; # does not actually need to be integer values...
+      # important to transpose the respModel before passing in to spike_fft
+      amps, rel_amps, full_fourier = spike_fft([respModel], tfs=tfAsInts, stimDur=stimDur, binWidth=1.0/nFrames)
 
     if returnPsth == 1:
       if respMeasure == 1: # i.e. F1
@@ -703,7 +722,7 @@ def loss_sfNormMod(respModel, respData, lossType=1):
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=1500, learning_rate=0.001, batch_size=200, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 200...
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=1500, learning_rate=0.001, batch_size=2000, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000
 
   ### Load the cell, set up the naming
   ########
@@ -725,7 +744,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       if excType == 1:
         fL_name = 'fitList%s_pyt_201017' % (loc_str); # pyt for pytorch
       elif excType == 2:
-        fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
+        fL_name = 'fitList%s_pyt_210107' % (loc_str); # pyt for pytorch
+        #fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
 
   if vecCorrected:
     fL_name = '%s_vecF1' % fL_name;
@@ -750,7 +770,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   # get the name for the stepList name, regardless of whether or not we keep this now
   stepListName = str(fitListName.replace('.npy', '_details.npy'));
 
-  print('\nFitList: %s' % fitListName);
+  print('\nFitList: %s [expDir is %s]' % (fitListName, expDir));
 
   # Load datalist, then specific cell
   try:
@@ -761,18 +781,34 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   dataNames = dataList['unitName'];
   print('loading data structure from %s...' % loc_data);
   try:
-    expInd = hf.exp_name_to_ind(dataList[expType][cellNum-1]);
+    expInd = hf.exp_name_to_ind(dataList['expType'][cellNum-1]);
   except:
-    expInd = -1; # for sfBB
+    if expDir == 'V1_BB/':
+      expInd = -1; # for sfBB
+    elif expDir == 'V1_orig/':
+      expInd = 1;
+  print('expInd is %d' % expInd);
   # - then cell
-  S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfBB.npy')); # why -1? 0 indexing...
-  expInfo = S['sfBB_core']; # TODO: generalize...
-  if vecCorrected:
-    # Overwrite f1 spikes
-    vec_corr_mask, vec_corr_base = hf_sfBB.adjust_f1_byTrial(expInfo);
-    expInfo['f1_mask'] = vec_corr_mask;
-    expInfo['f1_base'] = vec_corr_base;
-  trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials);
+  if expInd == -1:
+    S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfBB.npy')); # why -1? 0 indexing...
+  else:
+    S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfm.npy')); # why -1? 0 indexing...
+  if expInd == -1:
+    expInfo = S['sfBB_core'];
+  else:
+    expInfo = S['sfm']['exp']['trial'];
+  respOverwrite = None; # default to None, but if vecCorrected and expInd != -1, then we will specify
+  if vecCorrected and respMeasure == 1:
+    if expInd == -1:
+      # Overwrite f1 spikes
+      vec_corr_mask, vec_corr_base = hf_sfBB.adjust_f1_byTrial(expInfo);
+      expInfo['f1_mask'] = vec_corr_mask;
+      expInfo['f1_base'] = vec_corr_base;
+    else:
+      if expInd == 1:
+        sys.exit('Cannot run F1 model analysis on V1_orig/ experiment - exiting!');
+      respOverwrite = hf.adjust_f1_byTrial(expInfo, expInd);
+  trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite);
 
   respStr = hf_sfBB.get_resp_str(respMeasure);
   if os.path.isfile(loc_data + fitListName):
@@ -847,7 +883,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   training_parameters = [p for p in model.parameters() if p.requires_grad]
 
   ###  data wrapping
-  dw = dataWrapper(expInfo, respMeasure=respMeasure);
+  dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
   dataloader = torchdata.DataLoader(dw, batch_size)
 
   ### then set up the optimization
@@ -871,14 +907,19 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
       for bb, (feature, target) in enumerate(dataloader):
           predictions = model.forward(feature, respMeasure=respMeasure)
-          if respMeasure == 1:
+          if respMeasure == 1: # figure out which stimulus components were blank for the given trials
+            if expInd == -1:
               maskInd, baseInd = hf_sfBB.get_mask_base_inds();
-              target['resp'][target['maskCon']==0,0] = 1e-6 # force F1 ~= 0 if con of that stim is 0
-              target['resp'][target['baseCon']==0,1] = 1e-6 # force F1 ~= 0 if con of that stim is 0
-              predictions[target['maskCon']==0,0] = 1e-6 # force F1 ~= 0 if con of that stim is 0
-              predictions[target['baseCon']==0,1] = 1e-6 # force F1 ~= 0 if con of that stim is 0
-          target = target['resp'].flatten(); # since it's [nTr, 1], just make it [nTr]
-          predictions = predictions.flatten(); # either [nTr,2] to [2*nTr] or [nTr,1] to [nTr]
+              target['resp'][target['maskCon']==0,0] = 1e-6 # force F1 ~ 0 if con of that stim is 0
+              target['resp'][target['baseCon']==0,1] = 1e-6 # force F1 ~ 0 if con of that stim is 0
+              predictions[target['maskCon']==0,0] = 1e-6 # force F1 ~ 0 if con of that stim is 0
+              predictions[target['baseCon']==0,1] = 1e-6 # force F1 ~ 0 if con of that stim is 0
+            else:
+              blanks = np.where(target['cons']==0);
+              target['resp'][blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
+              predictions[blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
+          target = target['resp'].flatten(); # since it's [nTr, 1], just make it [nTr] (if respMeasure == 0)
+          predictions = predictions.flatten(); # either [nTr, nComp] to [nComp*nTr] or [nTr,1] to [nTr]
           loss_curr = loss_sfNormMod(predictions, target, model.lossType)
 
           if np.mod(t,100)==0: # and bb==0:
@@ -917,11 +958,17 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   gt_resp = _cast_as_tensor(dw.resp);
   # fix up responses if respMeasure == 1 (i.e. if mask or base con is 0, match the data & model responses...)
   if respMeasure == 1:
+    if expInd == -1:
       maskInd, baseInd = hf_sfBB.get_mask_base_inds();
       curr_resp[dw.trInf['con'][:,maskInd]==0, maskInd] = 1e-6 # force F1 ~= 0 if con of that stim is 0
       curr_resp[dw.trInf['con'][:,baseInd]==0, baseInd] = 1e-6 # force F1 ~= 0 if con of that stim is 0
       gt_resp[dw.trInf['con'][:,maskInd]==0, maskInd] = 1e-6 # force F1 ~= 0 if con of that stim is 0
       gt_resp[dw.trInf['con'][:,baseInd]==0, baseInd] = 1e-6 # force F1 ~= 0 if con of that st
+    else:
+      blanks = np.where(dw.trInf['con']==0);
+      curr_resp[blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
+      gt_resp[blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
+
   NLL = loss_sfNormMod(curr_resp, gt_resp, model.lossType).detach().numpy();
 
   ## we've finished optimization, so reload again to make sure that this  NLL is better than the currently saved one
@@ -982,7 +1029,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       print('[steplist] cell did not exist yet');
       stepList[cellNum-1] = dict();
       stepList[cellNum-1][respStr] = dict();
-    elif stepList not in stepList[cellNum-1]:
+    elif respStr not in stepList[cellNum-1]:
       print('%s did not exist yet' % respStr);
       stepList[cellNum-1][respStr] = dict();
     else:
