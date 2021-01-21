@@ -3126,7 +3126,7 @@ def organize_adj_responses(data, rvcFits, expInd):
             adjResps[val_trials] = curr_resps.flatten();
         if d_ind == 0:
             adjResps[val_trials] = curr_resps.flatten();
-    
+     
   return adjResps;
 
 def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False):

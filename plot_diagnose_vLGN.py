@@ -14,6 +14,8 @@ from scipy.stats.mstats import gmean
 
 import helper_fcns as hf
 import model_responses as mod_resp
+import helper_fcns_sfBB as hf_sf
+import model_responses_pytorch as mrpt
 
 import warnings
 warnings.filterwarnings('once');
@@ -50,7 +52,7 @@ excType  = int(sys.argv[2]);
 lossType = int(sys.argv[3]);
 expDir   = sys.argv[4]; 
 lgnFrontEnd = int(sys.argv[5]);
-rvcAdj   = int(sys.argv[6]); # if 1, then let's load rvcFits to adjust responses to F1
+rvcAdj   = int(sys.argv[6]); # if 1, then let's load rvcFits to adjust responses to F1; 0 means no rvcFits; -1 means vector F1 math
 rvcMod   = int(sys.argv[7]); # 0/1/2 (see hf.rvc_fit_name)
 diffPlot = int(sys.argv[8]);
 intpMod  = int(sys.argv[9]);
@@ -67,6 +69,15 @@ if len(sys.argv) > 12:
   respVar = int(sys.argv[12]);
 else:
   respVar = 1;
+
+if len(sys.argv) > 13:
+  pytorch_mod = int(sys.argv[13]);
+  newMethod = 1; # we are now using the newer method of computing the response in mrpt
+  respMeasure = None; # allow it to be done based on F1:F0 ratio for now...
+  # - we'll only need newMethod if pytorch_mod is 1
+else:
+  pytorch_mod = 0; # default, we don't use the pytorch model
+  newMethod = None;
 
 ## used for interpolation plot
 sfSteps  = 45; # i.e. how many steps between bounds of interest
@@ -99,9 +110,13 @@ expName = hf.get_datalist(expDir);
 if excType == 1:
   fitBase = 'fitList_200417'; # excType 1
 elif excType == 2:
-  fitBase = 'fitList_200507'; # excType 2
+  #fitBase = 'fitList_200507'; # excType 2
+  fitBase = 'fitList_pyt_210107' # excType 2
 #fitBase = 'fitList_200522c'; # excType 2
 #fitBase = 'holdout_fitList_190513cA';
+
+if pytorch_mod == 1 and rvcAdj == -1:
+  fitBase = '%s_vecF1' % fitBase;
 
 if lossType == 4: # chiSq...
   fitBase = '%s%s' % (fitBase, hf.chiSq_suffix(kMult));
@@ -159,7 +174,10 @@ if not os.path.exists(save_loc):
 
 conDig = 3; # round contrast to the 3rd digit
 
-dataList = np.load(str(data_loc + expName), encoding='latin1').item();
+try: # keeping for backwards compatability
+  dataList = np.load(str(data_loc + expName), encoding='latin1').item();
+except:
+  dataList = hf.np_smart_load(str(data_loc + expName))
 fitList = hf.np_smart_load(data_loc + fitName);
 fitList_lgn = hf.np_smart_load(data_loc + fitName_lgn);
 
@@ -170,39 +188,91 @@ except:
   # TODO: note, this is dangerous; thus far, only V1 cells don't have 'unitType' field in dataList, so we can safely do this
   cellType = 'V1'; 
 
-expData  = np.load(str(data_loc + cellName + '_sfm.npy'), encoding='latin1').item();
+try: # keeping for backwards compatability
+  expData  = np.load(str(data_loc + cellName + '_sfm.npy'), encoding='latin1').item();
+except:
+  expData  = hf.np_smart_load(str(data_loc + cellName + '_sfm.npy'));
 expInd   = hf.get_exp_ind(data_loc, cellName)[0];
 
 # #### Load model fits
-
-modFit = fitList[cellNum-1]['params']; # 
-modFit_lgn = fitList_lgn[cellNum-1]['params']; # 
+if pytorch_mod == 1:
+  if respMeasure is None:
+    f1f0_rat = hf.compute_f1f0(expData['sfm']['exp']['trial'], cellNum, expInd, loc_data=None)[0];
+    respMeasure = int(f1f0_rat > 1);
+  respStr = hf_sf.get_resp_str(respMeasure);
+  modFit = fitList[cellNum-1][respStr]['params']; # 
+  modFit_lgn = fitList_lgn[cellNum-1][respStr]['params']; # 
+  loss_V1 = fitList[cellNum-1][respStr]['NLL']
+  loss_LGN = fitList_lgn[cellNum-1][respStr]['NLL']
+else:
+  modFit = fitList[cellNum-1]['params']; # 
+  modFit_lgn = fitList_lgn[cellNum-1]['params']; # 
+  loss_V1 = fitList[cellNum-1]['NLL']
+  loss_LGN = fitList_lgn[cellNum-1]['NLL']
 modFits = [modFit, modFit_lgn];
 normTypes = [2, 1]; # weighted, then flat
 lgnTypes = [0, lgnFrontEnd];
 
 # ### Organize data
 # #### determine contrasts, center spatial frequency, dispersions
-# SFMGiveBof returns spike counts per trial, NOT rates -- we will correct in hf.organize_resp call below
-# - to properly evaluate the loss, load rvcFits, mask the trials
-rvcCurr = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
-stimOr = np.vstack(expData['sfm']['exp']['trial']['ori']);
-mask = np.isnan(np.sum(stimOr, 0)); # sum over all stim components...if there are any nans in that trial, we know
-# - now compute SFMGiveBof!
-modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask, compute_varExpl=1, lgnFrontEnd=lgn) for fit, norm,lgn in zip(modFits, normTypes, lgnTypes)];
+if pytorch_mod == 1:
+  ### now, set-up the two models (one LGN, one V1)
+  model_V1, model_LGN = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType) for prms,normType,lgnType in zip(modFits, normTypes, lgnTypes)]
 
-# unpack the model fits!
-varExplSF = modResps[0][3];
-varExplSF_lgn = modResps[1][3];
-varExplCon = modResps[0][4];
-varExplCon_lgn = modResps[1][4];
-lossByCond = modResps[0][2];
-lossByCond_lgn = modResps[1][2]; # We only care about weighted...
-modResps = [x[1] for x in modResps]; # 1st return output (x[0]) is NLL (don't care about that here)
+  # package the data, run the model
+  trialInf = expData['sfm']['exp']['trial'];
+  if expInd > 1 and respMeasure == 1:
+    respOverwrite = hf.adjust_f1_byTrial(trialInf, expInd);
+  else:
+    respOverwrite = None;
+  dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
+  modResps = [mod.forward(dw.trInf, respMeasure=respMeasure).detach().numpy() for mod in [model_V1, model_LGN]];
+  if respMeasure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
+    blanks = np.where(dw.trInf['con']==0);
+    modResps[0][blanks] = 0;
+    modResps[1][blanks] = 0;
+    # next, sum up across components
+    modResps = [np.sum(mr, axis=1) for mr in modResps];
+  # finally, make sure this fills out a vector of all responses (just have nan for non-modelled trials)
+  nTrialsFull = len(trialInf['num']);
+  mr_V1 = np.nan * np.zeros((nTrialsFull, ));
+  mr_V1[dw.trInf['num']] = modResps[0];
+  mr_LGN = np.nan * np.zeros((nTrialsFull, ));
+  mr_LGN[dw.trInf['num']] = modResps[1];
+  modResps = [mr_V1, mr_LGN];
+
+  # TODO: make these real values, eventually
+  varExplSF = None
+  varExplSF_lgn = None
+  varExplCon = None
+  varExplCon_lgn = None
+  lossByCond = None
+  lossByCond_lgn = None
+
+elif pytorch_mod == 0:
+  # SFMGiveBof returns spike counts per trial, NOT rates -- we will correct in hf.organize_resp call below
+  # - to properly evaluate the loss, load rvcFits, mask the trials
+  rvcCurr = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
+  stimOr = np.vstack(expData['sfm']['exp']['trial']['ori']);
+  mask = np.isnan(np.sum(stimOr, 0)); # sum over all stim components...if there are any nans in that trial, we know
+  # - now compute SFMGiveBof!
+  modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask, compute_varExpl=1, lgnFrontEnd=lgn) for fit, norm,lgn in zip(modFits, normTypes, lgnTypes)];
+                                  
+  # unpack the model fits!
+  varExplSF = modResps[0][3];
+  varExplSF_lgn = modResps[1][3];
+  varExplCon = modResps[0][4];
+  varExplCon_lgn = modResps[1][4];
+  lossByCond = modResps[0][2];
+  lossByCond_lgn = modResps[1][2]; # We only care about weighted...
+  modResps = [x[1] for x in modResps]; # 1st return output (x[0]) is NLL (don't care about that here)
+
+# Now, continue with organizing things
 gs_mean = modFit[8]; # the LGN is unweighted gain control, so only get this...
 gs_std = modFit[9];
 # now organize the responses
 orgs = [hf.organize_resp(mr, expData, expInd, respsAsRate=False) for mr in modResps];
+pdb.set_trace();
 oriModResps = [org[0] for org in orgs]; # only non-empty if expInd = 1
 conModResps = [org[1] for org in orgs]; # only non-empty if expInd = 1
 sfmixModResps = [org[2] for org in orgs];
@@ -215,17 +285,42 @@ modSponRates = [fit[6] for fit in modFits];
 
 # more tabulation - stim vals, organize measured responses
 _, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData, expInd);
-if rvcAdj == 1:
-  rvcFlag = '';
-  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
-  asRates = True;
-else:
-  rvcFlag = '_f0';
-  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
-  asRates = False;
-# rvcMod=-1 tells the function call to treat rvcName as the fits, already (we loaded above!)
-spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=rvcFits, rvcMod=-1, descrFitName_f0=None, baseline_sub=False);
+if rvcAdj >= 0:
+  if rvcAdj == 1:
+    rvcFlag = '';
+    rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
+    asRates = True;
+  elif rvcAdj == 0:
+    rvcFlag = '_f0';
+    rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
+    asRates = False;
+  # rvcMod=-1 tells the function call to treat rvcName as the fits, already (we loaded above!)
+  spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=rvcFits, rvcMod=-1, descrFitName_f0=None, baseline_sub=False);
+elif rvcAdj == -1: 
+  if respMeasure == 1 and expInd > 1:
+    spikes_byComp = respOverwrite;
+    # then, sum up the valid components per stimulus component
+    allCons = np.vstack(expData['sfm']['exp']['trial']['con']).transpose();
+    blanks = np.where(allCons==0);
+    spikes_byComp[blanks] = 0; # just set it to 0 if that component was blnak during the trial
+    spikes_rate = np.sum(spikes_byComp, axis=1);
+    asRates = False; # TODO: Figure out if really as rates or not...
+    rvcFlag = '_f1';
+  else:
+    spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=None, force_dc=True, baseline_sub=False); 
+    rvcFlag = '_f0';
+    asRates = True;
+
 _, _, respOrg, respAll = hf.organize_resp(spikes_rate, expData, expInd, respsAsRate=asRates);
+
+if varExplSF is None:  # TODO: make these real values, eventually
+  # For reference: sfmixModResps[0 or 1] is [nDisp x nSf x nCon]
+  varExplSF = np.nan * np.zeros_like(sfmixModResps[0][:, 0, :])
+  varExplSF_lgn = np.copy(varExplSF);
+  varExplCon = np.nan * np.zeros_like(sfmixModResps[0][:, :, 0])
+  varExplCon_lgn = np.copy(varExplCon);
+  lossByCond = np.nan * np.zeros_like(spikes_rate);
+  lossByCond_lgn = np.copy(lossByCond);
 
 respMean = respOrg;
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
@@ -384,7 +479,7 @@ for d in range(nDisps):
 
           dispAx[d][c_plt_ind, i].legend();
 
-    fCurr.suptitle('%s #%d, loss %.2f|%.2f' % (cellType, cellNum, fitList[cellNum-1]['NLL'], fitList_lgn[cellNum-1]['NLL']));
+    fCurr.suptitle('%s #%d, loss %.2f|%.2f' % (cellType, cellNum, loss_V1, loss_LGN));
 
 saveName = "/cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
@@ -568,7 +663,7 @@ else:
   lgnStr = '';
 
 f.legend();
-f.suptitle('%s #%d (%s), loss %.2f|%.2f%s' % (cellType, cellNum, cellName, fitList[cellNum-1]['NLL'], fitList_lgn[cellNum-1]['NLL'], lgnStr));
+f.suptitle('%s #%d (%s), loss %.2f|%.2f%s' % (cellType, cellNum, cellName, loss_V1, loss_LGN, lgnStr));
 	        
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc

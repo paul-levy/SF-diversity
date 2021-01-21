@@ -113,6 +113,39 @@ def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
     pred_spikes = DiffOfGauss(*params, stim_sf=stim_sf);
   return pred_spikes;
 
+def organize_mean_perCond(trInf, resp):
+  ''' Given trInf and resp, organize the mean per condition
+      Design this to work for all experiments...
+  '''
+  nConds = 0;
+  means = np.nan * np.zeros_like(resp);
+  conRounds = np.round(trInf['con'], 3);
+  unique_conSet = np.unique(conRounds, axis=0);
+  sfRounds = np.round(trInf['sf'], 3);
+  unique_sfSet = np.unique(sfRounds, axis=0);
+  for conSet in unique_conSet:
+    con_rows = np.where((conRounds == conSet).all(axis=1))[0];
+    if conSet[0] == 0: # i.e. if the first stimulus is blank, then the first SF doesn't matter
+      # Yes, this is just written for expInd == -1 but could be generalized to avoid needing an if statement...to do later on
+      unique_sfsubSet = np.unique(sfRounds[:, 1:]);
+      for sfSet in unique_sfsubSet:
+        sf_rows = np.where((sfRounds[:, 1:] == sfSet).all(axis=1))[0]
+        to_mean = np.intersect1d(con_rows, sf_rows);
+        if len(to_mean) == 0:
+          continue;
+        means[to_mean, :] = np.mean(resp[to_mean, :], axis=0)
+        nConds += 1;
+    else:
+      for sfSet in unique_sfSet:
+        sf_rows = np.where((sfRounds == sfSet).all(axis=1))[0];
+        to_mean = np.intersect1d(con_rows, sf_rows);
+        if len(to_mean) == 0:
+          continue;
+        means[to_mean, :] = np.mean(resp[to_mean, :], axis=0)
+        nConds += 1;
+  #print('# conditions: %d' % nConds);
+  return means;
+
 ## FFT
 def fft_amplitude(fftSpectrum, stimDur):
     ''' given an fftSpectrum (and assuming all other normalization has taken place), we double the non-DC frequencies and return
@@ -128,7 +161,6 @@ def fft_amplitude(fftSpectrum, stimDur):
     nyquist = [np.int(x.shape[1]/2) for x in fftSpectrum];
     correctFFT = [];
     for i, spect in enumerate(fftSpectrum):
-      # -- removed torch.abs(spect[...]), since we already square the coefficients in spike_fft
       allFFT = spect[:, 0:nyquist[i]+1]; # include nyquist 
       # since we cannot modify in-place, we simply double all of the non-DC amplitudes, then grab the unmodified DC, and create a new tensor accordingly
       nonDCvals = 2*allFFT[:, 1:nyquist[i]+1];
@@ -290,7 +322,7 @@ class dataWrapper(torchdata.Dataset):
         feature['sf'] = _cast_as_tensor(self.trInf['sf'][idx, :])
         feature['con'] = _cast_as_tensor(self.trInf['con'][idx, :])
         feature['ph'] = _cast_as_tensor(self.trInf['ph'][idx, :])
-        feature['num'] = self.trInf['ori'].shape[0] # num is the # of trials included here...
+        feature['num'] = idx; # which trials are part of this
         
         target = dict();
         target['resp'] = _cast_as_tensor(self.resp[idx, :]);
@@ -384,7 +416,7 @@ class sfNormMod(torch.nn.Module):
 
     ### LGN front parameters
     self.LGNmodel = 2;
-    # prepolate DoG parameters -- will overwrite, if needed
+    # prepopulate DoG parameters -- will overwrite, if needed
     self.M_k = _cast_as_tensor(1);
     self.M_fc = _cast_as_tensor(3);
     self.M_ks = _cast_as_tensor(0.3);
@@ -699,7 +731,8 @@ class sfNormMod(torch.nn.Module):
 
 ### End of class (sfNormMod)
     
-def loss_sfNormMod(respModel, respData, lossType=1):
+def loss_sfNormMod(respModel, respData, lossType=1, debug=0, respMeans=None, nbinomCalc=2, varGain=None):
+  # respMeans, nbinomCalc, varGain used only in lossType == 3
 
   if lossType == 1: # sqrt
       #mask = (~torch.isnan(respModel)) & (~torch.isnan(respData));
@@ -707,13 +740,42 @@ def loss_sfNormMod(respModel, respData, lossType=1):
       
       lsq = torch.pow(torch.sign(respModel)*torch.sqrt(torch.abs(respModel)) - torch.sign(respData)*torch.sqrt(torch.abs(respData)), 2);
 
+      per_cond = lsq;
       NLL = torch.mean(lsq);
 
   if lossType == 2: # poiss TODO FIX TODO
       poiss_loss = torch.nn.PoissonNLLLoss(log_input=False);
+      per_cond = poiss_loss;
       NLL = poiss_loss(respModel, respData); # previously was respData, respModel
 
-  return NLL;
+  if lossType == 3:
+      # varGain, respData, respMeans
+      # -- all_counts is the spike count from every trial
+      # -- count_mean is averaged across condition
+      # - How does it work? Mu will need to be broadcast to be the same length as all_counts
+      # - p is similarly broadcast, while r is just one value
+      mu = torch.max(_cast_as_tensor(.1), respMeans); # The predicted mean spike count
+      # -- sigmoid(varGain) to ensure it's non-negative
+      var = mu + (torch.sigmoid(varGain)*torch.pow(mu, 2)); # The corresponding variance of the spike count
+      # Note: Two differeing versions of r - the first (doesn't use var) is from Robbe's code shared through Hasse/Mariana
+      # -- the second is from the code that was in early code of my V1 model as written by Robbe
+      if nbinomCalc == 1:
+          r  = 1/varGain;
+      elif nbinomCalc == 2:
+          r  = torch.pow(mu, 2) / (var - mu); # The parameters r and p of the negative binomial distribution
+      pSucc  = r / (r + mu);
+      p = 1-pSucc; # why? Well, compared to scipy.stats.nbinom, the "p" here is for failure, not success, so it should be 1-p
+      nbinomDistr = torch.distributions.negative_binomial.NegativeBinomial(r,p);
+      # -- Evaluate the model
+      llh = nbinomDistr.log_prob(respData); # The likelihood for each pass under the doubly stochastic model
+      if torch.any(llh==0): # if it's F1 values, we'll round to integer
+          llh = nbinom.log_prob(torch.round(respData));
+      NLL = torch.mean(-llh);
+
+  if debug:
+    return NLL, per_cond;
+  else:
+    return NLL;
 
 ### Now, actually do the optimization!
 
@@ -809,6 +871,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         sys.exit('Cannot run F1 model analysis on V1_orig/ experiment - exiting!');
       respOverwrite = hf.adjust_f1_byTrial(expInfo, expInd);
   trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite);
+  if lossType == 3:
+    orgMeans = _cast_as_tensor(organize_mean_perCond(trInf, resp));
 
   respStr = hf_sfBB.get_resp_str(respMeasure);
   if os.path.isfile(loc_data + fitListName):
@@ -830,7 +894,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   ### set parameters
   # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
-  prefSfEst = 1;
+  prefSfEst = np.random.uniform(0.5, 2);
   normConst = -2;
   if fitType == 1:
     inhAsym = 0;
@@ -853,7 +917,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     respScalar = np.random.uniform(200, 700) if initFromCurr==0 else curr_params[4];
     noiseEarly = -1 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
   else:
-    respScalar = np.random.uniform(0.01, 0.05) if initFromCurr==0 else curr_params[4];
+    respScalar = np.random.uniform(0.1, 0.5) if initFromCurr==0 else curr_params[4];
     noiseEarly = 1e-3 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
   noiseLate = 1e-1 if initFromCurr==0 else curr_params[6];
   varGain = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
@@ -920,11 +984,18 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
               predictions[blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
           target = target['resp'].flatten(); # since it's [nTr, 1], just make it [nTr] (if respMeasure == 0)
           predictions = predictions.flatten(); # either [nTr, nComp] to [nComp*nTr] or [nTr,1] to [nTr]
-          loss_curr = loss_sfNormMod(predictions, target, model.lossType)
+          if model.lossType == 3:
+            loss_curr = loss_sfNormMod(predictions, target, model.lossType, respMeans=orgMeans[feature['num'], :].flatten(), varGain=model.varGain)
+          else:
+            loss_curr = loss_sfNormMod(predictions, target, model.lossType)
 
           if np.mod(t,100)==0: # and bb==0:
               if bb == 0:
                 print('\n****** STEP %d [%s] [prev loss: %.2f] *********' % (t, respStr, accum))
+                #print('\nTARGET, then predictions, finally loss');
+                #print(target[0:20]);
+                #print(predictions[0:20]);
+                #print(loss_sfNormMod(predictions[0:20], target[0:20], model.lossType, debug=1)[1]);
                 #print('\n****** STEP %d [%s] [prev loss: %.2f] *********' % (t, respStr, accum))
                 accum = 0;
               prms = model.named_parameters()
