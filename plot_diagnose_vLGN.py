@@ -111,7 +111,8 @@ if excType == 1:
   fitBase = 'fitList_200417'; # excType 1
 elif excType == 2:
   #fitBase = 'fitList_200507'; # excType 2
-  fitBase = 'fitList_pyt_210107' # excType 2
+  #fitBase = 'fitList_pyt_210107' # excType 2
+  fitBase = 'fitList_pyt_210121' # excType 2
 #fitBase = 'fitList_200522c'; # excType 2
 #fitBase = 'holdout_fitList_190513cA';
 
@@ -272,7 +273,6 @@ gs_mean = modFit[8]; # the LGN is unweighted gain control, so only get this...
 gs_std = modFit[9];
 # now organize the responses
 orgs = [hf.organize_resp(mr, expData, expInd, respsAsRate=False) for mr in modResps];
-pdb.set_trace();
 oriModResps = [org[0] for org in orgs]; # only non-empty if expInd = 1
 conModResps = [org[1] for org in orgs]; # only non-empty if expInd = 1
 sfmixModResps = [org[2] for org in orgs];
@@ -658,7 +658,8 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].set_ylabel('resp (imp/s)');
 
 if lgnFrontEnd > 0:
-  lgnStr = ' mWt=%.2f|%.2f' % (-99, modFits[1][-1]);
+  mWt = modFits[1][-1] if pytorch_mod == 0 else 1/(1+np.exp(-modFits[1][1])); # why? in pytorch_mod, it's a sigmoid
+  lgnStr = ' mWt=%.2f|%.2f' % (-99, mWt);
 else:
   lgnStr = '';
 
@@ -703,6 +704,8 @@ plt.loglog(respMean[val_conds][gt0], np.square(respVar[val_conds][gt0]), 'o');
 if lossType == 3: # i.e. modPoiss
   mean_vals = np.logspace(-1, 2, 50);
   varGains  = [x[7] for x in modFits];
+  if pytorch_mod: # then the real varGain value is sigmoid(varGain), i.e. 1/(1+exp(-varGain))
+    varGains = [1/(1+np.exp(-x)) for x in varGains];
   [plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals)) for varGain in varGains];
 plt.xlabel('Mean (imp/s)');
 plt.ylabel('Variance (imp/s^2)');

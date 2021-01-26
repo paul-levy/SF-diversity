@@ -82,6 +82,8 @@ if len(sys.argv) > 9:
 else:
   respVar = 1;
 
+vecCorrected = 1; # all "modern" fits are vecCorrected
+
 ### Then start to load the data, set directories, etc
 loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
@@ -109,9 +111,14 @@ if excType == 1:
   #fitBase = 'fitList_pyt_201017'; # excType 1
 elif excType == 2:
   #fitBase = 'fitList_pyt_200507'; # excType 2
-  fitBase = 'fitList_pyt_201107'; # excType 2
+  #fitBase = 'fitList_pyt_201107'; # excType 2
+  fitBase = 'fitList_pyt_210121'; # excType 2
+  #fitBase = 'fitList_pyt_210107'; # excType 2
 else:
   fitBase = None;
+
+if vecCorrected:
+  fitBase = '%s_vecF1' % fitBase;
 
 if fitBase is not None:
   if lossType == 4: # chiSq...
@@ -196,11 +203,11 @@ if fitBase is not None:
 
 # ---- DATA (Do, regardless of fitBase)
 # now get the mask+base response (f1 at base TF)
-respMatrixDC, respMatrixF1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0); # i.e. get the base response for F1
+respMatrixDC, respMatrixF1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, vecCorrectedF1=vecCorrected); # i.e. get the base response for F1
 # and get the mask only response (f1 at mask TF)
-respMatrixDC_onlyMask, respMatrixF1_onlyMask, respMatrixDC_onlyMask_all, respMatrixF1_onlyMask_all = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, returnByTr=1); # i.e. get the maskONLY response
+respMatrixDC_onlyMask, respMatrixF1_onlyMask, respMatrixDC_onlyMask_all, respMatrixF1_onlyMask_all = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, returnByTr=1, vecCorrectedF1=vecCorrected); # i.e. get the maskONLY response
 # and get the mask+base response (but f1 at mask TF)
-_, respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1); # i.e. get the maskONLY response
+_, respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, vecCorrectedF1=vecCorrected); # i.e. get the maskONLY response
 
 if fitBase is not None:
    # ---- V1 model responses
