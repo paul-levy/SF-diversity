@@ -22,6 +22,7 @@ import seaborn as sns
 torch.autograd.set_detect_anomaly(True)
 
 # Some global things...
+torch.set_num_threads(1) # attempt to reduce CPU usage - 20.01.26
 fall2020_adj = 1;
 if fall2020_adj:
   globalMin = 1e-10 # what do we "cut off" the model response at? should be >0 but small
@@ -42,7 +43,8 @@ except:
 ### Helper -- from Billy
 def _cast_as_tensor(x, device='cpu', dtype=torch.float32):
     # needs to be float32 to work with the Hessian calculations
-    return torch.tensor(x, dtype=dtype, device=device)
+    #return torch.tensor(x, dtype=dtype, device=device) # per bill broderick
+    return torch.as_tensor(x, dtype=dtype, device=device) # updated for expected lower CPU usage
 
 def _cast_as_param(x, requires_grad=True):
     return torch.nn.Parameter(_cast_as_tensor(x), requires_grad=requires_grad)
@@ -390,9 +392,9 @@ class sfNormMod(torch.nn.Module):
     self.noiseEarly = _cast_as_param(modParams[5]);   # early additive noise
     self.noiseLate  = _cast_as_param(modParams[6]);  # late additive noise
     if self.lossType == 3:
-      self.varGain    = _cast_as_param(modParams[7]);  # multiplicative noisew
+      self.varGain    = _cast_as_param(modParams[7]);  # multiplicative noise
     else:
-      self.varGain    = _cast_as_tensor(modParams[7]);  # multiplicative noisew
+      self.varGain    = _cast_as_tensor(modParams[7]);  # NOT optimized in this case
 
     ### Normalization parameters
     normParams = hf.getNormParams(modParams, normType);
@@ -731,8 +733,8 @@ class sfNormMod(torch.nn.Module):
 
 ### End of class (sfNormMod)
     
-def loss_sfNormMod(respModel, respData, lossType=1, debug=0, respMeans=None, nbinomCalc=2, varGain=None):
-  # respMeans, nbinomCalc, varGain used only in lossType == 3
+def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGain=None):
+  # nbinomCalc, varGain used only in lossType == 3
 
   if lossType == 1: # sqrt
       #mask = (~torch.isnan(respModel)) & (~torch.isnan(respData));
@@ -754,7 +756,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, respMeans=None, nbi
       # -- count_mean is averaged across condition
       # - How does it work? Mu will need to be broadcast to be the same length as all_counts
       # - p is similarly broadcast, while r is just one value
-      mu = torch.max(_cast_as_tensor(.1), respMeans); # The predicted mean spike count
+      mu = torch.max(_cast_as_tensor(.1), respModel); # The predicted mean spike count
       # -- sigmoid(varGain) to ensure it's non-negative
       var = mu + (torch.sigmoid(varGain)*torch.pow(mu, 2)); # The corresponding variance of the spike count
       # Note: Two differeing versions of r - the first (doesn't use var) is from Robbe's code shared through Hasse/Mariana
@@ -770,6 +772,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, respMeans=None, nbi
       llh = nbinomDistr.log_prob(respData); # The likelihood for each pass under the doubly stochastic model
       if torch.any(llh==0): # if it's F1 values, we'll round to integer
           llh = nbinom.log_prob(torch.round(respData));
+      per_cond = -llh;
       NLL = torch.mean(-llh);
 
   if debug:
@@ -784,7 +787,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, respMeans=None, nbi
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=1500, learning_rate=0.001, batch_size=2000, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=1000, learning_rate=0.05, batch_size=2000, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.05ish (0.15 seems too high - 21.01.26)
 
   ### Load the cell, set up the naming
   ########
@@ -806,7 +809,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       if excType == 1:
         fL_name = 'fitList%s_pyt_201017' % (loc_str); # pyt for pytorch
       elif excType == 2:
-        fL_name = 'fitList%s_pyt_210107' % (loc_str); # pyt for pytorch
+        #fL_name = 'fitList%s_pyt_210107' % (loc_str); # pyt for pytorch
+        fL_name = 'fitList%s_pyt_210121' % (loc_str); # pyt for pytorch
         #fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
 
   if vecCorrected:
@@ -872,8 +876,11 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       respOverwrite = hf.adjust_f1_byTrial(expInfo, expInd);
   trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite);
   if lossType == 3:
+    if respMeasure == 1:
+      blanks = np.where(trInf['con']==0); # then we'll need to zero-out the blanks
+      resp[blanks] = 1e-6;
     orgMeans = _cast_as_tensor(organize_mean_perCond(trInf, resp));
-
+ 
   respStr = hf_sfBB.get_resp_str(respMeasure);
   if os.path.isfile(loc_data + fitListName):
     fitList = hf.np_smart_load(str(loc_data + fitListName));
@@ -881,9 +888,12 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       curr_params = fitList[cellNum-1][respStr]['params'];
       # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
       testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd)
-      trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure)
+      trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite) # warning: added respOverwrite here; also add whichTrials???
       predictions = testModel.forward(trInfTemp, respMeasure=respMeasure);
-      loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType)
+      if testModel.lossType == 3:
+        loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType, varGain=testModel.varGain)
+      else:
+        loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType)
       if np.isnan(loss_test.item()):
         initFromCurr = 0; # then we've saved bad parameters -- force new ones!
     except:
@@ -894,7 +904,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   ### set parameters
   # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
-  prefSfEst = np.random.uniform(0.5, 2);
+  prefSfEst = np.random.uniform(0.5, 5);
   normConst = -2;
   if fitType == 1:
     inhAsym = 0;
@@ -920,7 +930,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     respScalar = np.random.uniform(0.1, 0.5) if initFromCurr==0 else curr_params[4];
     noiseEarly = 1e-3 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
   noiseLate = 1e-1 if initFromCurr==0 else curr_params[6];
-  varGain = np.random.uniform(0.1, 1) if initFromCurr==0 else curr_params[7];
+  varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
   if lgnFrontEnd > 0:
     # Now, the LGN weighting 
     mWeight = np.random.uniform(0.25, 0.75) if initFromCurr==0 else curr_params[-1];
@@ -985,7 +995,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           target = target['resp'].flatten(); # since it's [nTr, 1], just make it [nTr] (if respMeasure == 0)
           predictions = predictions.flatten(); # either [nTr, nComp] to [nComp*nTr] or [nTr,1] to [nTr]
           if model.lossType == 3:
-            loss_curr = loss_sfNormMod(predictions, target, model.lossType, respMeans=orgMeans[feature['num'], :].flatten(), varGain=model.varGain)
+            loss_curr = loss_sfNormMod(predictions, target, model.lossType, varGain=model.varGain)
           else:
             loss_curr = loss_sfNormMod(predictions, target, model.lossType)
 
@@ -1040,7 +1050,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       curr_resp[blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
       gt_resp[blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
 
-  NLL = loss_sfNormMod(curr_resp, gt_resp, model.lossType).detach().numpy();
+  if model.lossType == 3:
+    NLL = loss_sfNormMod(curr_resp.flatten(), gt_resp.flatten(), model.lossType, varGain=model.varGain).detach().numpy();
+  else:
+    NLL = loss_sfNormMod(curr_resp.flatten(), gt_resp.flatten(), model.lossType).detach().numpy();
 
   ## we've finished optimization, so reload again to make sure that this  NLL is better than the currently saved one
   ## -- why do we have to do it again here? We may be running multiple fits for the same cells at the same and we want to make sure that if one of those has updated, we don't overwrite that opt. if it's better
@@ -1079,7 +1092,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     fitList[cellNum-1][respStr]['params'] = opt_params;
     # NEW: Also save *when* this most recent fit was made (19.02.04); and nll_history below
     fitList[cellNum-1][respStr]['time'] = datetime.datetime.now();
-    # NEW: Also also save entire loss/optimization structure
+    # NEW: Also also save entire loss/optimizaiotn structure
     optInfo = dict();
     optInfo['call'] = optimizer;
     optInfo['epochs'] = max_epochs;

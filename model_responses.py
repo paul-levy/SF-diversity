@@ -1975,6 +1975,8 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     if lgnFrontEnd > 0:
       # Now, the LGN weighting 
       mWeight = np.random.uniform(0.25, 0.75) if initFromCurr==0 else curr_params[-1];
+    else:
+      mWeight = np.nan;
 
     if fitType == 1:
       inhAsym = 0;
