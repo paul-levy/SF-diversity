@@ -196,15 +196,33 @@ except:
 expInd   = hf.get_exp_ind(data_loc, cellName)[0];
 
 # #### Load model fits
+# - pre-define the loss trajectory to be None
+loss_traj_V1  = None;
+loss_traj_LGN = None;
+
 if pytorch_mod == 1:
   if respMeasure is None:
     f1f0_rat = hf.compute_f1f0(expData['sfm']['exp']['trial'], cellNum, expInd, loc_data=None)[0];
     respMeasure = int(f1f0_rat > 1);
   respStr = hf_sf.get_resp_str(respMeasure);
-  modFit = fitList[cellNum-1][respStr]['params']; # 
-  modFit_lgn = fitList_lgn[cellNum-1][respStr]['params']; # 
+  modFit = fitList[cellNum-1][respStr]['params'];
+  modFit_lgn = fitList_lgn[cellNum-1][respStr]['params'];
   loss_V1 = fitList[cellNum-1][respStr]['NLL']
   loss_LGN = fitList_lgn[cellNum-1][respStr]['NLL']
+  # load details, too, if possible
+  try:
+    try:
+      fitDetails = hf.np_smart_load(data_loc + fitName.replace('.npy', '_details.npy'));
+      loss_traj_V1 = fitDetails[cellNum-1][respStr]['loss'];
+    except:
+      pass; # it's ok, we've already pre-defined None
+    try:
+      fitDetails_lgn = hf.np_smart_load(data_loc + fitName_lgn.replace('.npy', '_details.npy'));
+      loss_traj_LGN = fitDetails_lgn[cellNum-1][respStr]['loss'];
+    except:
+      pass
+  except:
+    pass
 else:
   modFit = fitList[cellNum-1]['params']; # 
   modFit_lgn = fitList_lgn[cellNum-1]['params']; # 
@@ -214,18 +232,56 @@ modFits = [modFit, modFit_lgn];
 normTypes = [2, 1]; # weighted, then flat
 lgnTypes = [0, lgnFrontEnd];
 
-# ### Organize data
-# #### determine contrasts, center spatial frequency, dispersions
+# ### Organize data & model responses
+# ---- first, if m
 if pytorch_mod == 1:
-  ### now, set-up the two models (one LGN, one V1)
-  model_V1, model_LGN = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType) for prms,normType,lgnType in zip(modFits, normTypes, lgnTypes)]
-
-  # package the data, run the model
+  # get the correct, adjusted F1 response
   trialInf = expData['sfm']['exp']['trial'];
   if expInd > 1 and respMeasure == 1:
     respOverwrite = hf.adjust_f1_byTrial(trialInf, expInd);
   else:
     respOverwrite = None;
+# ---- DATA - organize data responses, first
+_, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData, expInd);
+if rvcAdj >= 0:
+  if rvcAdj == 1:
+    rvcFlag = '';
+    rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
+    asRates = True;
+  elif rvcAdj == 0:
+    rvcFlag = '_f0';
+    rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
+    asRates = False;
+  # rvcMod=-1 tells the function call to treat rvcName as the fits, already (we loaded above!)
+  spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=rvcFits, rvcMod=-1, descrFitName_f0=None, baseline_sub=False);
+elif rvcAdj == -1: # i.e. ignore the phase adjustment stuff...
+  if respMeasure == 1 and expInd > 1:
+    spikes_byComp = respOverwrite;
+    # then, sum up the valid components per stimulus component
+    allCons = np.vstack(expData['sfm']['exp']['trial']['con']).transpose();
+    blanks = np.where(allCons==0);
+    spikes_byComp[blanks] = 0; # just set it to 0 if that component was blnak during the trial
+    spikes_rate = np.sum(spikes_byComp, axis=1);
+    asRates = False; # TODO: Figure out if really as rates or not...
+    rvcFlag = '_f1';
+  else:
+    spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=None, force_dc=True, baseline_sub=False); 
+    rvcFlag = '_f0';
+    asRates = True;
+
+# #### determine contrasts, center spatial frequency, dispersions
+# -- first, load varGain, since we'll need it just below if pytorch_mod==1, or later on otherwise (if lossType=3)
+if lossType == 3: # i.e. modPoiss
+  varGains  = [x[7] for x in modFits];
+  if pytorch_mod: # then the real varGain value is sigmoid(varGain), i.e. 1/(1+exp(-varGain))
+    varGains = [1/(1+np.exp(-x)) for x in varGains];
+else:
+  varGains = [-99, -99]; # just dummy values; won't be used unless losstype=3
+
+if pytorch_mod == 1:
+  ### now, set-up the two models (one LGN, one V1)
+  model_V1, model_LGN = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType) for prms,normType,lgnType in zip(modFits, normTypes, lgnTypes)]
+
   dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
   modResps = [mod.forward(dw.trInf, respMeasure=respMeasure).detach().numpy() for mod in [model_V1, model_LGN]];
   if respMeasure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
@@ -242,13 +298,29 @@ if pytorch_mod == 1:
   mr_LGN[dw.trInf['num']] = modResps[1];
   modResps = [mr_V1, mr_LGN];
 
-  # TODO: make these real values, eventually
-  varExplSF = None
-  varExplSF_lgn = None
-  varExplCon = None
-  varExplCon_lgn = None
-  lossByCond = None
-  lossByCond_lgn = None
+  # organize responses so that we can package them for evaluating varExpl...
+  _, _, expByCond, _ = hf.organize_resp(spikes_rate, trialInf, expInd);
+  #_, _, expByCond, _ = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=asRates);
+  stimDur = hf.get_exp_params(expInd).stimDur;
+  _, _, modByCond_lgn, _ = hf.organize_resp(np.divide(mr_LGN, stimDur), trialInf, expInd);
+  _, _, modByCond, _ = hf.organize_resp(np.divide(mr_V1, stimDur), trialInf, expInd);
+  # - and now compute varExpl - first for SF tuning curves, then for RVCs...
+  nDisp, nSf, nCon = expByCond.shape;
+  varExplSF = np.nan * np.zeros((nDisp, nCon));
+  varExplSF_lgn = np.nan * np.zeros((nDisp, nCon));
+  varExplCon = np.nan * np.zeros((nDisp, nSf));
+  varExplCon_lgn = np.nan * np.zeros((nDisp, nSf));
+
+  for dI in np.arange(nDisp):
+    for sI in np.arange(nSf):
+      varExplCon[dI, sI] = hf.var_explained(hf.nan_rm(expByCond[dI, sI, :]), hf.nan_rm(modByCond[dI, sI, :]), None);
+      varExplCon_lgn[dI, sI] = hf.var_explained(hf.nan_rm(expByCond[dI, sI, :]), hf.nan_rm(modByCond_lgn[dI, sI, :]), None);
+    for cI in np.arange(nCon):
+      varExplSF[dI, cI] = hf.var_explained(hf.nan_rm(expByCond[dI, :, cI]), hf.nan_rm(modByCond[dI, :, cI]), None);
+      varExplSF_lgn[dI, cI] = hf.var_explained(hf.nan_rm(expByCond[dI, :, cI]), hf.nan_rm(modByCond_lgn[dI, :, cI]), None);
+
+  lossByCond = mrpt.loss_sfNormMod(mrpt._cast_as_tensor(mr_V1), mrpt._cast_as_tensor(spikes_rate), lossType=lossType, varGain=mrpt._cast_as_tensor(varGains[0]), debug=1)[1].detach().numpy();
+  lossByCond_lgn = mrpt.loss_sfNormMod(mrpt._cast_as_tensor(mr_LGN), mrpt._cast_as_tensor(spikes_rate), lossType=lossType, varGain=mrpt._cast_as_tensor(varGains[1]), debug=1)[1].detach().numpy();
 
 elif pytorch_mod == 0:
   # SFMGiveBof returns spike counts per trial, NOT rates -- we will correct in hf.organize_resp call below
@@ -283,44 +355,8 @@ modHighs = [np.nanmax(resp, axis=3) for resp in allSfMixs];
 modAvgs = [np.nanmean(resp, axis=3) for resp in allSfMixs];
 modSponRates = [fit[6] for fit in modFits];
 
-# more tabulation - stim vals, organize measured responses
-_, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData, expInd);
-if rvcAdj >= 0:
-  if rvcAdj == 1:
-    rvcFlag = '';
-    rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
-    asRates = True;
-  elif rvcAdj == 0:
-    rvcFlag = '_f0';
-    rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
-    asRates = False;
-  # rvcMod=-1 tells the function call to treat rvcName as the fits, already (we loaded above!)
-  spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=rvcFits, rvcMod=-1, descrFitName_f0=None, baseline_sub=False);
-elif rvcAdj == -1: 
-  if respMeasure == 1 and expInd > 1:
-    spikes_byComp = respOverwrite;
-    # then, sum up the valid components per stimulus component
-    allCons = np.vstack(expData['sfm']['exp']['trial']['con']).transpose();
-    blanks = np.where(allCons==0);
-    spikes_byComp[blanks] = 0; # just set it to 0 if that component was blnak during the trial
-    spikes_rate = np.sum(spikes_byComp, axis=1);
-    asRates = False; # TODO: Figure out if really as rates or not...
-    rvcFlag = '_f1';
-  else:
-    spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=None, force_dc=True, baseline_sub=False); 
-    rvcFlag = '_f0';
-    asRates = True;
-
+# DATA: more tabulation - stim vals, organize measured responses
 _, _, respOrg, respAll = hf.organize_resp(spikes_rate, expData, expInd, respsAsRate=asRates);
-
-if varExplSF is None:  # TODO: make these real values, eventually
-  # For reference: sfmixModResps[0 or 1] is [nDisp x nSf x nCon]
-  varExplSF = np.nan * np.zeros_like(sfmixModResps[0][:, 0, :])
-  varExplSF_lgn = np.copy(varExplSF);
-  varExplCon = np.nan * np.zeros_like(sfmixModResps[0][:, :, 0])
-  varExplCon_lgn = np.copy(varExplCon);
-  lossByCond = np.nan * np.zeros_like(spikes_rate);
-  lossByCond_lgn = np.copy(lossByCond);
 
 respMean = respOrg;
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
@@ -344,6 +380,7 @@ if diffPlot: # otherwise, nothing to do
 
 blankMean, blankStd, _ = hf.blankResp(expData, expInd); 
 
+# #### determine contrasts, center spatial frequency, dispersions
 all_disps = stimVals[0];
 all_cons = stimVals[1];
 all_sfs = stimVals[2];
@@ -382,7 +419,7 @@ for d in range(nDisps):
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
 
         # NOW...let's compute the sum loss across all SF values for this disp X con condition
-        if lossType == 1: # should be same for lossType == 2...
+        if lossType == 1 or lossType == 2 or lossType == 3:
           # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
           sfs_to_check = np.where(v_sfs)[0];
           all_trials = [hf.get_valid_trials(expData, d, v_cons[c], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in sfs_to_check];
@@ -584,8 +621,7 @@ for d in range(nDisps):
         
         # put sum loss for all conditions present
         # NOW...let's compute the sum loss across all SF values for this disp X con condition
-        if lossType == 1: # should be same for lossType == 2...
-          # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
+        if lossType == 1 or lossType == 2 or lossType == 3:
           sfs_to_check = np.where(v_sfs)[0];
           all_trials = [hf.get_valid_trials(expData, d, v_cons[c], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in sfs_to_check];
           # first, wghtd
@@ -596,7 +632,7 @@ for d in range(nDisps):
           except:
             all_loss = np.array([np.mean(x) for x in all_loss_all]);
             curr_loss = np.sum([np.sum(x) for x in all_loss_all]);
-          # then flat
+          # then flat/lgn
           all_loss_all_lgn = np.array([lossByCond_lgn[x] for x in all_trials]);
           try:
             all_loss_lgn = np.mean(all_loss_all_lgn, axis=1); # for error per SF condition
@@ -604,7 +640,9 @@ for d in range(nDisps):
           except:
             all_loss_lgn = np.array([np.mean(x) for x in all_loss_all_lgn]);
             curr_loss_lgn = np.sum([np.sum(x) for x in all_loss_all_lgn]);
-        if lossType == 4: # must add for lossType == 1||2 (handled the same way)...
+        elif lossType == 4: # must add for lossType == 1||2 (handled the same way)...
+          # NOTE: I think below is outdated - now lossByCond is just per trial!
+          # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
           sfs_to_check = np.where(v_sfs)[0];
           all_conds = [np.ravel_multi_index([d, sf, v_cons[c]], [nDisps, nSfs, nCons]) for sf in sfs_to_check];
           all_loss = np.array([lossByCond[x] for x in all_conds]);
@@ -639,9 +677,15 @@ for d in range(nDisps):
           else:
             relTo = np.zeros_like(interpModBoth[0]);
           for rsp, cc, s in zip(interpModBoth, modColors, modLabels):
-            sfMixAx[c_plt_ind, d].plot(plt_sfs, rsp-relTo, color=cc, label=s, clip_on=False);
+            if d == 0 and c == 0:
+              sfMixAx[c_plt_ind, d].plot(plt_sfs, rsp-relTo, color=cc, label=s, clip_on=False);
+            else:
+              sfMixAx[c_plt_ind, d].plot(plt_sfs, rsp-relTo, color=cc, clip_on=False);
         else: # plot model evaluated only at data point
-          [sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=False, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
+          if d == 0 and c == 0:
+            [sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=False, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
+          else:
+            [sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=False) for modAvg, cc in zip(modAvgs, modColors)];
 
         sfMixAx[c_plt_ind, d].set_xlim((np.min(all_sfs), np.max(all_sfs)));
         if diffPlot == 1:
@@ -654,8 +698,10 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].text(min(all_sfs), 0.8*maxResp, '%.2f, %.2f' % (varExplSF[d, v_cons[c]], varExplSF_lgn[d, v_cons[c]]), ha='left', wrap=True, fontsize=25);
 
         sfMixAx[c_plt_ind, d].set_xscale('log');
-        sfMixAx[c_plt_ind, d].set_xlabel('sf (c/deg)');
-        sfMixAx[c_plt_ind, d].set_ylabel('resp (imp/s)');
+        if c_plt_ind == (n_v_cons-1):
+          sfMixAx[c_plt_ind, d].set_xlabel('sf (c/deg)');
+        if d == 0:
+          sfMixAx[c_plt_ind, d].set_ylabel('resp (imp/s)');
 
 if lgnFrontEnd > 0:
   mWt = modFits[1][-1] if pytorch_mod == 0 else 1/(1+np.exp(-modFits[1][1])); # why? in pytorch_mod, it's a sigmoid
@@ -703,10 +749,8 @@ plt.loglog(respMean[val_conds][gt0], np.square(respVar[val_conds][gt0]), 'o');
 # skeleton for plotting modulated poisson prediction
 if lossType == 3: # i.e. modPoiss
   mean_vals = np.logspace(-1, 2, 50);
-  varGains  = [x[7] for x in modFits];
-  if pytorch_mod: # then the real varGain value is sigmoid(varGain), i.e. 1/(1+exp(-varGain))
-    varGains = [1/(1+np.exp(-x)) for x in varGains];
-  [plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals)) for varGain in varGains];
+  [plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals), label='vG: %.2f' % varGain) for varGain in varGains];
+  plt.legend();
 plt.xlabel('Mean (imp/s)');
 plt.ylabel('Variance (imp/s^2)');
 plt.title('Super-poisson?');
@@ -724,12 +768,11 @@ plt.semilogx(all_cons[val_cons], respMean[disp_rvc, sfToUse, val_cons], 'o', cli
 plt.xlabel('Con (%)', fontsize=20);
 plt.ylim([np.minimum(-5, np.nanmin(respMean[disp_rvc, sfToUse, val_cons])), 1.1*np.nanmax(respMean[disp_rvc, sfToUse, val_cons])]);
 
-# Remove top/right axis, put ticks only on bottom/left
-
 # plot model details - exc/suppressive components
 omega = np.logspace(-2, 2, 1000);
 sfExc = [];
-for i in modFits:
+sfExcRaw = [];
+for i, lgnType in zip(modFits, lgnTypes):
   prefSf = i[0];
 
   if excType == 1:
@@ -750,8 +793,39 @@ for i in modFits:
     # - now, compute the responses (automatically normalized, since max gaussian value is 1...)
     s     = [np.exp(-np.divide(np.square(np.log(x)), 2*np.square(y))) for x,y in zip(sfRel, sigma)];
     sfExcCurr = s; 
+    sfExcLGN = s;
+  # BUT. if this is an LGN model, we'll apply the filtering, eval. at 100% contrast
+  if lgnType == 1 or lgnType == 2:
+    params_m = [0, 12.5, 0.05];
+    params_p = [0, 17.5, 0.50];
+    DoGmodel = 2;
+    if lgnFrontEnd == 1:
+      dog_m = [1, 3, 0.3, 0.4]; # k, f_c, k_s, j_s
+      dog_p = [1, 9, 0.5, 0.4];
+    elif lgnFrontEnd == 2:
+      dog_m = [1, 6, 0.3, 0.4]; # k, f_c, k_s, j_s
+      dog_p = [1, 9, 0.5, 0.4];
+    # now compute with these parameters
+    resps_m = hf.get_descrResp(dog_m, omega, DoGmodel, minThresh=0.1)
+    resps_p = hf.get_descrResp(dog_p, omega, DoGmodel, minThresh=0.1)
+    # -- make sure we normalize by the true max response:
+    sfTest = np.geomspace(0.1, 10, 1000);
+    max_m = np.max(hf.get_descrResp(dog_m, sfTest, DoGmodel, minThresh=0.1));
+    max_p = np.max(hf.get_descrResp(dog_p, sfTest, DoGmodel, minThresh=0.1));
+    # -- then here's our selectivity per component for the current stimulus
+    selSf_m = np.divide(resps_m, max_m);
+    selSf_p = np.divide(resps_p, max_p);
+    # - then RVC response: # rvcMod 0 (Movshon)
+    rvc_mod = hf.get_rvc_model();
+    stimCo = np.linspace(0,1,10);
+    selCon_m = rvc_mod(*params_m, stimCo)
+    selCon_p = rvc_mod(*params_p, stimCo)
+    lgnSel = mWt*selSf_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
+    withLGN = s*lgnSel;
+    sfExcLGN = withLGN/np.max(withLGN);
 
-  sfExc.append(sfExcCurr);
+  sfExcRaw.append(sfExcCurr);
+  sfExc.append(sfExcLGN);
 
 inhSfTuning = hf.getSuppressiveSFtuning();
 
@@ -772,10 +846,11 @@ sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
 sfNorm = sfNorm/np.amax(np.abs(sfNorm));
 sfNorms = [sfNormTune, sfNorm];
 
-# just setting up lines
+# Plot the filters - for LGN, this is WITH the lgn filters "acting" (assuming high contrast)
 curr_ax = plt.subplot2grid(detailSize, (1, 1));
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset=5);
+# just setting up lines
 plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
 plt.semilogx([.01, .01], [-1.5, 1], 'k--')
 plt.semilogx([.1, .1], [-1.5, 1], 'k--')
@@ -790,7 +865,7 @@ plt.ylim([-0.1, 1.1]);
 plt.xlabel('spatial frequency (c/deg)', fontsize=12);
 plt.ylabel('Normalized response (a.u.)', fontsize=12);
 
-# SIMPLE normalization
+# SIMPLE normalization - i.e. the raw weights
 curr_ax = plt.subplot2grid(detailSize, (2, 1));
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset=5);
@@ -806,10 +881,11 @@ sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
 wt_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
 sfNormTuneSim = wt_weights/np.amax(np.abs(wt_weights));
 sfNormsSimple = [sfNormTuneSim, sfNormSim]
-[plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
+[plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExcRaw, modColors, modLabels)]
 [plt.semilogx(omega, norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
 plt.xlim([omega[0], omega[-1]]);
 plt.ylim([-0.1, 1.1]);
+plt.title('v-- raw weights/filters --v');
 plt.xlabel('spatial frequency (c/deg)', fontsize=12);
 plt.ylabel('Normalized response (a.u.)', fontsize=12);
 
@@ -825,6 +901,19 @@ plt.plot(np.linspace(-1,1,100), np.maximum(0, np.linspace(-1,1,100)), 'k--', lin
 plt.xlim([-1, 1]);
 plt.ylim([-.1, 1]);
 plt.text(0.5, 1.1, 'respExp: %.2f, %.2f' % (modExps[0], modExps[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+
+# IF available, show the loss trajectory
+if loss_traj_V1 is not None or loss_traj_LGN is not None:
+  curr_ax = plt.subplot2grid(detailSize, (2, 4));
+  if loss_traj_V1 is not None:
+    plt.plot(loss_traj_V1, label='V1-wght', color=modColors[0])
+  if loss_traj_LGN is not None:
+    plt.plot(loss_traj_LGN, label='LGN-flat', color=modColors[1])
+  plt.xscale('log');
+  plt.yscale('symlog');
+  plt.legend();
+  plt.title('Loss traj. on best fit');
+  sns.despine(ax=curr_ax, offset=10);
 
 # print, in text, model parameters:
 curr_ax = plt.subplot2grid(detailSize, (0, 4));

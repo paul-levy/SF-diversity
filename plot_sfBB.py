@@ -126,7 +126,8 @@ if excType == 1:
   #fitBase = 'fitList_pyt_201017'; # excType 1
 elif excType == 2:
   #fitBase = 'fitList_pyt_200507'; # excType 2
-  fitBase = 'fitList_pyt_201107'; # excType 2
+  #fitBase = 'fitList_pyt_201107'; # excType 2
+  fitBase = 'fitList_pyt_210121'; # excType 2
 else:
   fitBase = None;
 
@@ -521,8 +522,10 @@ for measure in [0,1]:
     ax[4, 2*measure].set_title('Joint REF tuning (%s)' % lbl)
     try:
       curr_str = hf_sf.get_resp_str(respMeasure=measure);
-      ax[4, 1+2*measure].loglog(fit_details[curr_str]['loss'], color=modColors[0]);
-      ax[4, 1+2*measure].loglog(fit_details_lgn[curr_str]['loss'], color=modColors[1]);
+      ax[4, 1+2*measure].plot(fit_details[curr_str]['loss'], color=modColors[0]);
+      ax[4, 1+2*measure].plot(fit_details_lgn[curr_str]['loss'], color=modColors[1]);
+      ax[4, 1+2*measure].set_xscale('log');
+      ax[4, 1+2*measure].set_yscale('symlog');
       ax[4, 1+2*measure].set_xlabel('Optimization epoch');
       ax[4, 1+2*measure].set_ylabel('Loss');
       ax[4, 1+2*measure].set_title('Optimization progress (%s)' % lbl)

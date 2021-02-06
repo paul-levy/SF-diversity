@@ -41,9 +41,14 @@ do
   python3.6 plot_diagnose_vLGN.py $run 2 2 altExp/ 1 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
 
   # LGN type 1, pytorch model, sqrt loss
-  #python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 1 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
-  #python3.6 plot_diagnose_vLGN.py $run 2 1 V1_orig/ 1 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
-  #python3.6 plot_diagnose_vLGN.py $run 2 1 altExp/ 1 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 1 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run 2 1 V1_orig/ 1 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run 2 1 altExp/ 1 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
+
+  # LGN type 1, pytorch model, modPoiss loss
+  python3.6 plot_diagnose_vLGN.py $run 2 3 V1/ 1 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run 2 3 V1_orig/ 1 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run 2 3 altExp/ 1 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
 
   #python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 99 1 1 0 0 0.05 1 1 & # no diff, not interpolated
   #python3.6 plot_diagnose_vLGN.py $run 2 1 V1_orig/ 99 1 1 0 0 0.05 1 1 & # no diff, not interpolated

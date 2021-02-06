@@ -70,10 +70,10 @@ for run in {1..20}; do
   #python3.6 model_responses_pytorch.py $run V1_orig/ 2 2 2 0 0 1 0.10 1 1 -1 & ### V1
   #python3.6 model_responses_pytorch.py $run altExp/ 2 2 2 0 0 1 0.10 1 1 -1 & ### V1
   #python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 2 0 0 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 1 1 0 1 0.10 1 1 -1 &  # LGN
   #python3.6 model_responses_pytorch.py $run V1/ 2 2 1 1 0 1 0.10 1 1 -1 &  # LGN
   #python3.6 model_responses_pytorch.py $run V1_orig/ 2 2 1 1 0 1 0.10 1 1 -1 &  # LGN
   #python3.6 model_responses_pytorch.py $run altExp/ 2 2 1 1 0 1 0.10 1 1 -1 &  # LGN
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 1 1 0 1 0.10 1 1 -1 &  # LGN
 
   # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------  
   #-----------------------------------------------------LGN--------nm--fixExp--
@@ -82,8 +82,8 @@ for run in {1..20}; do
   #python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 2 0 0 1 0.10 1 1 -1 & ### V1
   #python3.6 model_responses_pytorch.py $run altExp/ 2 1 2 0 0 1 0.10 1 1 -1 & ### V1
   #python3.6 model_responses_pytorch.py $run V1/ 2 1 2 0 0 1 0.10 1 1 -1 & ### V1
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 0 0 1 0.10 1 1 -1 & ### V1
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 0 1 0.10 1 1 -1 & # LGN
+  python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 0 0 1 0.10 1 1 -1 & ### V1
+  python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 0 1 0.10 1 1 -1 & # LGN
   #python3.6 model_responses_pytorch.py $run V1/ 2 1 1 1 0 1 0.10 1 1 -1 & # LGN
   #python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 1 1 0 1 0.10 1 1 -1 & # LGN
   #python3.6 model_responses_pytorch.py $run altExp/ 2 1 1 1 0 1 0.10 1 1 -1 & # LGN
@@ -94,11 +94,30 @@ for run in {1..20}; do
   #python3.6 model_responses_pytorch.py $run V1_orig/ 2 3 2 0 0 1 0.10 1 1 -1 & ### V1
   #python3.6 model_responses_pytorch.py $run altExp/ 2 3 2 0 0 1 0.10 1 1 -1 & ### V1
   #python3.6 model_responses_pytorch.py $run V1/ 2 3 2 0 0 1 0.10 1 1 -1 & ### V1
-  python3.6 model_responses_pytorch.py $run V1_BB/ 2 3 2 0 0 1 0.10 1 1 -1 & ### V1
-  python3.6 model_responses_pytorch.py $run V1_BB/ 2 3 1 1 0 1 0.10 1 1 -1 & # LGN
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 3 2 0 0 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 3 1 1 0 1 0.10 1 1 -1 & # LGN
   #python3.6 model_responses_pytorch.py $run V1/ 2 3 1 1 0 1 0.10 1 1 -1 & # LGN
   #python3.6 model_responses_pytorch.py $run V1_orig/ 2 3 1 1 0 1 0.10 1 1 -1 & # LGN
   #python3.6 model_responses_pytorch.py $run altExp/ 2 3 1 1 0 1 0.10 1 1 -1 & # LGN
+  # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------  
+  #-----------------------------------------------------LGN--------nm--fixExp--
+
+  # --- V1 flat, no init, sqrt, poiss, then modPoiss loss
+  # - sqrt
+  #python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 1 0 0 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run altExp/ 2 1 1 0 0 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run V1/ 2 1 1 0 0 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 0 0 1 0.10 1 1 -1 & ### V1
+  # - poiss
+  #python3.6 model_responses_pytorch.py $run V1_orig/ 2 2 1 0 0 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run altExp/ 2 2 1 0 0 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run V1/ 2 2 1 0 0 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 1 0 0 1 0.10 1 1 -1 & ### V1
+  # modPoiss
+  #python3.6 model_responses_pytorch.py $run V1_orig/ 2 3 1 0 0 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run altExp/ 2 3 1 0 0 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run V1/ 2 3 1 0 0 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 3 1 0 0 1 0.10 1 1 -1 & ### V1
   # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------  
   #-----------------------------------------------------LGN--------nm--fixExp--
 

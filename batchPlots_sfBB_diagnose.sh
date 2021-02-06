@@ -28,10 +28,11 @@ for run in {1..20}
 do
   # -----------------------------------e-l--dir-----kmul--rExp------
   # ---------------------------------------------lgn----plt--sem-----
-  #python3.6 plot_diagnose_sfBB.py $run 2 1 V1_BB/ 1 0.05 -1 -1 1 & # no diff, not interpolated
-  #python3.6 plot_diagnose_sfBB.py $run 2 2 V1_BB/ 1 0.05 -1 -1 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_sfBB.py $run 2 1 V1_BB/ 1 0.05 -1 -1 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_sfBB.py $run 2 2 V1_BB/ 1 0.05 -1 -1 1 & # no diff, not interpolated
+  python3.6 plot_diagnose_sfBB.py $run 2 3 V1_BB/ 1 0.05 -1 -1 1 & # no diff, not interpolated
   # ONLY DATA & ONLY PHASE CORRECTION
-  python3.6 plot_diagnose_sfBB.py $run -1 2 V1_BB/ 1 0.05 3 -1 1 & # no diff, not interpolated
+  #python3.6 plot_diagnose_sfBB.py $run -1 2 V1_BB/ 1 0.05 3 -1 1 & # no diff, not interpolated
 
 done
 
