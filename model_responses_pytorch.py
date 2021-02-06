@@ -747,7 +747,8 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 
   if lossType == 2: # poiss TODO FIX TODO
       poiss_loss = torch.nn.PoissonNLLLoss(log_input=False);
-      per_cond = poiss_loss;
+      if debug == 1: # only eval if debug, since this is slow
+        per_cond = _cast_as_tensor([poiss_loss(x,y) for x,y in zip(respModel, respData)]);
       NLL = poiss_loss(respModel, respData); # previously was respData, respModel
 
   if lossType == 3:
@@ -769,9 +770,10 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
       p = 1-pSucc; # why? Well, compared to scipy.stats.nbinom, the "p" here is for failure, not success, so it should be 1-p
       nbinomDistr = torch.distributions.negative_binomial.NegativeBinomial(r,p);
       # -- Evaluate the model
+      # ---- but first, make any negative values just greater than zero (if F1 responses)
+      if 'flo' in str(respData.dtype):
+        respData = torch.max(_cast_as_tensor(1e-6), respData);
       llh = nbinomDistr.log_prob(respData); # The likelihood for each pass under the doubly stochastic model
-      if torch.any(llh==0): # if it's F1 values, we'll round to integer
-          llh = nbinom.log_prob(torch.round(respData));
       per_cond = -llh;
       NLL = torch.mean(-llh);
 
@@ -787,7 +789,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=1000, learning_rate=0.05, batch_size=2000, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.05ish (0.15 seems too high - 21.01.26)
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=4000, learning_rate=0.04, batch_size=2000, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.05ish (0.15 seems too high - 21.01.26)
 
   ### Load the cell, set up the naming
   ########
