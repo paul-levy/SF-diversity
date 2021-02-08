@@ -51,27 +51,29 @@ cellNum  = int(sys.argv[1]);
 excType  = int(sys.argv[2]);
 lossType = int(sys.argv[3]);
 expDir   = sys.argv[4]; 
-lgnFrontEnd = int(sys.argv[5]);
-rvcAdj   = int(sys.argv[6]); # if 1, then let's load rvcFits to adjust responses to F1; 0 means no rvcFits; -1 means vector F1 math
-rvcMod   = int(sys.argv[7]); # 0/1/2 (see hf.rvc_fit_name)
-diffPlot = int(sys.argv[8]);
-intpMod  = int(sys.argv[9]);
-kMult  = float(sys.argv[10]);
+normTypesIn = int(sys.argv[5]); # two-digit number, extracting 1st for modA, 2nd for modB
+conTypesIn = int(sys.argv[6]); # two-digit number, extracting 1st for modA, 2nd for modB
+lgnFrontEnd = int(sys.argv[7]); # two-digit number, extracting 1st for modA, 2nd for modB
+rvcAdj   = int(sys.argv[8]); # if 1, then let's load rvcFits to adjust responses to F1; 0 means no rvcFits; -1 means vector F1 math
+rvcMod   = int(sys.argv[9]); # 0/1/2 (see hf.rvc_fit_name)
+diffPlot = int(sys.argv[10]);
+intpMod  = int(sys.argv[11]);
+kMult  = float(sys.argv[12]);
 
-if len(sys.argv) > 11:
-  fixRespExp = float(sys.argv[11]);
+if len(sys.argv) > 13:
+  fixRespExp = float(sys.argv[13]);
   if fixRespExp <= 0: # this is the code to not fix the respExp
     fixRespExp = None;
 else:
   fixRespExp = None; # default (see modCompare.ipynb for details)
 
-if len(sys.argv) > 12:
-  respVar = int(sys.argv[12]);
+if len(sys.argv) > 14:
+  respVar = int(sys.argv[14]);
 else:
   respVar = 1;
 
-if len(sys.argv) > 13:
-  pytorch_mod = int(sys.argv[13]);
+if len(sys.argv) > 15:
+  pytorch_mod = int(sys.argv[15]);
   newMethod = 1; # we are now using the newer method of computing the response in mrpt
   respMeasure = None; # allow it to be done based on F1:F0 ratio for now...
   # - we'll only need newMethod if pytorch_mod is 1
@@ -99,73 +101,42 @@ else:
 ### DATALIST
 expName = hf.get_datalist(expDir);
 ### FITLIST
-#fitBase = 'mr_fitList_190502cA';
-#fitBase = 'fitList_190502aA';
 #fitBase = 'fitList_190513cA'; # NOTE: THIS VERSION USED FOR VSS2019 poster
-#fitBase = 'fitList_190516cA';
-#fitBase = 'fitList_191023c';
-#fitBase = 'fitList_200413c';
-#fitBase = 'fitList_200417c_TNC'; # excType 1
-#fitBase = 'fitList_200418c_TNC'; # excType 2
 if excType == 1:
   fitBase = 'fitList_200417'; # excType 1
 elif excType == 2:
   #fitBase = 'fitList_200507'; # excType 2
-  #fitBase = 'fitList_pyt_210107' # excType 2
-  fitBase = 'fitList_pyt_210121' # excType 2
-#fitBase = 'fitList_200522c'; # excType 2
+  #fitBase = 'fitList_pyt_210121' # excType 2
+  fitBase = 'fitList_pyt_210206'
 #fitBase = 'holdout_fitList_190513cA';
 
 if pytorch_mod == 1 and rvcAdj == -1:
-  fitBase = '%s_vecF1' % fitBase;
-
-if lossType == 4: # chiSq...
-  fitBase = '%s%s' % (fitBase, hf.chiSq_suffix(kMult));
-
-# now, LGN-specific naming
-if fixRespExp is not None:
-  fitBase_lgn = '%s_re%d' % (fitBase, np.round(fixRespExp*10)); # suffix to indicate that the response exponent is fixed...
+  vecCorrected = 1;
 else:
-  fitBase_lgn = fitBase;
-
-if lgnFrontEnd == 1:
-  fitBase_lgn = '%s_LGN' % fitBase_lgn
-elif lgnFrontEnd == 2:
-  fitBase_lgn = '%s_LGNb' % fitBase_lgn
-elif lgnFrontEnd == 99:
-  fitBase_lgn = '%s_jLGN' % fitBase_lgn
+  vecCorrected = 0;
 
 ### RVCFITS
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
 rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
 
-# first the fit type
-fitSuf_fl = '_flat';
-fitSuf_wg = '_wght';
-# then the loss type
-if lossType == 1:
-  lossSuf = '_sqrt.npy';
-  loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
-elif lossType == 2:
-  lossSuf = '_poiss.npy';
-  loss = lambda resp, pred: poisson.logpmf(resp, pred);
-elif lossType == 3:
-  lossSuf = '_modPoiss.npy';
-  loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p));
-elif lossType == 4:
-  lossSuf = '_chiSq.npy';
-  # LOSS HERE IS TEMPORARY
-  loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
+### Model types
+# 0th: Unpack the norm types, con types, lgnTypes
+normA, normB = int(np.floor(normTypesIn/10)), np.mod(normTypesIn, 10)
+conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
+lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
 
-# NOTE: We choose weighted gain control for non-LGN model, flat gain control for the model with the LGN front end
-fitName = str(fitBase + fitSuf_wg + lossSuf);
-fitName_lgn = str(fitBase_lgn + fitSuf_fl + lossSuf);
+fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
+fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
+# what's the shorthand we use to refer to these models...
+modA_str = '%s%s%s' % ('fl' if normA==1 else 'wt', 'LGN' if lgnA>0 else 'V1', 'avg' if conA>1 else '');
+modB_str = '%s%s%s' % ('fl' if normB==1 else 'wt', 'LGN' if lgnB>0 else 'V1', 'avg' if conB>1 else '');
 
 # set the save directory to save_loc, then create the save directory if needed
+lossSuf = hf.lossType_suffix(lossType).replace('.npy', ''); # get the loss suffix, remove the file type ending
 if diffPlot == 1:
-  compDir  = str(fitBase_lgn + '_diagLGN' + lossSuf + '/diff');
+  compDir  = str(fitBase + '_diag_%s_%s' % (modA_str, modB_str) + lossSuf + '/diff');
 else:
-  compDir  = str(fitBase_lgn + '_diagLGN' + lossSuf);
+  compDir  = str(fitBase + '_diag_%s_%s' % (modA_str, modB_str) + lossSuf);
 if intpMod == 1:
   compDir = str(compDir + '/intp');
 subDir   = compDir.replace('fitList', 'fits').replace('.npy', '');
@@ -179,14 +150,14 @@ try: # keeping for backwards compatability
   dataList = np.load(str(data_loc + expName), encoding='latin1').item();
 except:
   dataList = hf.np_smart_load(str(data_loc + expName))
-fitList = hf.np_smart_load(data_loc + fitName);
-fitList_lgn = hf.np_smart_load(data_loc + fitName_lgn);
+fitListA = hf.np_smart_load(data_loc + fitNameA);
+fitListB = hf.np_smart_load(data_loc + fitNameB);
 
 cellName = dataList['unitName'][cellNum-1];
 try:
   cellType = dataList['unitType'][cellNum-1];
 except: 
-  # TODO: note, this is dangerous; thus far, only V1 cells don't have 'unitType' field in dataList, so we can safely do this
+  # TODO: note, this is dangerous; though thus far, only V1 cells don't have 'unitType' field in dataList, so we can safely do this
   cellType = 'V1'; 
 
 try: # keeping for backwards compatability
@@ -197,40 +168,41 @@ expInd   = hf.get_exp_ind(data_loc, cellName)[0];
 
 # #### Load model fits
 # - pre-define the loss trajectory to be None
-loss_traj_V1  = None;
-loss_traj_LGN = None;
+loss_traj_A  = None;
+loss_traj_B = None;
 
 if pytorch_mod == 1:
   if respMeasure is None:
     f1f0_rat = hf.compute_f1f0(expData['sfm']['exp']['trial'], cellNum, expInd, loc_data=None)[0];
     respMeasure = int(f1f0_rat > 1);
   respStr = hf_sf.get_resp_str(respMeasure);
-  modFit = fitList[cellNum-1][respStr]['params'];
-  modFit_lgn = fitList_lgn[cellNum-1][respStr]['params'];
-  loss_V1 = fitList[cellNum-1][respStr]['NLL']
-  loss_LGN = fitList_lgn[cellNum-1][respStr]['NLL']
+  modFit_A = fitListA[cellNum-1][respStr]['params'];
+  modFit_B = fitListB[cellNum-1][respStr]['params'];
+  loss_A = fitListA[cellNum-1][respStr]['NLL']
+  loss_B = fitListB[cellNum-1][respStr]['NLL']
   # load details, too, if possible
   try:
     try:
-      fitDetails = hf.np_smart_load(data_loc + fitName.replace('.npy', '_details.npy'));
-      loss_traj_V1 = fitDetails[cellNum-1][respStr]['loss'];
+      fitDetailsA = hf.np_smart_load(data_loc + fitNameA.replace('.npy', '_details.npy'));
+      loss_traj_A = fitDetailsA[cellNum-1][respStr]['loss'];
     except:
       pass; # it's ok, we've already pre-defined None
     try:
-      fitDetails_lgn = hf.np_smart_load(data_loc + fitName_lgn.replace('.npy', '_details.npy'));
-      loss_traj_LGN = fitDetails_lgn[cellNum-1][respStr]['loss'];
+      fitDetailsB = hf.np_smart_load(data_loc + fitNameB.replace('.npy', '_details.npy'));
+      loss_traj_B = fitDetailsB[cellNum-1][respStr]['loss'];
     except:
       pass
   except:
     pass
 else:
-  modFit = fitList[cellNum-1]['params']; # 
-  modFit_lgn = fitList_lgn[cellNum-1]['params']; # 
-  loss_V1 = fitList[cellNum-1]['NLL']
-  loss_LGN = fitList_lgn[cellNum-1]['NLL']
-modFits = [modFit, modFit_lgn];
-normTypes = [2, 1]; # weighted, then flat
-lgnTypes = [0, lgnFrontEnd];
+  modFit_A = fitListA[cellNum-1]['params']; # 
+  modFit_B = fitListB[cellNum-1]['params']; # 
+  loss_A = fitListA[cellNum-1]['NLL']
+  loss_B = fitListB[cellNum-1]['NLL']
+modFits = [modFit_A, modFit_B];
+normTypes = [normA, normB]; # weighted, then flat
+lgnTypes = [lgnA, lgnB];
+conTypes = [conA, conB];
 
 # ### Organize data & model responses
 # ---- first, if m
@@ -279,11 +251,11 @@ else:
   varGains = [-99, -99]; # just dummy values; won't be used unless losstype=3
 
 if pytorch_mod == 1:
-  ### now, set-up the two models (one LGN, one V1)
-  model_V1, model_LGN = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType) for prms,normType,lgnType in zip(modFits, normTypes, lgnTypes)]
+  ### now, set-up the two models
+  model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType) for prms,normType,lgnType in zip(modFits, normTypes, lgnTypes)]
 
   dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
-  modResps = [mod.forward(dw.trInf, respMeasure=respMeasure).detach().numpy() for mod in [model_V1, model_LGN]];
+  modResps = [mod.forward(dw.trInf, respMeasure=respMeasure).detach().numpy() for mod in [model_A, model_B]];
   if respMeasure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
     blanks = np.where(dw.trInf['con']==0);
     modResps[0][blanks] = 0;
@@ -292,35 +264,35 @@ if pytorch_mod == 1:
     modResps = [np.sum(mr, axis=1) for mr in modResps];
   # finally, make sure this fills out a vector of all responses (just have nan for non-modelled trials)
   nTrialsFull = len(trialInf['num']);
-  mr_V1 = np.nan * np.zeros((nTrialsFull, ));
-  mr_V1[dw.trInf['num']] = modResps[0];
-  mr_LGN = np.nan * np.zeros((nTrialsFull, ));
-  mr_LGN[dw.trInf['num']] = modResps[1];
-  modResps = [mr_V1, mr_LGN];
+  mr_A = np.nan * np.zeros((nTrialsFull, ));
+  mr_A[dw.trInf['num']] = modResps[0];
+  mr_B = np.nan * np.zeros((nTrialsFull, ));
+  mr_B[dw.trInf['num']] = modResps[1];
+  modResps = [mr_A, mr_B];
 
   # organize responses so that we can package them for evaluating varExpl...
   _, _, expByCond, _ = hf.organize_resp(spikes_rate, trialInf, expInd);
   #_, _, expByCond, _ = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=asRates);
   stimDur = hf.get_exp_params(expInd).stimDur;
-  _, _, modByCond_lgn, _ = hf.organize_resp(np.divide(mr_LGN, stimDur), trialInf, expInd);
-  _, _, modByCond, _ = hf.organize_resp(np.divide(mr_V1, stimDur), trialInf, expInd);
+  _, _, modByCondA, _ = hf.organize_resp(np.divide(mr_A, stimDur), trialInf, expInd);
+  _, _, modByCondB, _ = hf.organize_resp(np.divide(mr_B, stimDur), trialInf, expInd);
   # - and now compute varExpl - first for SF tuning curves, then for RVCs...
   nDisp, nSf, nCon = expByCond.shape;
-  varExplSF = np.nan * np.zeros((nDisp, nCon));
-  varExplSF_lgn = np.nan * np.zeros((nDisp, nCon));
-  varExplCon = np.nan * np.zeros((nDisp, nSf));
-  varExplCon_lgn = np.nan * np.zeros((nDisp, nSf));
+  varExplSF_A = np.nan * np.zeros((nDisp, nCon));
+  varExplSF_B = np.nan * np.zeros((nDisp, nCon));
+  varExplCon_A = np.nan * np.zeros((nDisp, nSf));
+  varExplCon_B = np.nan * np.zeros((nDisp, nSf));
 
   for dI in np.arange(nDisp):
     for sI in np.arange(nSf):
-      varExplCon[dI, sI] = hf.var_explained(hf.nan_rm(expByCond[dI, sI, :]), hf.nan_rm(modByCond[dI, sI, :]), None);
-      varExplCon_lgn[dI, sI] = hf.var_explained(hf.nan_rm(expByCond[dI, sI, :]), hf.nan_rm(modByCond_lgn[dI, sI, :]), None);
+      varExplCon_A[dI, sI] = hf.var_explained(hf.nan_rm(expByCond[dI, sI, :]), hf.nan_rm(modByCondA[dI, sI, :]), None);
+      varExplCon_B[dI, sI] = hf.var_explained(hf.nan_rm(expByCond[dI, sI, :]), hf.nan_rm(modByCondB[dI, sI, :]), None);
     for cI in np.arange(nCon):
-      varExplSF[dI, cI] = hf.var_explained(hf.nan_rm(expByCond[dI, :, cI]), hf.nan_rm(modByCond[dI, :, cI]), None);
-      varExplSF_lgn[dI, cI] = hf.var_explained(hf.nan_rm(expByCond[dI, :, cI]), hf.nan_rm(modByCond_lgn[dI, :, cI]), None);
+      varExplSF_A[dI, cI] = hf.var_explained(hf.nan_rm(expByCond[dI, :, cI]), hf.nan_rm(modByCondA[dI, :, cI]), None);
+      varExplSF_B[dI, cI] = hf.var_explained(hf.nan_rm(expByCond[dI, :, cI]), hf.nan_rm(modByCondB[dI, :, cI]), None);
 
-  lossByCond = mrpt.loss_sfNormMod(mrpt._cast_as_tensor(mr_V1), mrpt._cast_as_tensor(spikes_rate), lossType=lossType, varGain=mrpt._cast_as_tensor(varGains[0]), debug=1)[1].detach().numpy();
-  lossByCond_lgn = mrpt.loss_sfNormMod(mrpt._cast_as_tensor(mr_LGN), mrpt._cast_as_tensor(spikes_rate), lossType=lossType, varGain=mrpt._cast_as_tensor(varGains[1]), debug=1)[1].detach().numpy();
+  lossByCond_A = mrpt.loss_sfNormMod(mrpt._cast_as_tensor(mr_A), mrpt._cast_as_tensor(spikes_rate), lossType=lossType, varGain=mrpt._cast_as_tensor(varGains[0]), debug=1)[1].detach().numpy();
+  lossByCond_B = mrpt.loss_sfNormMod(mrpt._cast_as_tensor(mr_B), mrpt._cast_as_tensor(spikes_rate), lossType=lossType, varGain=mrpt._cast_as_tensor(varGains[1]), debug=1)[1].detach().numpy();
 
 elif pytorch_mod == 0:
   # SFMGiveBof returns spike counts per trial, NOT rates -- we will correct in hf.organize_resp call below
@@ -332,17 +304,26 @@ elif pytorch_mod == 0:
   modResps = [mod_resp.SFMGiveBof(fit, expData, normType=norm, lossType=lossType, expInd=expInd, cellNum=cellNum, rvcFits=rvcCurr, excType=excType, maskIn=~mask, compute_varExpl=1, lgnFrontEnd=lgn) for fit, norm,lgn in zip(modFits, normTypes, lgnTypes)];
                                   
   # unpack the model fits!
-  varExplSF = modResps[0][3];
-  varExplSF_lgn = modResps[1][3];
-  varExplCon = modResps[0][4];
-  varExplCon_lgn = modResps[1][4];
-  lossByCond = modResps[0][2];
-  lossByCond_lgn = modResps[1][2]; # We only care about weighted...
+  varExplSF_A = modResps[0][3];
+  varExplSF_B = modResps[1][3];
+  varExplCon_A = modResps[0][4];
+  varExplCon_B = modResps[1][4];
+  lossByCond_A = modResps[0][2];
+  lossByCond_B = modResps[1][2]; # We only care about weighted...
   modResps = [x[1] for x in modResps]; # 1st return output (x[0]) is NLL (don't care about that here)
 
 # Now, continue with organizing things
-gs_mean = modFit[8]; # the LGN is unweighted gain control, so only get this...
-gs_std = modFit[9];
+if normA > 1:
+  gs_mean_A = modFit_A[8]; 
+  gs_std_A = modFit_A[9];
+else:
+  gs_mean_A, gs_std_A = None, None
+if normB > 1:
+  gs_mean_B = modFit_B[8]; 
+  gs_std_B = modFit_B[9];
+else:
+  gs_mean_B, gs_std_B = None, None
+
 # now organize the responses
 orgs = [hf.organize_resp(mr, expData, expInd, respsAsRate=False) for mr in modResps];
 oriModResps = [org[0] for org in orgs]; # only non-empty if expInd = 1
@@ -394,7 +375,7 @@ nDisps = len(all_disps);
 # set up model plot info
 # i.e. flat model is red, weighted model is green
 modColors = ['g', 'r']
-modLabels = ['wght', 'LGN']
+modLabels = [modA_str, modB_str]
 
 # #### Plots by dispersion
 
@@ -423,34 +404,34 @@ for d in range(nDisps):
           # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
           sfs_to_check = np.where(v_sfs)[0];
           all_trials = [hf.get_valid_trials(expData, d, v_cons[c], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in sfs_to_check];
-          # first weighted
-          all_loss_all = np.array([lossByCond[x] for x in all_trials]);
+          # first modA
+          all_loss_all = np.array([lossByCond_A[x] for x in all_trials]);
           try:
             all_loss = np.mean(all_loss_all, axis=1); # for error per SF condition
             curr_loss = np.sum(all_loss_all)
           except: # in case all_loss_all has unequal length arrays (and is therefeore dtype=Object, not just a np.array)
             all_loss = np.array([np.mean(x) for x in all_loss_all]);
             curr_loss = np.sum([np.sum(x) for x in all_loss_all]);
-          # then flat
-          all_loss_all_lgn = np.array([lossByCond_lgn[x] for x in all_trials]);
+          # then modB
+          all_loss_all_B = np.array([lossByCond_B[x] for x in all_trials]);
           try:
-            all_loss_lgn = np.mean(all_loss_all_lgn, axis=1); # for error per SF condition
-            curr_loss_lgn = np.sum(all_loss_all_lgn);
-          except: # in case all_loss_all_lgn has unequal length arrays (and is therefeore dtype=Object, not just a np.array)
-            all_loss_lgn = np.array([np.mean(x) for x in all_loss_all_lgn]);
-            curr_loss_lgn = np.sum([np.sum(x) for x in all_loss_all_lgn]);
+            all_loss_B = np.mean(all_loss_all_B, axis=1); # for error per SF condition
+            curr_loss_B = np.sum(all_loss_all_B);
+          except: # in case all_loss_all_B has unequal length arrays (and is therefeore dtype=Object, not just a np.array)
+            all_loss_B = np.array([np.mean(x) for x in all_loss_all_B]);
+            curr_loss_B = np.sum([np.sum(x) for x in all_loss_all_B]);
         elif lossType == 4: # must add for lossType == 1||2 (handled the same way)...
           # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
           sfs_to_check = np.where(v_sfs)[0];
           all_conds = [np.ravel_multi_index([d, sf, v_cons[c]], [nDisps, nSfs, nCons]) for sf in sfs_to_check];
-          all_loss = np.array([lossByCond[x] for x in all_conds]);
+          all_loss = np.array([lossByCond_A[x] for x in all_conds]);
           curr_loss = np.sum(all_loss)
-          # then flat
-          all_loss_lgn = np.array([lossByCond_lgn[x] for x in all_conds]);
-          curr_loss_lgn = np.sum(all_loss_lgn);
+          # then modB
+          all_loss_B = np.array([lossByCond_B[x] for x in all_conds]);
+          curr_loss_B = np.sum(all_loss_B);
         else:
-          curr_loss = np.nan; curr_loss_lgn = np.nan;
-          all_loss = np.nan; all_loss_lgn = np.nan;
+          curr_loss = np.nan; curr_loss_B = np.nan;
+          all_loss = np.nan; all_loss_B = np.nan;
 
         for i in range(2): # i = 0 (lin-y); i = 1 (log-y)
 
@@ -459,7 +440,7 @@ for d in range(nDisps):
 
           dispAx[d][c_plt_ind, i].set_xscale('log');
           dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
-          dispAx[d][c_plt_ind, i].set_title('D%02d: contrast: %.3f (l_w %.1f, l_f %.1f)' % (d, all_cons[v_cons[c]], curr_loss, curr_loss_lgn));
+          dispAx[d][c_plt_ind, i].set_title('D%02d: contrast: %.3f (l_w %.1f, l_f %.1f)' % (d, all_cons[v_cons[c]], curr_loss, curr_loss_B));
           dispAx[d][c_plt_ind, i].set_ylabel('resp (imp/s)');
 
           # Set ticks out, remove top/right axis, put ticks only on bottom/left
@@ -509,14 +490,14 @@ for d in range(nDisps):
               dispAx[d][c_plt_ind, i].set_ylim((0, 1.5*maxResp));
               if np.array_equal(all_loss, np.nan):
                 dispAx[d][c_plt_ind, i].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True, fontsize=25);
-              dispAx[d][c_plt_ind, i].text(min(all_sfs), 0.8*maxResp, '%.2f, %.2f' % (varExplSF[d, v_cons[c]], varExplSF_lgn[d, v_cons[c]]), ha='left', wrap=True, fontsize=25);
+              dispAx[d][c_plt_ind, i].text(min(all_sfs), 0.8*maxResp, '%.2f, %.2f' % (varExplSF_A[d, v_cons[c]], varExplSF_B[d, v_cons[c]]), ha='left', wrap=True, fontsize=25);
             else:
               dispAx[d][c_plt_ind, i].set_yscale('symlog');
               dispAx[d][c_plt_ind, i].set_ylim((1.1*minResp, 1.5*maxResp));
 
           dispAx[d][c_plt_ind, i].legend();
 
-    fCurr.suptitle('%s #%d, loss %.2f|%.2f' % (cellType, cellNum, loss_V1, loss_LGN));
+    fCurr.suptitle('%s #%d, loss %.2f|%.2f' % (cellType, cellNum, loss_A, loss_B));
 
 saveName = "/cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
@@ -625,7 +606,7 @@ for d in range(nDisps):
           sfs_to_check = np.where(v_sfs)[0];
           all_trials = [hf.get_valid_trials(expData, d, v_cons[c], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in sfs_to_check];
           # first, wghtd
-          all_loss_all = np.array([lossByCond[x] for x in all_trials]);
+          all_loss_all = np.array([lossByCond_A[x] for x in all_trials]);
           try:
             all_loss = np.mean(all_loss_all, axis=1); # for error per SF condition
             curr_loss = np.sum(all_loss_all)
@@ -633,28 +614,28 @@ for d in range(nDisps):
             all_loss = np.array([np.mean(x) for x in all_loss_all]);
             curr_loss = np.sum([np.sum(x) for x in all_loss_all]);
           # then flat/lgn
-          all_loss_all_lgn = np.array([lossByCond_lgn[x] for x in all_trials]);
+          all_loss_all_B = np.array([lossByCond_B[x] for x in all_trials]);
           try:
-            all_loss_lgn = np.mean(all_loss_all_lgn, axis=1); # for error per SF condition
-            curr_loss_lgn = np.sum(all_loss_all_lgn);
+            all_loss_B = np.mean(all_loss_all_B, axis=1); # for error per SF condition
+            curr_loss_B = np.sum(all_loss_all_B);
           except:
-            all_loss_lgn = np.array([np.mean(x) for x in all_loss_all_lgn]);
-            curr_loss_lgn = np.sum([np.sum(x) for x in all_loss_all_lgn]);
+            all_loss_B = np.array([np.mean(x) for x in all_loss_all_B]);
+            curr_loss_B = np.sum([np.sum(x) for x in all_loss_all_B]);
         elif lossType == 4: # must add for lossType == 1||2 (handled the same way)...
           # NOTE: I think below is outdated - now lossByCond is just per trial!
           # lossByCond is [nDisp x nSf x nCon], but flattened - so we use np.ravel_multi_index to access
           sfs_to_check = np.where(v_sfs)[0];
           all_conds = [np.ravel_multi_index([d, sf, v_cons[c]], [nDisps, nSfs, nCons]) for sf in sfs_to_check];
-          all_loss = np.array([lossByCond[x] for x in all_conds]);
+          all_loss = np.array([lossByCond_A[x] for x in all_conds]);
           curr_loss = np.sum(all_loss);
           # then flat
-          all_loss_lgn = np.array([lossByCond_lgn[x] for x in all_conds]);
-          curr_loss_lgn = np.sum(all_loss_lgn);
+          all_loss_B = np.array([lossByCond_B[x] for x in all_conds]);
+          curr_loss_B = np.sum(all_loss_B);
         else:
-          curr_loss = np.nan; curr_loss_lgn = np.nan;
-          all_loss = np.nan; all_loss_lgn = np.nan;
+          curr_loss = np.nan; curr_loss_B = np.nan;
+          all_loss = np.nan; all_loss_B = np.nan;
 
-        sfMixAx[c_plt_ind, d].set_title('con: %s (l_w %.1f, l_lgn %.1f)' % (str(np.round(all_cons[v_cons[c]], 2)), curr_loss, curr_loss_lgn));
+        sfMixAx[c_plt_ind, d].set_title('con: %s (l_A %.1f, l_B %.1f)' % (str(np.round(all_cons[v_cons[c]], 2)), curr_loss, curr_loss_B));
         # plot data
         sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
                                        respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=False);
@@ -695,7 +676,7 @@ for d in range(nDisps):
 
         if np.array_equal(all_loss, np.nan):
           sfMixAx[c_plt_ind, d].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True, fontsize=10);
-        sfMixAx[c_plt_ind, d].text(min(all_sfs), 0.8*maxResp, '%.2f, %.2f' % (varExplSF[d, v_cons[c]], varExplSF_lgn[d, v_cons[c]]), ha='left', wrap=True, fontsize=25);
+        sfMixAx[c_plt_ind, d].text(min(all_sfs), 0.8*maxResp, '%.2f, %.2f' % (varExplSF_A[d, v_cons[c]], varExplSF_B[d, v_cons[c]]), ha='left', wrap=True, fontsize=25);
 
         sfMixAx[c_plt_ind, d].set_xscale('log');
         if c_plt_ind == (n_v_cons-1):
@@ -703,14 +684,18 @@ for d in range(nDisps):
         if d == 0:
           sfMixAx[c_plt_ind, d].set_ylabel('resp (imp/s)');
 
-if lgnFrontEnd > 0:
-  mWt = modFits[1][-1] if pytorch_mod == 0 else 1/(1+np.exp(-modFits[1][1])); # why? in pytorch_mod, it's a sigmoid
-  lgnStr = ' mWt=%.2f|%.2f' % (-99, mWt);
+if lgnA > 0:
+  mWt_A = modFit_A[-1] if pytorch_mod == 0 else 1/(1+np.exp(-modFit_A[1])); # why? in pytorch_mod, it's a sigmoid
 else:
-  lgnStr = '';
+  mWt_A = -99;
+if lgnB > 0:
+  mWt_B = modFit_B[-1] if pytorch_mod == 0 else 1/(1+np.exp(-modFit_B[1])); # why? in pytorch_mod, it's a sigmoid
+else:
+  mWt_B = -99;
+lgnStr = ' mWt=%.2f|%.2f' % (mWt_A, mWt_B);
 
-f.legend();
-f.suptitle('%s #%d (%s), loss %.2f|%.2f%s' % (cellType, cellNum, cellName, loss_V1, loss_LGN, lgnStr));
+f.legend(fontsize='large');
+f.suptitle('%s #%d (%s), loss %.2f|%.2f%s' % (cellType, cellNum, cellName, loss_A, loss_B, lgnStr));
 	        
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc
@@ -772,7 +757,7 @@ plt.ylim([np.minimum(-5, np.nanmin(respMean[disp_rvc, sfToUse, val_cons])), 1.1*
 omega = np.logspace(-2, 2, 1000);
 sfExc = [];
 sfExcRaw = [];
-for i, lgnType in zip(modFits, lgnTypes):
+for i,lgnType,lgnConType,mWt in zip(modFits, lgnTypes, conTypes, [mWt_A, mWt_B]):
   prefSf = i[0];
 
   if excType == 1:
@@ -792,17 +777,17 @@ for i, lgnType in zip(modFits, lgnTypes):
     sigma[[x for x in range(len(sfRel)) if sfRel[x] > 1]] = sigHigh;
     # - now, compute the responses (automatically normalized, since max gaussian value is 1...)
     s     = [np.exp(-np.divide(np.square(np.log(x)), 2*np.square(y))) for x,y in zip(sfRel, sigma)];
-    sfExcCurr = s; 
-    sfExcLGN = s;
+    sfExcV1 = s;
+    sfExcLGN = s; # will be used IF there isn't an LGN front-end...
   # BUT. if this is an LGN model, we'll apply the filtering, eval. at 100% contrast
   if lgnType == 1 or lgnType == 2:
     params_m = [0, 12.5, 0.05];
     params_p = [0, 17.5, 0.50];
     DoGmodel = 2;
-    if lgnFrontEnd == 1:
+    if lgnType == 1:
       dog_m = [1, 3, 0.3, 0.4]; # k, f_c, k_s, j_s
       dog_p = [1, 9, 0.5, 0.4];
-    elif lgnFrontEnd == 2:
+    elif lgnType == 2:
       dog_m = [1, 6, 0.3, 0.4]; # k, f_c, k_s, j_s
       dog_p = [1, 9, 0.5, 0.4];
     # now compute with these parameters
@@ -820,31 +805,51 @@ for i, lgnType in zip(modFits, lgnTypes):
     stimCo = np.linspace(0,1,10);
     selCon_m = rvc_mod(*params_m, stimCo)
     selCon_p = rvc_mod(*params_p, stimCo)
-    lgnSel = mWt*selSf_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
+    if lgnConType == 1: # DEFAULT
+      # -- then here's our final responses per component for the current stimulus
+      # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
+      lgnSel = mWt*selSf_m[-1]*selCon_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
+    elif lgnConType == 2 or lgnConType == 3:
+      # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
+      if lgnConType == 2:
+        avgWt = 0.5; # here, it's forced average between M & P (see lgnConType == 3)
+      elif lgnConType == 3:
+        avgWt = mWt; # here, it's equal to mWt
+      selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
+      lgnSel = mWt*selSf_m[-1]*selCon_avg[-1] + (1-mWt)*selSf_p*selCon_avg[-1];
     withLGN = s*lgnSel;
     sfExcLGN = withLGN/np.max(withLGN);
 
-  sfExcRaw.append(sfExcCurr);
+  sfExcRaw.append(sfExcV1);
   sfExc.append(sfExcLGN);
 
-inhSfTuning = hf.getSuppressiveSFtuning();
-
-# Compute weights for suppressive signals
-nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
-nTrials =  inhSfTuning.shape[0];
-inhWeight = hf.genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials, expInd);
-inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
-# first, tuned norm:
-sfNormTune = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
-sfNormTune = sfNormTune/np.amax(np.abs(sfNormTune));
-# then, untuned norm:
+# Compute the reference, untuned gain control (apply as necessary)
 inhAsym = 0;
 inhWeight = [];
+nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
+inhSfTuning = hf.getSuppressiveSFtuning();
 for iP in range(len(nInhChan)):
     inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
-sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
-sfNorm = sfNorm/np.amax(np.abs(sfNorm));
-sfNorms = [sfNormTune, sfNorm];
+sfNorm_flat = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
+sfNorm_flat = sfNorm_flat/np.amax(np.abs(sfNorm_flat));
+
+# Compute weights for suppressive signals
+nTrials =  inhSfTuning.shape[0];
+if gs_mean_A is not None:
+  inhWeight_A = hf.genNormWeights(expData, nInhChan, gs_mean_A, gs_std_A, nTrials, expInd);
+  inhWeight_A = inhWeight_A[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
+  sfNormTune_A = np.sum(-.5*(inhWeight_A*np.square(inhSfTuning)), 1);
+  sfNorm_A = sfNormTune_A/np.amax(np.abs(sfNormTune_A));
+else:
+  sfNorm_A = sfNorm_flat
+if gs_mean_B is not None:
+  inhWeight_B = hf.genNormWeights(expData, nInhChan, gs_mean_B, gs_std_B, nTrials, expInd);
+  inhWeight_B = inhWeight_B[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
+  sfNormTune_B = np.sum(-.5*(inhWeight_B*np.square(inhSfTuning)), 1);
+  sfNorm_B = sfNormTune_B/np.amax(np.abs(sfNormTune_B));
+else:
+  sfNorm_B = sfNorm_flat
+sfNorms = [sfNorm_A, sfNorm_B];
 
 # Plot the filters - for LGN, this is WITH the lgn filters "acting" (assuming high contrast)
 curr_ax = plt.subplot2grid(detailSize, (1, 1));
@@ -875,12 +880,24 @@ plt.semilogx([.1, .1], [-1.5, 1], 'k--')
 plt.semilogx([1, 1], [-1.5, 1], 'k--')
 plt.semilogx([10, 10], [-1.5, 1], 'k--')
 plt.semilogx([100, 100], [-1.5, 1], 'k--')
-# now the real stuff
+### now the real stuff
+# - flat
 unwt_weights = np.sqrt(hf.genNormWeightsSimple(omega, None, None));
 sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
-wt_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
-sfNormTuneSim = wt_weights/np.amax(np.abs(wt_weights));
-sfNormsSimple = [sfNormTuneSim, sfNormSim]
+# - tuned
+if gs_mean_A is not None:
+  wt_weights_A = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean_A, gs_std_A));
+  sfNormTuneSim_A = wt_weights_A/np.amax(np.abs(wt_weights_A));
+  sfNormSim_A = sfNormTuneSim_A;
+else:
+  sfNormSim_A = sfNormSim;
+if gs_mean_B is not None:
+  wt_weights_B = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean_B, gs_std_B));
+  sfNormTuneSim_B = wt_weights_B/np.amax(np.abs(wt_weights_B));
+  sfNormSim_B = sfNormTuneSim_B;
+else:
+  sfNormSim_B = sfNormSim;
+sfNormsSimple = [sfNormSim_A, sfNormSim_B]
 [plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExcRaw, modColors, modLabels)]
 [plt.semilogx(omega, norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
 plt.xlim([omega[0], omega[-1]]);
@@ -903,12 +920,12 @@ plt.ylim([-.1, 1]);
 plt.text(0.5, 1.1, 'respExp: %.2f, %.2f' % (modExps[0], modExps[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
 # IF available, show the loss trajectory
-if loss_traj_V1 is not None or loss_traj_LGN is not None:
+if loss_traj_A is not None or loss_traj_B is not None:
   curr_ax = plt.subplot2grid(detailSize, (2, 4));
-  if loss_traj_V1 is not None:
-    plt.plot(loss_traj_V1, label='V1-wght', color=modColors[0])
-  if loss_traj_LGN is not None:
-    plt.plot(loss_traj_LGN, label='LGN-flat', color=modColors[1])
+  if loss_traj_A is not None:
+    plt.plot(loss_traj_A, label='modA', color=modColors[0])
+  if loss_traj_B is not None:
+    plt.plot(loss_traj_B, label='modB', color=modColors[1])
   plt.xscale('log');
   plt.yscale('symlog');
   plt.legend();
@@ -1029,7 +1046,7 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
           rvcAx[d+1][row_ind, col_ind].legend((expPts[0], sepPlt[0], allPlt[0]), ('data', 'model fits'), fontsize='large', loc='center left')
           '''
 
-          rvcAx[plt_x][plt_y].text(min(all_cons[v_cons]), 0.8*maxResp, '%.2f, %.2f' % (varExplCon[d, sf_ind], varExplCon_lgn[d, sf_ind]), ha='left', wrap=True, fontsize=25);
+          rvcAx[plt_x][plt_y].text(min(all_cons[v_cons]), 0.8*maxResp, '%.2f, %.2f' % (varExplCon_A[d, sf_ind], varExplCon_B[d, sf_ind]), ha='left', wrap=True, fontsize=25);
 
           rvcAx[plt_x][plt_y].set_xscale('log', basex=10); # was previously symlog, linthreshx=0.01
           if col_ind == 0:

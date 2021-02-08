@@ -347,7 +347,7 @@ class dataWrapper(torchdata.Dataset):
 class sfNormMod(torch.nn.Module):
     # inherit methods/fields from torch.nn.Module()
 
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, device='cpu'):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, device='cpu'):
 
     super().__init__();
 
@@ -357,6 +357,7 @@ class sfNormMod(torch.nn.Module):
     self.normType = normType;
     self.lossType = lossType;
     self.lgnFrontEnd = lgnFrontEnd;
+    self.lgnConType = lgnConType;
     self.device = device;
     self.newMethod = newMethod;
 
@@ -519,9 +520,18 @@ class sfNormMod(torch.nn.Module):
       # - then RVC response: # ASSUMES rvcMod 0 (Movshon)
       selCon_m = get_rvc_model(self.rvc_m, stimCo);
       selCon_p = get_rvc_model(self.rvc_p, stimCo);
-      # -- then here's our final responses per component for the current stimulus
-      # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
-      lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
+      if self.lgnConType == 1: # DEFAULT
+        # -- then here's our final responses per component for the current stimulus
+        # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
+        lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
+      elif self.lgnConType == 2 or self.lgnConType == 3:
+        # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
+        if self.lgnConType == 2:
+          avgWt = 0.5; # here, it's forced average between M & P (see lgnConType == 3)
+        elif self.lgnConType == 3:
+          avgWt = self.mWeight; # here, it's equal to self.mWeight
+        selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
+        lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_avg)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_avg)));
 
     if self.excType == 1:
       # Compute spatial frequency tuning - Deriv. order Gaussian
@@ -624,7 +634,18 @@ class sfNormMod(torch.nn.Module):
       selCon_m = get_rvc_model(self.rvc_m, cons);
       selCon_p = get_rvc_model(self.rvc_p, cons);
       # -- then here's our final responses per component for the current stimulus
-      lgnStage = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
+      if self.lgnConType == 1: # DEFAULT
+        # -- then here's our final responses per component for the current stimulus
+        # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
+        lgnStage = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
+      elif self.lgnConType == 2 or self.lgnConType == 3:
+        # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
+        if self.lgnConType == 2:
+          avgWt = 0.5; # here, it's forced average between M & P (see lgnConType == 3)
+        elif self.lgnConType == 3:
+          avgWt = self.mWeight; # here, it's equal to self.mWeight
+        selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
+        lgnStage = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_avg)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_avg)));
     else:
       lgnStage = torch.ones_like(sfs);
 
@@ -789,7 +810,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, max_epochs=4000, learning_rate=0.04, batch_size=2000, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.05ish (0.15 seems too high - 21.01.26)
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, max_epochs=4000, learning_rate=0.04, batch_size=2000, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.05ish (0.15 seems too high - 21.01.26)
 
   ### Load the cell, set up the naming
   ########
@@ -812,9 +833,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         fL_name = 'fitList%s_pyt_201017' % (loc_str); # pyt for pytorch
       elif excType == 2:
         #fL_name = 'fitList%s_pyt_210107' % (loc_str); # pyt for pytorch
-        fL_name = 'fitList%s_pyt_210121' % (loc_str); # pyt for pytorch
+        #fL_name = 'fitList%s_pyt_210121' % (loc_str); # pyt for pytorch - lgn flat vs. V1 weight
+        fL_name = 'fitList%s_pyt_210206' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
         #fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
-
+  ''' # SHOULD now be effectively replaced by imporvement in hf.fitList_name
   if vecCorrected:
     fL_name = '%s_vecF1' % fL_name;
 
@@ -829,12 +851,18 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   if lgnFrontEnd == 1:
     fL_name = '%s_LGN' % fL_name # implicit "a" at the end of LGN...
-  if lgnFrontEnd == 2:
+  elif lgnFrontEnd == 2:
     fL_name = '%s_LGNb' % fL_name
-  if lgnFrontEnd == 99:
+  elif lgnFrontEnd == 9:
     fL_name = '%s_jLGN' % fL_name
+  if lgnFrontEnd > 0 and lgnConType > 1: # i.e. not the default one
+    lgnConSuff = 'f' if lgnConType == 2 else 'y'; # i.e. 'f' for fixed (at 0.5); 'y' for yoked-to-mWeight
+    # Note that the above line will work iff the only types are lgnConType = 1, 2, or 3
+    fL_name = '%s%s' % (fL_name, lgnConSuff)
+  '''
+  todoCV = 1 if whichTrials is not None else 0;
 
-  fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType);
+  fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrrected, CV=todoCV);
   # get the name for the stepList name, regardless of whether or not we keep this now
   stepListName = str(fitListName.replace('.npy', '_details.npy'));
 
@@ -889,7 +917,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     try:
       curr_params = fitList[cellNum-1][respStr]['params'];
       # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
-      testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd)
+      testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd)
       trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite) # warning: added respOverwrite here; also add whichTrials???
       predictions = testModel.forward(trInfTemp, respMeasure=respMeasure);
       if testModel.lossType == 3:
@@ -954,7 +982,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     param_list = param_list[0:-1];   
 
   ### define model, grab training parameters
-  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd)
+  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType)
 
   training_parameters = [p for p in model.parameters() if p.requires_grad]
 
@@ -1167,8 +1195,15 @@ if __name__ == '__main__':
     else:
       fixRespExp = None; # default (see modCompare.ipynb for details)
 
-    if len(sys.argv) > 13:
-      toPar = int(sys.argv[13]); # 1 for True, 0 for False
+    if len(sys.argv) > 13: # what model of contrast do we apply for the LGN (separate for M & P or a joint one?)
+      lgnConType = int(sys.argv[13]);
+      if lgnConType <= 0:
+        lgnConType = 1;
+    else:
+      lgnConType = 1;
+
+    if len(sys.argv) > 14:
+      toPar = int(sys.argv[14]); # 1 for True, 0 for False
       # Then, create the pool paramemeter globally (i.e. how many CPUs?)
       if toPar == 1:
         nCpu = mp.cpu_count()
@@ -1177,8 +1212,8 @@ if __name__ == '__main__':
 
     start = time.process_time();
     if cellNum >= 0:
-      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected); # first do DC
-      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected); # then F1
+      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected); # first do DC
+      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected); # then F1
 
     elif cellNum == -1:
       loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory

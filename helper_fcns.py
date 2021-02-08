@@ -420,6 +420,27 @@ def lossType_suffix(lossType):
     lossSuf = '_chiSq.npy';
   return lossSuf;
 
+def lgnType_suffix(lgnType, lgnConType=1):
+  ''' Use this to get the string referring to a given loss function
+  '''
+  if lgnType == 0:
+    lgnSuf = '';
+  elif lgnType == 1:
+    lgnSuf = '_LGN';
+  elif lgnType == 2:
+    lgnSuf = '_LGNb';
+  elif lgnType == 9:
+    lgnSuf = '_jLGN';
+
+  if lgnConType == 1: # this means separate RVC for M & P channels
+    conSuf = '';
+  elif lgnConType == 2: # this means one averaged RVC, with equal weighting for M & P (i.e. fixed)
+    conSuf = 'f'; # fixed
+  elif lgnConType == 3: # as for 2, but M vs P weighting for RVC is yoked to the mWeight model parameter (optimized)
+    conSuf = 'y'; # "yoked"
+
+  return '%s%s' % (lgnSuf, conSuf);
+
 def chiSq_suffix(kMult):
   ''' We need a multiplying constant when using the chiSquared loss (see chiSq within this file)
       I denote this multiplier with a flag; this function returns that flag based on the value
@@ -436,14 +457,26 @@ def chiSq_suffix(kMult):
     # why? don't want (e.g.) Z0.02, just Z02 - we know multiplier values are 0<x<<1
     return 'z%s' % afterDec;
 
-def fitList_name(base, fitType, lossType):
+def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrected=0, CV=0, fixRespExp=None, kMult=0.1):
   ''' use this to get the proper name for the full model fits
+      - kMult used iff lossType == 4
   '''
   # first the fit type
   fitSuf = fitType_suffix(fitType);
   # then the loss type
   lossSuf = lossType_suffix(lossType);
-  return str(base + fitSuf + lossSuf);
+  # IF lgnType/lgnConType are given, then we can add that, too
+  if lgnType is not None:
+    lgnSuf = lgnType_suffix(lgnType, lgnConType);
+  else:
+    lgnSuf = '';
+  vecSuf = '_vecF1' if vecCorrected else '';
+  CVsuf = '_CV' if CV else '';
+  reSuf = np.round(fixRespExp*10) if fixRespExp is not None else ''; # for fixing response exponent (round to nearest tenth)
+  kMult = chiSq_suffix(kMult) if lossType == 4 else '';  
+
+  # order is as follows
+  return str(base + kMult + vecSuf + CVsuf + reSuf + lgnSuf + fitSuf + lossSuf);
 
 def phase_fit_name(base, dir, byTrial=0):
   ''' Given the base name for a file, append the flag for the phase direction (dir)
