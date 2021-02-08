@@ -1,6 +1,21 @@
 import pdb
 import os, sys
 
+def rename_fit_files(expDir, orig_date, new_date, dryRun=1):
+  ''' Simple func. to fix mistake in fitList -- make the date 220206 instead of 210206
+  '''
+  curr_loc = os.getcwd() + '/';
+  full_path = curr_loc + expDir + 'structures/';
+  files = os.listdir(full_path);
+  for f in files:
+    if f.find(orig_date) >= 0:
+      old_name = f;
+      new_name  = f.replace(orig_date, new_date);
+      print('renaming %s to %s' % (old_name, new_name));
+      if dryRun == 0:
+        os.rename(full_path + old_name, full_path + new_name);
+      
+
 def rename_files(loc_data, files, fileExt='.xml', mBase='m6', trialRun=1, isDataList=False):
   # used for renaming files within a directory to pad numbers up to 2 digits
   # - i.e. m675p4r9 to m675p04r09

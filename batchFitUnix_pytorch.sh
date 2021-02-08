@@ -34,6 +34,9 @@
 #   newMethod - default is "old" method; 1 is new method (actually compute, work with PSTH rather than averaged)
 #   vecCorrected - make vector math adjustments for F1 responses? Yes [1], No [0; default]
 #   fixRespExp - (default is None, meaning a free resp. exp; otherwise, specify a value; use value <= 0 to make it None)
+#   lgnConType - 1 is default; for 2 or 3, we average the RVCs of M & P and apply that function for M & P SF responses
+#              --- for (2), the value is fixed at 0.5; for (3), it's simply equal to the optimized-for mWeight/1-mWeight
+#   toPar - (Default is 0/False; 1 will be True, i.e. do parallelization)
 
 #### see model_responses.py for additional details
 
@@ -65,6 +68,41 @@ for run in {1..20}; do
   #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 0 1 0.10 1 1 -1 & # lgn (type a)
   #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 2 0 1 0.10 1 1 -1 # lgn type B
 
+  ###########
+  #### New model fitting procedure/comparisons, per T.M.; started on 21.02.06
+  #### - Rather than comparing V1-only, wght against LGN-stage, flat, we'll do 2x2 matrix:
+  #### -- LGN stage will ALWAYS be present, but we toggle:
+  #### ---- flat (x) vs weighted gain control (y)
+  #### ---- lgn stage with separate RVC for M&P (1) vs averaged RVC applied to both M&P (2)
+  #### Last run per loss type:
+  #### --- poiss: 21.02.06 20:00 (all expts; full matrix) // TODO: rename fit*2202* to fit*2102*
+  #### ---  sqrt: 21.02.06 22:00 (all expts; full matrix)
+  ###########
+  # --- Poiss loss
+  # py ---------fun---------------------#---dir-e-l-f---i-t--k----vec--con-----  
+  #--------------------------------------------------LGN--------nm--fixExp-----
+  # - (x1)
+  #python3.6 model_responses_pytorch.py $run V1/ 2 1 1 1 0 1 0.10 1 1 -1 1 &
+  python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 1 1 0 1 0.10 1 1 -1 1 &
+  python3.6 model_responses_pytorch.py $run altExp/ 2 1 1 1 0 1 0.10 1 1 -1 1 &
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 0 1 0.10 1 1 -1 1 &
+  # - (y1)
+  #python3.6 model_responses_pytorch.py $run V1/ 2 1 2 1 0 1 0.10 1 1 -1 1 &
+  python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 2 1 0 1 0.10 1 1 -1 1 &
+  python3.6 model_responses_pytorch.py $run altExp/ 2 1 2 1 0 1 0.10 1 1 -1 1 &
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 1 0 1 0.10 1 1 -1 1 &
+  # - (x2)
+  #python3.6 model_responses_pytorch.py $run V1/ 2 1 1 1 0 1 0.10 1 1 -1 2 &
+  python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 1 1 0 1 0.10 1 1 -1 2 &
+  python3.6 model_responses_pytorch.py $run altExp/ 2 1 1 1 0 1 0.10 1 1 -1 2 &
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 0 1 0.10 1 1 -1 2 &
+  # - (y2)
+  #python3.6 model_responses_pytorch.py $run V1/ 2 1 2 1 0 1 0.10 1 1 -1 2 &
+  python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 2 1 0 1 0.10 1 1 -1 2 &
+  python3.6 model_responses_pytorch.py $run altExp/ 2 1 2 1 0 1 0.10 1 1 -1 2 &
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 1 0 1 0.10 1 1 -1 2 &
+  
+
   # --- LGN flat, V1 wght, init, Poiss loss
   #python3.6 model_responses_pytorch.py $run V1/ 2 2 2 0 0 1 0.10 1 1 -1 & ### V1
   #python3.6 model_responses_pytorch.py $run V1_orig/ 2 2 2 0 0 1 0.10 1 1 -1 & ### V1
@@ -82,8 +120,8 @@ for run in {1..20}; do
   #python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 2 0 0 1 0.10 1 1 -1 & ### V1
   #python3.6 model_responses_pytorch.py $run altExp/ 2 1 2 0 0 1 0.10 1 1 -1 & ### V1
   #python3.6 model_responses_pytorch.py $run V1/ 2 1 2 0 0 1 0.10 1 1 -1 & ### V1
-  python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 0 0 1 0.10 1 1 -1 & ### V1
-  python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 0 1 0.10 1 1 -1 & # LGN
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 0 0 1 0.10 1 1 -1 & ### V1
+  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 0 1 0.10 1 1 -1 & # LGN
   #python3.6 model_responses_pytorch.py $run V1/ 2 1 1 1 0 1 0.10 1 1 -1 & # LGN
   #python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 1 1 0 1 0.10 1 1 -1 & # LGN
   #python3.6 model_responses_pytorch.py $run altExp/ 2 1 1 1 0 1 0.10 1 1 -1 & # LGN
@@ -101,28 +139,5 @@ for run in {1..20}; do
   #python3.6 model_responses_pytorch.py $run altExp/ 2 3 1 1 0 1 0.10 1 1 -1 & # LGN
   # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------  
   #-----------------------------------------------------LGN--------nm--fixExp--
-
-  # --- V1 flat, no init, sqrt, poiss, then modPoiss loss
-  # - sqrt
-  #python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 1 0 0 1 0.10 1 1 -1 & ### V1
-  #python3.6 model_responses_pytorch.py $run altExp/ 2 1 1 0 0 1 0.10 1 1 -1 & ### V1
-  #python3.6 model_responses_pytorch.py $run V1/ 2 1 1 0 0 1 0.10 1 1 -1 & ### V1
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 0 0 1 0.10 1 1 -1 & ### V1
-  # - poiss
-  #python3.6 model_responses_pytorch.py $run V1_orig/ 2 2 1 0 0 1 0.10 1 1 -1 & ### V1
-  #python3.6 model_responses_pytorch.py $run altExp/ 2 2 1 0 0 1 0.10 1 1 -1 & ### V1
-  #python3.6 model_responses_pytorch.py $run V1/ 2 2 1 0 0 1 0.10 1 1 -1 & ### V1
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 2 1 0 0 1 0.10 1 1 -1 & ### V1
-  # modPoiss
-  #python3.6 model_responses_pytorch.py $run V1_orig/ 2 3 1 0 0 1 0.10 1 1 -1 & ### V1
-  #python3.6 model_responses_pytorch.py $run altExp/ 2 3 1 0 0 1 0.10 1 1 -1 & ### V1
-  #python3.6 model_responses_pytorch.py $run V1/ 2 3 1 0 0 1 0.10 1 1 -1 & ### V1
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 3 1 0 0 1 0.10 1 1 -1 & ### V1
-  # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------  
-  #-----------------------------------------------------LGN--------nm--fixExp--
-
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 1 1 2 0 0 1 0.10 1 1 -1 & 
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 1 2 1 1 0 1 0.10 1 1 -1 & # lgn (type a)
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 1 2 1 2 0 1 0.10 1 1 -1 & # lgn type B
 
 done
