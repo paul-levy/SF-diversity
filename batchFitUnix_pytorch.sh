@@ -60,6 +60,9 @@ source activate pytorch-lcv
 
 #################
 #################
+# Used with newest version of calling the model fits (21.02.07)
+EXP_DIR="altExp/" 
+LOSS=2
 
 for run in {1..20}; do
   # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------
@@ -75,33 +78,24 @@ for run in {1..20}; do
   #### ---- flat (x) vs weighted gain control (y)
   #### ---- lgn stage with separate RVC for M&P (1) vs averaged RVC applied to both M&P (2)
   #### Last run per loss type:
-  #### --- poiss: 21.02.06 20:00 (all expts; full matrix) // TODO: rename fit*2202* to fit*2102*
-  #### ---  sqrt: 21.02.06 22:00 (all expts; full matrix)
+  #### ---  sqrt: 21.02.07 22:43 (all expts; full matrix)
+  #### --- poiss: 21.02.08 23:52 (all expts; full matrix)
   ###########
-  # --- Poiss loss
+  # --- Current loss: Sqrt loss
   # py ---------fun---------------------#---dir-e-l-f---i-t--k----vec--con-----  
   #--------------------------------------------------LGN--------nm--fixExp-----
   # - (x1)
-  #python3.6 model_responses_pytorch.py $run V1/ 2 1 1 1 0 1 0.10 1 1 -1 1 &
-  python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 1 1 0 1 0.10 1 1 -1 1 &
-  python3.6 model_responses_pytorch.py $run altExp/ 2 1 1 1 0 1 0.10 1 1 -1 1 &
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 0 1 0.10 1 1 -1 1 &
+  python3.6 model_responses_pytorch.py $run $EXP_DIR 2 $LOSS 1 1 0 1 0.10 1 1 -1 1 &
   # - (y1)
-  #python3.6 model_responses_pytorch.py $run V1/ 2 1 2 1 0 1 0.10 1 1 -1 1 &
-  python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 2 1 0 1 0.10 1 1 -1 1 &
-  python3.6 model_responses_pytorch.py $run altExp/ 2 1 2 1 0 1 0.10 1 1 -1 1 &
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 1 0 1 0.10 1 1 -1 1 &
+  python3.6 model_responses_pytorch.py $run $EXP_DIR 2 $LOSS 2 1 0 1 0.10 1 1 -1 1 &
   # - (x2)
-  #python3.6 model_responses_pytorch.py $run V1/ 2 1 1 1 0 1 0.10 1 1 -1 2 &
-  python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 1 1 0 1 0.10 1 1 -1 2 &
-  python3.6 model_responses_pytorch.py $run altExp/ 2 1 1 1 0 1 0.10 1 1 -1 2 &
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 1 1 0 1 0.10 1 1 -1 2 &
+  python3.6 model_responses_pytorch.py $run $EXP_DIR 2 $LOSS 1 1 0 1 0.10 1 1 -1 2 &
   # - (y2)
-  #python3.6 model_responses_pytorch.py $run V1/ 2 1 2 1 0 1 0.10 1 1 -1 2 &
-  python3.6 model_responses_pytorch.py $run V1_orig/ 2 1 2 1 0 1 0.10 1 1 -1 2 &
-  python3.6 model_responses_pytorch.py $run altExp/ 2 1 2 1 0 1 0.10 1 1 -1 2 &
-  #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 1 0 1 0.10 1 1 -1 2 &
-  
+  python3.6 model_responses_pytorch.py $run $EXP_DIR 2 $LOSS 2 1 0 1 0.10 1 1 -1 2 &
+    ################
+  #### END current procedure (started 21.02)
+  ################
+
 
   # --- LGN flat, V1 wght, init, Poiss loss
   #python3.6 model_responses_pytorch.py $run V1/ 2 2 2 0 0 1 0.10 1 1 -1 & ### V1

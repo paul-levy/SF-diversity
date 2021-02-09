@@ -810,7 +810,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, max_epochs=4000, learning_rate=0.04, batch_size=2000, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.05ish (0.15 seems too high - 21.01.26)
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, max_epochs=7500, learning_rate=0.04, batch_size=2000, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.05ish (0.15 seems too high - 21.01.26)
 
   ### Load the cell, set up the naming
   ########
@@ -862,7 +862,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   '''
   todoCV = 1 if whichTrials is not None else 0;
 
-  fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrrected, CV=todoCV);
+  fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV);
   # get the name for the stepList name, regardless of whether or not we keep this now
   stepListName = str(fitListName.replace('.npy', '_details.npy'));
 

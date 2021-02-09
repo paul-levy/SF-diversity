@@ -375,7 +375,7 @@ nDisps = len(all_disps);
 # set up model plot info
 # i.e. flat model is red, weighted model is green
 modColors = ['g', 'r']
-modLabels = [modA_str, modB_str]
+modLabels = ['A: %s' % modA_str, 'B: %s' % modB_str]
 
 # #### Plots by dispersion
 
