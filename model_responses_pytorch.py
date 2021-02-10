@@ -345,7 +345,7 @@ class dataWrapper(torchdata.Dataset):
 
 ### The model
 class sfNormMod(torch.nn.Module):
-    # inherit methods/fields from torch.nn.Module()
+  # inherit methods/fields from torch.nn.Module()
 
   def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, device='cpu'):
 
@@ -556,7 +556,6 @@ class sfNormMod(torch.nn.Module):
       selSi = torch.mul(selSf, lgnSel); # filter sensitivity for the sinusoid in the frequency domain
     else:
       selSi = selSf;
-    #selSi[torch.where(torch.isnan(selSi))] = 0;
 
     # Use the effective number of frames displayed/stimulus duration
     # phase calculation -- 
@@ -585,7 +584,6 @@ class sfNormMod(torch.nn.Module):
     realImag[...,0] = realPart;
     realImag[...,1] = imagPart;
     rComplex = torch.einsum('ij,ikjz->ikz', torch.mul(selSi,stimCo), realImag) # mult. to get [nTr x nFr x 2] response
-    #rComplex[torch.where(torch.isnan(rComplex))] = 1e-4; # avoid NaN
     # The above line takes care of summing over stimulus components
 
     # four filters placed in quadrature (only if self.newMethod == 0, which is default)
@@ -758,9 +756,6 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
   # nbinomCalc, varGain used only in lossType == 3
 
   if lossType == 1: # sqrt
-      #mask = (~torch.isnan(respModel)) & (~torch.isnan(respData));
-      #lsq = torch.pow(torch.sign(respModel[mask])*torch.sqrt(torch.abs(respModel[mask])) - torch.sign(respData[mask])*torch.sqrt(torch.abs(respData[mask])), 2);
-      
       lsq = torch.pow(torch.sign(respModel)*torch.sqrt(torch.abs(respModel)) - torch.sign(respData)*torch.sqrt(torch.abs(respData)), 2);
 
       per_cond = lsq;
@@ -810,15 +805,13 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, max_epochs=7500, learning_rate=0.04, batch_size=2000, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.05ish (0.15 seems too high - 21.01.26)
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, max_epochs=4500, learning_rate=0.07, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.04ish (on 20.02.06; 0.15 seems too high - 21.01.26)
 
   ### Load the cell, set up the naming
   ########
   # Load cell
   ########
-  # NOTE: TEMPORARILY ADDED replace(...) since we're debugging and running from .../pytorch/ directory
   loc_base = os.getcwd() + '/';
-  #loc_base = os.getcwd().replace('pytorch', '') # + '/'; # ensure there is a "/" after the final directory
   loc_data = loc_base + expDir + 'structures/';
 
   if 'pl1465' in loc_base:
@@ -836,30 +829,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         #fL_name = 'fitList%s_pyt_210121' % (loc_str); # pyt for pytorch - lgn flat vs. V1 weight
         fL_name = 'fitList%s_pyt_210206' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
         #fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
-  ''' # SHOULD now be effectively replaced by imporvement in hf.fitList_name
-  if vecCorrected:
-    fL_name = '%s_vecF1' % fL_name;
 
-  if whichTrials is not None: # meaning we're going to hold out some trials!
-    fL_name = '%s_CV' % fL_name; # i.e. we're doing cross-validation...
-
-  if lossType == 4: # chiSq...
-    fL_name = '%s%s' % (fL_name, hf.chiSq_suffix(kMult));
-
-  if fixRespExp is not None:
-    fL_name = '%s_re%d' % (fL_name, np.round(fixRespExp*10)); # suffix to indicate that the response exponent is fixed...
-
-  if lgnFrontEnd == 1:
-    fL_name = '%s_LGN' % fL_name # implicit "a" at the end of LGN...
-  elif lgnFrontEnd == 2:
-    fL_name = '%s_LGNb' % fL_name
-  elif lgnFrontEnd == 9:
-    fL_name = '%s_jLGN' % fL_name
-  if lgnFrontEnd > 0 and lgnConType > 1: # i.e. not the default one
-    lgnConSuff = 'f' if lgnConType == 2 else 'y'; # i.e. 'f' for fixed (at 0.5); 'y' for yoked-to-mWeight
-    # Note that the above line will work iff the only types are lgnConType = 1, 2, or 3
-    fL_name = '%s%s' % (fL_name, lgnConSuff)
-  '''
   todoCV = 1 if whichTrials is not None else 0;
 
   fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV);
@@ -991,8 +961,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   dataloader = torchdata.DataLoader(dw, batch_size)
 
   ### then set up the optimization
-  # optimizer = torch.optim.SGD(training_parameters, lr=learning_rate)
-  optimizer = torch.optim.Adam(training_parameters, amsgrad=True, lr=learning_rate, )
+  optimizer = torch.optim.Adam(training_parameters, amsgrad=True, lr=learning_rate, ) # amsgrad is variant of opt
+  # - and the LR scheduler, if applicable
+  if scheduler:
+    # value of 0.5 per Billy (21.02.09); patience is # of epochs before we start to reduce the LR
+    LR_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', 
+                                                              factor=0.5, patience=int(max_epochs/15)); 
+
   # - then data
   # - predefine some arrays for tracking loss
   loss_history = []
@@ -1002,7 +977,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   hessian_history = []
 
   first_pred = model.forward(trInf, respMeasure=respMeasure);
-  accum = 0; # keep track of accumulator
+  accum = np.nan; # keep track of accumulator (will be replaced with zero at first step)
   for t in range(max_epochs):
       optimizer.zero_grad()
 
@@ -1053,9 +1028,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
               # we raise an exception here and then try again.
               raise Exception("Loss is nan or inf on epoch %s, batch %s!" % (t, 0))
 
-  #         loss_curr.backward()
           loss_curr.backward(retain_graph=True)
           optimizer.step()
+          if scheduler:
+            LR_scheduler.step(loss_curr.item());
 
       model.eval()
       model.train()

@@ -28,7 +28,7 @@ source activate pytorch-lcv
 #source activate lcv-python
 
 # Used with newest version of calling the plotting function
-EXP_DIR="altExp/" 
+EXP_DIR="V1/" 
 LOSS=2
 
 for run in {1..8}
@@ -39,13 +39,13 @@ do
   #python3.6 plot_diagnose_vLGN.py $run 2 1 V1_orig/ 99 1 1 0 0 0.05 -1 1 & # no diff, not interpolated
   #python3.6 plot_diagnose_vLGN.py $run 2 1 altExp/ 99 1 1 0 0 0.05 -1 1 & # no diff, not interpolated
 
-  # pytorch mod, loss; modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-  #python3.6 plot_diagnose_vLGN.py $run 2 $LOSS $EXP_DIR 12 22 11 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
-  # pytorch mod, poiss loss; modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 plot_diagnose_vLGN.py $run 2 $LOSS $EXP_DIR 12 21 11 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
-  # pytorch mod, poiss loss; modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 plot_diagnose_vLGN.py $run 2 $LOSS $EXP_DIR 12 11 11 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
-  # pytorch mod, poiss loss; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
+  # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
+  python3.6 plot_diagnose_vLGN.py $run 2 $LOSS $EXP_DIR 12 22 11 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
+  # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
+  python3.6 plot_diagnose_vLGN.py $run 2 $LOSS $EXP_DIR 12 21 11 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
+  # pytorch mod; modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
+  python3.6 plot_diagnose_vLGN.py $run 2 $LOSS $EXP_DIR 12 11 11 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
+  # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
   python3.6 plot_diagnose_vLGN.py $run 2 $LOSS $EXP_DIR 22 21 11 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated
 
   # LGN type 1, pytorch model, poiss loss

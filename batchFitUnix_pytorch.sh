@@ -61,8 +61,8 @@ source activate pytorch-lcv
 #################
 #################
 # Used with newest version of calling the model fits (21.02.07)
-EXP_DIR="altExp/" 
-LOSS=2
+EXP_DIR="V1_BB/" 
+LOSS=1
 
 for run in {1..20}; do
   # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------
@@ -78,8 +78,8 @@ for run in {1..20}; do
   #### ---- flat (x) vs weighted gain control (y)
   #### ---- lgn stage with separate RVC for M&P (1) vs averaged RVC applied to both M&P (2)
   #### Last run per loss type:
-  #### ---  sqrt: 21.02.07 22:43 (all expts; full matrix)
-  #### --- poiss: 21.02.08 23:52 (all expts; full matrix)
+  #### ---  sqrt: 21.02.09 20:43 (V1/, V1_BB; full matrix)
+  #### --- poiss: 21.02.09 20:52 (V1/, V1_BB; full matrix)
   ###########
   # --- Current loss: Sqrt loss
   # py ---------fun---------------------#---dir-e-l-f---i-t--k----vec--con-----  

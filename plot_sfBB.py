@@ -2,9 +2,8 @@
 
 #### NOTE: Based on plot_diagnose_vLGN.py
 # i.e. we'll compare two models (if NOT just plotting the data)
-# - WEIGHTED GAIN CONTROL WITH NO LGN 
-# -- VS
-# - FLAT GAIN CONTROL WITH LGN FRONT END
+# As of 21.02.09, we will make the same change as in the "parent" function
+# - that is, we can flexibly choose the two models we use (not just assume one with, one without LGN front end)
 
 import os
 import sys
@@ -60,23 +59,25 @@ cellNum  = int(sys.argv[1]);
 excType  = int(sys.argv[2]);
 lossType = int(sys.argv[3]);
 expDir   = sys.argv[4]; 
-lgnFrontEnd = int(sys.argv[5]);
-diffPlot = int(sys.argv[6]);
-intpMod  = int(sys.argv[7]);
-kMult  = float(sys.argv[8]);
-vecCorrected = int(sys.argv[9]);
-onsetTransient = int(sys.argv[10]);
+normTypesIn = int(sys.argv[5]); # two-digit number, extracting 1st for modA, 2nd for modB
+conTypesIn = int(sys.argv[6]); # two-digit number, extracting 1st for modA, 2nd for modB
+lgnFrontEnd = int(sys.argv[7]); # two-digit number, extracting 1st for modA, 2nd for modB
+diffPlot = int(sys.argv[8]);
+intpMod  = int(sys.argv[9]);
+kMult  = float(sys.argv[10]);
+vecCorrected = int(sys.argv[11]);
+onsetTransient = int(sys.argv[12]);
 onsetMod = 1;
 
-if len(sys.argv) > 11:
-  fixRespExp = float(sys.argv[11]);
+if len(sys.argv) > 13:
+  fixRespExp = float(sys.argv[13]);
   if fixRespExp <= 0: # this is the code to not fix the respExp
     fixRespExp = None;
 else:
   fixRespExp = None; # default (see modCompare.ipynb for details)
 
-if len(sys.argv) > 12:
-  respVar = int(sys.argv[12]);
+if len(sys.argv) > 14:
+  respVar = int(sys.argv[14]);
 else:
   respVar = 1;
 
@@ -127,83 +128,59 @@ if excType == 1:
 elif excType == 2:
   #fitBase = 'fitList_pyt_200507'; # excType 2
   #fitBase = 'fitList_pyt_201107'; # excType 2
-  fitBase = 'fitList_pyt_210121'; # excType 2
+  #fitBase = 'fitList_pyt_210121'; # excType 2
+  fitBase = 'fitList_pyt_210206'; # excType 2
 else:
   fitBase = None;
 
 if fitBase is not None:
   if vecCorrected:
-    fitBase = '%s_vecF1' % fitBase;
-  if lossType == 4: # chiSq...
-    fitBase = '%s%s' % (fitBase, hf.chiSq_suffix(kMult));
-
-  if fixRespExp is not None:
-    fitBase = '%s_re%d' % (fitBase, np.round(fixRespExp*10)); # suffix to indicate that the response exponent is fixed...
-
-  # now, LGN-specific naming
-  if fixRespExp is not None:
-    fitBase_lgn = '%s_re%d' % (fitBase, np.round(fixRespExp*10)); # suffix to indicate that the response exponent is fixed...
+    vecCorrected = 1;
   else:
-    fitBase_lgn = fitBase;
+    vecCorrected = 0;
 
-  if lgnFrontEnd == 1:
-    fitBase_lgn = '%s_LGN' % fitBase_lgn
-  elif lgnFrontEnd == 2:
-    fitBase_lgn = '%s_LGNb' % fitBase_lgn
-  elif lgnFrontEnd == 99:
-    fitBase_lgn = '%s_jLGN' % fitBase_lgn
+  ### Model types
+  # 0th: Unpack the norm types, con types, lgnTypes
+  normA, normB = int(np.floor(normTypesIn/10)), np.mod(normTypesIn, 10)
+  conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
+  lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
 
-  # first the fit type
-  fitSuf_fl = '_flat';
-  fitSuf_wg = '_wght';
-  # then the loss type
-  if lossType == 1:
-    lossSuf = '_sqrt.npy';
-    loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
-  elif lossType == 2:
-    lossSuf = '_poiss.npy';
-    loss = lambda resp, pred: poisson.logpmf(resp, pred);
-  elif lossType == 3:
-    lossSuf = '_modPoiss.npy';
-    loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p));
-  elif lossType == 4:
-    lossSuf = '_chiSq.npy';
-    # LOSS HERE IS TEMPORARY
-    loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
+  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
+  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
+  # what's the shorthand we use to refer to these models...
+  modA_str = '%s%s%s' % ('fl' if normA==1 else 'wt', 'LGN' if lgnA>0 else 'V1', 'avg' if conA>1 else '');
+  modB_str = '%s%s%s' % ('fl' if normB==1 else 'wt', 'LGN' if lgnB>0 else 'V1', 'avg' if conB>1 else '');
 
-  # NOTE: We choose weighted gain control for non-LGN model, flat gain control for the model with the LGN front end
-  fitName = str(fitBase + fitSuf_wg + lossSuf);
-  fitName_lgn = str(fitBase_lgn + fitSuf_fl + lossSuf);
-
-  fitList = hf.np_smart_load(data_loc + fitName); # V1 only
-  fitList_lgn = hf.np_smart_load(data_loc + fitName_lgn); # with LGN, no tuned gain control
+  fitListA = hf.np_smart_load(data_loc + fitNameA);
+  fitListB = hf.np_smart_load(data_loc + fitNameB);
 
   try:
-    fit_details = hf.np_smart_load(data_loc + fitName.replace('.npy', '_details.npy'));
-    fit_details_lgn = hf.np_smart_load(data_loc + fitName_lgn.replace('.npy', '_details.npy'));
-    fit_details = fit_details[cellNum-1];
-    fit_details_lgn = fit_details_lgn[cellNum-1];
+    fit_detailsA = hf.np_smart_load(data_loc + fitNameA.replace('.npy', '_details.npy'));
+    fit_detailsB = hf.np_smart_load(data_loc + fitNameB.replace('.npy', '_details.npy'));
+    fit_detailsA = fit_detailsA[cellNum-1];
+    fit_detailsB = fit_detailsB[cellNum-1];
   except:
-    fit_details = None; fit_details_lgn = None;
+    fit_detailsA = None; fit_detailsB = None;
 
   dc_str = hf_sf.get_resp_str(respMeasure=0);
   f1_str = hf_sf.get_resp_str(respMeasure=1);
 
-  modFit_V1_dc = fitList[cellNum-1][dc_str]['params']; # 
-  modFit_lgn_dc = fitList_lgn[cellNum-1][dc_str]['params']; # 
-  modFit_V1_f1 = fitList[cellNum-1][f1_str]['params']; # 
-  modFit_lgn_f1 = fitList_lgn[cellNum-1][f1_str]['params']; # 
+  modFit_A_dc = fitListA[cellNum-1][dc_str]['params'];
+  modFit_B_dc = fitListB[cellNum-1][dc_str]['params'];
+  modFit_A_f1 = fitListA[cellNum-1][f1_str]['params'];
+  modFit_B_f1 = fitListB[cellNum-1][f1_str]['params'];
 
-  normTypes = [2, 1]; # weighted, then flat
-  lgnTypes = [0, lgnFrontEnd];
+  normTypes = [normA, normB]; # weighted, then flat
+  lgnTypes = [lgnA, lgnB];
+  conTypes = [conA, conB];
 
   expInd = -1;
   newMethod = 1;
 
-  mod_V1_dc  = mrpt.sfNormMod(modFit_V1_dc, expInd=expInd, excType=excType, normType=2, lossType=lossType, lgnFrontEnd=0, newMethod=newMethod)
-  mod_LGN_dc = mrpt.sfNormMod(modFit_lgn_dc, expInd=expInd, excType=excType, normType=1, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod)
-  mod_V1_f1  = mrpt.sfNormMod(modFit_V1_f1, expInd=expInd, excType=excType, normType=2, lossType=lossType, lgnFrontEnd=0, newMethod=newMethod)
-  mod_LGN_f1 = mrpt.sfNormMod(modFit_lgn_f1, expInd=expInd, excType=excType, normType=1, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod)
+  mod_A_dc  = mrpt.sfNormMod(modFit_A_dc, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0])
+  mod_B_dc = mrpt.sfNormMod(modFit_B_dc, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1])
+  mod_A_f1  = mrpt.sfNormMod(modFit_A_f1, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0])
+  mod_B_f1 = mrpt.sfNormMod(modFit_B_f1, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1])
 
 else: # we will just plot the data
   fitList_fl = None;
@@ -215,11 +192,12 @@ if onsetCurr is None:
 else:
   onsetStr = '_onset%s_%03d_%03d' % (onsetMod_str, onsetDur, halfWidth)
 
+lossSuf = hf.lossType_suffix(lossType).replace('.npy', ''); # get the loss suffix, remove the file type ending
 if fitBase is not None:
-  if diffPlot == 1:
-    compDir  = str(fitBase + '_diag' + lossSuf + '/diff');
+  if diffPlot == 1: 
+    compDir  = str(fitBase + '_diag_%s_%s' % (modA_str, modB_str) + lossSuf + '/diff');
   else:
-    compDir  = str(fitBase + '_diag' + lossSuf);
+    compDir  = str(fitBase + '_diag_%s_%s' % (modA_str, modB_str) + lossSuf);
   if intpMod == 1:
     compDir = str(compDir + '/intp');
   subDir   = compDir.replace('fitList', 'fits').replace('.npy', '');
@@ -257,32 +235,32 @@ if fitBase is not None:
   trInf_f1, _ = mrpt.process_data(expInfo, expInd=expInd, respMeasure=1); 
   val_trials = trInf_dc['num']; # these are the indices of valid, original trials
 
-  resp_V1_dc  = mod_V1_dc.forward(trInf_dc, respMeasure=0).detach().numpy();
-  resp_LGN_dc = mod_LGN_dc.forward(trInf_dc, respMeasure=0).detach().numpy();
-  resp_V1_f1  = mod_V1_f1.forward(trInf_f1, respMeasure=1).detach().numpy();
-  resp_LGN_f1 = mod_LGN_f1.forward(trInf_f1, respMeasure=1).detach().numpy();
+  resp_A_dc  = mod_A_dc.forward(trInf_dc, respMeasure=0).detach().numpy();
+  resp_B_dc = mod_B_dc.forward(trInf_dc, respMeasure=0).detach().numpy();
+  resp_A_f1  = mod_A_f1.forward(trInf_f1, respMeasure=1).detach().numpy();
+  resp_B_f1 = mod_B_f1.forward(trInf_f1, respMeasure=1).detach().numpy();
 
   # now get the mask+base response (f1 at base TF)
   maskInd, baseInd = hf_sf.get_mask_base_inds();
 
-  ooh = hf_sf.get_baseOnly_resp(expInfo, dc_resp=resp_V1_dc, val_trials=val_trials);
+  ooh = hf_sf.get_baseOnly_resp(expInfo, dc_resp=resp_A_dc, val_trials=val_trials);
   # note the indexing: [1][x][0][0] for [summary], [dc||f1], [unpack], [mean], respectively
-  baseMean_mod_dc = [hf_sf.get_baseOnly_resp(expInfo, dc_resp=x, val_trials=val_trials)[1][0][0][0] for x in [resp_V1_dc, resp_LGN_dc]];
-  aah = hf_sf.get_baseOnly_resp(expInfo, f1_base=resp_V1_f1[:,baseInd], val_trials=val_trials); 
-  baseMean_mod_f1 = [hf_sf.get_baseOnly_resp(expInfo, f1_base=x[:,baseInd], val_trials=val_trials)[1][1][0][0] for x in [resp_V1_f1, resp_LGN_f1]];
+  baseMean_mod_dc = [hf_sf.get_baseOnly_resp(expInfo, dc_resp=x, val_trials=val_trials)[1][0][0][0] for x in [resp_A_dc, resp_B_dc]];
+  aah = hf_sf.get_baseOnly_resp(expInfo, f1_base=resp_A_f1[:,baseInd], val_trials=val_trials); 
+  baseMean_mod_f1 = [hf_sf.get_baseOnly_resp(expInfo, f1_base=x[:,baseInd], val_trials=val_trials)[1][1][0][0] for x in [resp_A_f1, resp_B_f1]];
 
-  # ---- V1 model responses
-  respMatrix_V1_dc, respMatrix_V1_f1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, dc_resp=resp_V1_dc, f1_base=resp_V1_f1[:,baseInd], f1_mask=resp_V1_f1[:,maskInd], val_trials=val_trials); # i.e. get the base response for F1
+  # ---- model A responses
+  respMatrix_A_dc, respMatrix_A_f1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, dc_resp=resp_A_dc, f1_base=resp_A_f1[:,baseInd], f1_mask=resp_A_f1[:,maskInd], val_trials=val_trials); # i.e. get the base response for F1
   # and get the mask only response (f1 at mask TF)
-  respMatrix_V1_dc_onlyMask, respMatrix_V1_f1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, dc_resp=resp_V1_dc, f1_base=resp_V1_f1[:,baseInd], f1_mask=resp_V1_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
+  respMatrix_A_dc_onlyMask, respMatrix_A_f1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, dc_resp=resp_A_dc, f1_base=resp_A_f1[:,baseInd], f1_mask=resp_A_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
   # and get the mask+base response (but f1 at mask TF)
-  _, respMatrix_V1_f1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=resp_V1_dc, f1_base=resp_V1_f1[:,baseInd], f1_mask=resp_V1_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
-  # ---- LGN model responses
-  respMatrix_LGN_dc, respMatrix_LGN_f1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, dc_resp=resp_LGN_dc, f1_base=resp_LGN_f1[:,baseInd], f1_mask=resp_LGN_f1[:,maskInd], val_trials=val_trials); # i.e. get the base response for F1
+  _, respMatrix_A_f1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=resp_A_dc, f1_base=resp_A_f1[:,baseInd], f1_mask=resp_A_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
+  # ---- model B responses
+  respMatrix_B_dc, respMatrix_B_f1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, dc_resp=resp_B_dc, f1_base=resp_B_f1[:,baseInd], f1_mask=resp_B_f1[:,maskInd], val_trials=val_trials); # i.e. get the base response for F1
   # and get the mask only response (f1 at mask TF)
-  respMatrix_LGN_dc_onlyMask, respMatrix_LGN_f1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, dc_resp=resp_LGN_dc, f1_base=resp_LGN_f1[:,baseInd], f1_mask=resp_LGN_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
+  respMatrix_B_dc_onlyMask, respMatrix_B_f1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, dc_resp=resp_B_dc, f1_base=resp_B_f1[:,baseInd], f1_mask=resp_B_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
   # and get the mask+base response (but f1 at mask TF)
-  _, respMatrix_LGN_f1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=resp_LGN_dc, f1_base=resp_LGN_f1[:,baseInd], f1_mask=resp_LGN_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
+  _, respMatrix_B_f1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=resp_B_dc, f1_base=resp_B_f1[:,baseInd], f1_mask=resp_B_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
 
 ### Get the responses - base only, mask+base [base F1], mask only (mask F1)
 baseDistrs, baseSummary, baseConds = hf_sf.get_baseOnly_resp(expInfo);
@@ -329,7 +307,7 @@ refF1_rvc = refF1[:, prefSf_ind, :];
 # set up model plot info
 # i.e. flat model is red, weighted model is green
 modColors = ['g', 'r']
-modLabels = ['wght', 'LGN']
+modLabels = ['A: %s' % modA_str, 'B: %s' % modB_str]
 
 nrow, ncol = 5, 4;
 f, ax = plt.subplots(nrows=nrow, ncols=ncol, figsize=(ncol*15, nrow*15))
@@ -365,14 +343,14 @@ for measure in [0,1]:
         ylim_diffsAbLe = AbLe_bounds;
         lbl = 'DC' 
         if fitBase is not None:
-          data_V1 = respMatrix_V1_dc;
-          data_LGN = respMatrix_LGN_dc;
-          data_V1_onlyMask = respMatrix_V1_dc_onlyMask;
-          data_LGN_onlyMask = respMatrix_LGN_dc_onlyMask;
-          data_V1_baseTf = None;
-          data_LGN_baseTf = None;
-          mod_mean_V1 = baseMean_mod_dc[0];
-          mod_mean_LGN = baseMean_mod_dc[1];
+          data_A = respMatrix_A_dc;
+          data_B = respMatrix_B_dc;
+          data_A_onlyMask = respMatrix_A_dc_onlyMask;
+          data_B_onlyMask = respMatrix_B_dc_onlyMask;
+          data_A_baseTf = None;
+          data_B_baseTf = None;
+          mod_mean_A = baseMean_mod_dc[0];
+          mod_mean_B = baseMean_mod_dc[1];
     elif measure == 1:
         data = respMatrixF1_maskTf;
         data_baseTf = respMatrixF1;
@@ -388,14 +366,14 @@ for measure in [0,1]:
         xlim_base = overall_ylim
         lbl = 'F1'
         if fitBase is not None:
-          data_V1 = respMatrix_V1_f1_maskTf;
-          data_LGN = respMatrix_LGN_f1_maskTf;
-          data_V1_onlyMask = respMatrix_V1_f1_onlyMask;
-          data_LGN_onlyMask = respMatrix_LGN_f1_onlyMask;
-          data_V1_baseTf = respMatrix_V1_f1;
-          data_LGN_baseTf = respMatrix_LGN_f1;
-          mod_mean_V1 = baseMean_mod_f1[0];
-          mod_mean_LGN = baseMean_mod_f1[1];
+          data_A = respMatrix_A_f1_maskTf;
+          data_B = respMatrix_B_f1_maskTf;
+          data_A_onlyMask = respMatrix_A_f1_onlyMask;
+          data_B_onlyMask = respMatrix_B_f1_onlyMask;
+          data_A_baseTf = respMatrix_A_f1;
+          data_B_baseTf = respMatrix_B_f1;
+          mod_mean_A = baseMean_mod_f1[0];
+          mod_mean_B = baseMean_mod_f1[1];
 
     # Now, subtract the baseOnly response from the base+mask response (only used if measure=0, i.e. DC)
     # -- but store it separately 
@@ -403,10 +381,10 @@ for measure in [0,1]:
         data_sub = np.copy(data);
         data_sub[:,:,0] = data[:,:,0]-np.mean(baseOnly);
         if fitBase is not None:
-            data_V1_sub = np.copy(data_V1);
-            data_V1_sub[:,:,0] = data_V1[:,:,0] - mod_mean_V1;
-            data_LGN_sub = np.copy(data_LGN);
-            data_LGN_sub[:,:,0] = data_LGN[:,:,0] - mod_mean_LGN;
+            data_A_sub = np.copy(data_A);
+            data_A_sub[:,:,0] = data_A[:,:,0] - mod_mean_A;
+            data_B_sub = np.copy(data_B);
+            data_B_sub[:,:,0] = data_B[:,:,0] - mod_mean_B;
 
     ### first, just the distribution of base responses
     ax[0, measure] = plt.subplot(nrow, 2, 1+measure); # pretend there are only 2 columns
@@ -432,15 +410,15 @@ for measure in [0,1]:
             ax[0, measure].axvline(baseline, linestyle='--', color='b',label='blank')
         if fitBase is not None:
             ax[0, measure].axvline(np.mean(baseOnly), linestyle='--', color='k',label='data mean')
-            ax[0, measure].axvline(mod_mean_V1, linestyle='--', color=modColors[0], label='%s mean' % modLabels[0])
-            ax[0, measure].axvline(mod_mean_LGN, linestyle='--', color=modColors[1], label='%s mean' % modLabels[1])
+            ax[0, measure].axvline(mod_mean_A, linestyle='--', color=modColors[0], label='%s mean' % modLabels[0])
+            ax[0, measure].axvline(mod_mean_B, linestyle='--', color=modColors[1], label='%s mean' % modLabels[1])
         ax[0, measure].legend(fontsize='small');
 
     # SF tuning with contrast
     resps = [maskOnly, data, data_baseTf]; #need to plot data_baseTf for f1
     if fitBase is not None:
-      v1_resps = [data_V1_onlyMask, data_V1, data_V1_baseTf];
-      lgn_resps = [data_LGN_onlyMask, data_LGN, data_LGN_baseTf];
+      modA_resps = [data_A_onlyMask, data_A, data_A_baseTf];
+      modB_resps = [data_B_onlyMask, data_B, data_B_baseTf];
     labels = ['mask', 'mask+base', 'mask+base']
     measure_lbl = np.vstack((['', '', ''], ['', ' (mask TF)', ' (base TF)'])); # specify which TF, if F1 response
     labels_ref = ['blank', 'base']
@@ -461,10 +439,10 @@ for measure in [0,1]:
             if fitBase is None: # then just plot a line for the data
               ax[1+ii, 2*measure].plot(maskSf, rsps[mcI,:,0], clip_on=False, color=col)
             else:
-              # PLOT THE V1 model (if present)
-              ax[1+ii, 2*measure].plot(maskSf, v1_resps[ii][mcI,:,0], color=modColors[0], alpha=1-col[0])
-              # PLOT THE LGN model (if present)
-              ax[1+ii, 2*measure].plot(maskSf, lgn_resps[ii][mcI,:,0], color=modColors[1], alpha=1-col[0])
+              # PLOT model A (if present)
+              ax[1+ii, 2*measure].plot(maskSf, modA_resps[ii][mcI,:,0], color=modColors[0], alpha=1-col[0])
+              # PLOT model B (if present)
+              ax[1+ii, 2*measure].plot(maskSf, modB_resps[ii][mcI,:,0], color=modColors[1], alpha=1-col[0])
 
         ax[1+ii, 2*measure].set_xscale('log');
         ax[1+ii, 2*measure].set_xlabel('SF (c/deg)')
@@ -494,10 +472,10 @@ for measure in [0,1]:
             if fitBase is None: # then just plot a line for the data
               ax[1+ii, 1+2*measure].plot(maskCon, rsps[:,msI,0], clip_on=False, color=col)
             else:
-              # PLOT THE V1 model (if present)
-              ax[1+ii, 1+2*measure].plot(maskCon, v1_resps[ii][:,msI,0], color=modColors[0], alpha=1-col[0])
-              # PLOT THE LGN model (if present)
-              ax[1+ii, 1+2*measure].plot(maskCon, lgn_resps[ii][:,msI,0], color=modColors[1], alpha=1-col[0])
+              # PLOT model A (if present)
+              ax[1+ii, 1+2*measure].plot(maskCon, modA_resps[ii][:,msI,0], color=modColors[0], alpha=1-col[0])
+              # PLOT model B (if present)
+              ax[1+ii, 1+2*measure].plot(maskCon, modB_resps[ii][:,msI,0], color=modColors[1], alpha=1-col[0])
 
         ax[1+ii, 1+2*measure].set_xscale('log');
         ax[1+ii, 1+2*measure].set_xlabel('Contrast (%)')
@@ -522,8 +500,8 @@ for measure in [0,1]:
     ax[4, 2*measure].set_title('Joint REF tuning (%s)' % lbl)
     try:
       curr_str = hf_sf.get_resp_str(respMeasure=measure);
-      ax[4, 1+2*measure].plot(fit_details[curr_str]['loss'], color=modColors[0]);
-      ax[4, 1+2*measure].plot(fit_details_lgn[curr_str]['loss'], color=modColors[1]);
+      ax[4, 1+2*measure].plot(fit_detailsA[curr_str]['loss'], color=modColors[0]);
+      ax[4, 1+2*measure].plot(fit_detailsB[curr_str]['loss'], color=modColors[1]);
       ax[4, 1+2*measure].set_xscale('log');
       ax[4, 1+2*measure].set_yscale('symlog');
       ax[4, 1+2*measure].set_xlabel('Optimization epoch');
@@ -543,10 +521,10 @@ for measure in [0,1]:
             if fitBase is None: # then just plot a line for the data
               ax[3, 2*measure].plot(maskSf, data_sub[mcI,:,0]-maskOnly[mcI,:,0], clip_on=False, color=col)
             else:
-              # PLOT THE V1 model (if present)
-              ax[3, 2*measure].plot(maskSf, data_V1_sub[mcI,:,0]-data_V1_onlyMask[mcI,:,0], color=modColors[0], alpha=1-col[0])
-              # PLOT THE LGN model (if present)
-              ax[3, 2*measure].plot(maskSf, data_LGN_sub[mcI,:,0]-data_LGN_onlyMask[mcI,:,0], color=modColors[1], alpha=1-col[0])
+              # model A (if present)
+              ax[3, 2*measure].plot(maskSf, data_A_sub[mcI,:,0]-data_A_onlyMask[mcI,:,0], color=modColors[0], alpha=1-col[0])
+              # model B (if present)
+              ax[3, 2*measure].plot(maskSf, data_B_sub[mcI,:,0]-data_B_onlyMask[mcI,:,0], color=modColors[1], alpha=1-col[0])
 
             ax[3, 2*measure].set_ylim(ylim_diffsAbLe)
 
@@ -573,10 +551,10 @@ for measure in [0,1]:
             if fitBase is None: # then just plot a line for the data
               ax[3, 1+2*measure].plot(maskCon, data_sub[:, msI,0]-maskOnly[:, msI,0], clip_on=False, color=col)
             else:
-              # PLOT THE V1 model (if present)
-              ax[3, 1+2*measure].plot(maskCon, data_V1_sub[:, msI,0]-data_V1_onlyMask[:, msI,0], color=modColors[0], alpha=1-col[0])
-              # PLOT THE LGN model (if present)
-              ax[3, 1+2*measure].plot(maskCon, data_LGN_sub[:, msI,0]-data_LGN_onlyMask[:, msI,0], color=modColors[1], alpha=1-col[0])
+              # model A (if present)
+              ax[3, 1+2*measure].plot(maskCon, data_A_sub[:, msI,0]-data_A_onlyMask[:, msI,0], color=modColors[0], alpha=1-col[0])
+              # model B (if present)
+              ax[3, 1+2*measure].plot(maskCon, data_B_sub[:, msI,0]-data_B_onlyMask[:, msI,0], color=modColors[1], alpha=1-col[0])
 
 
             ax[3, 1+2*measure].set_ylim(ylim_diffsAbLe)
@@ -609,8 +587,8 @@ if fitBase is not None: # then we can plot some model details
 
   respTypes = [None, None]; # todo: [dcResps, f1Resps], figure out how to package, esp. with f1 having mask & base
   colToAdd = [0, 2]; # we add +2 if doing f1 details
-  # ordering of labels/model parameters will be: V1/LGN (following form of modColors/modLabels from above)
-  whichModels = [[modFit_V1_dc, modFit_lgn_dc], [modFit_V1_f1, modFit_lgn_f1]];
+  # ordering of labels/model parameters will be: modA/modB (following form of modColors/modLabels from above)
+  whichModels = [[modFit_A_dc, modFit_B_dc], [modFit_A_f1, modFit_B_f1]];
   for (i, resps), colAdd, currMods in zip(enumerate(respTypes), colToAdd, whichModels):
 
     # TODO: poisson test - mean/var for each condition (i.e. sfXdispXcon)
@@ -703,7 +681,9 @@ if fitBase is not None: # then we can plot some model details
     curr_ax = plt.subplot2grid(detailSize, (2, 0+colAdd));
     plt.text(0.5, 0.6, 'order: %s, %s' % (*modLabels, ), fontsize=24, horizontalalignment='center', verticalalignment='center');
     plt.text(0.5, 0.5, 'prefSf: %.2f, %.2f' % (currMods[0][0], currMods[1][0]), fontsize=24, horizontalalignment='center', verticalalignment='center');
-    plt.text(0.5, 0.4, 'normSf: %.2f, %.2f' % (np.exp(currMods[0][8]), np.nan), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    normA = np.exp(currMods[0][8]) if normTypes[0]==2 else np.nan;
+    normB = np.exp(currMods[1][8]) if normTypes[1]==2 else np.nan;
+    plt.text(0.5, 0.4, 'normSf: %.2f, %.2f' % (normA, normB), fontsize=24, horizontalalignment='center', verticalalignment='center');
     if excType == 1:
       plt.text(0.5, 0.3, 'derivative order: %.2f, %.2f' % (currMods[0][1], currMods[1][1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
     elif excType == 2:

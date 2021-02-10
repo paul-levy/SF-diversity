@@ -252,7 +252,7 @@ else:
 
 if pytorch_mod == 1:
   ### now, set-up the two models
-  model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType) for prms,normType,lgnType in zip(modFits, normTypes, lgnTypes)]
+  model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon) for prms,normType,lgnType,lgnCon in zip(modFits, normTypes, lgnTypes, conTypes)]
 
   dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
   modResps = [mod.forward(dw.trInf, respMeasure=respMeasure).detach().numpy() for mod in [model_A, model_B]];
