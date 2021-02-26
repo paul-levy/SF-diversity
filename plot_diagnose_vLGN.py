@@ -274,8 +274,11 @@ if pytorch_mod == 1:
   _, _, expByCond, _ = hf.organize_resp(spikes_rate, trialInf, expInd);
   #_, _, expByCond, _ = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=asRates);
   stimDur = hf.get_exp_params(expInd).stimDur;
-  _, _, modByCondA, _ = hf.organize_resp(np.divide(mr_A, stimDur), trialInf, expInd);
-  _, _, modByCondB, _ = hf.organize_resp(np.divide(mr_B, stimDur), trialInf, expInd);
+  # TODO: This is a work around for which measures are in rates vs. counts (DC vs F1, model vs data...)
+  # --- but check V1/1 -- why is varExpl still bad????
+  divFactor = stimDur if respMeasure == 0 else 1;
+  _, _, modByCondA, _ = hf.organize_resp(np.divide(mr_A, divFactor), trialInf, expInd); # divFactor was previously stimDur
+  _, _, modByCondB, _ = hf.organize_resp(np.divide(mr_B, divFactor), trialInf, expInd);
   # - and now compute varExpl - first for SF tuning curves, then for RVCs...
   nDisp, nSf, nCon = expByCond.shape;
   varExplSF_A = np.nan * np.zeros((nDisp, nCon));
@@ -685,11 +688,11 @@ for d in range(nDisps):
           sfMixAx[c_plt_ind, d].set_ylabel('resp (imp/s)');
 
 if lgnA > 0:
-  mWt_A = modFit_A[-1] if pytorch_mod == 0 else 1/(1+np.exp(-modFit_A[1])); # why? in pytorch_mod, it's a sigmoid
+  mWt_A = modFit_A[-1] if pytorch_mod == 0 else 1/(1+np.exp(-modFit_A[-1])); # why? in pytorch_mod, it's a sigmoid
 else:
   mWt_A = -99;
 if lgnB > 0:
-  mWt_B = modFit_B[-1] if pytorch_mod == 0 else 1/(1+np.exp(-modFit_B[1])); # why? in pytorch_mod, it's a sigmoid
+  mWt_B = modFit_B[-1] if pytorch_mod == 0 else 1/(1+np.exp(-modFit_B[-1])); # why? in pytorch_mod, it's a sigmoid
 else:
   mWt_B = -99;
 lgnStr = ' mWt=%.2f|%.2f' % (mWt_A, mWt_B);
@@ -757,20 +760,20 @@ plt.ylim([np.minimum(-5, np.nanmin(respMean[disp_rvc, sfToUse, val_cons])), 1.1*
 omega = np.logspace(-2, 2, 1000);
 sfExc = [];
 sfExcRaw = [];
-for i,lgnType,lgnConType,mWt in zip(modFits, lgnTypes, conTypes, [mWt_A, mWt_B]):
-  prefSf = i[0];
+for (pltNum, modPrm),lgnType,lgnConType,mWt in zip(enumerate(modFits), lgnTypes, conTypes, [mWt_A, mWt_B]):
+  prefSf = modPrm[0];
 
   if excType == 1:
     ### deriv. gauss
-    dOrder = i[1];
+    dOrder = modPrm[1];
     sfRel = omega/prefSf;
     s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
     sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
     sfExcCurr = s/sMax;
   if excType == 2:
     ### flex. gauss
-    sigLow = i[1];
-    sigHigh = i[-1];
+    sigLow = modPrm[1];
+    sigHigh = modPrm[-1];
     sfRel = np.divide(omega, prefSf);
     # - set the sigma appropriately, depending on what the stimulus SF is
     sigma = np.multiply(sigLow, [1]*len(sfRel));
@@ -802,13 +805,13 @@ for i,lgnType,lgnConType,mWt in zip(modFits, lgnTypes, conTypes, [mWt_A, mWt_B])
     selSf_p = np.divide(resps_p, max_p);
     # - then RVC response: # rvcMod 0 (Movshon)
     rvc_mod = hf.get_rvc_model();
-    stimCo = np.linspace(0,1,10);
+    stimCo = np.linspace(0,1,100);
     selCon_m = rvc_mod(*params_m, stimCo)
     selCon_p = rvc_mod(*params_p, stimCo)
     if lgnConType == 1: # DEFAULT
       # -- then here's our final responses per component for the current stimulus
       # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
-      lgnSel = mWt*selSf_m[-1]*selCon_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
+      lgnSel = mWt*selSf_m*selCon_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
     elif lgnConType == 2 or lgnConType == 3:
       # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
       if lgnConType == 2:
@@ -816,9 +819,26 @@ for i,lgnType,lgnConType,mWt in zip(modFits, lgnTypes, conTypes, [mWt_A, mWt_B])
       elif lgnConType == 3:
         avgWt = mWt; # here, it's equal to mWt
       selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
-      lgnSel = mWt*selSf_m[-1]*selCon_avg[-1] + (1-mWt)*selSf_p*selCon_avg[-1];
+      lgnSel = mWt*selSf_m*selCon_avg[-1] + (1-mWt)*selSf_p*selCon_avg[-1];
     withLGN = s*lgnSel;
     sfExcLGN = withLGN/np.max(withLGN);
+
+    # plot LGN front-end, if we're here
+    curr_ax = plt.subplot2grid(detailSize, (1+pltNum, 0));
+    plt.semilogx(omega, selSf_m, label='magno', color='r', linestyle='--');
+    plt.semilogx(omega, selSf_p, label='parvo', color='b', linestyle='--');
+    max_joint = np.max(lgnSel);
+    plt.semilogx(omega, np.divide(lgnSel, max_joint), label='joint - 100% contrast', color='k');
+    conMatch = 0.20
+    conValInd = np.argmin(np.square(stimCo-conMatch));
+    if lgnConType == 1:
+      jointAtLowCon = mWt*selSf_m*selCon_m[conValInd] + (1-mWt)*selSf_p*selCon_p[conValInd];
+    elif lgnConType == 2 or lgnConType == 3:
+      jointAtLowCon = mWt*selSf_m*selCon_avg[conValInd] + (1-mWt)*selSf_p*selCon_avg[conValInd];
+    plt.semilogx(omega, np.divide(jointAtLowCon, max_joint), label='joint - %d%% contrast' % (100*conMatch), color='k', alpha=0.3);
+    plt.title('lgn %s' % modLabels[pltNum]);
+    plt.legend();
+    plt.xlim([1e-1, 1e1]);
 
   sfExcRaw.append(sfExcV1);
   sfExc.append(sfExcLGN);
@@ -906,9 +926,43 @@ plt.title('v-- raw weights/filters --v');
 plt.xlabel('spatial frequency (c/deg)', fontsize=12);
 plt.ylabel('Normalized response (a.u.)', fontsize=12);
 
+# Now, plot the full denominator (including the constant term) at a few contrasts
+# --- use the debug flag to get the tuned component of the gain control as computed in the full model
+curr_ax = plt.subplot2grid(detailSize, (1, 2));
+modRespsDebug = [mod.forward(dw.trInf, respMeasure=respMeasure, debug=1) for mod in [model_A, model_B]];
+modA_norm, modA_sigma = [modRespsDebug[0][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
+modB_norm, modB_sigma = [modRespsDebug[1][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
+# --- then, simply mirror the calculation as done in the full model
+full_denoms = [np.power(sigmaFilt + np.power(norm, 2), 0.5) for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
+# --- use hf.get_valid_trials to get high/low con, single gratings
+disp = 0;
+v_cons = np.array(val_con_by_disp[disp]);
+conVals = [0.10, 0.33, 1]; # try to get the normResp at these contrast values
+modTrials = dw.trInf['num']; # these are the trials eval. by the model
+# then, let's go through for the above contrasts and get the in-model response
+for cI, conVal in enumerate(conVals):
+  closest_ind = np.argmin(np.abs(conVal - all_cons[v_cons]));
+  close_enough = np.abs(all_cons[v_cons[closest_ind]] - conVal) < 0.03 # must be within 3% contrast
+  if close_enough:
+    valSfInds = hf.get_valid_sfs(None, disp, v_cons[closest_ind], expInd, stimVals, validByStimVal);
+    # highest contrast, first
+    all_trials = [hf.get_valid_trials(expData, disp, v_cons[closest_ind], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in valSfInds];
+    # then, find which corresponding index into model-eval-only trials this is
+    all_trials_modInd = [np.intersect1d(modTrials, trs, return_indices=True)[1] for trs in all_trials];
+    modA_resps = [np.mean(full_denoms[0][trs]) for trs in all_trials_modInd];
+    modB_resps = [np.mean(full_denoms[1][trs]) for trs in all_trials_modInd];
+    sf_vals = all_sfs[valSfInds];
+    [plt.semilogx(sf_vals, denom, alpha=conVal, color=clr) for clr,denom in zip(modColors, [modA_resps, modB_resps])]
+    plt.title('Normalization term by contrast, model');
+# plot just the constant term (i.e. if there is NO g.c. pooled response)
+sf_vals = all_sfs[valSfInds];
+onlySigma = [np.power(sigmaFilt + np.power(0, 2), 0.5) for sigmaFilt in [modA_sigma, modB_sigma]];
+[plt.plot(xCoord*sf_vals[-1], sig, color=clr, marker='<') for xCoord,sig,clr in zip([1.1, 1.2], onlySigma, modColors)]
+plt.xlim([1e-1, 1e1]);
+
 # last but not least...and not last... response nonlinearity
 modExps = [x[3] for x in modFits];
-curr_ax = plt.subplot2grid(detailSize, (1, 2));
+curr_ax = plt.subplot2grid(detailSize, (0, 2));
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset=5);
 plt.plot([-1, 1], [0, 0], 'k--')

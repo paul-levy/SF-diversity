@@ -127,9 +127,9 @@ if excType == 1:
   #fitBase = 'fitList_pyt_201017'; # excType 1
 elif excType == 2:
   #fitBase = 'fitList_pyt_200507'; # excType 2
-  #fitBase = 'fitList_pyt_201107'; # excType 2
   #fitBase = 'fitList_pyt_210121'; # excType 2
-  fitBase = 'fitList_pyt_210206'; # excType 2
+  #fitBase = 'fitList_pyt_210206'; # excType 2
+  fitBase = 'fitList_pyt_210222'; # excType 2
 else:
   fitBase = None;
 
@@ -169,6 +169,7 @@ if fitBase is not None:
   modFit_B_dc = fitListB[cellNum-1][dc_str]['params'];
   modFit_A_f1 = fitListA[cellNum-1][f1_str]['params'];
   modFit_B_f1 = fitListB[cellNum-1][f1_str]['params'];
+  lossVals = [[x[cellNum-1][y]['NLL'] for x in [fitListA, fitListB]] for y in [dc_str, f1_str]]
 
   normTypes = [normA, normB]; # weighted, then flat
   lgnTypes = [lgnA, lgnB];
@@ -210,7 +211,7 @@ if not os.path.exists(save_loc):
 
 conDig = 3; # round contrast to the 3rd digit
 
-dataList = hf.np_smart_load(data_loc + 'dataList.npy')
+dataList = hf.np_smart_load(data_loc + expName)
 
 if fix_ylim == 1:
     ylim_flag = '_fixed';
@@ -307,7 +308,10 @@ refF1_rvc = refF1[:, prefSf_ind, :];
 # set up model plot info
 # i.e. flat model is red, weighted model is green
 modColors = ['g', 'r']
-modLabels = ['A: %s' % modA_str, 'B: %s' % modB_str]
+try:
+  modLabels = ['A: %s' % modA_str, 'B: %s' % modB_str]
+except:
+  modLabels = None
 
 nrow, ncol = 5, 4;
 f, ax = plt.subplots(nrows=nrow, ncols=ncol, figsize=(ncol*15, nrow*15))
@@ -412,7 +416,7 @@ for measure in [0,1]:
             ax[0, measure].axvline(np.mean(baseOnly), linestyle='--', color='k',label='data mean')
             ax[0, measure].axvline(mod_mean_A, linestyle='--', color=modColors[0], label='%s mean' % modLabels[0])
             ax[0, measure].axvline(mod_mean_B, linestyle='--', color=modColors[1], label='%s mean' % modLabels[1])
-        ax[0, measure].legend(fontsize='small');
+        ax[0, measure].legend(fontsize='large');
 
     # SF tuning with contrast
     resps = [maskOnly, data, data_baseTf]; #need to plot data_baseTf for f1
@@ -506,7 +510,7 @@ for measure in [0,1]:
       ax[4, 1+2*measure].set_yscale('symlog');
       ax[4, 1+2*measure].set_xlabel('Optimization epoch');
       ax[4, 1+2*measure].set_ylabel('Loss');
-      ax[4, 1+2*measure].set_title('Optimization progress (%s)' % lbl)
+      ax[4, 1+2*measure].set_title('Optimization (%s): %.2f|%.2f' % (lbl, *lossVals[measure]), fontsize='x-large')
     except:
       ax[4, 1+2*measure].axis('off');
 
@@ -695,123 +699,6 @@ if fitBase is not None: # then we can plot some model details
   # at end, make tight layout
   fDetails.tight_layout(pad=0.05)
 
-  '''
-
-  # plot model details - exc/suppressive components
-  omega = np.logspace(-2, 2, 1000);
-  sfExc = [];
-  for i in modFits:
-    prefSf = i[0];
-
-    if excType == 1:
-      ### deriv. gauss
-      dOrder = i[1];
-      sfRel = omega/prefSf;
-      s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
-      sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
-      sfExcCurr = s/sMax;
-    if excType == 2:
-      ### flex. gauss
-      sigLow = i[1];
-      sigHigh = i[-1];
-      sfRel = np.divide(omega, prefSf);
-      # - set the sigma appropriately, depending on what the stimulus SF is
-      sigma = np.multiply(sigLow, [1]*len(sfRel));
-      sigma[[x for x in range(len(sfRel)) if sfRel[x] > 1]] = sigHigh;
-      # - now, compute the responses (automatically normalized, since max gaussian value is 1...)
-      s     = [np.exp(-np.divide(np.square(np.log(x)), 2*np.square(y))) for x,y in zip(sfRel, sigma)];
-      sfExcCurr = s; 
-
-    sfExc.append(sfExcCurr);
-
-  inhSfTuning = hf.getSuppressiveSFtuning();
-
-  # Compute weights for suppressive signals
-  nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
-  nTrials =  inhSfTuning.shape[0];
-  inhWeight = hf.genNormWeights(expData, nInhChan, gs_mean, gs_std, nTrials, expInd);
-  inhWeight = inhWeight[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
-  # first, tuned norm:
-  sfNormTune = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
-  sfNormTune = sfNormTune/np.amax(np.abs(sfNormTune));
-  # then, untuned norm:
-  inhAsym = 0;
-  inhWeight = [];
-  for iP in range(len(nInhChan)):
-      inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
-  sfNorm = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
-  sfNorm = sfNorm/np.amax(np.abs(sfNorm));
-  sfNorms = [sfNorm, sfNormTune];
-
-  # just setting up lines
-  curr_ax = plt.subplot2grid(detailSize, (1, 1));
-  # Remove top/right axis, put ticks only on bottom/left
-  sns.despine(ax=curr_ax, offset=5);
-  plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
-  plt.semilogx([.01, .01], [-1.5, 1], 'k--')
-  plt.semilogx([.1, .1], [-1.5, 1], 'k--')
-  plt.semilogx([1, 1], [-1.5, 1], 'k--')
-  plt.semilogx([10, 10], [-1.5, 1], 'k--')
-  plt.semilogx([100, 100], [-1.5, 1], 'k--')
-  # now the real stuff
-  [plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
-  [plt.semilogx(omega, -norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNorms, modColors, modLabels)]
-  plt.xlim([omega[0], omega[-1]]);
-  plt.ylim([-0.1, 1.1]);
-  plt.xlabel('spatial frequency (c/deg)', fontsize=12);
-  plt.ylabel('Normalized response (a.u.)', fontsize=12);
-
-  # SIMPLE normalization
-  curr_ax = plt.subplot2grid(detailSize, (2, 1));
-  # Remove top/right axis, put ticks only on bottom/left
-  sns.despine(ax=curr_ax, offset=5);
-  plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
-  plt.semilogx([.01, .01], [-1.5, 1], 'k--')
-  plt.semilogx([.1, .1], [-1.5, 1], 'k--')
-  plt.semilogx([1, 1], [-1.5, 1], 'k--')
-  plt.semilogx([10, 10], [-1.5, 1], 'k--')
-  plt.semilogx([100, 100], [-1.5, 1], 'k--')
-  # now the real stuff
-  unwt_weights = np.sqrt(hf.genNormWeightsSimple(omega, None, None));
-  sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
-  wt_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
-  sfNormTuneSim = wt_weights/np.amax(np.abs(wt_weights));
-  sfNormsSimple = [sfNormSim, sfNormTuneSim]
-  [plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
-  [plt.semilogx(omega, norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
-  plt.xlim([omega[0], omega[-1]]);
-  plt.ylim([-0.1, 1.1]);
-  plt.xlabel('spatial frequency (c/deg)', fontsize=12);
-  plt.ylabel('Normalized response (a.u.)', fontsize=12);
-
-  # last but not least...and not last... response nonlinearity
-  modExps = [x[3] for x in modFits];
-  curr_ax = plt.subplot2grid(detailSize, (1, 2));
-  # Remove top/right axis, put ticks only on bottom/left
-  sns.despine(ax=curr_ax, offset=5);
-  plt.plot([-1, 1], [0, 0], 'k--')
-  plt.plot([0, 0], [-.1, 1], 'k--')
-  [plt.plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modExp), '%s-' % cc, label=s, linewidth=2) for modExp,cc,s in zip(modExps, modColors, modLabels)]
-  plt.plot(np.linspace(-1,1,100), np.maximum(0, np.linspace(-1,1,100)), 'k--', linewidth=1)
-  plt.xlim([-1, 1]);
-  plt.ylim([-.1, 1]);
-  plt.text(0.5, 1.1, 'respExp: %.2f, %.2f' % (modExps[0], modExps[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-
-  # print, in text, model parameters:
-  curr_ax = plt.subplot2grid(detailSize, (0, 4));
-  plt.text(0.5, 0.5, 'prefSf: %.3f, %.3f' % (modFits[0][0], modFits[1][0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-  if excType == 1:
-    plt.text(0.5, 0.4, 'derivative order: %.3f, %.3f' % (modFits[0][1], modFits[1][1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-  elif excType == 2:
-    plt.text(0.5, 0.4, 'sig: %.2f|%.2f, %.2f|%.2f' % (modFits[0][1], modFits[0][-1], modFits[1][1], modFits[1][-1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-  plt.text(0.5, 0.3, 'response scalar: %.3f, %.3f' % (modFits[0][4], modFits[1][4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-  plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, modFits[0][2]), np.power(10, modFits[1][2]), modFits[0][2], modFits[1][2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-
-  # Now, space out the subplots...
-  #f.tight_layout(pad=0.1)
-  fDetails.tight_layout(pad=0.1)
-
-  '''
 else:
   fDetails = None
   print('here');
@@ -836,253 +723,250 @@ pdfSv.close()
 #######################
 ## var* (if applicable)
 #######################
+# Do this only if we are't plotting model fits
+### --- TODO: Must make fits to sfBB_var* expts...
+if fitBase is None:
 
-'''
+  # first, load the sfBB_core experiment to get reference tuning
+  expInfo_base = cell['sfBB_core']
+  f1f0_rat = hf_sf.compute_f1f0(expInfo_base)[0];
 
-### TODO: Must make fits to sfBB_var* expts...
+  maskSf_ref, maskCon_ref = expInfo_base['maskSF'], expInfo_base['maskCon'];
+  refDC, refF1 = hf_sf.get_mask_resp(expInfo_base, withBase=0);
+  # - get DC tuning curves
+  refDC_sf = refDC[-1, :, :];
+  prefSf_ind = np.argmax(refDC_sf[:, 0]);
+  prefSf_DC = maskSf_ref[prefSf_ind];
+  refDC_rvc = refDC[:, prefSf_ind, :];
+  # - get F1 tuning curves
+  refF1_sf = refF1[-1, :, :];
+  prefSf_ind = np.argmax(refF1_sf[:, 0]);
+  prefSf_F1 = maskSf_ref[prefSf_ind];
+  refF1_rvc = refF1[:, prefSf_ind, :];
 
-# first, load the sfBB_core experiment to get reference tuning
-expInfo_base = cell['sfBB_core']
-f1f0_rat = hf_sf.compute_f1f0(expInfo_base)[0];
+  # now, find out which - if any - varExpts exist
+  allKeys = list(cell.keys())
+  whichVar = np.where(['var' in x for x in allKeys])[0];
 
-maskSf_ref, maskCon_ref = expInfo_base['maskSF'], expInfo_base['maskCon'];
-refDC, refF1 = hf_sf.get_mask_resp(expInfo_base, withBase=0);
-# - get DC tuning curves
-refDC_sf = refDC[-1, :, :];
-prefSf_ind = np.argmax(refDC_sf[:, 0]);
-prefSf_DC = maskSf_ref[prefSf_ind];
-refDC_rvc = refDC[:, prefSf_ind, :];
-# - get F1 tuning curves
-refF1_sf = refF1[-1, :, :];
-prefSf_ind = np.argmax(refF1_sf[:, 0]);
-prefSf_F1 = maskSf_ref[prefSf_ind];
-refF1_rvc = refF1[:, prefSf_ind, :];
+  for wV in whichVar: # if len(whichVar) == 0, nothing will happen
+      expName = allKeys[wV];
 
-# now, find out which - if any - varExpts exist
-allKeys = list(cell.keys())
-whichVar = np.where(['var' in x for x in allKeys])[0];
+      if 'Size' in expName:
+          continue; # we don't have an analysis for this yet
 
-for wV in whichVar: # if len(whichVar) == 0, nothing will happen
-    expName = allKeys[wV];
+      expInfo = cell[expName]
+      byTrial = expInfo['trial'];
 
-    if 'Size' in expName:
-        continue; # we don't have an analysis for this yet
+      ## base information/responses
+      baseOnlyTr = np.logical_and(byTrial['baseOn'], ~byTrial['maskOn'])
+      respDistr, _, unique_pairs = hf_sf.get_baseOnly_resp(expInfo);
+      # now get the mask+base response (f1 at base TF)
+      respMatrixDC, respMatrixF1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0); # i.e. get the base response
+      # and get the mask only response (f1 at mask TF)
+      respMatrixDC_onlyMask, respMatrixF1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1); # i.e. get the maskONLY response
+      # and get the mask+base response (but f1 at mask TF)
+      _, respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1); # i.e. get the maskONLY response
+      ## mask Con/SF values
+      # - note that we round the contrast values, since the calculation of mask contrast with different 
+      #   base contrasts can leave slight differences -- all much less than the conDig we round to.
+      maskCon, maskSf = np.unique(np.round(expInfo['maskCon'], conDig)), expInfo['maskSF'];
 
-    expInfo = cell[expName]
-    byTrial = expInfo['trial'];
+      # what's the maximum response value?
+      maxResp = np.maximum(np.nanmax(respMatrixDC), np.nanmax(respMatrixF1));
+      maxResp_onlyMask = np.maximum(np.nanmax(respMatrixDC_onlyMask), np.nanmax(respMatrixF1_onlyMask));
+      maxResp_total = np.maximum(maxResp, maxResp_onlyMask);
+      overall_ylim = [0, 1.2*maxResp_total];
+      # - also make the limits to be consistent across all base conditions for the AbLe plot
+      dc_meanPerBase = [np.mean(x) for x in respDistr[0]];
+      f1_meanPerBase = [np.mean(x) for x in respDistr[1]];
+      AbLe_mn = 100; AbLe_mx = -100; # dummy values to be overwitten
+      for ii in np.arange(len(dc_meanPerBase)):
+          # only DC matters for AbLe...
+          curr_min = np.nanmin(respMatrixDC[ii][:,:,0]-dc_meanPerBase[ii]-respMatrixDC_onlyMask[:,:,0])
+          curr_max = np.nanmax(respMatrixDC[ii][:,:,0]-dc_meanPerBase[ii]-respMatrixDC_onlyMask[:,:,0])
+          if curr_min < AbLe_mn:
+              AbLe_mn = curr_min;
+          if curr_max > AbLe_mx:
+              AbLe_mx = curr_max;
+      AbLe_bounds = [np.sign(AbLe_mn)*1.2*np.abs(AbLe_mn), np.maximum(5, 1.2*AbLe_mx)]; # ensure we always go at least above 0
 
-    ## base information/responses
-    baseOnlyTr = np.logical_and(byTrial['baseOn'], ~byTrial['maskOn'])
-    respDistr, _, unique_pairs = hf_sf.get_baseOnly_resp(expInfo);
-    # now get the mask+base response (f1 at base TF)
-    respMatrixDC, respMatrixF1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0); # i.e. get the base response
-    # and get the mask only response (f1 at mask TF)
-    respMatrixDC_onlyMask, respMatrixF1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1); # i.e. get the maskONLY response
-    # and get the mask+base response (but f1 at mask TF)
-    _, respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1); # i.e. get the maskONLY response
-    ## mask Con/SF values
-    # - note that we round the contrast values, since the calculation of mask contrast with different 
-    #   base contrasts can leave slight differences -- all much less than the conDig we round to.
-    maskCon, maskSf = np.unique(np.round(expInfo['maskCon'], conDig)), expInfo['maskSF'];
+      for (ii, up), respDC, respF1, respF1_maskTf in zip(enumerate(unique_pairs), respMatrixDC, respMatrixF1, respMatrixF1_maskTf):
 
-    # what's the maximum response value?
-    maxResp = np.maximum(np.nanmax(respMatrixDC), np.nanmax(respMatrixF1));
-    maxResp_onlyMask = np.maximum(np.nanmax(respMatrixDC_onlyMask), np.nanmax(respMatrixF1_onlyMask));
-    maxResp_total = np.maximum(maxResp, maxResp_onlyMask);
-    overall_ylim = [0, 1.2*maxResp_total];
-    # - also make the limits to be consistent across all base conditions for the AbLe plot
-    dc_meanPerBase = [np.mean(x) for x in respDistr[0]];
-    f1_meanPerBase = [np.mean(x) for x in respDistr[1]];
-    AbLe_mn = 100; AbLe_mx = -100; # dummy values to be overwitten
-    for ii in np.arange(len(dc_meanPerBase)):
-        # only DC matters for AbLe...
-        curr_min = np.nanmin(respMatrixDC[ii][:,:,0]-dc_meanPerBase[ii]-respMatrixDC_onlyMask[:,:,0])
-        curr_max = np.nanmax(respMatrixDC[ii][:,:,0]-dc_meanPerBase[ii]-respMatrixDC_onlyMask[:,:,0])
-        if curr_min < AbLe_mn:
-            AbLe_mn = curr_min;
-        if curr_max > AbLe_mx:
-            AbLe_mx = curr_max;
-    AbLe_bounds = [np.sign(AbLe_mn)*1.2*np.abs(AbLe_mn), np.maximum(5, 1.2*AbLe_mx)]; # ensure we always go at least above 0
+          # we have the unique pairs, now cycle through and do the same thing here we did with the other base stimulus....
+          baseSf_curr, baseCon_curr = up;
+          baseOnly_curr = np.logical_and(baseOnlyTr, np.logical_and(byTrial['sf'][1,:]==baseSf_curr,
+                                                                   byTrial['con'][1,:]==baseCon_curr))
+          baseDC, baseF1 = respDistr[0][ii], respDistr[1][ii];
 
-    for (ii, up), respDC, respF1, respF1_maskTf in zip(enumerate(unique_pairs), respMatrixDC, respMatrixF1, respMatrixF1_maskTf):
+          ### Now, plot
+          nrow, ncol = 5, 4;
+          f, ax = plt.subplots(nrows=nrow, ncols=ncol, figsize=(ncol*12, nrow*12))
 
-        # we have the unique pairs, now cycle through and do the same thing here we did with the other base stimulus....
-        baseSf_curr, baseCon_curr = up;
-        baseOnly_curr = np.logical_and(baseOnlyTr, np.logical_and(byTrial['sf'][1,:]==baseSf_curr,
-                                                                 byTrial['con'][1,:]==baseCon_curr))
-        baseDC, baseF1 = respDistr[0][ii], respDistr[1][ii];
+          f.suptitle('V1 #%d [%s, %.2f] base: %.2f cpd, %.2f%%' % (cellNum, unitNm, f1f0_rat, baseSf_curr, baseCon_curr));            
 
-        ### Now, plot
-        nrow, ncol = 5, 4;
-        f, ax = plt.subplots(nrows=nrow, ncols=ncol, figsize=(ncol*12, nrow*12))
+          for measure in [0,1]:
+              if measure == 0:
+                  baseline = expInfo['blank']['mean'];
+                  data = respDC;
+                  maskOnly = respMatrixDC_onlyMask;
+                  baseOnly = baseDC
+                  refAll = refDC[:,:,0];
+                  refSf = refDC_sf;
+                  refRVC = refDC_rvc;
+                  refSf_pref = prefSf_DC;
+                  if baselineSub:
+                      data -= baseline
+                      baseOnly -= baseline;
+                  xlim_base = overall_ylim;
+                  ylim_diffsAbLe = AbLe_bounds;
+                  lbl = 'DC'
+              elif measure == 1:
+                  data = respF1_maskTf # mask+base, at mask TF
+                  data_baseTf = respF1; # mask+base, but at base TF
+                  maskOnly = respMatrixF1_onlyMask;
+                  baseOnly = baseF1;
+                  refAll = refF1[:,:,0];
+                  refSf = refF1_sf;
+                  refRVC = refF1_rvc;
+                  refSf_pref = prefSf_F1;
+                  xlim_base = overall_ylim;
+                  lbl = 'F1'
 
-        f.suptitle('V1 #%d [%s, %.2f] base: %.2f cpd, %.2f%%' % (cellNum, unitNm, f1f0_rat, baseSf_curr, baseCon_curr));            
+              data_sub = np.copy(data);
+              data_sub[:,:,0] = data[:,:,0]-np.mean(baseOnly);
 
-        for measure in [0,1]:
-            if measure == 0:
-                baseline = expInfo['blank']['mean'];
-                data = respDC;
-                maskOnly = respMatrixDC_onlyMask;
-                baseOnly = baseDC
-                refAll = refDC[:,:,0];
-                refSf = refDC_sf;
-                refRVC = refDC_rvc;
-                refSf_pref = prefSf_DC;
-                if baselineSub:
-                    data -= baseline
-                    baseOnly -= baseline;
-                xlim_base = overall_ylim;
-                ylim_diffsAbLe = AbLe_bounds;
-                lbl = 'DC'
-            elif measure == 1:
-                data = respF1_maskTf # mask+base, at mask TF
-                data_baseTf = respF1; # mask+base, but at base TF
-                maskOnly = respMatrixF1_onlyMask;
-                baseOnly = baseF1;
-                refAll = refF1[:,:,0];
-                refSf = refF1_sf;
-                refRVC = refF1_rvc;
-                refSf_pref = prefSf_F1;
-                xlim_base = overall_ylim;
-                lbl = 'F1'
+              ### first, just the distribution of base responses
+              ax[0, measure] = plt.subplot(nrow, 2, 1+measure); # pretend there are only 2 columns
 
-            data_sub = np.copy(data);
-            data_sub[:,:,0] = data[:,:,0]-np.mean(baseOnly);
+              sns.distplot(baseOnly, ax=ax[0, measure], kde=False);
+              base_mn, base_sem = np.mean(baseOnly), np.std(baseOnly)/np.sqrt(len(baseOnly));
 
-            ### first, just the distribution of base responses
-            ax[0, measure] = plt.subplot(nrow, 2, 1+measure); # pretend there are only 2 columns
+              ax[0, measure].set_xlim(xlim_base)
+              ax[0, measure].set_title('[%s] mn|sem = %.2f|%.2f' % (lbl, base_mn, base_sem))
+              if measure == 0:
+                  ax[0, measure].axvline(baseline, linestyle='--', color='r')
 
-            sns.distplot(baseOnly, ax=ax[0, measure], kde=False);
-            base_mn, base_sem = np.mean(baseOnly), np.std(baseOnly)/np.sqrt(len(baseOnly));
+              # SF tuning with contrast
+              resps = [maskOnly, data, data_baseTf]; #need to plot data_baseTf for f1
+              labels = ['mask', 'mask+base', 'mask+base']
+              measure_lbl = np.vstack((['', '', ''], ['', ' (mask TF)', ' (base TF)'])); # specify which TF, if F1 response
+              labels_ref = ['blank', 'base']
+              floors = [baseline, base_mn]; # i.e. the blank response, then the response to the base alone
 
-            ax[0, measure].set_xlim(xlim_base)
-            ax[0, measure].set_title('[%s] mn|sem = %.2f|%.2f' % (lbl, base_mn, base_sem))
-            if measure == 0:
-                ax[0, measure].axvline(baseline, linestyle='--', color='r')
+              #####
 
-            # SF tuning with contrast
-            resps = [maskOnly, data, data_baseTf]; #need to plot data_baseTf for f1
-            labels = ['mask', 'mask+base', 'mask+base']
-            measure_lbl = np.vstack((['', '', ''], ['', ' (mask TF)', ' (base TF)'])); # specify which TF, if F1 response
-            labels_ref = ['blank', 'base']
-            floors = [baseline, base_mn]; # i.e. the blank response, then the response to the base alone
+              # SF across con
+              for ii, rsps in enumerate(resps): # first mask only, then mask+base (data)
+                  nCons = len(maskCon);
+                  # we don't plot the F1 at base TF for DC response...
+                  if measure == 0 and ii == (len(resps)-1):
+                      continue;
 
-            #####
+                  for mcI, mC in enumerate(maskCon):
+                      col = [(nCons-mcI-1)/float(nCons), (nCons-mcI-1)/float(nCons), (nCons-mcI-1)/float(nCons)];
 
-            # SF across con
-            for ii, rsps in enumerate(resps): # first mask only, then mask+base (data)
-                nCons = len(maskCon);
-                # we don't plot the F1 at base TF for DC response...
-                if measure == 0 and ii == (len(resps)-1):
-                    continue;
+                      curr_line = ax[1+ii, 2*measure].errorbar(maskSf, rsps[mcI,:,0], rsps[mcI,:,1], marker='o', 
+                                                          color=col, label=str(np.round(mC, 2)) + '%')
+                  ax[1+ii, 2*measure].set_xscale('log');
+                  ax[1+ii, 2*measure].set_xlabel('SF (c/deg)')
+                  ax[1+ii, 2*measure].set_ylabel('Response (spks/s) [%s]' % lbl)
+                  ax[1+ii, 2*measure].set_title(labels[ii] + measure_lbl[measure, ii]);
+                  ax[1+ii, 2*measure].set_ylim(overall_ylim);
+                  if measure == 0: # only do the blank response for DC
+                      ax[1+ii, 2*measure].axhline(baseline, linestyle='--', color='r', label=labels_ref[0])
+                  # i.e. always put the baseOnly reference line...
+                  ax[1+ii, 2*measure].axhline(base_mn, linestyle='--', color='b', label=labels_ref[1])
+                  ax[1+ii, 2*measure].legend();
 
-                for mcI, mC in enumerate(maskCon):
-                    col = [(nCons-mcI-1)/float(nCons), (nCons-mcI-1)/float(nCons), (nCons-mcI-1)/float(nCons)];
+              # RVC across SF
+              for ii, rsps in enumerate(resps): # first mask only, then mask+base (data)
+                  nSfs = len(maskSf);
 
-                    curr_line = ax[1+ii, 2*measure].errorbar(maskSf, rsps[mcI,:,0], rsps[mcI,:,1], marker='o', 
-                                                        color=col, label=str(np.round(mC, 2)) + '%')
-                ax[1+ii, 2*measure].set_xscale('log');
-                ax[1+ii, 2*measure].set_xlabel('SF (c/deg)')
-                ax[1+ii, 2*measure].set_ylabel('Response (spks/s) [%s]' % lbl)
-                ax[1+ii, 2*measure].set_title(labels[ii] + measure_lbl[measure, ii]);
-                ax[1+ii, 2*measure].set_ylim(overall_ylim);
-                if measure == 0: # only do the blank response for DC
-                    ax[1+ii, 2*measure].axhline(baseline, linestyle='--', color='r', label=labels_ref[0])
-                # i.e. always put the baseOnly reference line...
-                ax[1+ii, 2*measure].axhline(base_mn, linestyle='--', color='b', label=labels_ref[1])
-                ax[1+ii, 2*measure].legend();
+                  # we don't plot the F1 at base TF for DC response...
+                  if measure == 0 and ii == (len(resps)-1):
+                      continue;
 
-            # RVC across SF
-            for ii, rsps in enumerate(resps): # first mask only, then mask+base (data)
-                nSfs = len(maskSf);
+                  for msI, mS in enumerate(maskSf):
 
-                # we don't plot the F1 at base TF for DC response...
-                if measure == 0 and ii == (len(resps)-1):
-                    continue;
+                      col = [(nSfs-msI-1)/float(nSfs), (nSfs-msI-1)/float(nSfs), (nSfs-msI-1)/float(nSfs)];
 
-                for msI, mS in enumerate(maskSf):
+                      curr_line = ax[1+ii, 1+2*measure].errorbar(maskCon, rsps[:,msI,0], rsps[:,msI,1], marker='o', 
+                                                          color=col, label=str(np.round(mS, 2)) + ' cpd')
+                  ax[1+ii, 1+2*measure].set_xscale('log');
+                  ax[1+ii, 1+2*measure].set_xlabel('Contrast (%)')
+                  ax[1+ii, 1+2*measure].set_ylabel('Response (spks/s) [%s]' % lbl)
+                  ax[1+ii, 1+2*measure].set_title(labels[ii] + measure_lbl[measure, ii])
+                  ax[1+ii, 1+2*measure].set_ylim(overall_ylim);
+                  if measure == 0: # only do the blank response for DC
+                      ax[1+ii, 1+2*measure].axhline(floors[0], linestyle='--', color='r', label=labels_ref[0])
+                  # i.e. always put the baseOnly reference line...
+                  ax[1+ii, 1+2*measure].axhline(floors[1], linestyle='--', color='b', label=labels_ref[1])
+                  ax[1+ii, 1+2*measure].legend(fontsize='small');
 
-                    col = [(nSfs-msI-1)/float(nSfs), (nSfs-msI-1)/float(nSfs), (nSfs-msI-1)/float(nSfs)];
+              ### joint tuning
+              ax[4, measure] = plt.subplot(nrow, 2, 2*nrow-1+measure); # pretend there are only 2 columns
 
-                    curr_line = ax[1+ii, 1+2*measure].errorbar(maskCon, rsps[:,msI,0], rsps[:,msI,1], marker='o', 
-                                                        color=col, label=str(np.round(mS, 2)) + ' cpd')
-                ax[1+ii, 1+2*measure].set_xscale('log');
-                ax[1+ii, 1+2*measure].set_xlabel('Contrast (%)')
-                ax[1+ii, 1+2*measure].set_ylabel('Response (spks/s) [%s]' % lbl)
-                ax[1+ii, 1+2*measure].set_title(labels[ii] + measure_lbl[measure, ii])
-                ax[1+ii, 1+2*measure].set_ylim(overall_ylim);
-                if measure == 0: # only do the blank response for DC
-                    ax[1+ii, 1+2*measure].axhline(floors[0], linestyle='--', color='r', label=labels_ref[0])
-                # i.e. always put the baseOnly reference line...
-                ax[1+ii, 1+2*measure].axhline(floors[1], linestyle='--', color='b', label=labels_ref[1])
-                ax[1+ii, 1+2*measure].legend(fontsize='small');
+              ax[4, measure].contourf(maskSf_ref, maskCon_ref, refAll);
+              ax[4, measure].set_xlabel('Spatial frequency (c/deg)');
+              ax[4, measure].set_ylabel('Contrast (%)');
+              ax[4, measure].set_xscale('log');
+              ax[4, measure].set_yscale('log');
+              ax[4, measure].set_title('Joint REF tuning (%s)' % lbl)
 
-            ### joint tuning
-            ax[4, measure] = plt.subplot(nrow, 2, 2*nrow-1+measure); # pretend there are only 2 columns
+              # SF tuning with contrast [rows 1-4, column 1 (& 3)]
+              lines = []; linesNorm = []; linesAbLe = [];
+              nCons = len(maskCon);
+              for mcI, mC in enumerate(maskCon):
+                  col = [(nCons-mcI-1)/float(nCons), (nCons-mcI-1)/float(nCons), (nCons-mcI-1)/float(nCons)];
 
-            ax[4, measure].contourf(maskSf_ref, maskCon_ref, refAll);
-            ax[4, measure].set_xlabel('Spatial frequency (c/deg)');
-            ax[4, measure].set_ylabel('Contrast (%)');
-            ax[4, measure].set_xscale('log');
-            ax[4, measure].set_yscale('log');
-            ax[4, measure].set_title('Joint REF tuning (%s)' % lbl)
+                  if measure == 0:
+                      curr_line = ax[3, 2*measure].errorbar(maskSf, data_sub[mcI,:,0]-maskOnly[mcI,:,0], data_sub[mcI,:,1],
+                                                            marker='o', color=col, label=str(np.round(mC, 2)) + '%')
+                      linesAbLe.append(curr_line);
+                      ax[3, 2*measure].set_ylim(ylim_diffsAbLe);
 
-            # SF tuning with contrast [rows 1-4, column 1 (& 3)]
-            lines = []; linesNorm = []; linesAbLe = [];
-            nCons = len(maskCon);
-            for mcI, mC in enumerate(maskCon):
-                col = [(nCons-mcI-1)/float(nCons), (nCons-mcI-1)/float(nCons), (nCons-mcI-1)/float(nCons)];
+              ylim_diffs = [ylim_diffsAbLe];
+              diff_endings = [' - R(m))'];
+              for (j,ylim),txt in zip(enumerate(ylim_diffs), diff_endings):
+                  ax[3+j, 2*measure].set_xscale('log');
+                  ax[3+j, 2*measure].set_xlabel('SF (c/deg)')
+                  ax[3+j, 2*measure].set_ylabel('Difference (R(m+b) - R(b)%s (spks/s) [%s]' % (txt,lbl))
+                  if measure==1: # Abramov/Levine sub. -- only DC has this analysis
+                      pass;
+                  else:
+                      ax[3+j, 2*measure].axhline(0, color='k', linestyle='--')
+                  ax[3+j, 2*measure].legend();
 
-                if measure == 0:
-                    curr_line = ax[3, 2*measure].errorbar(maskSf, data_sub[mcI,:,0]-maskOnly[mcI,:,0], data_sub[mcI,:,1],
-                                                          marker='o', color=col, label=str(np.round(mC, 2)) + '%')
-                    linesAbLe.append(curr_line);
-                    ax[3, 2*measure].set_ylim(ylim_diffsAbLe);
+              # RVC across SF [rows 1-4, column 2 (& 4)]
+              lines = []; linesNorm = []; linesAbLe = [];
+              nSfs = len(maskSf);
+              for msI, mS in enumerate(maskSf):
+                  col = [(nSfs-msI-1)/float(nSfs), (nSfs-msI-1)/float(nSfs), (nSfs-msI-1)/float(nSfs)];
 
-            ylim_diffs = [ylim_diffsAbLe];
-            diff_endings = [' - R(m))'];
-            for (j,ylim),txt in zip(enumerate(ylim_diffs), diff_endings):
-                ax[3+j, 2*measure].set_xscale('log');
-                ax[3+j, 2*measure].set_xlabel('SF (c/deg)')
-                ax[3+j, 2*measure].set_ylabel('Difference (R(m+b) - R(b)%s (spks/s) [%s]' % (txt,lbl))
-                if measure==1: # Abramov/Levine sub. -- only DC has this analysis
-                    pass;
-                else:
-                    ax[3+j, 2*measure].axhline(0, color='k', linestyle='--')
-                ax[3+j, 2*measure].legend();
+                  if measure == 0:
+                      curr_line = ax[3, 1+2*measure].errorbar(maskCon, data_sub[:,msI,0] - maskOnly[:,msI,0], data_sub[:,msI,1],
+                                                              marker='o', color=col, label=str(np.round(mS, 2)) + ' cpd')
+                      linesAbLe.append(curr_line);
+                      ax[3, 1+2*measure].set_ylim(ylim_diffsAbLe)
 
-            # RVC across SF [rows 1-4, column 2 (& 4)]
-            lines = []; linesNorm = []; linesAbLe = [];
-            nSfs = len(maskSf);
-            for msI, mS in enumerate(maskSf):
-                col = [(nSfs-msI-1)/float(nSfs), (nSfs-msI-1)/float(nSfs), (nSfs-msI-1)/float(nSfs)];
+              for (j,ylim),txt in zip(enumerate(ylim_diffs), diff_endings):
+                  ax[3+j, 1+2*measure].set_xscale('log');
+                  ax[3+j, 1+2*measure].set_xlabel('Contrast (%%)')
+                  ax[3+j, 1+2*measure].set_ylabel('Difference (R(m+b) - R(b)%s (spks/s) [%s]' % (txt, lbl))
+                  if measure==1: # Abramov/Levine sub. -- only DC has this analysis
+                      pass;
+                  else:
+                      ax[3+j, 1+2*measure].axhline(0, color='k', linestyle='--')
+                  ax[3+j, 1+2*measure].legend();
 
-                if measure == 0:
-                    curr_line = ax[3, 1+2*measure].errorbar(maskCon, data_sub[:,msI,0] - maskOnly[:,msI,0], data_sub[:,msI,1],
-                                                            marker='o', color=col, label=str(np.round(mS, 2)) + ' cpd')
-                    linesAbLe.append(curr_line);
-                    ax[3, 1+2*measure].set_ylim(ylim_diffsAbLe)
+          sns.despine(offset=10)
+          f.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-            for (j,ylim),txt in zip(enumerate(ylim_diffs), diff_endings):
-                ax[3+j, 1+2*measure].set_xscale('log');
-                ax[3+j, 1+2*measure].set_xlabel('Contrast (%%)')
-                ax[3+j, 1+2*measure].set_ylabel('Difference (R(m+b) - R(b)%s (spks/s) [%s]' % (txt, lbl))
-                if measure==1: # Abramov/Levine sub. -- only DC has this analysis
-                    pass;
-                else:
-                    ax[3+j, 1+2*measure].axhline(0, color='k', linestyle='--')
-                ax[3+j, 1+2*measure].legend();
-
-        sns.despine(offset=10)
-        f.tight_layout(rect=[0, 0.03, 1, 0.95])
-
-        saveName = "/cell_%03d_both_sf%03d_con%03d.pdf" % (cellNum, np.int(100*baseSf_curr), np.int(100*baseCon_curr))
-        full_save = os.path.dirname(str(save_loc + '%s/cell_%03d/' % (expName, cellNum)));
-        if not os.path.exists(full_save):
-            os.makedirs(full_save);
-        pdfSv = pltSave.PdfPages(full_save + saveName);
-        pdfSv.savefig(f)
-        plt.close(f)
-        pdfSv.close()
-
-'''
+          saveName = "/cell_%03d_both_sf%03d_con%03d.pdf" % (cellNum, np.int(100*baseSf_curr), np.int(100*baseCon_curr))
+          full_save = os.path.dirname(str(save_loc + '%s/cell_%03d/' % (expName, cellNum)));
+          if not os.path.exists(full_save):
+              os.makedirs(full_save);
+          pdfSv = pltSave.PdfPages(full_save + saveName);
+          pdfSv.savefig(f)
+          plt.close(f)
+          pdfSv.close()
