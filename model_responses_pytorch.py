@@ -21,7 +21,9 @@ import seaborn as sns
 
 torch.autograd.set_detect_anomaly(True)
 
-# Some global things...
+#########
+### Some global things...
+#########
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
 fall2020_adj = 1; # 210121, 210206
 spring2021_adj = 1; # further adjustment to make scale a sigmoid rather than abs; 210222
@@ -31,6 +33,11 @@ if fall2020_adj:
 else:
   globalMin = 1e-6 # what do we "cut off" the model response at? should be >0 but small
 modRecov = 0;
+# --- for parameters that are transformed with sigmoids, what's the scalar in front of the sigmoid??
+_sigmoidScale = 10
+_sigmoidDord = 5;
+# --- and a flag for whether or not to include the LGN filter for the gain control
+_LGNforNorm = 0;
 
 try:
   cellNum = int(sys.argv[1]);
@@ -348,7 +355,7 @@ class dataWrapper(torchdata.Dataset):
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module()
 
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, device='cpu'):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu'):
 
     super().__init__();
 
@@ -359,6 +366,7 @@ class sfNormMod(torch.nn.Module):
     self.lossType = lossType;
     self.lgnFrontEnd = lgnFrontEnd;
     self.lgnConType = lgnConType;
+    self.applyLGNtoNorm = applyLGNtoNorm; # do we also apply the LGN front-end to the gain control tuning? Default is 1 for backwards compatability, but should be 0 (i.e., DON'T; per Eero, 21.02.26)
     self.device = device;
     self.newMethod = newMethod;
 
@@ -450,6 +458,29 @@ class sfNormMod(torch.nn.Module):
     ### END OF INIT
 
   #######
+  def print_params(self, transformed=1):
+    # return a list of the parameters
+    print('\n********MODEL PARAMETERS********');
+    print('prefSf: %.2f' % self.prefSf.item());
+    if excType == 1:
+      dord = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.dordSp)) if transformed else self.dordSp.item();
+      print('deriv. order: %.2f' % dord);
+    elif excType == 2:
+      print('sigma l|r: %.2f|%.2f' % (self.sigLow.item(), self.sigHigh.item()));
+    if self.lgnFrontEnd > 0:
+      mWt = torch.sigmoid(self.mWeight).item() if transformed else self.mWeight.item();
+      print('mWeight: %.2f' % mWt);
+    scale = torch.mul(_cast_as_tensor(_sigmoidScale), torch.sigmoid(self.scale)).item() if transformed else self.scale.item();
+    print('scalar|early|late: %.2f|%.2f|%.2f' % (scale, self.noiseEarly.item(), self.noiseLate.item()));
+    print('norm. const.: %.2f' % self.sigma.item());
+    if self.normType == 2:
+      normMn = torch.exp(self.gs_mean).item() if transformed else self.gs_mean.item();
+      print('tuned norm mn|std: %.2f|%.2f' % (normMn, self.gs_std.item()));
+    print('still applying the LGN filter for the gain control') if self.applyLGNtoNorm else print('No LGN for GC');
+    print('********END OF MODEL PARAMETERS********\n');
+
+    return None;
+
   def return_params(self):
     # return a list of the parameters
     if self.normType == 1:
@@ -537,8 +568,9 @@ class sfNormMod(torch.nn.Module):
     if self.excType == 1:
       # Compute spatial frequency tuning - Deriv. order Gaussian
       sfRel = torch.div(stimSf, self.prefSf);
-      s     = torch.pow(stimSf, self.dordSp) * torch.exp(-self.dordSp/2 * torch.pow(sfRel, 2));
-      sMax  = torch.pow(self.prefSf, self.dordSp) * torch.exp(-self.dordSp/2);
+      effDord = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.dordSp));
+      s     = torch.pow(stimSf, effDord) * torch.exp(-effDord/2 * torch.pow(sfRel, 2));
+      sMax  = torch.pow(self.prefSf, effDord) * torch.exp(-effDord/2);
       selSf   = torch.div(s, sMax);
     elif self.excType == 2:
       selSf = flexible_Gauss([0,1,self.prefSf,self.sigLow,self.sigHigh], stimSf, minThresh=0);
@@ -620,7 +652,7 @@ class sfNormMod(torch.nn.Module):
 
     # apply LGN stage -
     # -- NOTE: previously, we applied equal M and P weight, since this is across a population of neurons, not just the one one neuron under consideration
-    if self.lgnFrontEnd > 0:
+    if self.lgnFrontEnd > 0 and self.applyLGNtoNorm:
       resps_m = get_descrResp(self.dog_m, sfs, self.LGNmodel, minThresh=globalMin)
       resps_p = get_descrResp(self.dog_p, sfs, self.LGNmodel, minThresh=globalMin)
       # -- make sure we normalize by the true max response:
@@ -708,7 +740,7 @@ class sfNormMod(torch.nn.Module):
     if self.newMethod == 1:
       if fall2020_adj:
         if spring2021_adj:
-          respModel     = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, torch.mul(10*torch.sigmoid(self.scale), ratio))); # why 10 as the scalar? From multiple fits, the value is never over 1 or 2, so 10 gives the parameter enough operating range
+          respModel     = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, torch.mul(torch.mul(_cast_as_tensor(_sigmoidScale), torch.sigmoid(self.scale)), ratio))); # why 10 as the scalar? From multiple fits, the value is never over 1 or 2, so 10 gives the parameter enough operating range
         else:
           respModel     = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, torch.mul(torch.abs(self.scale), ratio)));
       else:
@@ -809,7 +841,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, max_epochs=7500, learning_rate=0.05, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.04ish (on 20.02.06; 0.15 seems too high - 21.01.26)
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=7500, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.04ish (on 20.02.06; 0.15 seems too high - 21.01.26)
 
   ### Load the cell, set up the naming
   ########
@@ -827,11 +859,12 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
       if excType == 1:
-        fL_name = 'fitList%s_pyt_201017' % (loc_str); # pyt for pytorch
+        #fL_name = 'fitList%s_pyt_201017' % (loc_str); # pyt for pytorch
+        fL_name = 'fitList%s_pyt_210226_dG' % (loc_str); # pyt for pytorch
       elif excType == 2:
         #fL_name = 'fitList%s_pyt_210121' % (loc_str); # pyt for pytorch - lgn flat vs. V1 weight
         #fL_name = 'fitList%s_pyt_210206' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
-        fL_name = 'fitList%s_pyt_210222' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
+        fL_name = 'fitList%s_pyt_210226' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
         #fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
 
   todoCV = 1 if whichTrials is not None else 0;
@@ -891,7 +924,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     try:
       curr_params = fitList[cellNum-1][respStr]['params'];
       # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
-      testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd)
+      testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm)
       trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite) # warning: added respOverwrite here; also add whichTrials???
       predictions = testModel.forward(trInfTemp, respMeasure=respMeasure);
       if testModel.lossType == 3:
@@ -920,7 +953,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   # --- then, set up each parameter
   pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
   if excType == 1:
-    dOrdSp = np.random.uniform(1, 3) if initFromCurr==0 else curr_params[1];
+    dOrd_preSigmoid = np.random.uniform(1, 2.5)
+    dOrdSp = -np.log((_sigmoidDord-dOrd_preSigmoid)/dOrd_preSigmoid) if initFromCurr==0 else curr_params[1];
   elif excType == 2:
     sigLow = np.random.uniform(0.1, 0.3) if initFromCurr==0 else curr_params[1];
     # - make sigHigh relative to sigLow, but bias it to be lower, i.e. narrower
@@ -950,7 +984,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
   if lgnFrontEnd > 0:
     # Now, the LGN weighting 
-    mWeight = np.random.uniform(0.25, 0.75) if initFromCurr==0 else curr_params[-1];
+    mWt_preSigmoid = np.random.uniform(0.25, 0.75); # this is what we want the real/effective mWeight initialization to be
+    mWeight = -np.log((1-mWt_preSigmoid)/mWt_preSigmoid) if initFromCurr==0 else curr_params[-1];
   else:
     mWeight = -99; # just a "dummy" value
 
@@ -969,9 +1004,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     param_list = param_list[0:-1];   
 
   ### define model, grab training parameters
-  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType)
+  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm)
 
   training_parameters = [p for p in model.parameters() if p.requires_grad]
+  model.print_params(); # optionally, nicely print the initial parameters...
 
   ###  data wrapping
   dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
@@ -1023,7 +1059,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
           if np.mod(t,100)==0: # and bb==0:
               if bb == 0:
-                print('\n****** STEP %d [%s] [prev loss: %.2f] *********' % (t, respStr, accum))
+                print('\n****** STEP %d [%s] [prev loss: %.3f] *********' % (t, respStr, accum))
                 #print('\nTARGET, then predictions, finally loss');
                 #print(target[0:20]);
                 #print(predictions[0:20]);
@@ -1205,8 +1241,8 @@ if __name__ == '__main__':
 
     start = time.process_time();
     if cellNum >= 0:
-      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected); # first do DC
-      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected); # then F1
+      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected); # first do DC
+      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected); # then F1
 
     elif cellNum == -1:
       loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory

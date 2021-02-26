@@ -62,10 +62,11 @@ source activate pytorch-lcv
 #################
 #################
 # Used with newest version of calling the model fits (adjusted on  21.02.07)
-EXP_DIR="V1_BB/" 
+EXP_DIR="V1/"
+EXC_TYPE=2
 LOSS=1
 
-for run in {1..30}; do
+for run in {1..41}; do
   # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------
   #-----------------------------------------------------LGN--------nm--fixExp--
   #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 0 0 1 0.10 1 1 -1 &
@@ -86,13 +87,13 @@ for run in {1..30}; do
   # py ---------fun---------------------#---dir-e-l-f---i-t--k----vec--con-----  
   #--------------------------------------------------LGN--------nm--fixExp-----
   # - (x1)
-  python3.6 model_responses_pytorch.py $run $EXP_DIR 2 $LOSS 1 1 0 1 0.10 1 1 -1 1 &
+  python3.6 model_responses_pytorch.py $run $EXP_DIR $EXC_TYPE $LOSS 1 1 0 1 0.10 1 1 -1 1 &
   # - (y1)
-  python3.6 model_responses_pytorch.py $run $EXP_DIR 2 $LOSS 2 1 0 1 0.10 1 1 -1 1 &
+  python3.6 model_responses_pytorch.py $run $EXP_DIR $EXC_TYPE $LOSS 2 1 0 1 0.10 1 1 -1 1 &
   # - (x2)
-  python3.6 model_responses_pytorch.py $run $EXP_DIR 2 $LOSS 1 1 0 1 0.10 1 1 -1 2 &
+  python3.6 model_responses_pytorch.py $run $EXP_DIR $EXC_TYPE $LOSS 1 1 0 1 0.10 1 1 -1 2 &
   # - (y2)
-  python3.6 model_responses_pytorch.py $run $EXP_DIR 2 $LOSS 2 1 0 1 0.10 1 1 -1 2 &
+  python3.6 model_responses_pytorch.py $run $EXP_DIR $EXC_TYPE $LOSS 2 1 0 1 0.10 1 1 -1 2 &
     ################
   #### END current procedure (started 21.02)
   ################

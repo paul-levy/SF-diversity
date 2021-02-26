@@ -24,6 +24,7 @@
 
 source activate pytorch-lcv
 
+EXC_TYPE=2
 LOSS=1
 
 # 20 cells if original datalist; 41 cells if dataList_210222
@@ -36,13 +37,13 @@ do
   # --------------------------e-l--dir--nrm-lgn-dif--kmul--onsr--sem-----
   # --------------------------------------con--inp----cor-rExp-------
   # modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-  python3.6 plot_sfBB.py $run 2 $LOSS V1_BB/ 12 22 11 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
+  python3.6 plot_sfBB.py $run $EXC_TYPE $LOSS V1_BB/ 12 22 11 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
   # modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  python3.6 plot_sfBB.py $run 2 $LOSS V1_BB/ 12 21 11 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
+  python3.6 plot_sfBB.py $run $EXC_TYPE $LOSS V1_BB/ 12 21 11 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
   # modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-  python3.6 plot_sfBB.py $run 2 $LOSS V1_BB/ 12 11 11 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
+  python3.6 plot_sfBB.py $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
   # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  python3.6 plot_sfBB.py $run 2 $LOSS V1_BB/ 22 21 11 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
+  python3.6 plot_sfBB.py $run $EXC_TYPE $LOSS V1_BB/ 22 21 11 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
 
   # --- data only
   #python3.6 plot_sfBB.py $run -1 $LOSS V1_BB/ 1 0 0 0 0 0.05 1 0 -1 1 &
@@ -52,14 +53,11 @@ do
   ## End of new version
   ######
 
-
-  #python3.6 plot_sfBB.py $run 2 1 V1_BB/ 1 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
-  #python3.6 plot_sfBB.py $run 2 2 V1_BB/ 1 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
-  #python3.6 plot_sfBB.py $run 2 3 V1_BB/ 1 0 0 0.05 1 0 -1 1 & # no diff, not interpolated
   # DATA ONLY, WITH PHASE CORRECTION  
   #python3.6 plot_sfBB.py $run -1 2 V1_BB/ 1 0 0 0.05 1 80 -1 1 & # no diff, not interpolated
   # --------------------------e-l--dir----dif--kmul--rExp------
   # ------------------------------------lgn-inp----corr-sem-------
+
 done
 
 # leave a blank line at the end

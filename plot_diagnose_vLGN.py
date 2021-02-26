@@ -102,12 +102,14 @@ else:
 expName = hf.get_datalist(expDir);
 ### FITLIST
 #fitBase = 'fitList_190513cA'; # NOTE: THIS VERSION USED FOR VSS2019 poster
+_applyLGNtoNorm = 0;
 if excType == 1:
-  fitBase = 'fitList_200417'; # excType 1
+  #fitBase = 'fitList_200417'; # excType 1
+  fitBase = 'fitList_pyt_210226_dG'
 elif excType == 2:
   #fitBase = 'fitList_200507'; # excType 2
   #fitBase = 'fitList_pyt_210121' # excType 2
-  fitBase = 'fitList_pyt_210206'
+  fitBase = 'fitList_pyt_210226'
 #fitBase = 'holdout_fitList_190513cA';
 
 if pytorch_mod == 1 and rvcAdj == -1:
@@ -252,7 +254,7 @@ else:
 
 if pytorch_mod == 1:
   ### now, set-up the two models
-  model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon) for prms,normType,lgnType,lgnCon in zip(modFits, normTypes, lgnTypes, conTypes)]
+  model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm) for prms,normType,lgnType,lgnCon in zip(modFits, normTypes, lgnTypes, conTypes)]
 
   dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
   modResps = [mod.forward(dw.trInf, respMeasure=respMeasure).detach().numpy() for mod in [model_A, model_B]];
