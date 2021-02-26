@@ -22,8 +22,9 @@ import seaborn as sns
 torch.autograd.set_detect_anomaly(True)
 
 # Some global things...
-torch.set_num_threads(1) # attempt to reduce CPU usage - 20.01.26
-fall2020_adj = 1;
+torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
+fall2020_adj = 1; # 210121, 210206
+spring2021_adj = 1; # further adjustment to make scale a sigmoid rather than abs; 210222
 if fall2020_adj:
   globalMin = 1e-10 # what do we "cut off" the model response at? should be >0 but small
   #globalMin = 1e-1 # what do we "cut off" the model response at? should be >0 but small
@@ -617,7 +618,8 @@ class sfNormMod(torch.nn.Module):
     cons = _cast_as_tensor(trialInf['con']); # [nComps x nTrials]
     consSq = np.square(cons);
 
-    # apply LGN stage, if specified - we apply equal M and P weight, since this is across a population of neurons, not just the one one uron under consideration
+    # apply LGN stage -
+    # -- NOTE: previously, we applied equal M and P weight, since this is across a population of neurons, not just the one one neuron under consideration
     if self.lgnFrontEnd > 0:
       resps_m = get_descrResp(self.dog_m, sfs, self.LGNmodel, minThresh=globalMin)
       resps_p = get_descrResp(self.dog_p, sfs, self.LGNmodel, minThresh=globalMin)
@@ -705,8 +707,10 @@ class sfNormMod(torch.nn.Module):
     # we're now skipping the averaging across frames...
     if self.newMethod == 1:
       if fall2020_adj:
-        #respModel     = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, torch.pow(torch.mul(self.scale, ratio), self.respExp)));
-        respModel     = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, torch.mul(torch.abs(self.scale), ratio)));
+        if spring2021_adj:
+          respModel     = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, torch.mul(10*torch.sigmoid(self.scale), ratio))); # why 10 as the scalar? From multiple fits, the value is never over 1 or 2, so 10 gives the parameter enough operating range
+        else:
+          respModel     = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, torch.mul(torch.abs(self.scale), ratio)));
       else:
         respModel     = torch.add(self.noiseLate, torch.mul(torch.abs(self.scale), ratio));
       return torch.transpose(respModel, 1, 0);
@@ -805,7 +809,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, max_epochs=4500, learning_rate=0.07, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.04ish (on 20.02.06; 0.15 seems too high - 21.01.26)
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, max_epochs=7500, learning_rate=0.05, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.04ish (on 20.02.06; 0.15 seems too high - 21.01.26)
 
   ### Load the cell, set up the naming
   ########
@@ -825,9 +829,9 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       if excType == 1:
         fL_name = 'fitList%s_pyt_201017' % (loc_str); # pyt for pytorch
       elif excType == 2:
-        #fL_name = 'fitList%s_pyt_210107' % (loc_str); # pyt for pytorch
         #fL_name = 'fitList%s_pyt_210121' % (loc_str); # pyt for pytorch - lgn flat vs. V1 weight
-        fL_name = 'fitList%s_pyt_210206' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
+        #fL_name = 'fitList%s_pyt_210206' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
+        fL_name = 'fitList%s_pyt_210222' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
         #fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
 
   todoCV = 1 if whichTrials is not None else 0;
@@ -905,12 +909,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   ### set parameters
   # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
   prefSfEst = np.random.uniform(0.5, 5);
-  normConst = -2;
+  normConst = -2; # per Tony, just start with a low value (i.e. closer to linear)
   if fitType == 1:
     inhAsym = 0;
   if fitType == 2:
-    normMean = np.log10(prefSfEst) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
-    normStd = 0.5 if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
+    # see modCompare.ipynb, "Smarter initialization" for details
+    normMean = np.random.uniform(0.75, 1.25) * np.log10(prefSfEst) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
+    normStd = np.random.uniform(0.3, 2) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
 
   # --- then, set up each parameter
   pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
@@ -926,10 +931,22 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     # easier to start with a small scalar and work up, rather than work down
     respScalar = np.random.uniform(200, 700) if initFromCurr==0 else curr_params[4];
     noiseEarly = -1 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
-  else:
-    respScalar = np.random.uniform(0.1, 0.5) if initFromCurr==0 else curr_params[4];
-    noiseEarly = 1e-3 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
-  noiseLate = 1e-1 if initFromCurr==0 else curr_params[6];
+    noiseLate = 1e-1 if initFromCurr==0 else curr_params[6];
+  else: # see modCompare.ipynb, "Smarter initialization" for details
+    if respMeasure == 0: # slightly different range of successfully-fit respScalars for DC vs. F1 fits 
+      if spring2021_adj:
+        respScalar = np.random.uniform(-7, -2) if initFromCurr==0 else curr_params[4];
+      else:
+        respScalar = np.power(10, np.random.uniform(-1, 0)) if initFromCurr==0 else curr_params[4];
+      noiseLate = np.random.uniform(-0.1, 0.2) if initFromCurr==0 else curr_params[6];
+      noiseEarly = np.random.uniform(-0.5, 0.1) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
+    elif respMeasure == 1:
+      if spring2021_adj:
+        respScalar = np.random.uniform(-8, -3.5) if initFromCurr==0 else curr_params[4];
+      else:
+        respScalar = np.power(10, np.random.uniform(-2.5, -0.5)) if initFromCurr==0 else curr_params[4];
+      noiseLate = np.random.uniform(0.25, 0.75) if initFromCurr==0 else curr_params[6];
+      noiseEarly = np.random.uniform(-0.5, 0.5) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
   varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
   if lgnFrontEnd > 0:
     # Now, the LGN weighting 
@@ -1201,4 +1218,4 @@ if __name__ == '__main__':
       #setModel_joint(cellNums, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod, excType=excType, lgnFrontEnd=lgnFrontOn, fixRespExp=fixRespExp, toPar=toPar);
 
     enddd = time.process_time();
-    print('Took %d time -- NO par!!!' % (enddd-start));
+    print('Took %d minutes -- NO par!!!' % ((enddd-start)/60));

@@ -266,7 +266,7 @@ def get_datalist(expDir):
     return 'dataList_glx_200507.npy'; # limited set of data
     #return 'dataList_glx.npy';
   elif expDir == 'V1_BB/':
-    return 'dataList.npy';
+    return 'dataList_210222.npy';
 
 def exp_name_to_ind(expName):
     ''' static mapping from name of experiment to expInd
