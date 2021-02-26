@@ -53,6 +53,7 @@
 # V1/ - 8 cells
 # V1_orig/ - 3 cells
 # altExp   - 3 cells
+# V1_BB/ - 41 cells (if dl=dataList_210222; else, 20 cells)
 ###
 
 
@@ -60,11 +61,11 @@ source activate pytorch-lcv
 
 #################
 #################
-# Used with newest version of calling the model fits (21.02.07)
+# Used with newest version of calling the model fits (adjusted on  21.02.07)
 EXP_DIR="V1_BB/" 
 LOSS=1
 
-for run in {1..20}; do
+for run in {1..30}; do
   # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------
   #-----------------------------------------------------LGN--------nm--fixExp--
   #python3.6 model_responses_pytorch.py $run V1_BB/ 2 1 2 0 0 1 0.10 1 1 -1 &

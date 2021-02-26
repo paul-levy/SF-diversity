@@ -7,13 +7,8 @@ import pdb
 
 ######################
 ## NOTE: if you are starting a dataList from scratch, run this whole function (e.g. python buildDataList.py arg1 arg2 ...)
-## If you are simply adding something to the list (e.g. basic_list), then it is best to run just pieces of this code manually, since otherwise any manual curation of the datalist will be overwritten!
-######################
-
-
-######################
-## Helper code to get the existing basic characterizations for a given file
-## -- for now, let's just get the basic files
+## If you are simply adding something to the list (e.g. basic_list), then it is best to run just pieces of this code manually, since otherwise any manual curation of the datalist 
+## will be overwritten!
 ######################
 
 ######################
@@ -45,7 +40,7 @@ def update_data_list(loc_data, dl_name, recArea):
   ### now, let's get the corresponding basic characterization files!
   ###### IF MANUAL EDIT OF DATALIST (just to add basic list) START HERE
   #########
-  basic_list, _, _, basic_order = bl.build_basic_lists(unitName, '', loc='V1_orig/', subfolder='recordings/', folderByExpt=False, reduceNums=False);
+  basic_list, _, _, basic_order = bl.build_basic_lists(unitName, '', loc='V1_orig/', subfolder='recordings/', folderByExpt=False, reduceNums=True);
 
   #########
   ### finally, let's save it all

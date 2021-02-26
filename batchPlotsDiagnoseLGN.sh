@@ -28,8 +28,8 @@ source activate pytorch-lcv
 #source activate lcv-python
 
 # Used with newest version of calling the plotting function
-EXP_DIR="V1/" 
-LOSS=2
+EXP_DIR="V1_orig/" 
+LOSS=1
 
 for run in {1..8}
 do
