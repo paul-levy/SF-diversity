@@ -101,8 +101,11 @@ else:
 ### DATALIST
 expName = hf.get_datalist(expDir);
 ### FITLIST
-#fitBase = 'fitList_190513cA'; # NOTE: THIS VERSION USED FOR VSS2019 poster
 _applyLGNtoNorm = 0;
+# -- some params are sigmoid, we'll use this to unpack the true parameter
+_sigmoidScale = 10
+_sigmoidDord = 5;
+#fitBase = 'fitList_190513cA'; # NOTE: THIS VERSION USED FOR VSS2019 poster
 if excType == 1:
   #fitBase = 'fitList_200417'; # excType 1
   fitBase = 'fitList_pyt_210226_dG'
@@ -258,6 +261,7 @@ if pytorch_mod == 1:
 
   dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
   modResps = [mod.forward(dw.trInf, respMeasure=respMeasure).detach().numpy() for mod in [model_A, model_B]];
+
   if respMeasure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
     blanks = np.where(dw.trInf['con']==0);
     modResps[0][blanks] = 0;
@@ -767,11 +771,12 @@ for (pltNum, modPrm),lgnType,lgnConType,mWt in zip(enumerate(modFits), lgnTypes,
 
   if excType == 1:
     ### deriv. gauss
-    dOrder = modPrm[1];
+    dOrder = _sigmoidDord*1/(1+np.exp(-modPrm[1]));
     sfRel = omega/prefSf;
     s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
     sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
-    sfExcCurr = s/sMax;
+    sfExcV1 = s/sMax;
+    sfExcLGN = s/sMax; # will be used IF there isn't an LGN front-end...
   if excType == 2:
     ### flex. gauss
     sigLow = modPrm[1];
@@ -855,7 +860,8 @@ for iP in range(len(nInhChan)):
 sfNorm_flat = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
 sfNorm_flat = sfNorm_flat/np.amax(np.abs(sfNorm_flat));
 
-# Compute weights for suppressive signals
+### Compute weights for suppressive signals
+# - first, the old way (including the subunits, which is now deprecated...)
 nTrials =  inhSfTuning.shape[0];
 if gs_mean_A is not None:
   inhWeight_A = hf.genNormWeights(expData, nInhChan, gs_mean_A, gs_std_A, nTrials, expInd);
@@ -872,38 +878,7 @@ if gs_mean_B is not None:
 else:
   sfNorm_B = sfNorm_flat
 sfNorms = [sfNorm_A, sfNorm_B];
-
-# Plot the filters - for LGN, this is WITH the lgn filters "acting" (assuming high contrast)
-curr_ax = plt.subplot2grid(detailSize, (1, 1));
-# Remove top/right axis, put ticks only on bottom/left
-sns.despine(ax=curr_ax, offset=5);
-# just setting up lines
-plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
-plt.semilogx([.01, .01], [-1.5, 1], 'k--')
-plt.semilogx([.1, .1], [-1.5, 1], 'k--')
-plt.semilogx([1, 1], [-1.5, 1], 'k--')
-plt.semilogx([10, 10], [-1.5, 1], 'k--')
-plt.semilogx([100, 100], [-1.5, 1], 'k--')
-# now the real stuff
-[plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
-[plt.semilogx(omega, -norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNorms, modColors, modLabels)]
-plt.xlim([omega[0], omega[-1]]);
-plt.ylim([-0.1, 1.1]);
-plt.xlabel('spatial frequency (c/deg)', fontsize=12);
-plt.ylabel('Normalized response (a.u.)', fontsize=12);
-
-# SIMPLE normalization - i.e. the raw weights
-curr_ax = plt.subplot2grid(detailSize, (2, 1));
-# Remove top/right axis, put ticks only on bottom/left
-sns.despine(ax=curr_ax, offset=5);
-plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
-plt.semilogx([.01, .01], [-1.5, 1], 'k--')
-plt.semilogx([.1, .1], [-1.5, 1], 'k--')
-plt.semilogx([1, 1], [-1.5, 1], 'k--')
-plt.semilogx([10, 10], [-1.5, 1], 'k--')
-plt.semilogx([100, 100], [-1.5, 1], 'k--')
-### now the real stuff
-# - flat
+# then, the actual way!
 unwt_weights = np.sqrt(hf.genNormWeightsSimple(omega, None, None));
 sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
 # - tuned
@@ -920,8 +895,40 @@ if gs_mean_B is not None:
 else:
   sfNormSim_B = sfNormSim;
 sfNormsSimple = [sfNormSim_A, sfNormSim_B]
-[plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExcRaw, modColors, modLabels)]
+
+# Plot the filters - for LGN, this is WITH the lgn filters "acting" (assuming high contrast)
+curr_ax = plt.subplot2grid(detailSize, (1, 1));
+# Remove top/right axis, put ticks only on bottom/left
+sns.despine(ax=curr_ax, offset=5);
+# just setting up lines
+plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+plt.semilogx([.01, .01], [-1.5, 1], 'k--')
+plt.semilogx([.1, .1], [-1.5, 1], 'k--')
+plt.semilogx([1, 1], [-1.5, 1], 'k--')
+plt.semilogx([10, 10], [-1.5, 1], 'k--')
+plt.semilogx([100, 100], [-1.5, 1], 'k--')
+# now the real stuff
+[plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
 [plt.semilogx(omega, norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
+# -- this is the OLD version (note sfNorms as opposed to sfNormsSimple) with the subunits included
+#[plt.semilogx(omega, -norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNorms, modColors, modLabels)]
+plt.xlim([omega[0], omega[-1]]);
+plt.ylim([-0.1, 1.1]);
+plt.xlabel('spatial frequency (c/deg)', fontsize=12);
+plt.ylabel('Normalized response (a.u.)', fontsize=12);
+
+### now the raw weights/filters (i.e. with LGN filter applied for excitation, if needed)
+curr_ax = plt.subplot2grid(detailSize, (2, 1));
+# Remove top/right axis, put ticks only on bottom/left
+sns.despine(ax=curr_ax, offset=5);
+plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+plt.semilogx([.01, .01], [-1.5, 1], 'k--')
+plt.semilogx([.1, .1], [-1.5, 1], 'k--')
+plt.semilogx([1, 1], [-1.5, 1], 'k--')
+plt.semilogx([10, 10], [-1.5, 1], 'k--')
+plt.semilogx([100, 100], [-1.5, 1], 'k--')
+[plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExcRaw, modColors, modLabels)]
+#[plt.semilogx(omega, norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
 plt.xlim([omega[0], omega[-1]]);
 plt.ylim([-0.1, 1.1]);
 plt.title('v-- raw weights/filters --v');
@@ -959,7 +966,7 @@ for cI, conVal in enumerate(conVals):
 # plot just the constant term (i.e. if there is NO g.c. pooled response)
 sf_vals = all_sfs[valSfInds];
 onlySigma = [np.power(sigmaFilt + np.power(0, 2), 0.5) for sigmaFilt in [modA_sigma, modB_sigma]];
-[plt.plot(xCoord*sf_vals[-1], sig, color=clr, marker='<') for xCoord,sig,clr in zip([1.1, 1.2], onlySigma, modColors)]
+[plt.plot(xCoord*sf_vals[0], sig, color=clr, marker='>') for xCoord,sig,clr in zip([0.95, 0.85], onlySigma, modColors)]
 plt.xlim([1e-1, 1e1]);
 
 # last but not least...and not last... response nonlinearity
@@ -995,7 +1002,8 @@ if excType == 1:
   plt.text(0.5, 0.4, 'derivative order: %.3f, %.3f' % (modFits[0][1], modFits[1][1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 elif excType == 2:
   plt.text(0.5, 0.4, 'sig: %.2f|%.2f, %.2f|%.2f' % (modFits[0][1], modFits[0][-1], modFits[1][1], modFits[1][-1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-plt.text(0.5, 0.3, 'response scalar: %.3f, %.3f' % (modFits[0][4], modFits[1][4]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+respScalars = [_sigmoidScale/(1+np.exp(-x)) for x in [modFits[0][4], modFits[1][4]]];
+plt.text(0.5, 0.3, 'response scalar: %.3f, %.3f' % (respScalars[0], respScalars[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, modFits[0][2]), np.power(10, modFits[1][2]), modFits[0][2], modFits[1][2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
 # Now, space out the subplots...

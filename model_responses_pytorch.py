@@ -462,10 +462,10 @@ class sfNormMod(torch.nn.Module):
     # return a list of the parameters
     print('\n********MODEL PARAMETERS********');
     print('prefSf: %.2f' % self.prefSf.item());
-    if excType == 1:
+    if self.excType == 1:
       dord = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.dordSp)) if transformed else self.dordSp.item();
       print('deriv. order: %.2f' % dord);
-    elif excType == 2:
+    elif self.excType == 2:
       print('sigma l|r: %.2f|%.2f' % (self.sigLow.item(), self.sigHigh.item()));
     if self.lgnFrontEnd > 0:
       mWt = torch.sigmoid(self.mWeight).item() if transformed else self.mWeight.item();

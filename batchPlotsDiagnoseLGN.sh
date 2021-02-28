@@ -28,7 +28,7 @@ source activate pytorch-lcv
 #source activate lcv-python
 
 # Used with newest version of calling the plotting function
-EXP_DIR="V1_orig/" 
+EXP_DIR="V1/"
 EXC_TYPE=2
 LOSS=1
 

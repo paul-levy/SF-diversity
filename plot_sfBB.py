@@ -122,14 +122,19 @@ else:
   onsetCurr = None;
 
 ### FITLIST
+_applyLGNtoNorm = 0;
+# -- some params are sigmoid, we'll use this to unpack the true parameter
+_sigmoidScale = 10
+_sigmoidDord = 5;
 if excType == 1:
-  fitBase = 'fitList_pyt_200417'; # excType 1
+  fitBase = 'fitList_pyt_210226_dG'
+  #fitBase = 'fitList_pyt_200417'; # excType 1
   #fitBase = 'fitList_pyt_201017'; # excType 1
 elif excType == 2:
   #fitBase = 'fitList_pyt_200507'; # excType 2
   #fitBase = 'fitList_pyt_210121'; # excType 2
   #fitBase = 'fitList_pyt_210206'; # excType 2
-  fitBase = 'fitList_pyt_210222'; # excType 2
+  fitBase = 'fitList_pyt_210226'
 else:
   fitBase = None;
 
@@ -171,17 +176,17 @@ if fitBase is not None:
   modFit_B_f1 = fitListB[cellNum-1][f1_str]['params'];
   lossVals = [[x[cellNum-1][y]['NLL'] for x in [fitListA, fitListB]] for y in [dc_str, f1_str]]
 
-  normTypes = [normA, normB]; # weighted, then flat
+  normTypes = [normA, normB];
   lgnTypes = [lgnA, lgnB];
   conTypes = [conA, conB];
 
   expInd = -1;
   newMethod = 1;
 
-  mod_A_dc  = mrpt.sfNormMod(modFit_A_dc, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0])
-  mod_B_dc = mrpt.sfNormMod(modFit_B_dc, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1])
-  mod_A_f1  = mrpt.sfNormMod(modFit_A_f1, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0])
-  mod_B_f1 = mrpt.sfNormMod(modFit_B_f1, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1])
+  mod_A_dc  = mrpt.sfNormMod(modFit_A_dc, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm)
+  mod_B_dc = mrpt.sfNormMod(modFit_B_dc, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm)
+  mod_A_f1  = mrpt.sfNormMod(modFit_A_f1, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm)
+  mod_B_f1 = mrpt.sfNormMod(modFit_B_f1, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm)
 
 else: # we will just plot the data
   fitList_fl = None;
@@ -232,6 +237,7 @@ f1f0_rat = hf_sf.compute_f1f0(expInfo)[0];
 
 ### Now, if we've got the models, get and organize those responses...
 if fitBase is not None:
+  ## unpack the mWeight
   trInf_dc, _ = mrpt.process_data(expInfo, expInd=expInd, respMeasure=0); 
   trInf_f1, _ = mrpt.process_data(expInfo, expInd=expInd, respMeasure=1); 
   val_trials = trInf_dc['num']; # these are the indices of valid, original trials
@@ -581,19 +587,20 @@ f.tight_layout(rect=[0, 0.03, 1, 0.95])
 if fitBase is not None: # then we can plot some model details
 
   fDetails = plt.figure();
-  fDetails.set_size_inches(w=40,h=25)
+  fDetails.set_size_inches(w=60,h=25)
 
   # make overall title
   fDetails.suptitle('DC <---- |model details| ----> F1');
 
-  detailSize = (3, 4);
-  detailSize_filters = (3,2); # for the filters, we'll just pretend we have two columns
+  detailSize = (3, 6);
+  #detailSize_filters = (3,2); # for the filters, we'll just pretend we have two columns
 
   respTypes = [None, None]; # todo: [dcResps, f1Resps], figure out how to package, esp. with f1 having mask & base
-  colToAdd = [0, 2]; # we add +2 if doing f1 details
+  colToAdd = [0, 3]; # we add +X if doing f1 details
   # ordering of labels/model parameters will be: modA/modB (following form of modColors/modLabels from above)
-  whichModels = [[modFit_A_dc, modFit_B_dc], [modFit_A_f1, modFit_B_f1]];
-  for (i, resps), colAdd, currMods in zip(enumerate(respTypes), colToAdd, whichModels):
+  whichParams = [[modFit_A_dc, modFit_B_dc], [modFit_A_f1, modFit_B_f1]];
+  whichModels = [[mod_A_dc, mod_B_dc], [mod_A_f1, mod_B_f1]];
+  for (i, resps), colAdd, currPrms, currMods, trInf, respMeas in zip(enumerate(respTypes), colToAdd, whichParams, whichModels, [trInf_dc, trInf_f1], [0,1]): # DC, then F1...
 
     # TODO: poisson test - mean/var for each condition (i.e. sfXdispXcon)
     '''
@@ -615,7 +622,7 @@ if fitBase is not None: # then we can plot some model details
     '''
 
     # response nonlinearity
-    modExps = [x[3] for x in currMods]; # respExp is in location [3]
+    modExps = [x[3] for x in currPrms]; # respExp is in location [3]
     curr_ax = plt.subplot2grid(detailSize, (0, 1+colAdd));
     # Remove top/right axis, put ticks only on bottom/left
     sns.despine(ax=curr_ax, offset=5);
@@ -629,34 +636,127 @@ if fitBase is not None: # then we can plot some model details
     plt.legend(fontsize='medium');
 
     # plot model details - exc/suppressive components
+    ########### as copied, and now edited, from plot_diagnose_vLGN
     omega = np.logspace(-2, 2, 1000);
     sfExc = [];
-    for md, lgnOn in zip(currMods, lgnTypes):
-      prefSf = md[0];
+    sfExcRaw = [];
+    sfNorms = [];
+
+    for (pltNum, modPrm),lgnType,lgnConType,normType in zip(enumerate(currPrms), lgnTypes, conTypes, normTypes):
+      # First, excitatory stuff
+      prefSf = modPrm[0];
+      mWt = 1/(1+np.exp(-modPrm[-1])); # either this is mWeight parameter, or we're not fitting an LGN model anyway (ignored)
 
       if excType == 1:
         ### deriv. gauss
-        dOrder = md[1];
+        dOrder = _sigmoidDord*1/(1+np.exp(-modPrm[1]));
         sfRel = omega/prefSf;
         s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
         sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
-        sfExcCurr = s/sMax;
+        sfExcV1 = s/sMax;
+        sfExcLGN = s/sMax; # will be used IF there isn't an LGN front-end...
       if excType == 2:
         ### flex. gauss
-        sigLow = md[1];
-        sigHigh = md[-1-np.sign(lgnOn)]; # if we have an lgnFrontEnd, then mWeight is the last param, so we'll go back one more from end
+        sigLow = modPrm[1];
+        sigHigh = modPrm[-1];
         sfRel = np.divide(omega, prefSf);
         # - set the sigma appropriately, depending on what the stimulus SF is
         sigma = np.multiply(sigLow, [1]*len(sfRel));
         sigma[[x for x in range(len(sfRel)) if sfRel[x] > 1]] = sigHigh;
         # - now, compute the responses (automatically normalized, since max gaussian value is 1...)
         s     = [np.exp(-np.divide(np.square(np.log(x)), 2*np.square(y))) for x,y in zip(sfRel, sigma)];
-        sfExcCurr = s; 
+        sfExcV1 = s;
+        sfExcLGN = s; # will be used IF there isn't an LGN front-end...
+      # BUT. if this is an LGN model, we'll apply the filtering, eval. at 100% contrast
+      if lgnType == 1 or lgnType == 2:
+        params_m = [0, 12.5, 0.05];
+        params_p = [0, 17.5, 0.50];
+        DoGmodel = 2;
+        if lgnType == 1:
+          dog_m = [1, 3, 0.3, 0.4]; # k, f_c, k_s, j_s
+          dog_p = [1, 9, 0.5, 0.4];
+        elif lgnType == 2:
+          dog_m = [1, 6, 0.3, 0.4]; # k, f_c, k_s, j_s
+          dog_p = [1, 9, 0.5, 0.4];
+        # now compute with these parameters
+        resps_m = hf.get_descrResp(dog_m, omega, DoGmodel, minThresh=0.1)
+        resps_p = hf.get_descrResp(dog_p, omega, DoGmodel, minThresh=0.1)
+        # -- make sure we normalize by the true max response:
+        sfTest = np.geomspace(0.1, 10, 1000);
+        max_m = np.max(hf.get_descrResp(dog_m, sfTest, DoGmodel, minThresh=0.1));
+        max_p = np.max(hf.get_descrResp(dog_p, sfTest, DoGmodel, minThresh=0.1));
+        # -- then here's our selectivity per component for the current stimulus
+        selSf_m = np.divide(resps_m, max_m);
+        selSf_p = np.divide(resps_p, max_p);
+        # - then RVC response: # rvcMod 0 (Movshon)
+        rvc_mod = hf.get_rvc_model();
+        stimCo = np.linspace(0,1,100);
+        selCon_m = rvc_mod(*params_m, stimCo)
+        selCon_p = rvc_mod(*params_p, stimCo)
+        if lgnConType == 1: # DEFAULT
+          # -- then here's our final responses per component for the current stimulus
+          # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
+          lgnSel = mWt*selSf_m*selCon_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
+        elif lgnConType == 2 or lgnConType == 3:
+          # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
+          if lgnConType == 2:
+            avgWt = 0.5; # here, it's forced average between M & P (see lgnConType == 3)
+          elif lgnConType == 3:
+            avgWt = mWt; # here, it's equal to mWt
+          selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
+          lgnSel = mWt*selSf_m*selCon_avg[-1] + (1-mWt)*selSf_p*selCon_avg[-1];
+        withLGN = s*lgnSel;
+        sfExcLGN = withLGN/np.max(withLGN);
 
-      sfExc.append(sfExcCurr);
+        # Then, plot LGN front-end, if we're here
+        curr_ax = plt.subplot2grid(detailSize, (1+pltNum, colAdd));
+        plt.semilogx(omega, selSf_m, label='magno', color='r', linestyle='--');
+        plt.semilogx(omega, selSf_p, label='parvo', color='b', linestyle='--');
+        max_joint = np.max(lgnSel);
+        plt.semilogx(omega, np.divide(lgnSel, max_joint), label='joint - 100% contrast', color='k');
+        conMatch = 0.20
+        conValInd = np.argmin(np.square(stimCo-conMatch));
+        if lgnConType == 1:
+          jointAtLowCon = mWt*selSf_m*selCon_m[conValInd] + (1-mWt)*selSf_p*selCon_p[conValInd];
+        elif lgnConType == 2 or lgnConType == 3:
+          jointAtLowCon = mWt*selSf_m*selCon_avg[conValInd] + (1-mWt)*selSf_p*selCon_avg[conValInd];
+        plt.semilogx(omega, np.divide(jointAtLowCon, max_joint), label='joint - %d%% contrast' % (100*conMatch), color='k', alpha=0.3);
+        plt.title('lgn %s' % modLabels[pltNum]);
+        plt.legend();
+        plt.xlim([1e-1, 1e1]);
 
-    # -- now the simple normalization
-    curr_ax = plt.subplot2grid(detailSize_filters, (1, 0+i));
+      sfExcRaw.append(sfExcV1);
+      sfExc.append(sfExcLGN);
+
+      # Compute weights for suppressive signals
+      nTrials = len(val_trials);
+      gs_mean = modPrm[8] if normType == 2 else None;
+      gs_std = modPrm[9] if normType == 2 else None;
+      norm_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
+      sfNormSimple = norm_weights/np.amax(np.abs(norm_weights));
+      sfNorms.append(sfNormSimple);
+
+    # Plot the filters - for LGN, this is WITH the lgn filters "acting" (assuming high contrast)
+    curr_ax = plt.subplot2grid(detailSize, (1, 1+colAdd));
+    # Remove top/right axis, put ticks only on bottom/left
+    sns.despine(ax=curr_ax, offset=5);
+    # just setting up lines
+    plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
+    plt.semilogx([.01, .01], [-1.5, 1], 'k--')
+    plt.semilogx([.1, .1], [-1.5, 1], 'k--')
+    plt.semilogx([1, 1], [-1.5, 1], 'k--')
+    plt.semilogx([10, 10], [-1.5, 1], 'k--')
+    plt.semilogx([100, 100], [-1.5, 1], 'k--')
+    # now the real stuff
+    [plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
+    [plt.semilogx(omega, norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNorms, modColors, modLabels)]
+    plt.xlim([omega[0], omega[-1]]);
+    plt.ylim([-0.1, 1.1]);
+    plt.xlabel('spatial frequency (c/deg)', fontsize=12);
+    plt.ylabel('Normalized response (a.u.)', fontsize=12);
+
+    # SIMPLE normalization - i.e. the raw weights
+    curr_ax = plt.subplot2grid(detailSize, (2, 1+colAdd));
     # Remove top/right axis, put ticks only on bottom/left
     sns.despine(ax=curr_ax, offset=5);
     plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
@@ -665,35 +765,59 @@ if fitBase is not None: # then we can plot some model details
     plt.semilogx([1, 1], [-1.5, 1], 'k--')
     plt.semilogx([10, 10], [-1.5, 1], 'k--')
     plt.semilogx([100, 100], [-1.5, 1], 'k--')
-    # now the real stuff
-    unwt_weights = np.sqrt(hf.genNormWeightsSimple(omega, None, None));
-    sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
-    gs_mean = currMods[0][8]; # currMods[0] is the V1 model - position 8/9 are norm mean/std 
-    gs_std = currMods[0][9];
-    wt_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
-    sfNormTuneSim = wt_weights/np.amax(np.abs(wt_weights));
-    sfNormsSimple = [sfNormTuneSim, sfNormSim]; # pack as wght, LGN
-    [plt.semilogx(omega, exc, '%s-' % cc, label='exc[%s]' % s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
-    [plt.semilogx(omega, norm, '%s--' % cc, label='inh[%s]' % s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
+    ### now the real stuff
+    [plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExcRaw, modColors, modLabels)]
     plt.xlim([omega[0], omega[-1]]);
     plt.ylim([-0.1, 1.1]);
-    plt.xlabel('spatial frequency (c/deg)');
-    plt.ylabel('Normalized response (a.u.)');
-    plt.legend(fontsize='medium');
+    plt.title('v-- raw weights/filters --v');
+    plt.xlabel('spatial frequency (c/deg)', fontsize=12);
+    plt.ylabel('Normalized response (a.u.)', fontsize=12);
+
+    # Now, plot the full denominator (including the constant term) at a few contrasts
+    # --- use the debug flag to get the tuned component of the gain control as computed in the full model
+    curr_ax = plt.subplot2grid(detailSize, (1, 2+colAdd));
+    modRespsDebug = [mod.forward(trInf, respMeasure=respMeas, debug=1) for mod in currMods];
+    modA_norm, modA_sigma = [modRespsDebug[0][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
+    modB_norm, modB_sigma = [modRespsDebug[1][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
+    # --- then, simply mirror the calculation as done in the full model
+    full_denoms = [np.power(sigmaFilt + np.power(norm, 2), 0.5) for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
+    # --- use hf.get_valid_trials to get high/low con, single gratings
+    conVals = [maskCon[-5], maskCon[-3], maskCon[-1]]; # try to get the normResp at these contrast values
+    modTrials = trInf['num']; # these are the trials eval. by the model
+    # then, let's go through for the above contrasts and get the in-model response
+    for cI, conVal in enumerate(conVals):
+      closest_ind = np.argmin(np.abs(conVal - maskCon));
+      close_enough = np.abs(maskCon[closest_ind] - conVal) < 0.03 # must be within 3% contrast
+      if close_enough:
+        # highest contrast, first; for all, no base, only mask
+        all_trials = [hf_sf.get_valid_trials(expInfo, 1, 0, closest_ind, sfI)[0] for sfI,_ in enumerate(maskSf)];
+        # then, find which corresponding index into model-eval-only trials this is
+        all_trials_modInd = [np.intersect1d(modTrials, trs, return_indices=True)[1] for trs in all_trials];
+        modA_resps = [np.mean(full_denoms[0][trs]) for trs in all_trials_modInd];
+        modB_resps = [np.mean(full_denoms[1][trs]) for trs in all_trials_modInd];
+        # -- take sqrt of con val so that it's not SO dim...
+        [plt.semilogx(maskSf, denom, alpha=np.sqrt(conVal), color=clr) for clr,denom in zip(modColors, [modA_resps, modB_resps])]
+        plt.title('Normalization term by contrast, model');
+    # plot just the constant term (i.e. if there is NO g.c. pooled response)
+    sf_vals = maskSf;
+    onlySigma = [np.power(sigmaFilt + np.power(0, 2), 0.5) for sigmaFilt in [modA_sigma, modB_sigma]];
+    [plt.plot(xCoord*sf_vals[0], sig, color=clr, marker='>') for xCoord,sig,clr in zip([0.95, 0.85], onlySigma, modColors)]
+    plt.xlim([1e-1, 1e1]);
 
     # print, in text, model parameters:
-    curr_ax = plt.subplot2grid(detailSize, (2, 0+colAdd));
+    curr_ax = plt.subplot2grid(detailSize, (0, 0+colAdd));
     plt.text(0.5, 0.6, 'order: %s, %s' % (*modLabels, ), fontsize=24, horizontalalignment='center', verticalalignment='center');
-    plt.text(0.5, 0.5, 'prefSf: %.2f, %.2f' % (currMods[0][0], currMods[1][0]), fontsize=24, horizontalalignment='center', verticalalignment='center');
-    normA = np.exp(currMods[0][8]) if normTypes[0]==2 else np.nan;
-    normB = np.exp(currMods[1][8]) if normTypes[1]==2 else np.nan;
+    plt.text(0.5, 0.5, 'prefSf: %.2f, %.2f' % (currPrms[0][0], currPrms[1][0]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    normA = np.exp(currPrms[0][8]) if normTypes[0]==2 else np.nan;
+    normB = np.exp(currPrms[1][8]) if normTypes[1]==2 else np.nan;
     plt.text(0.5, 0.4, 'normSf: %.2f, %.2f' % (normA, normB), fontsize=24, horizontalalignment='center', verticalalignment='center');
     if excType == 1:
-      plt.text(0.5, 0.3, 'derivative order: %.2f, %.2f' % (currMods[0][1], currMods[1][1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+      plt.text(0.5, 0.3, 'derivative order: %.2f, %.2f' % (currPrms[0][1], currPrms[1][1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
     elif excType == 2:
-      plt.text(0.5, 0.3, 'sig: %.2f|%.2f, %.2f|%.2f' % (currMods[0][1], currMods[0][-1], currMods[1][1], currMods[1][-1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
-    plt.text(0.5, 0.2, 'response scalar: %.2f, %.2f' % (currMods[0][4], currMods[1][4]), fontsize=24, horizontalalignment='center', verticalalignment='center');
-    plt.text(0.5, 0.1, 'sigma (con): %.2f, %.2f' % (np.power(10, currMods[0][2]), np.power(10, currMods[1][2])), fontsize=24, horizontalalignment='center', verticalalignment='center');
+      plt.text(0.5, 0.3, 'sig: %.2f|%.2f, %.2f|%.2f' % (currPrms[0][1], currPrms[0][-1], currPrms[1][1], currPrms[1][-1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    plt.text(0.5, 0.2, 'response scalar: %.2f, %.2f' % (currPrms[0][4], currPrms[1][4]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    plt.text(0.5, 0.1, 'sigma (con): %.2f, %.2f' % (np.power(10, currPrms[0][2]), np.power(10, currPrms[1][2])), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    plt.axis('off');
 
 
   # at end, make tight layout
