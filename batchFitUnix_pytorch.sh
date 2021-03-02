@@ -62,9 +62,9 @@ source activate pytorch-lcv
 #################
 #################
 # Used with newest version of calling the model fits (adjusted on  21.02.07)
-EXP_DIR="V1_BB/"
-EXC_TYPE=2
-LOSS=1
+EXP_DIR=$1
+EXC_TYPE=$2
+LOSS=$3
 
 for run in {1..41}; do
   # py ---------fun---------------------#----dir---e-l-f---i-t--k----vec-------

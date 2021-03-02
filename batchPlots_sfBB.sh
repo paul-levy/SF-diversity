@@ -24,8 +24,8 @@
 
 source activate pytorch-lcv
 
-EXC_TYPE=1
-LOSS=1
+EXC_TYPE=$1
+LOSS=$2
 
 # 20 cells if original datalist; 41 cells if dataList_210222
 
