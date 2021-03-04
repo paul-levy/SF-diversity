@@ -81,6 +81,11 @@ else:
   pytorch_mod = 0; # default, we don't use the pytorch model
   newMethod = None;
 
+if len(sys.argv) > 16:
+  useHPCfit = int(sys.argv[16]);
+else:
+  useHPCfit = 0;
+
 ## used for interpolation plot
 sfSteps  = 45; # i.e. how many steps between bounds of interest
 conSteps = -1;
@@ -93,7 +98,7 @@ loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
-if 'pl1465' in loc_base:
+if 'pl1465' in loc_base or useHPCfit:
   loc_str = 'HPC';
 else:
   loc_str = '';
@@ -108,11 +113,11 @@ _sigmoidDord = 5;
 #fitBase = 'fitList_190513cA'; # NOTE: THIS VERSION USED FOR VSS2019 poster
 if excType == 1:
   #fitBase = 'fitList_200417'; # excType 1
-  fitBase = 'fitList_pyt_210226_dG'
+  fitBase = 'fitList%s_pyt_210226_dG' % loc_str
 elif excType == 2:
   #fitBase = 'fitList_200507'; # excType 2
   #fitBase = 'fitList_pyt_210121' # excType 2
-  fitBase = 'fitList_pyt_210226'
+  fitBase = 'fitList%s_pyt_210226' % loc_str
 #fitBase = 'holdout_fitList_190513cA';
 
 if pytorch_mod == 1 and rvcAdj == -1:

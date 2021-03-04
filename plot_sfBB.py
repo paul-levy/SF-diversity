@@ -81,6 +81,11 @@ if len(sys.argv) > 14:
 else:
   respVar = 1;
 
+if len(sys.argv) > 15:
+  useHPCfit = int(sys.argv[15]);
+else:
+  useHPCfit = 0;
+
 ## Unlikely to be changed, but keep flexibility
 baselineSub = 0;
 fix_ylim = 0;
@@ -97,7 +102,7 @@ loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
-if 'pl1465' in loc_base:
+if 'pl1465' in loc_base or useHPCfit:
   loc_str = 'HPC';
 else:
   loc_str = '';
@@ -127,16 +132,17 @@ _applyLGNtoNorm = 0;
 _sigmoidScale = 10
 _sigmoidDord = 5;
 if excType == 1:
-  fitBase = 'fitList_pyt_210226_dG'
+  fitBase = 'fitList%s_pyt_210226_dG' % loc_str
   #fitBase = 'fitList_pyt_200417'; # excType 1
   #fitBase = 'fitList_pyt_201017'; # excType 1
 elif excType == 2:
   #fitBase = 'fitList_pyt_200507'; # excType 2
   #fitBase = 'fitList_pyt_210121'; # excType 2
   #fitBase = 'fitList_pyt_210206'; # excType 2
-  fitBase = 'fitList_pyt_210226'
+  fitBase = 'fitList%s_pyt_210226' % loc_str
 else:
   fitBase = None;
+print('Plotting for %s' % fitBase);
 
 if fitBase is not None:
   if vecCorrected:
