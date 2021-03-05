@@ -253,17 +253,17 @@ def sf_var(resps, sfs, sf_cm):
   except:
     return np.nan
 
-def get_datalist(expDir):
+def get_datalist(expDir, force_full=0):
   if expDir == 'V1_orig/':
-    return 'dataList_200507.npy'; # limited set of data
+    return 'dataList_200507.npy' if force_full==0 else 'dataList.npy'; # limited set of data
     #return 'dataList.npy';
   elif expDir == 'altExp/':
-    return 'dataList_200507.npy'; # limited set of data
+    return 'dataList_200507.npy' if force_full==0 else 'dataList.npy'; # limited set of data
     #return 'dataList.npy';
   elif expDir == 'LGN/':
     return 'dataList.npy';
   elif expDir == 'V1/':
-    return 'dataList_glx_200507.npy'; # limited set of data
+    return 'dataList_glx_200507.npy' if force_full==0 else 'dataList_glx.npy'; # limited set of data
     #return 'dataList_glx.npy';
   elif expDir == 'V1_BB/':
     return 'dataList_210222.npy';
@@ -548,12 +548,12 @@ def rvc_mod_suff(modNum):
    
    return suff;
 
-def rvc_fit_name(rvcBase, modNum, dir=1):
+def rvc_fit_name(rvcBase, modNum, dir=1, vecF1=None):
    ''' returns the correct suffix for the given RVC model number and direction (pos/neg)
    '''
+   vecSuff = '_vecF1' if vecF1==1 else '';
    suff = rvc_mod_suff(modNum);
-
-   base = rvcBase + suff;
+   base = rvcBase + vecSuff + suff;
 
    return phase_fit_name(base, dir);
 
@@ -2191,7 +2191,7 @@ def flexible_Gauss_np(params, stim_sf, minThresh=0.1):
     return np.maximum(minThresh, respFloor + respRelFloor*shape);
 
 def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1):
-  # returns only pred_spikes
+  # returns only pred_spikes; 0 is flexGauss.; 1 is DoG sach; 2 is DoG (tony)
   if DoGmodel == 0:
     #pred_spikes = flexible_Gauss(params, stim_sf=stim_sf, minThresh=minThresh);
     pred_spikes = flexible_Gauss_np(params, stim_sf=stim_sf, minThresh=minThresh);
@@ -3248,11 +3248,11 @@ def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes 
         spikes = data['f1']
   return spikes;
 
-def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', rvcMod=0, direc=1):
+def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', rvcMod=0, direc=1, vecF1=None):
   ''' simple function to return the rvc fits needed for adjusting responses
   '''
   if expInd > 2: # no adjustment for V1, altExp as of now (19.08.28)
-    rvcFits = np_smart_load(str(loc_data + rvc_fit_name(rvcName, rvcMod, direc)));
+    rvcFits = np_smart_load(str(loc_data + rvc_fit_name(rvcName, rvcMod, direc, vecF1=vecF1)));
     try:
       rvcFits = rvcFits[cellNum-1];
     except: # if the RVC fits haven't been done...
