@@ -12,7 +12,7 @@
 #   1 - cell #
 #   2 - dispersion (index into the list of dispersions for that cell; not used in descr/DoG fits)
 #   3 - data directory (e.g. LGN/ or V1/)
-#   4 - make phase advance fits
+#   4 - make phase advance fits (yes [1], no [0], vec correction for F1 [-1])
 #   5 - make RVC fits
 #   6 - make RVC f0-only fits
 #   7 - which RVC model? (see hf::rvc_fit_name)
@@ -47,17 +47,41 @@ source activate lcv-python
 ###   
 ########
 
-for run in {1..77}
+for run in {1..59}
 do
+  #######
+  ### Start 21.03.04 run
+  #######
+
+  # V1/ -- vec F1 adjustment with full dataset
+  ## RVCs ONLY with NO phase adjustment (instead, vector correction for F1)
+  #python descr_fits.py $run 0 V1/ -1 1 0 1 0 0 2 0 &
+  #python descr_fits.py $run 1 V1/ -1 1 0 1 0 0 2 0 &
+  #python descr_fits.py $run 2 V1/ -1 1 0 1 0 0 2 0 &
+  #python descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 & 
+  # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
+  #python descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 & 
+
+  # V1_orig/ -- rvc_f0 and descr only
+  #python descr_fits.py $run 0 V1_orig/ -1 0 1 1 0 0 2 0 &
+  # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
+  #python descr_fits.py $run 0 V1_orig/ -1 0 0 1 1 0 2 0 & 
+
+  # altExp/ -- rvc_f0 and descr only
+  python descr_fits.py $run 0 altExp/ -1 0 1 1 0 0 2 0 &
+  # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
+  python descr_fits.py $run 0 altExp/ -1 0 0 1 1 0 2 0 & 
+
+  #######
+  ### END 21.03.04 run
+  #######
+
   ## LGN - phase adjustment (will be done iff LGN/ 1; not if LGN/ 0 ) and F1 rvc
   #python descr_fits.py $run 0 LGN/ 1 0 0 0 0 0 3 1 &
-  python descr_fits.py $run 0 LGN/ 0 1 0 0 0 0 3 1 &
-  python descr_fits.py $run 1 LGN/ 0 1 0 0 0 0 3 1 &
-  python descr_fits.py $run 2 LGN/ 0 1 0 0 0 0 3 1 &
-  python descr_fits.py $run 3 LGN/ 0 1 0 0 0 0 3 1 &
-
-  ## LGN - descrFits (DoG)
-  #python descr_fits.py $run 0 LGN/ 0 0 0 0 1 0 2 0 1 &
+  #python descr_fits.py $run 0 LGN/ 0 1 0 0 0 0 3 1 &
+  #python descr_fits.py $run 1 LGN/ 0 1 0 0 0 0 3 1 &
+  #python descr_fits.py $run 2 LGN/ 0 1 0 0 0 0 3 1 &
+  #python descr_fits.py $run 3 LGN/ 0 1 0 0 0 0 3 1 &
 
   ## V1 - phase adjustment and F1 rvc
   #python descr_fits.py $run 0 altExp/ 1 0 0 1 0 0 3 1 # phAdv fits, only; each cell, in turn (not in background)
