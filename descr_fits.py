@@ -11,19 +11,16 @@ import pdb
 basePath = os.getcwd() + '/';
 data_suff = 'structures/';
 
-expName = hf.get_datalist(sys.argv[3]); # sys.argv[3] is experiment dir
+expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 #expName = 'dataList_glx_mr.npy'
 #df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
 df_f0 = None;
-#dogName =  'descrFits_191023';
-#dogName =  'descrFits_200507';
-dogName =  'descrFits_200714';
+dogName = 'descrFits_210304';
 phAdvName = 'phaseAdvanceFits_200714'
-#phAdvName = 'phaseAdvanceFits_191023'
-rvcName_f0   = 'rvcFits_200507_f0' # .npy will be added later, as will suffix assoc. w/particular RVC model
-#rvcName_f1   = 'rvcFits_191023' # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-rvcName_f1   = 'rvcFits_200714' # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f0 = 'rvcFits_210304_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f1 = 'rvcFits_210304';
+
 ## model recovery???
 modelRecov = 0;
 if modelRecov == 1:
@@ -136,12 +133,17 @@ def phase_advance_fit(cell_num, data_loc, expInd, phAdvName=phAdvName, to_save=1
 
   return phAdv_model, all_opts;
 
-def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=1, expName=expName, force_f1=False, rvcMod=0):
-  ''' Piggy-backing off of phase_advance_fit above, get prepared to project the responses onto the proper phase to get the correct amplitude
-      Then, with the corrected response amplitudes, fit the RVC model
+def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=1, expName=expName, force_f1=False, rvcMod=0, vecF1=0):
+  ''' With the corrected response amplitudes, fit the RVC model
       - as of 19.11.07, we will fit non-baseline subtracted responses 
           (F1 have baseline of 0 always, but now we will not subtract baseline from F0 responses)
+      - If vecF1=0: Piggy-back off of phase_advance_fit above, get prepared to project the responses onto the proper phase to get the correct amplitude
+      - If vecF1=1: Do the vector-averaging across conditions to get the mean response per condition
+      -- the vecF1=1 approach was started in late 2020/early 2021, a smarter approach for V1 than doing phase-adjustment, per se
   '''
+  assert expInd>2, "In rvc_adjusted_fit; we can only evaluate F1 for experiments with \
+                    careful component TF; expInd 1, 2 do not meet this requirement.\nUse fit_RVC_f0 instead"
+  
   #########
   ### load data/metadata
   #########
@@ -149,7 +151,7 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=r
   cellName = dataList['unitName'][cell_num-1];
   cellStruct = hf.np_smart_load(data_loc + cellName + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
-  rvcNameFinal = hf.rvc_fit_name(rvcName, rvcMod, dir);
+  rvcNameFinal = hf.rvc_fit_name(rvcName, rvcMod, dir, vecF1);
   expInd = hf.get_exp_ind(data_loc, cellName)[0];
 
   #########
@@ -192,17 +194,28 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=r
     # NOTE: We always call phase_advance_fit with disp=0 (default), since we don't make a fit
     # for the mixtrue stimuli - instead, we use the fits made on single gratings to project the
     # individual-component-in-mixture responses
-    phAdv_model, all_opts = phase_advance_fit(cell_num, data_loc=data_loc, expInd=expInd, dir=dir, to_save = 0); # don't save
-    allAmp, allPhi, _, allCompCon, allCompSf = hf.get_all_fft(data, disp, expInd, dir=dir, all_trials=1);
-    # get just the mean amp/phi and put into convenient lists
-    allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)
-    allAmpTrials = [[x[2] for x in sf] for sf in allAmp]; # trial-by-trial is third element 
+    if vecF1==0:
+      phAdv_model, all_opts = phase_advance_fit(cell_num, data_loc=data_loc, expInd=expInd, dir=dir, to_save = 0); # don't save
+      allAmp, allPhi, _, allCompCon, allCompSf = hf.get_all_fft(data, disp, expInd, dir=dir, all_trials=1);
+      # get just the mean amp/phi and put into convenient lists
+      allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)
+      allAmpTrials = [[x[2] for x in sf] for sf in allAmp]; # trial-by-trial is third element 
 
-    allPhiMeans = [[x[0] for x in sf] for sf in allPhi]; # mean is in the first element; do that for each [mean, var] pair in each list (split by sf)
-    allPhiTrials = [[x[2] for x in sf] for sf in allPhi]; # trial-by-trial is third element 
+      allPhiMeans = [[x[0] for x in sf] for sf in allPhi]; # mean is in the first element; do that for each [mean, var] pair in each list (split by sf)
+      allPhiTrials = [[x[2] for x in sf] for sf in allPhi]; # trial-by-trial is third element 
 
-    adjMeans   = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
-    adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs);
+      adjMeans   = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
+      adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs);
+    elif vecF1==1:
+      adjByTrial = hf.adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3)
+      # then, sum up the valid components per stimulus component
+      allCons = np.vstack(data['con']).transpose();
+      blanks = np.where(allCons==0);
+      adjByTrialSum = np.copy(adjByTrial);
+      adjByTrialSum[blanks] = 0; # just set it to 0 if that component was blnak during the trial
+      adjByTrialSum = np.sum(adjByTrialSum, axis=1);
+      # get the mean resp organized by sfMix condition
+      adjMeans = hf.organize_resp(adjByTrialSum, cellStruct, expInd, respsAsRate=False)[2];
     consRepeat = [valCons] * len(adjMeans);
 
     if disp > 0: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)
@@ -381,7 +394,7 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is_f0=0, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0):
+def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is_f0=0, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0):
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
   '''
@@ -411,7 +424,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is
   expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1]);
   print('Making descriptive SF fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
   if is_f0 == 0 and get_rvc == 1: # NOTE: as of 19.09.16 (well, earlier, actually), rvcFits are on F0 or F1, depending on simple/complex designation - in either case, they are both already as rates!
-    rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num, rvcName=rvcName, rvcMod=rvcMod); # see default arguments in helper_fcns.py
+    rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num, rvcName=rvcName, rvcMod=rvcMod, vecF1=vecF1); # see default arguments in helper_fcns.py
   else:
     rvcFits = None;
 
@@ -522,8 +535,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, is
 
 if __name__ == '__main__':
 
-    if len(sys.argv) < 2:
-      print('uhoh...you need at least one argument(s) here');
+    if len(sys.argv) < 11:
+      print('uhoh...you need at least 11 arguments here');
       exit();
 
     cell_num   = int(sys.argv[1]);
@@ -540,7 +553,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 12:
       dir = float(sys.argv[12]);
     else:
-      dir = None;
+      dir = 1; # default
     if len(sys.argv) > 13:
       gainReg = float(sys.argv[13]);
     else:
@@ -559,21 +572,15 @@ if __name__ == '__main__':
     else:
       force_f1 = False; # let simple/complex be the determing factor!
 
+    vecF1 = 1 if ph_fits == -1 else 0;
+
     # then, put what to run here...
-    if dir == None:
-      if ph_fits == 1:
-        phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp);
-      if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp, force_f1=force_f1, rvcMod=rvc_model);
-      if descr_fits == 1:
-        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint);
-    else:
-      if ph_fits == 1:
-        phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp, dir=dir);
-      if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model);
-      if descr_fits == 1:
-        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint);
+    if ph_fits == 1:
+      phase_advance_fit(cell_num, data_loc=dataPath, expInd=expInd, disp=disp, dir=dir);
+    if rvc_fits == 1:
+      rvc_adjusted_fit(cell_num, data_loc=dataPath, expInd=expInd, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1);
+    if descr_fits == 1:
+      fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1);
 
     if rvcF0_fits == 1:
       fit_RVC_f0(cell_num, data_loc=dataPath, rvcMod=rvc_model);
