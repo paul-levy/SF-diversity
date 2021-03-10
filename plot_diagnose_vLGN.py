@@ -81,11 +81,6 @@ else:
   pytorch_mod = 0; # default, we don't use the pytorch model
   newMethod = None;
 
-if len(sys.argv) > 16:
-  useHPCfit = int(sys.argv[16]);
-else:
-  useHPCfit = 0;
-
 ## used for interpolation plot
 sfSteps  = 45; # i.e. how many steps between bounds of interest
 conSteps = -1;
@@ -98,13 +93,13 @@ loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
-if 'pl1465' in loc_base or useHPCfit:
+if 'pl1465' in loc_base:
   loc_str = 'HPC';
 else:
   loc_str = '';
 
 ### DATALIST
-expName = hf.get_datalist(expDir, force_full=0);
+expName = hf.get_datalist(expDir);
 ### FITLIST
 _applyLGNtoNorm = 0;
 # -- some params are sigmoid, we'll use this to unpack the true parameter
@@ -113,11 +108,13 @@ _sigmoidDord = 5;
 #fitBase = 'fitList_190513cA'; # NOTE: THIS VERSION USED FOR VSS2019 poster
 if excType == 1:
   #fitBase = 'fitList_200417'; # excType 1
-  fitBase = 'fitList%s_pyt_210226_dG' % loc_str
+  #fitBase = 'fitList_pyt_210226_dG'
+  fitBase = 'fitList%s_pyt_210308_dG' % loc_str
 elif excType == 2:
   #fitBase = 'fitList_200507'; # excType 2
   #fitBase = 'fitList_pyt_210121' # excType 2
-  fitBase = 'fitList%s_pyt_210226' % loc_str
+  #fitBase = 'fitList_pyt_210226'
+  fitBase = 'fitList%s_pyt_210308' % loc_str
 #fitBase = 'holdout_fitList_190513cA';
 
 if pytorch_mod == 1 and rvcAdj == -1:
@@ -137,6 +134,7 @@ lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
 
 fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
 fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
+print('modA: %s\nmodB: %s\n' % (fitNameA, fitNameB))
 # what's the shorthand we use to refer to these models...
 modA_str = '%s%s%s' % ('fl' if normA==1 else 'wt', 'LGN' if lgnA>0 else 'V1', 'avg' if conA>1 else '');
 modB_str = '%s%s%s' % ('fl' if normB==1 else 'wt', 'LGN' if lgnB>0 else 'V1', 'avg' if conB>1 else '');
@@ -174,8 +172,8 @@ try: # keeping for backwards compatability
   expData  = np.load(str(data_loc + cellName + '_sfm.npy'), encoding='latin1').item();
 except:
   expData  = hf.np_smart_load(str(data_loc + cellName + '_sfm.npy'));
-expInd   = hf.get_exp_ind(data_loc, cellName)[0];
-
+expInd   = hf.exp_name_to_ind(dataList['expType'][cellNum-1]);
+  
 # #### Load model fits
 # - pre-define the loss trajectory to be None
 loss_traj_A  = None;
@@ -972,7 +970,8 @@ for cI, conVal in enumerate(conVals):
 sf_vals = all_sfs[valSfInds];
 onlySigma = [np.power(sigmaFilt + np.power(0, 2), 0.5) for sigmaFilt in [modA_sigma, modB_sigma]];
 [plt.plot(xCoord*sf_vals[0], sig, color=clr, marker='>') for xCoord,sig,clr in zip([0.95, 0.85], onlySigma, modColors)]
-plt.xlim([1e-1, 1e1]);
+plt.xlim([omega[0], omega[-1]]);
+#plt.xlim([1e-1, 1e1]);
 
 # last but not least...and not last... response nonlinearity
 modExps = [x[3] for x in modFits];
@@ -1007,7 +1006,8 @@ if excType == 1:
   plt.text(0.5, 0.4, 'derivative order: %.3f, %.3f' % (modFits[0][1], modFits[1][1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 elif excType == 2:
   plt.text(0.5, 0.4, 'sig: %.2f|%.2f, %.2f|%.2f' % (modFits[0][1], modFits[0][-1], modFits[1][1], modFits[1][-1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-respScalars = [_sigmoidScale/(1+np.exp(-x)) for x in [modFits[0][4], modFits[1][4]]];
+#respScalars = [_sigmoidScale/(1+np.exp(-x)) for x in [modFits[0][4], modFits[1][4]]];
+respScalars = [modFits[0][4], modFits[1][4]]; # don't transform them, since we want to know the real value of the optimized parameter
 plt.text(0.5, 0.3, 'response scalar: %.3f, %.3f' % (respScalars[0], respScalars[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, modFits[0][2]), np.power(10, modFits[1][2]), modFits[0][2], modFits[1][2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 

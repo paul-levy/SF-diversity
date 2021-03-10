@@ -20,7 +20,9 @@ torch.autograd.set_detect_anomaly(True)
 ### Some global things...
 #########
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
-fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304
+force_earlyNoise = 0; # if None, allow it as parameter; otherwise, force it to this value
+_schedule = False; # use scheduler or not???
+fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304, 210308
 spring2021_adj = 1; # further adjustment to make scale a sigmoid rather than abs; 210222
 if fall2020_adj:
   globalMin = 1e-10 # what do we "cut off" the model response at? should be >0 but small
@@ -29,6 +31,7 @@ else:
   globalMin = 1e-6 # what do we "cut off" the model response at? should be >0 but small
 modRecov = 0;
 # --- for parameters that are transformed with sigmoids, what's the scalar in front of the sigmoid??
+_sigmoidSigma = 5; # if None, then we just use raw value; otherwise, we'll do a sigmoid transform
 _sigmoidScale = 10
 _sigmoidDord = 5;
 # --- and a flag for whether or not to include the LGN filter for the gain control
@@ -39,7 +42,7 @@ try:
 except:
   cellNum = np.nan;
 try:
-  dataListName = hf.get_datalist(sys.argv[2]); # argv[2] is expDir
+  dataListName = hf.get_datalist(sys.argv[2], force_full=0); # argv[2] is expDir
 except:
   dataListName = None;
 
@@ -64,12 +67,12 @@ def get_rvc_model(params, cons):
   return torch.add(b, torch.mul(k, torch.log(1+torch.div(cons, c0))));
 
 ## sf tuning
-def flexible_Gauss(params, stim_sf, minThresh=0.1):
+def flexible_Gauss(params, stim_sf, minThresh=0.1, sigmoidValue=_sigmoidSigma):
     respFloor       = params[0];
     respRelFloor    = params[1];
     sfPref          = params[2];
-    sigmaLow        = params[3];
-    sigmaHigh       = params[4];
+    sigmaLow        = params[3] if sigmoidValue is None else torch.mul(_cast_as_tensor(sigmoidValue), torch.sigmoid(params[3]));
+    sigmaHigh       = params[4] if sigmoidValue is None else torch.mul(_cast_as_tensor(sigmoidValue), torch.sigmoid(params[4]));
 
     # Tuning function
     sf0   = torch.div(stim_sf, sfPref);
@@ -163,7 +166,7 @@ def fft_amplitude(fftSpectrum, stimDur):
         But, remember that for a real signal like this, non-DC amplitudes need to be doubled - we take care of that here       
     '''
     # Note that fftSpectrum will be [nTr x nFr]
-    nyquist = [np.int(x.shape[1]/2) for x in fftSpectrum];
+    nyquist = [np.int32(x.shape[1]/2) for x in fftSpectrum];
     correctFFT = [];
     for i, spect in enumerate(fftSpectrum):
       allFFT = spect[:, 0:nyquist[i]+1]; # include nyquist 
@@ -375,11 +378,13 @@ class sfNormMod(torch.nn.Module):
     # handle the possibility of a multi fitting first
     if self.lgnFrontEnd == 99:
       self.mWeight = _cast_as_param(modParams[nParams-1]);
-    elif self.lgnFrontEnd > 0:
+    elif self.lgnFrontEnd > 0 and self.lgnConType != 2: # why? if lgnConType is 2, then we are NOT actually optimizing the mWeight, just fixing it at 0.5
       self.mWeight = _cast_as_param(modParams[-1]);
-    else:
-      self.mWeight = _cast_as_tensor(modParams[-1]); # then it's NOT a parameter
-
+    elif self.lgnConType == 2: # FORCE at 0.5
+      self.mWeight = _cast_as_tensor(0); # then it's NOT a parameter, and is fixed at 0, since as input to sigmoid, this gives 0.5
+    else: # still not a parameter, but use the value in modParams; this case shouldn't really come up...
+      self.mWeight = _cast_as_tensor(modParams[-1]);
+      
     self.prefSf = _cast_as_param(modParams[0]);
     if self.excType == 1:
       self.dordSp = _cast_as_param(modParams[1]);
@@ -394,7 +399,10 @@ class sfNormMod(torch.nn.Module):
     self.scale    = _cast_as_param(modParams[4]); # response scalar
 
     # Noise parameters
-    self.noiseEarly = _cast_as_param(modParams[5]);   # early additive noise
+    if force_earlyNoise is None:
+      self.noiseEarly = _cast_as_param(modParams[5]);   # early additive noise
+    else:
+      self.noiseEarly = _cast_as_tensor(force_earlyNoise); # early additive noise - fixed value, i.e. NOT optimized in this case
     self.noiseLate  = _cast_as_param(modParams[6]);  # late additive noise
     if self.lossType == 3:
       self.varGain    = _cast_as_param(modParams[7]);  # multiplicative noise
@@ -464,9 +472,9 @@ class sfNormMod(torch.nn.Module):
       print('sigma l|r: %.2f|%.2f' % (self.sigLow.item(), self.sigHigh.item()));
     if self.lgnFrontEnd > 0:
       mWt = torch.sigmoid(self.mWeight).item() if transformed else self.mWeight.item();
-      print('mWeight: %.2f' % mWt);
+      print('mWeight: %.2f (orig %.2f)' % (mWt, self.mWeight.item()));
     scale = torch.mul(_cast_as_tensor(_sigmoidScale), torch.sigmoid(self.scale)).item() if transformed else self.scale.item();
-    print('scalar|early|late: %.2f|%.2f|%.2f' % (scale, self.noiseEarly.item(), self.noiseLate.item()));
+    print('scalar|early|late: %.3f|%.3f|%.3f' % (scale, self.noiseEarly.item(), self.noiseLate.item()));
     print('norm. const.: %.2f' % self.sigma.item());
     if self.normType == 2:
       normMn = torch.exp(self.gs_mean).item() if transformed else self.gs_mean.item();
@@ -553,10 +561,7 @@ class sfNormMod(torch.nn.Module):
         lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
       elif self.lgnConType == 2 or self.lgnConType == 3:
         # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
-        if self.lgnConType == 2:
-          avgWt = 0.5; # here, it's forced average between M & P (see lgnConType == 3)
-        elif self.lgnConType == 3:
-          avgWt = self.mWeight; # here, it's equal to self.mWeight
+        avgWt = torch.sigmoid(self.mWeight);
         selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
         lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_avg)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_avg)));
 
@@ -611,6 +616,8 @@ class sfNormMod(torch.nn.Module):
     realImag = torch.empty((*realPart.shape,2), device=realPart.device);
     realImag[...,0] = realPart;
     realImag[...,1] = imagPart;
+    # NOTE: here, I use the term complex to denote that it is a complex number NOT
+    # - that it reflects a complex cell (i.e. this is still a simple cell response)
     rComplex = torch.einsum('ij,ikjz->ikz', torch.mul(selSi,stimCo), realImag) # mult. to get [nTr x nFr x 2] response
     # The above line takes care of summing over stimulus components
 
@@ -620,7 +627,7 @@ class sfNormMod(torch.nn.Module):
     if self.newMethod == 1:
       respSimple1 = rComplex[...,0]; # we'll keep the half-wave rectification for the end...
       return torch.transpose(respSimple1, 0, 1);
-    else:
+    else: # Old approach, in which we return the complex response
       # the remaining filters in quadrature
       respSimple1 = torch.max(_cast_as_tensor(globalMin), rComplex[...,0]); # half-wave rectification,...
       respSimple2 = torch.max(_cast_as_tensor(globalMin), torch.mul(_cast_as_tensor(-1),rComplex[...,0]));
@@ -632,9 +639,9 @@ class sfNormMod(torch.nn.Module):
       respComplex = torch.pow(respSimple1, 2) + torch.pow(respSimple2, 2) \
           + torch.pow(respSimple3, 2) + torch.pow(respSimple4, 2);
       respAvg = torch.div(respComplex, 4);
-      respSimple = torch.sqrt(respAvg); # div by 4 to avg across all filters
+      respComp = torch.sqrt(respAvg); # div by 4 to avg across all filters
 
-      return torch.transpose(respSimple, 0, 1);
+      return torch.transpose(respComp, 0, 1);
 
   def genNormWeightsSimple(self, trialInf):
     ''' simply evaluates the usual normalization weighting but at the frequencies of the stimuli directly
@@ -667,8 +674,8 @@ class sfNormMod(torch.nn.Module):
         lgnStage = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
       elif self.lgnConType == 2 or self.lgnConType == 3:
         # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
-        if self.lgnConType == 2:
-          avgWt = 0.5; # here, it's forced average between M & P (see lgnConType == 3)
+        if self.lgnConType == 2: 
+          avgWt = 0; # As input to sigmoid, gives 0.5; here, it's forced average between M & P (see lgnConType == 3)
         elif self.lgnConType == 3:
           avgWt = self.mWeight; # here, it's equal to self.mWeight
         selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
@@ -836,9 +843,9 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=7500, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.04ish (on 20.02.06; 0.15 seems too high - 21.01.26)
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=7500, learning_rate=0.10, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # learning rate 0.04ish (on 20.03.06; 0.15 seems too high - 21.01.26)
   global dataListName
-
+  
   ### Load the cell, set up the naming
   ########
   # Load cell
@@ -854,14 +861,17 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
-      if excType == 1:
+      if excType == 1: #dG for derivative of Gaussian
         #fL_name = 'fitList%s_pyt_201017' % (loc_str); # pyt for pytorch
-        fL_name = 'fitList%s_pyt_210226_dG' % (loc_str); # pyt for pytorch
+        #fL_name = 'fitList%s_pyt_210226_dG' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
+        fL_name = 'fitList%s_pyt_210308_dG' % (loc_str); # pyt for pytorch
+        #fL_name = 'fitList%s_pyt_210304_dG' % (loc_str); # pyt for pytorch; FULL datalists for V1_orig, altExpl
       elif excType == 2:
-        #fL_name = 'fitList%s_pyt_210121' % (loc_str); # pyt for pytorch - lgn flat vs. V1 weight
-        #fL_name = 'fitList%s_pyt_210206' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
-        fL_name = 'fitList%s_pyt_210226' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
         #fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
+        #fL_name = 'fitList%s_pyt_210121' % (loc_str); # pyt for pytorch - lgn flat vs. V1 weight
+        #fL_name = 'fitList%s_pyt_210226' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
+        fL_name = 'fitList%s_pyt_210310' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
+        #fL_name = 'fitList%s_pyt_210304' % (loc_str); # pyt for pytorch; FULL datalists for V1_orig, altExp
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -937,7 +947,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   ### set parameters
   # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
-  prefSfEst = np.random.uniform(0.5, 5);
+  prefSfEst = np.random.uniform(0.3, 2);
   normConst = -2; # per Tony, just start with a low value (i.e. closer to linear)
   if fitType == 1:
     inhAsym = 0;
@@ -968,14 +978,14 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         respScalar = np.random.uniform(-7, -2) if initFromCurr==0 else curr_params[4];
       else:
         respScalar = np.power(10, np.random.uniform(-1, 0)) if initFromCurr==0 else curr_params[4];
-      noiseLate = np.random.uniform(-0.1, 0.2) if initFromCurr==0 else curr_params[6];
+      noiseLate = np.random.uniform(-0.4, 0.4) if initFromCurr==0 else curr_params[6];
       noiseEarly = np.random.uniform(-0.5, 0.1) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
     elif respMeasure == 1:
       if spring2021_adj:
         respScalar = np.random.uniform(-8, -3.5) if initFromCurr==0 else curr_params[4];
       else:
         respScalar = np.power(10, np.random.uniform(-2.5, -0.5)) if initFromCurr==0 else curr_params[4];
-      noiseLate = np.random.uniform(0.25, 0.75) if initFromCurr==0 else curr_params[6];
+      noiseLate = np.random.uniform(0, 1) if initFromCurr==0 else curr_params[6];
       noiseEarly = np.random.uniform(-0.5, 0.5) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
   varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
   if lgnFrontEnd > 0:
@@ -1053,9 +1063,11 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           else:
             loss_curr = loss_sfNormMod(predictions, target, model.lossType)
 
-          if np.mod(t,100)==0: # and bb==0:
+          if np.mod(t,500)==0: # and bb==0:
               if bb == 0:
-                print('\n****** STEP %d [%s] [prev loss: %.3f] *********' % (t, respStr, accum))
+                now = datetime.datetime.now()
+                current_time = now.strftime("%H:%M:%S")
+                print('\n****** STEP %d [%s] [t=%s] [prev loss: %.3f] *********' % (t, respStr, current_time, accum))
                 #print('\nTARGET, then predictions, finally loss');
                 #print(target[0:20]);
                 #print(predictions[0:20]);
@@ -1236,9 +1248,20 @@ if __name__ == '__main__':
       toPar = False;
 
     start = time.process_time();
+    dcOk = 0; f1Ok = 0;
     if cellNum >= 0:
-      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected); # first do DC
-      setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected); # then F1
+      try:
+        setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # first do DC
+        dcOk = 1;
+      except Exception as e:
+        print(e)
+        pass;
+      try:
+        setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # then F1
+        f1Ok = 1;
+      except Exception as e:
+        print(e)
+        pass;
 
     elif cellNum == -1:
       loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory
@@ -1250,4 +1273,4 @@ if __name__ == '__main__':
       #setModel_joint(cellNums, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod, excType=excType, lgnFrontEnd=lgnFrontOn, fixRespExp=fixRespExp, toPar=toPar);
 
     enddd = time.process_time();
-    print('Took %d minutes -- NO par!!!' % ((enddd-start)/60));
+    print('Took %d minutes -- dc %d || f1 %d' % ((enddd-start)/60, dcOk, f1Ok));

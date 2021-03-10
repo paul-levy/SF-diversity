@@ -132,17 +132,18 @@ _applyLGNtoNorm = 0;
 _sigmoidScale = 10
 _sigmoidDord = 5;
 if excType == 1:
-  fitBase = 'fitList%s_pyt_210226_dG' % loc_str
+  fitBase = 'fitList%s_pyt_210308_dG' % loc_str
+  #fitBase = 'fitList_pyt_210226_dG'
   #fitBase = 'fitList_pyt_200417'; # excType 1
   #fitBase = 'fitList_pyt_201017'; # excType 1
 elif excType == 2:
   #fitBase = 'fitList_pyt_200507'; # excType 2
   #fitBase = 'fitList_pyt_210121'; # excType 2
   #fitBase = 'fitList_pyt_210206'; # excType 2
-  fitBase = 'fitList%s_pyt_210226' % loc_str
+  #fitBase = 'fitList_pyt_210226'
+  fitBase = 'fitList%s_pyt_210308' % loc_str
 else:
   fitBase = None;
-print('Plotting for %s' % fitBase);
 
 if fitBase is not None:
   if vecCorrected:
@@ -729,7 +730,8 @@ if fitBase is not None: # then we can plot some model details
         plt.semilogx(omega, np.divide(jointAtLowCon, max_joint), label='joint - %d%% contrast' % (100*conMatch), color='k', alpha=0.3);
         plt.title('lgn %s' % modLabels[pltNum]);
         plt.legend();
-        plt.xlim([1e-1, 1e1]);
+        plt.xlim([omega[0], omega[-1]]);
+        #plt.xlim([1e-1, 1e1]);
 
       sfExcRaw.append(sfExcV1);
       sfExc.append(sfExcLGN);
@@ -808,7 +810,8 @@ if fitBase is not None: # then we can plot some model details
     sf_vals = maskSf;
     onlySigma = [np.power(sigmaFilt + np.power(0, 2), 0.5) for sigmaFilt in [modA_sigma, modB_sigma]];
     [plt.plot(xCoord*sf_vals[0], sig, color=clr, marker='>') for xCoord,sig,clr in zip([0.95, 0.85], onlySigma, modColors)]
-    plt.xlim([1e-1, 1e1]);
+    plt.xlim([omega[0], omega[-1]]);
+    #plt.xlim([1e-1, 1e1]);
 
     # print, in text, model parameters:
     curr_ax = plt.subplot2grid(detailSize, (0, 0+colAdd));
@@ -818,13 +821,11 @@ if fitBase is not None: # then we can plot some model details
     normB = np.exp(currPrms[1][8]) if normTypes[1]==2 else np.nan;
     plt.text(0.5, 0.4, 'normSf: %.2f, %.2f' % (normA, normB), fontsize=24, horizontalalignment='center', verticalalignment='center');
     if excType == 1:
-      # TODO: make this sigmoid transform just for pytorch mod...
-      dOrds = [_sigmoidDord*1/(1+np.exp(-x)) for x in [currPrms[0][1], currPrms[1][1]]];
-      plt.text(0.5, 0.3, 'derivative order: %.2f, %.2f' % (dOrds[0], dOrds[1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+      plt.text(0.5, 0.3, 'derivative order: %.2f, %.2f' % (currPrms[0][1], currPrms[1][1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
     elif excType == 2:
-      plt.text(0.5, 0.3, 'sig: %.2f|%.2f, %.2f|%.2f' % (currPrms[0][1], currPrms[0][-1], currPrms[1][1], currPrms[1][-1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+      plt.text(0.5, 0.3, 'sig (l|r): %.2f|%.2f, %.2f|%.2f' % (currPrms[0][1], currPrms[0][-1], currPrms[1][1], currPrms[1][-1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
     plt.text(0.5, 0.2, 'response scalar: %.2f, %.2f' % (currPrms[0][4], currPrms[1][4]), fontsize=24, horizontalalignment='center', verticalalignment='center');
-    plt.text(0.5, 0.1, 'sigma (con): %.2f, %.2f' % (np.power(10, currPrms[0][2]), np.power(10, currPrms[1][2])), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    plt.text(0.5, 0.1, 'sigma (con|raw): %.2f, %.2f || %.2f, %.2f' % (np.power(10, currPrms[0][2]), np.power(10, currPrms[1][2]), currPrms[0][2], currPrms[1][2]), fontsize=24, horizontalalignment='center', verticalalignment='center');
     plt.axis('off');
 
 
