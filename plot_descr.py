@@ -25,19 +25,32 @@ warnings.filterwarnings('once');
 
 import pdb
 
-plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_cluster.mplstyle');
+plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
 from matplotlib import rcParams
-rcParams['font.size'] = 40;
-rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['lines.linewidth'] = 4;
-rcParams['axes.linewidth'] = 4;
-rcParams['lines.markersize'] = 9;
-rcParams['font.style'] = 'oblique';
-rcParams['xtick.major.size'] = 24;
-rcParams['xtick.minor.size'] = 12;
-rcParams['ytick.major.size'] = 24;
-rcParams['ytick.minor.size'] = 12;
+for i in range(2):
+    # must run twice for changes to take effect?
+    from matplotlib import rcParams, cm
+    rcParams['font.family'] = 'sans-serif'
+    # rcParams['font.sans-serif'] = ['Helvetica']
+    rcParams['font.style'] = 'oblique'
+    rcParams['font.size'] = 30;
+    rcParams['pdf.fonttype'] = 3 # should be 42, but there are kerning issues
+    rcParams['ps.fonttype'] = 3 # should be 42, but there are kerning issues
+    rcParams['lines.linewidth'] = 3;
+    rcParams['lines.markeredgewidth'] = 0; # remove edge??                                                                                                                               
+    rcParams['axes.linewidth'] = 3;
+    rcParams['lines.markersize'] = 12; # 8 is the default                                                                                                                                
+    rcParams['font.style'] = 'oblique';
+
+    rcParams['xtick.major.size'] = 25
+    rcParams['xtick.minor.size'] = 12
+    rcParams['ytick.major.size'] = 25
+    rcParams['ytick.minor.size'] = 0; # i.e. don't have minor ticks on y...                                                                                                              
+
+    rcParams['xtick.major.width'] = 2
+    rcParams['xtick.minor.width'] = 2
+    rcParams['ytick.major.width'] = 2
+    rcParams['ytick.minor.width'] = 0
 
 majWidth = 4;
 minWidth = 4;
@@ -67,9 +80,10 @@ data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
 ### DATALIST
-expName = hf.get_datalist(expDir);
+expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_200714';
+descrBase = 'descrFits_210304';
+#descrBase = 'descrFits_200714';
 #descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
 #descrBase = 'descrFits_200507'; # for altExp
 #descrBase = 'descrFits_190503';
@@ -80,7 +94,11 @@ if descrJnt == 1:
 ### RVCFITS
 #rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
-rvcBase = 'rvcFits_200714'; # direc flag & '.npy' are adde
+#rvcBase = 'rvcFits_200714'; # direc flag & '.npy' are adde
+rvcBase = 'rvcFits_210304';
+# -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
+rvcAdjSigned = rvcAdj;
+rvcAdj = np.abs(rvcAdj);
 
 ##################
 ### Spatial frequency
@@ -110,7 +128,8 @@ if expInd <= 2: # if expInd <= 2, then there cannot be rvcAdj, anyway!
   rvcAdj = 0; # then we'll load just below!
 
 if rvcAdj == 1:
-  rvcFits = hf.np_smart_load(data_loc + hf.rvc_fit_name(rvcBase, modNum=rvcMod, dir=1)); # i.e. positive
+  vecF1 = 1 if rvcAdjSigned==-1 else 0
+  rvcFits = hf.np_smart_load(data_loc + hf.rvc_fit_name(rvcBase, modNum=rvcMod, dir=1, vecF1=vecF1)); # i.e. positive
 if rvcAdj == 0:
   rvcFits = hf.np_smart_load(data_loc + rvcBase + '_f0_NR.npy');
 rvcFits = rvcFits[cellNum-1];
@@ -876,7 +895,8 @@ for d in range(1): #nDisps
   #   note that we also transpose so that SF will be on the x, contrast on the y
   curr_resps = respOrg[np.ix_([d], val_sfs, val_cons)].squeeze().transpose();
   ## now, RVC model - here, each set of parameters is for a given SF
-  rvcCurr = rvcFits[d]['params']
+  rvcCurr = rvcFits[d]['params'] if rvcAdj == 1 else rvcFits['params'][d, :,:];
+
   con_steps = 100;
   plt_cons = np.geomspace(all_cons[val_cons][0], all_cons[val_cons][-1], con_steps);
   rvcResps = np.zeros((con_steps, len(val_sfs)));

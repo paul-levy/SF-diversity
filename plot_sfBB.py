@@ -818,7 +818,9 @@ if fitBase is not None: # then we can plot some model details
     normB = np.exp(currPrms[1][8]) if normTypes[1]==2 else np.nan;
     plt.text(0.5, 0.4, 'normSf: %.2f, %.2f' % (normA, normB), fontsize=24, horizontalalignment='center', verticalalignment='center');
     if excType == 1:
-      plt.text(0.5, 0.3, 'derivative order: %.2f, %.2f' % (currPrms[0][1], currPrms[1][1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+      # TODO: make this sigmoid transform just for pytorch mod...
+      dOrds = [_sigmoidDord*1/(1+np.exp(-x)) for x in [currPrms[0][1], currPrms[1][1]]];
+      plt.text(0.5, 0.3, 'derivative order: %.2f, %.2f' % (dOrds[0], dOrds[1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
     elif excType == 2:
       plt.text(0.5, 0.3, 'sig: %.2f|%.2f, %.2f|%.2f' % (currPrms[0][1], currPrms[0][-1], currPrms[1][1], currPrms[1][-1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
     plt.text(0.5, 0.2, 'response scalar: %.2f, %.2f' % (currPrms[0][4], currPrms[1][4]), fontsize=24, horizontalalignment='center', verticalalignment='center');

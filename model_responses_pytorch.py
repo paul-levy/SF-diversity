@@ -14,18 +14,13 @@ from functools import partial
 
 import pdb
 
-import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.backends.backend_pdf as pltSave
-import seaborn as sns
-
 torch.autograd.set_detect_anomaly(True)
 
 #########
 ### Some global things...
 #########
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
-fall2020_adj = 1; # 210121, 210206
+fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304
 spring2021_adj = 1; # further adjustment to make scale a sigmoid rather than abs; 210222
 if fall2020_adj:
   globalMin = 1e-10 # what do we "cut off" the model response at? should be >0 but small
@@ -842,6 +837,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 #  ''' Set the parameters of the model '''
 
 def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=7500, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # batch_size = 2000; learning rate 0.04ish (on 20.02.06; 0.15 seems too high - 21.01.26)
+  global dataListName
 
   ### Load the cell, set up the naming
   ########

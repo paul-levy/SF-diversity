@@ -20,6 +20,7 @@ import pdb
 # --- Computing F1 response (including phase), computing F1::F0 ratio, etc
 # get_vec_avg_response
 # compute_f1f0
+# -- descriptive tuning fits
 
 ### HELPER/BASIC ###
 
@@ -445,6 +446,3 @@ def compute_f1f0(trial_inf):
   f1rate_pos = f1all[f0rate_posInd];
 
   return np.nanmean(np.divide(f1rate_pos, f0rate_pos)), f0all, f1all, f0_rates, f1_rates;
-
-#def organize_modResp(modParams):
-

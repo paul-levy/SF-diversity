@@ -17,7 +17,7 @@
         # 3 - poiss
         # 4 - sach
 # fifth param is joint (descr) - 0/1
-# sixth param is f0/f1 (i.e. if 1, load rvcFits)
+# sixth param is f0/f1 (i.e. if 1, load rvcFits; if -1, load vec-adjusted rvcFits, rather than phase-corrected responses)
 # seventh param is which rvcModel to get/plot (0: movshon; 1: naka-rushton; 2: peirce)
 # eigth param is std/sem as variance measure: (1 sem (default))
 # ninth param is force log Y for byDisp/allCon and CRF/allSfs: (0/no (default))
@@ -35,9 +35,12 @@ source activate lcv-python
 # altExp   - standard, 8 cells
 # LGN/ - standard, 77 cells
 
-for run in {1..77}
-do  
-  python plot_descr.py $run LGN/ 0 2 0 1 0 1 0 &
+for run in {1..59}
+do 
+  ### For 21.03.04 fits
+  python plot_descr.py $run V1/ 0 2 0 -1 1 1 &
+  ### OLD
+  #python plot_descr.py $run LGN/ 0 2 0 1 0 1 0 &
   #python plot_descr.py $run LGN/ 1 4 0 1 0 1 1 &
   #python plot_descr.py $run V1/ 0 2 0 1 1 1 1 &
   #python plot_descr.py $run altExp/ 0 2 0 0 1 1 1 &

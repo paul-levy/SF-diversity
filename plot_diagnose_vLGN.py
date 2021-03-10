@@ -104,7 +104,7 @@ else:
   loc_str = '';
 
 ### DATALIST
-expName = hf.get_datalist(expDir);
+expName = hf.get_datalist(expDir, force_full=0);
 ### FITLIST
 _applyLGNtoNorm = 0;
 # -- some params are sigmoid, we'll use this to unpack the true parameter
