@@ -21,6 +21,7 @@ torch.autograd.set_detect_anomaly(True)
 #########
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
 force_earlyNoise = 0; # if None, allow it as parameter; otherwise, force it to this value
+recenter_norm = 1;
 _schedule = False; # use scheduler or not???
 fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304, 210308
 spring2021_adj = 1; # further adjustment to make scale a sigmoid rather than abs; 210222
@@ -502,7 +503,7 @@ class sfNormMod(torch.nn.Module):
 
     return param_list
 
-  def simpleResp_matMul(self, trialInf, stimParams = [], sigmoidSigma=None):
+  def simpleResp_matMul(self, trialInf, stimParams = []):
     # returns object with simpleResp and other things
     # --- Created 20.10.12 --- provides ~4x speed up compared to SFMSimpleResp() without need to explicit parallelization
     # --- Updated 20.10.29 --- created new method 
@@ -573,7 +574,7 @@ class sfNormMod(torch.nn.Module):
       sMax  = torch.pow(self.prefSf, effDord) * torch.exp(-effDord/2);
       selSf   = torch.div(s, sMax);
     elif self.excType == 2:
-      selSf = flexible_Gauss([0,1,self.prefSf,self.sigLow,self.sigHigh], stimSf, minThresh=0, sigmoidValue=sigmoidSigma);
+      selSf = flexible_Gauss([0,1,self.prefSf,self.sigLow,self.sigHigh], stimSf, minThresh=0);
  
     # II. Phase, space and time
     omegaX = torch.mul(stimSf, torch.cos(stimOr)); # the stimulus in frequency space
@@ -693,7 +694,12 @@ class sfNormMod(torch.nn.Module):
       weight_distr = torch.distributions.normal.Normal(self.gs_mean, self.gs_std)
       new_weights = torch.exp(weight_distr.log_prob(log_sfs)); 
       new_weights = torch.mul(lgnStage, new_weights);
-
+      if recenter_norm: # we'll recenter this weighted normalization around zero
+        normMin, normMax = torch.min(new_weights), torch.max(new_weights)
+        centerVal = (normMax-normMin)/2
+        toAdd = 1-centerVal-normMin; # to make the center of these weights at 1
+        new_weights = toAdd + new_weights
+        
     return new_weights;
 
   def SimpleNormResp(self, trialInf, trialArtificial=None):
@@ -712,9 +718,9 @@ class sfNormMod(torch.nn.Module):
 
     return respPerTr; # will be [nTrials] -- later, will ensure right output size during operation
 
-  def respPerCell(self, trialInf, debug=0, sigmoidSigma=None):
+  def respPerCell(self, trialInf, debug=0):
     # excitatory filter, first
-    simpleResp = self.simpleResp_matMul(trialInf, sigmoidSigma=sigmoidSigma);
+    simpleResp = self.simpleResp_matMul(trialInf);
     normResp = self.SimpleNormResp(trialInf); # [nFrames x nTrials]
     if self.newMethod == 1:
       Lexc = simpleResp; # [nFrames x nTrials]
@@ -753,9 +759,9 @@ class sfNormMod(torch.nn.Module):
       respModel     = torch.add(self.noiseLate, torch.mul(torch.abs(self.scale), meanRate));
       return respModel; # I don't think we need to transpose here...
 
-  def forward(self, trialInf, respMeasure=0, returnPsth=0, debug=0, sigmoidSigma=_sigmoidSigma): # expInd=-1 for sfBB
+  def forward(self, trialInf, respMeasure=0, returnPsth=0, debug=0): # expInd=-1 for sfBB
     # respModel is the psth! [nTr x nFr]
-    respModel = self.respPerCell(trialInf, debug, sigmoidSigma);
+    respModel = self.respPerCell(trialInf, debug);
 
     if debug:
       return respModel
@@ -843,7 +849,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=7500, learning_rate=0.10, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None): # learning rate 0.04ish (on 20.03.06; 0.15 seems too high - 21.01.26)
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=7500, learning_rate=0.10, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm): # learning rate 0.04ish (on 20.03.06; 0.15 seems too high - 21.01.26)
   global dataListName
   
   ### Load the cell, set up the naming
@@ -865,13 +871,20 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         #fL_name = 'fitList%s_pyt_201017' % (loc_str); # pyt for pytorch
         #fL_name = 'fitList%s_pyt_210226_dG' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
         fL_name = 'fitList%s_pyt_210308_dG' % (loc_str); # pyt for pytorch
+        if recenter_norm:
+          fL_name = 'fitList%s_pyt_210311_dG' % (loc_str); # pyt for pytorch
         #fL_name = 'fitList%s_pyt_210304_dG' % (loc_str); # pyt for pytorch; FULL datalists for V1_orig, altExpl
       elif excType == 2:
         #fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
         #fL_name = 'fitList%s_pyt_210121' % (loc_str); # pyt for pytorch - lgn flat vs. V1 weight
         #fL_name = 'fitList%s_pyt_210226' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
-        fL_name = 'fitList%s_pyt_210310' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
-        #fL_name = 'fitList%s_pyt_210304' % (loc_str); # pyt for pytorch; FULL datalists for V1_orig, altExp
+        if sigmoidSigma is None:
+          fL_name = 'fitList%s_pyt_210308' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
+        else:
+          fL_name = 'fitList%s_pyt_210310' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
+        # overwriting...
+        if recenter_norm:
+          fL_name = 'fitList%s_pyt_210311' % (loc_str); # pyt for pytorch
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -962,9 +975,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     dOrd_preSigmoid = np.random.uniform(1, 2.5)
     dOrdSp = -np.log((_sigmoidDord-dOrd_preSigmoid)/dOrd_preSigmoid) if initFromCurr==0 else curr_params[1];
   elif excType == 2:
-    sigLow = np.random.uniform(0.1, 0.3) if initFromCurr==0 else curr_params[1];
-    # - make sigHigh relative to sigLow, but bias it to be lower, i.e. narrower
-    sigHigh = sigLow*np.random.uniform(0.5, 1.25) if initFromCurr==0 else curr_params[-1-np.sign(lgnFrontEnd)]; # if lgnFrontEnd == 0, then it's the last param; otherwise it's the 2nd to last param
+    if _sigmoidSigma is None:
+      sigLow = np.random.uniform(0.1, 0.3) if initFromCurr==0 else curr_params[1];
+      # - make sigHigh relative to sigLow, but bias it to be lower, i.e. narrower
+      sigHigh = sigLow*np.random.uniform(0.5, 1.25) if initFromCurr==0 else curr_params[-1-np.sign(lgnFrontEnd)]; # if lgnFrontEnd == 0, then it's the last param; otherwise it's the 2nd to last param
+    else: # this is from modCompare::smarter initialization, assuming _sigmoidSigma = 5
+      sigLow = np.random.uniform(-2, 0.5);
+      sigHigh = np.random.uniform(-2, 0.5);
   normConst = normConst if initFromCurr==0 else curr_params[2];
   respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
   if newMethod == 0:
@@ -978,15 +995,23 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         respScalar = np.random.uniform(-7, -2) if initFromCurr==0 else curr_params[4];
       else:
         respScalar = np.power(10, np.random.uniform(-1, 0)) if initFromCurr==0 else curr_params[4];
-      noiseLate = np.random.uniform(-0.4, 0.4) if initFromCurr==0 else curr_params[6];
-      noiseEarly = np.random.uniform(-0.5, 0.1) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
+      if force_earlyNoise is None:
+        noiseLate = np.random.uniform(-0.4, 0.4) if initFromCurr==0 else curr_params[6];
+        noiseEarly = np.random.uniform(-0.5, 0.1) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
+      else: # again, from modCompare::smarter initialization, with force_noiseEarly = 0
+        noiseLate = np.random.uniform(-2, 0.4) if initFromCurr==0 else curr_params[6];
+        noiseEarly = force_earlyNoise if initFromCurr==0 else curr_params[6];
     elif respMeasure == 1:
       if spring2021_adj:
-        respScalar = np.random.uniform(-8, -3.5) if initFromCurr==0 else curr_params[4];
+        respScalar = np.random.uniform(-12, -4) if initFromCurr==0 else curr_params[4];
       else:
         respScalar = np.power(10, np.random.uniform(-2.5, -0.5)) if initFromCurr==0 else curr_params[4];
-      noiseLate = np.random.uniform(0, 1) if initFromCurr==0 else curr_params[6];
-      noiseEarly = np.random.uniform(-0.5, 0.5) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
+      if force_earlyNoise is None:
+        noiseLate = np.random.uniform(0, 1) if initFromCurr==0 else curr_params[6];
+        noiseEarly = np.random.uniform(-0.5, 0.5) if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
+      else: # again, from modCompare::smarter initialization, with force_noiseEarly = 0
+        noiseLate = np.random.uniform(0, 3) if initFromCurr==0 else curr_params[6];
+        noiseEarly = force_earlyNoise if initFromCurr==0 else curr_params[6];
   varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
   if lgnFrontEnd > 0:
     # Now, the LGN weighting 
@@ -1248,20 +1273,28 @@ if __name__ == '__main__':
       toPar = False;
 
     start = time.process_time();
-    dcOk = 0; f1Ok = 0;
+    dcOk = 0; f1Ok = 0; nTry = 10;
     if cellNum >= 0:
-      try:
-        setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # first do DC
-        dcOk = 1;
-      except Exception as e:
-        print(e)
-        pass;
-      try:
-        setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # then F1
-        f1Ok = 1;
-      except Exception as e:
-        print(e)
-        pass;
+      while not dcOk and nTry>0:
+        try:
+          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # first do DC
+          dcOk = 1;
+          print('passed with nTry = %d' % nTry);
+        except Exception as e:
+          print(e)
+          pass;
+        nTry -= 1;
+      # now, do F1 fits
+      nTry=10; # reset nTry...
+      while not f1Ok and nTry>0:
+        try:
+          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # then F1
+          f1Ok = 1;
+          print('passed with nTry = %d' % nTry);
+        except Exception as e:
+          print(e)
+          pass;
+        nTry -= 1;
 
     elif cellNum == -1:
       loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory
