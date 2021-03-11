@@ -502,7 +502,7 @@ class sfNormMod(torch.nn.Module):
 
     return param_list
 
-  def simpleResp_matMul(self, trialInf, stimParams = []):
+  def simpleResp_matMul(self, trialInf, stimParams = [], sigmoidSigma=None):
     # returns object with simpleResp and other things
     # --- Created 20.10.12 --- provides ~4x speed up compared to SFMSimpleResp() without need to explicit parallelization
     # --- Updated 20.10.29 --- created new method 
@@ -573,7 +573,7 @@ class sfNormMod(torch.nn.Module):
       sMax  = torch.pow(self.prefSf, effDord) * torch.exp(-effDord/2);
       selSf   = torch.div(s, sMax);
     elif self.excType == 2:
-      selSf = flexible_Gauss([0,1,self.prefSf,self.sigLow,self.sigHigh], stimSf, minThresh=0);
+      selSf = flexible_Gauss([0,1,self.prefSf,self.sigLow,self.sigHigh], stimSf, minThresh=0, sigmoidValue=sigmoidSigma);
  
     # II. Phase, space and time
     omegaX = torch.mul(stimSf, torch.cos(stimOr)); # the stimulus in frequency space
@@ -712,9 +712,9 @@ class sfNormMod(torch.nn.Module):
 
     return respPerTr; # will be [nTrials] -- later, will ensure right output size during operation
 
-  def respPerCell(self, trialInf, debug=0):
+  def respPerCell(self, trialInf, debug=0, sigmoidSigma=None):
     # excitatory filter, first
-    simpleResp = self.simpleResp_matMul(trialInf);
+    simpleResp = self.simpleResp_matMul(trialInf, sigmoidSigma=sigmoidSigma);
     normResp = self.SimpleNormResp(trialInf); # [nFrames x nTrials]
     if self.newMethod == 1:
       Lexc = simpleResp; # [nFrames x nTrials]
@@ -753,9 +753,9 @@ class sfNormMod(torch.nn.Module):
       respModel     = torch.add(self.noiseLate, torch.mul(torch.abs(self.scale), meanRate));
       return respModel; # I don't think we need to transpose here...
 
-  def forward(self, trialInf, respMeasure=0, returnPsth=0, debug=0): # expInd=-1 for sfBB
+  def forward(self, trialInf, respMeasure=0, returnPsth=0, debug=0, sigmoidSigma=_sigmoidSigma): # expInd=-1 for sfBB
     # respModel is the psth! [nTr x nFr]
-    respModel = self.respPerCell(trialInf, debug);
+    respModel = self.respPerCell(trialInf, debug, sigmoidSigma);
 
     if debug:
       return respModel

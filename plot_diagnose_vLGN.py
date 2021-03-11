@@ -22,6 +22,9 @@ warnings.filterwarnings('once');
 
 import pdb
 
+# using fits where the filter sigma is sigmoid?
+_sigmoidSigma = 5; # put a value (5, as of 21.03.10) or None (see model_responses_pytorch.py for details)
+
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
 from matplotlib import rcParams
 # TODO: migrate this to actual .mplstyle sheet
@@ -81,6 +84,11 @@ else:
   pytorch_mod = 0; # default, we don't use the pytorch model
   newMethod = None;
 
+if len(sys.argv) > 16:
+  useHPCfit = int(sys.argv[16]);
+else:
+  useHPCfit = 0;
+
 ## used for interpolation plot
 sfSteps  = 45; # i.e. how many steps between bounds of interest
 conSteps = -1;
@@ -93,7 +101,7 @@ loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
-if 'pl1465' in loc_base:
+if 'pl1465' in loc_base or useHPCfit:
   loc_str = 'HPC';
 else:
   loc_str = '';
@@ -114,7 +122,10 @@ elif excType == 2:
   #fitBase = 'fitList_200507'; # excType 2
   #fitBase = 'fitList_pyt_210121' # excType 2
   #fitBase = 'fitList_pyt_210226'
-  fitBase = 'fitList%s_pyt_210308' % loc_str
+  if _sigmoidSigma is None:
+    fitBase = 'fitList%s_pyt_210308' % loc_str
+  else:
+    fitBase = 'fitList%s_pyt_210310' % loc_str
 #fitBase = 'holdout_fitList_190513cA';
 
 if pytorch_mod == 1 and rvcAdj == -1:
@@ -263,7 +274,7 @@ if pytorch_mod == 1:
   model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm) for prms,normType,lgnType,lgnCon in zip(modFits, normTypes, lgnTypes, conTypes)]
 
   dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
-  modResps = [mod.forward(dw.trInf, respMeasure=respMeasure).detach().numpy() for mod in [model_A, model_B]];
+  modResps = [mod.forward(dw.trInf, respMeasure=respMeasure, sigmoidSigma=_sigmoidSigma).detach().numpy() for mod in [model_A, model_B]];
 
   if respMeasure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
     blanks = np.where(dw.trInf['con']==0);
@@ -941,7 +952,7 @@ plt.ylabel('Normalized response (a.u.)', fontsize=12);
 # Now, plot the full denominator (including the constant term) at a few contrasts
 # --- use the debug flag to get the tuned component of the gain control as computed in the full model
 curr_ax = plt.subplot2grid(detailSize, (1, 2));
-modRespsDebug = [mod.forward(dw.trInf, respMeasure=respMeasure, debug=1) for mod in [model_A, model_B]];
+modRespsDebug = [mod.forward(dw.trInf, respMeasure=respMeasure, debug=1, sigmoidSigma=_sigmoidSigma) for mod in [model_A, model_B]];
 modA_norm, modA_sigma = [modRespsDebug[0][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
 modB_norm, modB_sigma = [modRespsDebug[1][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
 # --- then, simply mirror the calculation as done in the full model
