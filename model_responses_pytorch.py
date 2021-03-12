@@ -35,6 +35,7 @@ modRecov = 0;
 _sigmoidSigma = 5; # if None, then we just use raw value; otherwise, we'll do a sigmoid transform
 _sigmoidScale = 10
 _sigmoidDord = 5;
+_sigmoidGainNorm = 5;
 # --- and a flag for whether or not to include the LGN filter for the gain control
 _LGNforNorm = 0;
 
@@ -415,9 +416,13 @@ class sfNormMod(torch.nn.Module):
     if self.normType == 1:
       self.inhAsym = _cast_as_tensor(normParams); # then it's not really meant to be optimized, should be just zero
       self.gs_mean = None; self.gs_std = None; # replacing the "else" in commented out 'if normType == 2 or normType == 4' below
-    elif self.normType == 2:
+    elif self.normType == 2 or self.normType == 5:
       self.gs_mean = _cast_as_param(normParams[0]);
       self.gs_std  = _cast_as_param(normParams[1]);
+      if self.normType == 5:
+        self.gs_gain = _cast_as_param(normParams[2]);
+      else:
+        self.gs_gain = None;
     elif self.normType == 3:
       # sigma calculation
       self.offset_sigma = _cast_as_param(normParams[0]);  # c50 filter will range between [v_sigOffset, 1]
@@ -477,9 +482,11 @@ class sfNormMod(torch.nn.Module):
     scale = torch.mul(_cast_as_tensor(_sigmoidScale), torch.sigmoid(self.scale)).item() if transformed else self.scale.item();
     print('scalar|early|late: %.3f|%.3f|%.3f' % (scale, self.noiseEarly.item(), self.noiseLate.item()));
     print('norm. const.: %.2f' % self.sigma.item());
-    if self.normType == 2:
+    if self.normType == 2 or self.normType == 5:
       normMn = torch.exp(self.gs_mean).item() if transformed else self.gs_mean.item();
       print('tuned norm mn|std: %.2f|%.2f' % (normMn, self.gs_std.item()));
+      if self.normType == 5:
+        print('\tAnd the norm gain (transformed|untransformed) is: %.2f|%.2f' % (torch.mul(_cast_as_tensor(_sigmoidGainNorm), torch.sigmoid(self.gs_gain)).item(), self.gs_gain.item()));
     print('still applying the LGN filter for the gain control') if self.applyLGNtoNorm else print('No LGN for GC');
     print('********END OF MODEL PARAMETERS********\n');
 
@@ -497,7 +504,11 @@ class sfNormMod(torch.nn.Module):
           param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.gs_mean.item(), self.gs_std.item(), self.mWeight.item()];
         elif self.excType == 2:
           param_list = [self.prefSf.item(), self.sigLow.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.gs_mean.item(), self.gs_std.item(), self.sigHigh.item(), self.mWeight.item()];
-
+    elif self.normType == 5:
+        if self.excType == 1:
+          param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.gs_mean.item(), self.gs_std.item(), self.gs_gain.item(), self.mWeight.item()];
+        elif self.excType == 2:
+          param_list = [self.prefSf.item(), self.sigLow.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.gs_mean.item(), self.gs_std.item(), self.gs_gain.item(), self.sigHigh.item(), self.mWeight.item()];
     if self.lgnFrontEnd == 0: # then we'll trim off the last constraint, which is mWeight bounds (and the last param, which is mWeight)
       param_list = param_list[0:-1];
 
@@ -688,12 +699,13 @@ class sfNormMod(torch.nn.Module):
       self.inhAsym = _cast_as_tensor(0);
       new_weights = 1 + self.inhAsym*(torch.log(sfs) - torch.mean(torch.log(sfs)));
       new_weights = torch.mul(lgnStage, new_weights);
-    elif self.normType == 2:
+    elif self.normType == 2 or self.normType == 5:
       # Relying on https://pytorch.org/docs/stable/distributions.html#torch.distributions.normal.Normal.log_prob
       log_sfs = torch.log(sfs);
       weight_distr = torch.distributions.normal.Normal(self.gs_mean, self.gs_std)
-      new_weights = torch.exp(weight_distr.log_prob(log_sfs)); 
-      new_weights = torch.mul(lgnStage, new_weights);
+      new_weights = torch.exp(weight_distr.log_prob(log_sfs));
+      gain_curr = torch.mul(_cast_as_tensor(_sigmoidGainNorm), torch.sigmoid(self.gs_gain)) if self.normType == 5 else _cast_as_tensor(1);
+      new_weights = torch.mul(gain_curr, torch.mul(lgnStage, new_weights));
       if recenter_norm: # we'll recenter this weighted normalization around zero
         normMin, normMax = torch.min(new_weights), torch.max(new_weights)
         centerVal = (normMax-normMin)/2
@@ -964,11 +976,12 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   normConst = -2; # per Tony, just start with a low value (i.e. closer to linear)
   if fitType == 1:
     inhAsym = 0;
-  if fitType == 2:
+  if fitType == 2 or fitType == 5:
     # see modCompare.ipynb, "Smarter initialization" for details
     normMean = np.random.uniform(0.75, 1.25) * np.log10(prefSfEst) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
     normStd = np.random.uniform(0.3, 2) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
-
+    if fitType == 5:
+      normGain = np.random.uniform(-3, -1) if initFromCurr == 0 else curr_params[10]; # will be a sigmoid-ed value...
   # --- then, set up each parameter
   pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
   if excType == 1:
@@ -1031,6 +1044,12 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, mWeight);
     elif excType == 2:
       param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, sigHigh, mWeight);
+  elif fitType == 5:
+    ### TODO: make this less redundant???
+    if excType == 1:
+      param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, normGain, mWeight);
+    elif excType == 2:
+      param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, normGain, sigHigh, mWeight);
   if lgnFrontEnd == 0: # then we'll trim off the last constraint, which is mWeight bounds (and the last param, which is mWeight)
     param_list = param_list[0:-1];   
 
