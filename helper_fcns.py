@@ -405,6 +405,8 @@ def fitType_suffix(fitType):
     fitSuf = '_c50';
   elif fitType == 4:
     fitSuf = '_flex';
+  elif fitType == 5:
+    fitSuf = '_wghtGain';
   return fitSuf;
 
 def lossType_suffix(lossType):
@@ -3644,10 +3646,14 @@ def getNormParams(params, normType, forceAsymZero=True):
       inhAsym = 0;
 
     return inhAsym;
-  elif normType == 2:
+  elif normType == 2 or normType == 5:
     gs_mean = params[8];
     gs_std  = params[9];
-    return gs_mean, gs_std;
+    if normType == 2:
+      return gs_mean, gs_std;
+    elif normType == 5:
+      gs_gain = params[10]; # just one parameter after gs_std
+      return gs_mean, gs_std, gs_gain;
   elif normType == 3:
     # sigma calculation
     offset_sigma = params[8];  # c50 filter will range between [v_sigOffset, 1]
@@ -3890,7 +3896,7 @@ def nParamsByType(fitType, excType, lgnType=0):
       nParams = 9; 
     elif fitType == 2 or fitType == 4:
       nParams = 10;
-    elif fitType == 3:
+    elif fitType == 3 or fitType == 5:
       nParams = 11;
     # add one extra parameter if it's excType == 2
     if excType == 2:

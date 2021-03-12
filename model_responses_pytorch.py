@@ -384,8 +384,10 @@ class sfNormMod(torch.nn.Module):
       self.mWeight = _cast_as_param(modParams[-1]);
     elif self.lgnConType == 2: # FORCE at 0.5
       self.mWeight = _cast_as_tensor(0); # then it's NOT a parameter, and is fixed at 0, since as input to sigmoid, this gives 0.5
-    else: # still not a parameter, but use the value in modParams; this case shouldn't really come up...
+    elif self.lgnConType == 3: # still not a parameter, but use the value in modParams; this case shouldn't really come up...
       self.mWeight = _cast_as_tensor(modParams[-1]);
+    elif self.lgnConType == 4: # FORCE at -1, i.e. all parvo
+      self.mWeight = _cast_as_tensor(-np.Inf); # then it's NOT a parameter, and is fixed at -Inf, since as input to sigmoid, this gives 0 (i.e. all parvo)
       
     self.prefSf = _cast_as_param(modParams[0]);
     if self.excType == 1:
@@ -571,7 +573,7 @@ class sfNormMod(torch.nn.Module):
         # -- then here's our final responses per component for the current stimulus
         # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
         lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
-      elif self.lgnConType == 2 or self.lgnConType == 3:
+      elif self.lgnConType == 2 or self.lgnConType == 3 or self.lgnConType == 4:
         # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
         avgWt = torch.sigmoid(self.mWeight);
         selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
@@ -655,9 +657,11 @@ class sfNormMod(torch.nn.Module):
 
       return torch.transpose(respComp, 0, 1);
 
-  def genNormWeightsSimple(self, trialInf, recenter_norm=recenter_norm):
+  def genNormWeightsSimple(self, trialInf, recenter_norm=recenter_norm, threshWeights=1e-3):
     ''' simply evaluates the usual normalization weighting but at the frequencies of the stimuli directly
     i.e. in effect, we are eliminating the bank of filters in the norm. pool
+        --- if threshWeights is None, then we won't threshold the norm. weights; 
+        --- if it's not None, we do max(threshWeights, calculatedWeights)
     '''
 
     sfs = _cast_as_tensor(trialInf['sf']); # [nComps x nTrials]
@@ -684,13 +688,9 @@ class sfNormMod(torch.nn.Module):
         # -- then here's our final responses per component for the current stimulus
         # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
         lgnStage = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
-      elif self.lgnConType == 2 or self.lgnConType == 3:
-        # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
-        if self.lgnConType == 2: 
-          avgWt = 0; # As input to sigmoid, gives 0.5; here, it's forced average between M & P (see lgnConType == 3)
-        elif self.lgnConType == 3:
-          avgWt = self.mWeight; # here, it's equal to self.mWeight
-        selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
+      elif self.lgnConType == 2 or self.lgnConType == 3 or self.lgnConType == 4:
+        # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take some average in-between of the two (depending on lgnConType)
+        selCon_avg = torch.sigmoid(self.mWeight)*selCon_m + (1-torch.sigmoid(self.mWeight))*selCon_p;
         lgnStage = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_avg)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_avg)));
     else:
       lgnStage = torch.ones_like(sfs);
@@ -711,6 +711,8 @@ class sfNormMod(torch.nn.Module):
         centerVal = (normMax-normMin)/2
         toAdd = 1-centerVal-normMin; # to make the center of these weights at 1
         new_weights = toAdd + new_weights
+        if threshWeights is not None:
+          new_weights = torch.max(_cast_as_tensor(threshWeights), new_weights);
         
     return new_weights;
 
@@ -884,7 +886,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         #fL_name = 'fitList%s_pyt_210226_dG' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
         fL_name = 'fitList%s_pyt_210308_dG' % (loc_str); # pyt for pytorch
         if recenter_norm:
-          fL_name = 'fitList%s_pyt_210311_dG' % (loc_str); # pyt for pytorch
+          fL_name = 'fitList%s_pyt_210312_dG' % (loc_str); # pyt for pytorch
         #fL_name = 'fitList%s_pyt_210304_dG' % (loc_str); # pyt for pytorch; FULL datalists for V1_orig, altExpl
       elif excType == 2:
         #fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
@@ -896,7 +898,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           fL_name = 'fitList%s_pyt_210310' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
         # overwriting...
         if recenter_norm:
-          fL_name = 'fitList%s_pyt_210311' % (loc_str); # pyt for pytorch
+          fL_name = 'fitList%s_pyt_210312' % (loc_str); # pyt for pytorch
 
   todoCV = 1 if whichTrials is not None else 0;
 
