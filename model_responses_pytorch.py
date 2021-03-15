@@ -380,10 +380,10 @@ class sfNormMod(torch.nn.Module):
     # handle the possibility of a multi fitting first
     if self.lgnFrontEnd == 99:
       self.mWeight = _cast_as_param(modParams[nParams-1]);
-    elif self.lgnFrontEnd > 0 and self.lgnConType != 2: # why? if lgnConType is 2, then we are NOT actually optimizing the mWeight, just fixing it at 0.5
+    elif self.lgnFrontEnd == 1 and self.lgnConType == 1:
       self.mWeight = _cast_as_param(modParams[-1]);
     elif self.lgnConType == 2: # FORCE at 0.5
-      self.mWeight = _cast_as_tensor(0); # then it's NOT a parameter, and is fixed at 0, since as input to sigmoid, this gives 0.5
+       self.mWeight = _cast_as_tensor(0); # then it's NOT a parameter, and is fixed at 0, since as input to sigmoid, this gives 0.5
     elif self.lgnConType == 3: # still not a parameter, but use the value in modParams; this case shouldn't really come up...
       self.mWeight = _cast_as_tensor(modParams[-1]);
     elif self.lgnConType == 4: # FORCE at -1, i.e. all parvo
