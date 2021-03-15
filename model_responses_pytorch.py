@@ -32,6 +32,7 @@ else:
   globalMin = 1e-6 # what do we "cut off" the model response at? should be >0 but small
 modRecov = 0;
 # --- for parameters that are transformed with sigmoids, what's the scalar in front of the sigmoid??
+_sigmoidRespExp = 3;
 _sigmoidSigma = 5; # if None, then we just use raw value; otherwise, we'll do a sigmoid transform
 _sigmoidScale = 10
 _sigmoidDord = 5;
@@ -399,6 +400,7 @@ class sfNormMod(torch.nn.Module):
 
     # Other (nonlinear) model components
     self.sigma    = _cast_as_param(modParams[2]); # normalization constant
+    #self.respExp  = _cast_as_tensor(1); # response exponent -- fixed at one (not a free param)
     self.respExp  = _cast_as_param(modParams[3]); # response exponent
     self.scale    = _cast_as_param(modParams[4]); # response scalar
 
@@ -755,7 +757,8 @@ class sfNormMod(torch.nn.Module):
     # half-wave rectification??? we add a squaring after the max, then respExp will do what it does...
     #ratio         = torch.pow(torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), 2), self.respExp);
     # just rectify, forget the squaring
-    ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), self.respExp);
+    ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), 1+torch.mul(_cast_as_tensor(_sigmoidRespExp), torch.sigmoid(self.respExp)));
+    #ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), self.respExp);
     # just rectify, don't even add the power
     #ratio = torch.max(_cast_as_tensor(globalMin), rawResp);
     # we're now skipping the averaging across frames...
@@ -863,7 +866,8 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=7500, learning_rate=0.10, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm): # learning rate 0.04ish (on 20.03.06; 0.15 seems too high - 21.01.26)
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=7500, learning_rate=0.10, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=1): # learning rate 0.04ish (on 20.03.06; 0.15 seems too high - 21.01.26)
+  # --- rExp_gt1 means that we force the response exponent to be gteq 1
   global dataListName
   
   ### Load the cell, set up the naming
@@ -877,6 +881,12 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     loc_str = 'HPC';
   else:
     loc_str = '';
+
+  if rExp_gt1:
+    rExpStr = 're';
+  else:
+    rExpStr = '';
+    
   if fL_name is None: # otherwise, it's already defined...
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
@@ -886,7 +896,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         #fL_name = 'fitList%s_pyt_210226_dG' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
         fL_name = 'fitList%s_pyt_210308_dG' % (loc_str); # pyt for pytorch
         if recenter_norm:
-          fL_name = 'fitList%s_pyt_210312_dG' % (loc_str); # pyt for pytorch
+          #fL_name = 'fitList%s_pyt_210312_dG' % (loc_str); # pyt for pytorch
+          fL_name = 'fitList%s_pyt_210314%s_dG' % (loc_str, rExpStr); # pyt for pytorch
         #fL_name = 'fitList%s_pyt_210304_dG' % (loc_str); # pyt for pytorch; FULL datalists for V1_orig, altExpl
       elif excType == 2:
         #fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
@@ -898,7 +909,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           fL_name = 'fitList%s_pyt_210310' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
         # overwriting...
         if recenter_norm:
-          fL_name = 'fitList%s_pyt_210312' % (loc_str); # pyt for pytorch
+          #fL_name = 'fitList%s_pyt_210312' % (loc_str); # pyt for pytorch
+          fL_name = 'fitList%s_pyt_210314%s' % (loc_str, rExpStr); # pyt for pytorch
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -998,7 +1010,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       sigLow = np.random.uniform(-2, 0.5);
       sigHigh = np.random.uniform(-2, 0.5);
   normConst = normConst if initFromCurr==0 else curr_params[2];
-  respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
+  respExp = -np.inf if initFromCurr==0 else curr_params[3]; # np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
   if newMethod == 0:
     # easier to start with a small scalar and work up, rather than work down
     respScalar = np.random.uniform(200, 700) if initFromCurr==0 else curr_params[4];
