@@ -27,8 +27,12 @@ warnings.filterwarnings('once');
 import pdb
 
 # using fits where the filter sigma is sigmoid?
-_sigmoidSigma = None; # put a value (5) or None (see model_responses_pytorch.py for details)
+_sigmoidRespExp = None; # 3 or None, as of 21.03.14
+_sigmoidSigma = 5; # put a value (5) or None (see model_responses_pytorch.py for details)
+_sigmoidGainNorm = 5;
+recenter_norm = 1; # recenter the tuned normalization around 1?
 useCoreFit = 1; # if useCoreFit, then we'll plot the model response to the sfBB_var* experiments, if applicable
+_globalMin = 1e-10;
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
 from matplotlib import rcParams
@@ -111,6 +115,11 @@ if 'pl1465' in loc_base or useHPCfit:
 else:
   loc_str = '';
 
+if _sigmoidRespExp is not None:
+  rExpStr = 're';
+else:
+  rExpStr = '';
+
 ### DATALIST
 expName = hf.get_datalist(expDir);
 ### ONSETS
@@ -137,6 +146,10 @@ _sigmoidScale = 10
 _sigmoidDord = 5;
 if excType == 1:
   fitBase = 'fitList%s_pyt_210308_dG' % loc_str
+  if recenter_norm:
+    #fitBase = 'fitList%s_pyt_210314%s_dG' % (loc_str, rExpStr)
+    #fitBase = 'fitList%s_pyt_210312_dG' % loc_str
+    fitBase = 'fitList%s_pyt_210315_dG' % loc_str
   #fitBase = 'fitList_pyt_210226_dG'
   #fitBase = 'fitList_pyt_200417'; # excType 1
   #fitBase = 'fitList_pyt_201017'; # excType 1
@@ -149,6 +162,10 @@ elif excType == 2:
     fitBase = 'fitList%s_pyt_210308' % loc_str
   else:
     fitBase = 'fitList%s_pyt_210310' % loc_str
+  if recenter_norm:
+    #fitBase = 'fitList%s_pyt_210314%s' % (loc_str, rExpStr)
+    #fitBase = 'fitList%s_pyt_210312' % loc_str
+    fitBase = 'fitList%s_pyt_210315' % loc_str
 else:
   fitBase = None;
 
@@ -167,8 +184,14 @@ if fitBase is not None:
   fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
   fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
   # what's the shorthand we use to refer to these models...
-  modA_str = '%s%s%s' % ('fl' if normA==1 else 'wt', 'LGN' if lgnA>0 else 'V1', 'avg' if conA>1 else '');
-  modB_str = '%s%s%s' % ('fl' if normB==1 else 'wt', 'LGN' if lgnB>0 else 'V1', 'avg' if conB>1 else '');
+  wtStr = 'wt';
+  # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
+  aWtStr = 'wt%s' % ('' if normA==2 else 'Gn');
+  bWtStr = 'wt%s' % ('' if normB==2 else 'Gn');
+  lgnStrA = hf.lgnType_suffix(lgnA, conA);
+  lgnStrB = hf.lgnType_suffix(lgnB, conB);
+  modA_str = '%s%s' % ('fl' if normA==1 else aWtStr, lgnStrA if lgnA>0 else 'V1');
+  modB_str = '%s%s' % ('fl' if normB==1 else bWtStr, lgnStrB if lgnB>0 else 'V1');
 
   fitListA = hf.np_smart_load(data_loc + fitNameA);
   fitListB = hf.np_smart_load(data_loc + fitNameB);
@@ -265,10 +288,10 @@ if fitBase is not None:
   trInf_f1, _ = mrpt.process_data(expInfo, expInd=expInd, respMeasure=1); 
   val_trials = trInf_dc['num']; # these are the indices of valid, original trials
 
-  resp_A_dc  = mod_A_dc.forward(trInf_dc, respMeasure=0, sigmoidSigma=_sigmoidSigma).detach().numpy();
-  resp_B_dc = mod_B_dc.forward(trInf_dc, respMeasure=0, sigmoidSigma=_sigmoidSigma).detach().numpy();
-  resp_A_f1  = mod_A_f1.forward(trInf_f1, respMeasure=1, sigmoidSigma=_sigmoidSigma).detach().numpy();
-  resp_B_f1 = mod_B_f1.forward(trInf_f1, respMeasure=1, sigmoidSigma=_sigmoidSigma).detach().numpy();
+  resp_A_dc  = mod_A_dc.forward(trInf_dc, respMeasure=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
+  resp_B_dc = mod_B_dc.forward(trInf_dc, respMeasure=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
+  resp_A_f1  = mod_A_f1.forward(trInf_f1, respMeasure=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
+  resp_B_f1 = mod_B_f1.forward(trInf_f1, respMeasure=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
 
   # now get the mask+base response (f1 at base TF)
   maskInd, baseInd = hf_sf.get_mask_base_inds();
@@ -308,6 +331,9 @@ respMatrixDC, respMatrixF1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, 
 respMatrixDC_onlyMask, respMatrixF1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, vecCorrectedF1=vecCorrected, onsetTransient=onsetCurr); # i.e. get the maskONLY response
 # and get the mask+base response (but f1 at mask TF)
 _, respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, vecCorrectedF1=vecCorrected, onsetTransient=onsetCurr); # i.e. get the maskONLY response
+#_, rMF1_mTf_noVec = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, vecCorrectedF1=0, onsetTransient=onsetCurr);
+#pdb.set_trace();
+
 # -- if vecCorrected, let's just take the "r" elements, not the phi information
 if vecCorrected:
     respMatrixF1 = respMatrixF1[:,:,0,:]; # just take the "r" information (throw away the phi)
@@ -609,8 +635,7 @@ if fitBase is not None: # then we can plot some model details
   # make overall title
   fDetails.suptitle('DC <---- |model details| ----> F1');
 
-  detailSize = (3, 6);
-  #detailSize_filters = (3,2); # for the filters, we'll just pretend we have two columns
+  detailSize = (4, 6); # yes, normally (3,6), but making debug plots on 21.03.14 & want the extra row
 
   respTypes = [None, None]; # todo: [dcResps, f1Resps], figure out how to package, esp. with f1 having mask & base
   colToAdd = [0, 3]; # we add +X if doing f1 details
@@ -639,7 +664,10 @@ if fitBase is not None: # then we can plot some model details
     '''
 
     # response nonlinearity
-    modExps = [x[3] for x in currPrms]; # respExp is in location [3]
+    if _sigmoidRespExp is None:
+      modExps = [x[3] for x in currPrms]; # respExp is in location [3]
+    else:
+      modExps = [1 + _sigmoidRespExp/(1+np.exp(-x[3])) for x in currPrms]; # respExp is in location [3]
     curr_ax = plt.subplot2grid(detailSize, (0, 1+colAdd));
     # Remove top/right axis, put ticks only on bottom/left
     sns.despine(ax=curr_ax, offset=5);
@@ -674,8 +702,8 @@ if fitBase is not None: # then we can plot some model details
         sfExcLGN = s/sMax; # will be used IF there isn't an LGN front-end...
       if excType == 2:
         ### flex. gauss
-        sigLow = modPrm[1];
-        sigHigh = modPrm[-1];
+        sigLow = modPrm[1] if _sigmoidSigma is None else _sigmoidSigma/(1+np.exp(-modPrm[1]));
+        sigHigh = modPrm[-1-np.sign(lgnType)] if _sigmoidSigma is None else _sigmoidSigma/(1+np.exp(-modPrm[-1-np.sign(lgnType)]));
         sfRel = np.divide(omega, prefSf);
         # - set the sigma appropriately, depending on what the stimulus SF is
         sigma = np.multiply(sigLow, [1]*len(sfRel));
@@ -714,13 +742,9 @@ if fitBase is not None: # then we can plot some model details
           # -- then here's our final responses per component for the current stimulus
           # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
           lgnSel = mWt*selSf_m*selCon_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
-        elif lgnConType == 2 or lgnConType == 3:
+        elif lgnConType == 2 or lgnConType == 3 or lgnConType == 4:
           # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
-          if lgnConType == 2:
-            avgWt = 0.5; # here, it's forced average between M & P (see lgnConType == 3)
-          elif lgnConType == 3:
-            avgWt = mWt; # here, it's equal to mWt
-          selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
+          selCon_avg = mWt*selCon_m + (1-mWt)*selCon_p;
           lgnSel = mWt*selSf_m*selCon_avg[-1] + (1-mWt)*selSf_p*selCon_avg[-1];
         withLGN = s*lgnSel;
         sfExcLGN = withLGN/np.max(withLGN);
@@ -735,7 +759,7 @@ if fitBase is not None: # then we can plot some model details
         conValInd = np.argmin(np.square(stimCo-conMatch));
         if lgnConType == 1:
           jointAtLowCon = mWt*selSf_m*selCon_m[conValInd] + (1-mWt)*selSf_p*selCon_p[conValInd];
-        elif lgnConType == 2 or lgnConType == 3:
+        elif lgnConType == 2 or lgnConType == 3 or lgnConType == 4:
           jointAtLowCon = mWt*selSf_m*selCon_avg[conValInd] + (1-mWt)*selSf_p*selCon_avg[conValInd];
         plt.semilogx(omega, np.divide(jointAtLowCon, max_joint), label='joint - %d%% contrast' % (100*conMatch), color='k', alpha=0.3);
         plt.title('lgn %s' % modLabels[pltNum]);
@@ -748,8 +772,9 @@ if fitBase is not None: # then we can plot some model details
 
       # Compute weights for suppressive signals
       nTrials = len(val_trials);
-      gs_mean = modPrm[8] if normType == 2 else None;
-      gs_std = modPrm[9] if normType == 2 else None;
+      gs_mean = modPrm[8] if normType == 2 or normType == 5 else None;
+      gs_std = modPrm[9] if normType == 2 or normType == 5 else None;
+      #gs_gain = 
       norm_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
       sfNormSimple = norm_weights/np.amax(np.abs(norm_weights));
       sfNorms.append(sfNormSimple);
@@ -771,7 +796,7 @@ if fitBase is not None: # then we can plot some model details
     plt.xlim([omega[0], omega[-1]]);
     plt.ylim([-0.1, 1.1]);
     plt.xlabel('spatial frequency (c/deg)', fontsize=12);
-    plt.ylabel('Normalized response (a.u.)', fontsize=12);
+    plt.ylabel('Normalized response (a.u.)', fontsize=12)
 
     # SIMPLE normalization - i.e. the raw weights
     curr_ax = plt.subplot2grid(detailSize, (2, 1+colAdd));
@@ -794,7 +819,7 @@ if fitBase is not None: # then we can plot some model details
     # Now, plot the full denominator (including the constant term) at a few contrasts
     # --- use the debug flag to get the tuned component of the gain control as computed in the full model
     curr_ax = plt.subplot2grid(detailSize, (1, 2+colAdd));
-    modRespsDebug = [mod.forward(trInf, respMeasure=respMeas, debug=1, sigmoidSigma=_sigmoidSigma) for mod in currMods];
+    modRespsDebug = [mod.forward(trInf, respMeasure=respMeas, debug=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm) for mod in currMods];
     modA_norm, modA_sigma = [modRespsDebug[0][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
     modB_norm, modB_sigma = [modRespsDebug[1][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
     # --- then, simply mirror the calculation as done in the full model
@@ -823,17 +848,102 @@ if fitBase is not None: # then we can plot some model details
     plt.xlim([omega[0], omega[-1]]);
     #plt.xlim([1e-1, 1e1]);
 
+    ##################
+    # TEMP. DEBUG: plot the full response at a few contrasts (single gratings)
+    # --- and, generally the progression from filter-->threhsolding-->etc
+    # - excitatory alone (0), with thresholding/resrpExp (1), full response (2)
+    ##################
+    ### 
+    # --- use the debug flag to get the tuned component of the gain control as computed in the full model
+    modRespsDebug = [mod.forward(trInf, respMeasure=respMeas, debug=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm) for mod in currMods];
+    modA_exc, modA_norm, modA_sigma = [modRespsDebug[0][x].detach().numpy() for x in [0,1,2]]; # returns are exc, inh, sigmaFilt (c50)
+    modB_exc, modB_norm, modB_sigma = [modRespsDebug[1][x].detach().numpy() for x in [0,1,2]]; # returns are exc, inh, sigmaFilt (c50)
+    # --- then, simply mirror the calculation as done in the full model
+    full_nums   = [np.add(modPrms[5], excs) for modPrms, excs in zip(currPrms, [modA_exc, modB_exc])]; # X is the index for early noise
+    full_denoms = [np.power(sigmaFilt + np.power(norm, 2), 0.5) for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
+    full_ratio = [np.divide(num, np.tile(denom, (num.shape[0], 1))) for num, denom in zip(full_nums, full_denoms)];
+    # --- full response (with actual respExp, and with respExp=1)
+    full_resp_dcs = [];
+    for rExp in [[currPrms[0][3], currPrms[1][3]], [1, 1]]:
+      full_resp_one  = [np.power(np.maximum(_globalMin, ratio), rExp_curr) for ratio, rExp_curr in zip(full_ratio, rExp)];
+      full_resp_two = [np.maximum(_globalMin, modPrms[6] + (ratio*_sigmoidScale)/(1+np.exp(-modPrms[4]))) for ratio, modPrms in zip(full_resp_one, currPrms)];
+      full_resp_fft = [hf.spike_fft(psth.transpose(), stimDur=1)[0] for psth in full_resp_two];
+      full_resp_dc = [np.array([resp[0] for resp in ffts]) for ffts in full_resp_fft];
+      full_resp_dcs.append(full_resp_dc);
+    # --- just the excitatory filter (no thresholding)
+    numer_fft = [hf.spike_fft(psth.transpose(), stimDur=1)[0] for psth in full_nums];
+    numer_dc = [np.array([resp[0] for resp in ffts]) for ffts in numer_fft];
+    # --- then, numerator with thresholding (with actual rExp, and with 1)
+    thresh_resp  = [np.power(np.maximum(_globalMin, ratio), modPrms[3]) for ratio, modPrms in zip(full_nums, currPrms)];
+    thresh_respNoExp  = [np.power(np.maximum(_globalMin, ratio), 1) for ratio, modPrms in zip(full_nums, currPrms)];
+    thresh_fft = [[hf.spike_fft(psth.transpose(), stimDur=1)[0] for psth in threshs] for threshs in [thresh_resp, thresh_respNoExp]];
+    thresh_dcs = [[np.array([resp[0] for resp in ffts]) for ffts in tfft] for tfft in thresh_fft];
+
+    currToPlot = [numer_dc, thresh_dcs, full_resp_dcs];
+    titles = ['filt', 'with thresh, nonlin', 'full resp']
+    ylims = [[0, 1], [0, 1], [0, 1]];
+    
+    for (row, resp), title, ylim in zip(enumerate(currToPlot), titles, ylims):
+      curr_ax = plt.subplot2grid(detailSize, (3, row+colAdd));
+      # --- use hf.get_valid_trials to get high/low con, single gratings
+      conVals = [maskCon[-5], maskCon[-3], maskCon[-1]]; # try to get the normResp at these contrast values
+      modTrials = trInf['num']; # these are the trials eval. by the model
+      # then, let's go through for the above contrasts and get the in-model response
+      for cI, conVal in enumerate(reversed(conVals)):
+        closest_ind = np.argmin(np.abs(conVal - maskCon));
+        close_enough = np.abs(maskCon[closest_ind] - conVal) < 0.03 # must be within 3% contrast
+        if close_enough:
+          # highest contrast, first; for all, no base, only mask
+          all_trials = [hf_sf.get_valid_trials(expInfo, 1, 0, closest_ind, sfI)[0] for sfI,_ in enumerate(maskSf)];
+          # then, find which corresponding index into model-eval-only trials this is
+          all_trials_modInd = [np.intersect1d(modTrials, trs, return_indices=True)[1] for trs in all_trials];
+          if row == 0:
+            modA_resps = [np.mean(resp[0][trs]) for trs in all_trials_modInd]
+            modB_resps = [np.mean(resp[1][trs]) for trs in all_trials_modInd]
+            if cI==0:
+              max_resp = np.maximum(np.max(modA_resps), np.max(modB_resps));
+          else: # then we've got two plots
+            modA_resps = [[np.mean(resps[0][trs]) for trs in all_trials_modInd] for resps in resp];
+            modB_resps = [[np.mean(resps[1][trs]) for trs in all_trials_modInd] for resps in resp];
+            if cI==0:
+              max_resp = np.maximum(np.max(modA_resps[0]), np.max(modB_resps[0]));
+              max_resp_noExp = np.maximum(np.max(modA_resps[1]), np.max(modB_resps[1]));
+          # -- take sqrt of con val so that it's not SO dim...
+          if row == 0:
+            [plt.semilogx(maskSf, resp/max_resp, alpha=np.sqrt(conVal), color=clr) for clr,resp in zip(modColors, [modA_resps, modB_resps])]
+          else:
+            [plt.semilogx(maskSf, resp/max_resp, alpha=np.sqrt(conVal), color=clr) for clr,resp in zip(modColors, [modA_resps[0], modB_resps[0]])]
+            [plt.semilogx(maskSf, resp/max_resp_noExp, alpha=np.sqrt(conVal), color=clr, linestyle='--') for clr,resp in zip(modColors, [modA_resps[1], modB_resps[1]])]
+          plt.axhline(_globalMin, linestyle='--', color='k');
+          plt.axvline(0.1, linestyle='--', color='k');
+          plt.axvline(1, linestyle='--', color='k');
+          plt.axvline(10, linestyle='--', color='k');
+      #plt.xlim([0.1, 10]);
+      plt.xlim([omega[0], omega[-1]]);
+      if row < 2:
+        plt.yscale('symlog', linthresh=1e-10);
+      plt.ylim(ylim); #plt.ylim([0, 1]);
+      plt.title(title);
+    ##################
+    # END TEMP. DEBUG
+    ##################
+
     # print, in text, model parameters:
     curr_ax = plt.subplot2grid(detailSize, (0, 0+colAdd));
     plt.text(0.5, 0.6, 'order: %s, %s' % (*modLabels, ), fontsize=24, horizontalalignment='center', verticalalignment='center');
     plt.text(0.5, 0.5, 'prefSf: %.2f, %.2f' % (currPrms[0][0], currPrms[1][0]), fontsize=24, horizontalalignment='center', verticalalignment='center');
-    normA = np.exp(currPrms[0][8]) if normTypes[0]==2 else np.nan;
-    normB = np.exp(currPrms[1][8]) if normTypes[1]==2 else np.nan;
+    # assumes only 2 or 5 as normTypes (besides 1...)
+    normA = np.exp(currPrms[0][8]) if normTypes[0]>=2 else np.nan;
+    normB = np.exp(currPrms[1][8]) if normTypes[1]>=2 else np.nan;
+    normGainA = _sigmoidGainNorm/(1+np.exp(-currPrms[0][10])) if normTypes[0]==5 else np.nan;
+    normGainB = _sigmoidGainNorm/(1+np.exp(-currPrms[1][10])) if normTypes[1]==5 else np.nan;
     plt.text(0.5, 0.4, 'normSf: %.2f, %.2f' % (normA, normB), fontsize=24, horizontalalignment='center', verticalalignment='center');
+    if normGainA is not None or normGainB is not None:
+      plt.text(0.5, 0.0, 'normGain: %.2f, %.2f' % (normGainA, normGainB), fontsize=24, horizontalalignment='center', verticalalignment='center');
     if excType == 1:
       plt.text(0.5, 0.3, 'derivative order: %.2f, %.2f' % (currPrms[0][1], currPrms[1][1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
     elif excType == 2:
-      plt.text(0.5, 0.3, 'sig (l|r): %.2f|%.2f, %.2f|%.2f' % (currPrms[0][1], currPrms[0][-1], currPrms[1][1], currPrms[1][-1]), fontsize=24, horizontalalignment='center', verticalalignment='center');
+      plt.text(0.5, 0.3, 'sig (l|r): %.2f|%.2f, %.2f|%.2f' % (currPrms[0][1], currPrms[0][-1-np.sign(lgnTypes[0])], currPrms[1][1], currPrms[1][-1-np.sign(lgnTypes[1])]), fontsize=24, horizontalalignment='center', verticalalignment='center');
     plt.text(0.5, 0.2, 'response scalar: %.2f, %.2f' % (currPrms[0][4], currPrms[1][4]), fontsize=24, horizontalalignment='center', verticalalignment='center');
     plt.text(0.5, 0.1, 'sigma (con|raw): %.2f, %.2f || %.2f, %.2f' % (np.power(10, currPrms[0][2]), np.power(10, currPrms[1][2]), currPrms[0][2], currPrms[1][2]), fontsize=24, horizontalalignment='center', verticalalignment='center');
     plt.axis('off');

@@ -215,7 +215,7 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=r
       adjByTrialSum[blanks] = 0; # just set it to 0 if that component was blnak during the trial
       adjByTrialSum = np.sum(adjByTrialSum, axis=1);
       # get the mean resp organized by sfMix condition
-      adjMeans = hf.organize_resp(adjByTrialSum, cellStruct, expInd, respsAsRate=False)[2];
+      adjMeans, adjByTrialSum = hf.organize_resp(adjByTrialSum, cellStruct, expInd, respsAsRate=False)[2:];
     consRepeat = [valCons] * len(adjMeans);
 
     if disp > 0: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)
@@ -224,8 +224,10 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=r
       adjSemCompTr  = [[sem(hf.switch_inner_outer(x)) for x in y] for y in adjByTrial];
       rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True, prevFits=rvcFits_curr);
     elif disp == 0:
-      adjSemTr   = [[sem(x) for x in y] for y in adjByTrial];
+      adjSemTr   = [[sem(x) for x in y] for y in adjByTrialSum]; # keeping for backwards compatability? check when this one works
+      #adjSemTr   = [[sem(x) for x in y] for y in adjByTrial]; # keeping for backwards compatability? check when this one works
       adjSemCompTr = adjSemTr; # for single gratings, there is only one component!
+      pdb.set_trace();
       rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True, prevFits=rvcFits_curr);
   ######
   # complex cell

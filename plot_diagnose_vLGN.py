@@ -23,7 +23,10 @@ warnings.filterwarnings('once');
 import pdb
 
 # using fits where the filter sigma is sigmoid?
+_sigmoidRespExp = None; # 3 or None, as of 21.03.14
 _sigmoidSigma = 5; # put a value (5, as of 21.03.10) or None (see model_responses_pytorch.py for details)
+_sigmoidGainNorm = 5;
+recenter_norm = 1;
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
 from matplotlib import rcParams
@@ -106,6 +109,11 @@ if 'pl1465' in loc_base or useHPCfit:
 else:
   loc_str = '';
 
+if _sigmoidRespExp is not None:
+  rExpStr = 're';
+else:
+  rExpStr = '';
+
 ### DATALIST
 expName = hf.get_datalist(expDir);
 ### FITLIST
@@ -118,6 +126,10 @@ if excType == 1:
   #fitBase = 'fitList_200417'; # excType 1
   #fitBase = 'fitList_pyt_210226_dG'
   fitBase = 'fitList%s_pyt_210308_dG' % loc_str
+  if recenter_norm:
+    #fitBase = 'fitList%s_pyt_210314%s_dG' % (loc_str, rExpStr)
+    #fitBase = 'fitList%s_pyt_210312_dG' % loc_str
+    fitBase = 'fitList%s_pyt_210315_dG' % loc_str
 elif excType == 2:
   #fitBase = 'fitList_200507'; # excType 2
   #fitBase = 'fitList_pyt_210121' # excType 2
@@ -126,6 +138,10 @@ elif excType == 2:
     fitBase = 'fitList%s_pyt_210308' % loc_str
   else:
     fitBase = 'fitList%s_pyt_210310' % loc_str
+  if recenter_norm:
+    #fitBase = 'fitList%s_pyt_210314%s' % (loc_str, rExpStr)
+    #fitBase = 'fitList%s_pyt_210312' % loc_str
+    fitBase = 'fitList%s_pyt_210315' % loc_str
 #fitBase = 'holdout_fitList_190513cA';
 
 if pytorch_mod == 1 and rvcAdj == -1:
@@ -147,8 +163,14 @@ fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, f
 fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
 print('modA: %s\nmodB: %s\n' % (fitNameA, fitNameB))
 # what's the shorthand we use to refer to these models...
-modA_str = '%s%s%s' % ('fl' if normA==1 else 'wt', 'LGN' if lgnA>0 else 'V1', 'avg' if conA>1 else '');
-modB_str = '%s%s%s' % ('fl' if normB==1 else 'wt', 'LGN' if lgnB>0 else 'V1', 'avg' if conB>1 else '');
+wtStr = 'wt';
+# -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
+aWtStr = 'wt%s' % ('' if normA==2 else 'Gn');
+bWtStr = 'wt%s' % ('' if normB==2 else 'Gn');
+lgnStrA = hf.lgnType_suffix(lgnA, conA);
+lgnStrB = hf.lgnType_suffix(lgnB, conB);
+modA_str = '%s%s' % ('fl' if normA==1 else aWtStr, lgnStrA if lgnA>0 else 'V1');
+modB_str = '%s%s' % ('fl' if normB==1 else bWtStr, lgnStrB if lgnB>0 else 'V1');
 
 # set the save directory to save_loc, then create the save directory if needed
 lossSuf = hf.lossType_suffix(lossType).replace('.npy', ''); # get the loss suffix, remove the file type ending
@@ -544,7 +566,7 @@ if diffPlot != 1:
       v_cons = val_con_by_disp[d];
       n_v_cons = len(v_cons);
 
-      fCurr, dispCurr = plt.subplots(1, 3, figsize=(35, 30)); # left side for flat; middle for data; right side for weighted modelb
+      fCurr, dispCurr = plt.subplots(1, 3, figsize=(35, 30), sharey=True); # left side for flat; middle for data; right side for weighted modelb
       fDisp.append(fCurr)
       dispAx.append(dispCurr);
 
@@ -793,8 +815,8 @@ for (pltNum, modPrm),lgnType,lgnConType,mWt in zip(enumerate(modFits), lgnTypes,
     sfExcLGN = s/sMax; # will be used IF there isn't an LGN front-end...
   if excType == 2:
     ### flex. gauss
-    sigLow = modPrm[1];
-    sigHigh = modPrm[-1];
+    sigLow = modPrm[1] if _sigmoidSigma is None else _sigmoidSigma/(1+np.exp(-modPrm[1]));
+    sigHigh = modPrm[-1-np.sign(lgnType)] if _sigmoidSigma is None else _sigmoidSigma/(1+np.exp(-modPrm[-1-np.sign(lgnType)]))
     sfRel = np.divide(omega, prefSf);
     # - set the sigma appropriately, depending on what the stimulus SF is
     sigma = np.multiply(sigLow, [1]*len(sfRel));
@@ -833,13 +855,9 @@ for (pltNum, modPrm),lgnType,lgnConType,mWt in zip(enumerate(modFits), lgnTypes,
       # -- then here's our final responses per component for the current stimulus
       # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
       lgnSel = mWt*selSf_m*selCon_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
-    elif lgnConType == 2 or lgnConType == 3:
+    elif lgnConType == 2 or lgnConType == 3 or lgnConType == 4:
       # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
-      if lgnConType == 2:
-        avgWt = 0.5; # here, it's forced average between M & P (see lgnConType == 3)
-      elif lgnConType == 3:
-        avgWt = mWt; # here, it's equal to mWt
-      selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
+      selCon_avg = mWt*selCon_m + (1-mWt)*selCon_p;
       lgnSel = mWt*selSf_m*selCon_avg[-1] + (1-mWt)*selSf_p*selCon_avg[-1];
     withLGN = s*lgnSel;
     sfExcLGN = withLGN/np.max(withLGN);
@@ -854,7 +872,7 @@ for (pltNum, modPrm),lgnType,lgnConType,mWt in zip(enumerate(modFits), lgnTypes,
     conValInd = np.argmin(np.square(stimCo-conMatch));
     if lgnConType == 1:
       jointAtLowCon = mWt*selSf_m*selCon_m[conValInd] + (1-mWt)*selSf_p*selCon_p[conValInd];
-    elif lgnConType == 2 or lgnConType == 3:
+    elif lgnConType == 2 or lgnConType == 3 or lgnConType == 4:
       jointAtLowCon = mWt*selSf_m*selCon_avg[conValInd] + (1-mWt)*selSf_p*selCon_avg[conValInd];
     plt.semilogx(omega, np.divide(jointAtLowCon, max_joint), label='joint - %d%% contrast' % (100*conMatch), color='k', alpha=0.3);
     plt.title('lgn %s' % modLabels[pltNum]);
@@ -985,7 +1003,10 @@ plt.xlim([omega[0], omega[-1]]);
 #plt.xlim([1e-1, 1e1]);
 
 # last but not least...and not last... response nonlinearity
-modExps = [x[3] for x in modFits];
+if _sigmoidRespExp is None:
+  modExps = [x[3] for x in modFits]; # respExp is in location [3]
+else:
+  modExps = [1 + _sigmoidRespExp/(1+np.exp(-x[3])) for x in modFits]; # respExp is in location [3]
 curr_ax = plt.subplot2grid(detailSize, (0, 2));
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset=5);
@@ -1021,6 +1042,11 @@ elif excType == 2:
 respScalars = [modFits[0][4], modFits[1][4]]; # don't transform them, since we want to know the real value of the optimized parameter
 plt.text(0.5, 0.3, 'response scalar: %.3f, %.3f' % (respScalars[0], respScalars[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, modFits[0][2]), np.power(10, modFits[1][2]), modFits[0][2], modFits[1][2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+normGainA = _sigmoidGainNorm/(1+np.exp(-modFits[0][10])) if normTypes[0]==5 else np.nan;
+normGainB = _sigmoidGainNorm/(1+np.exp(-modFits[1][10])) if normTypes[1]==5 else np.nan;
+if normGainA is not None or normGainB is not None:
+  plt.text(0.5, 0.1, 'normGain: %.2f, %.2f' % (normGainA, normGainB), fontsize=12, horizontalalignment='center', verticalalignment='center');
+
 
 # Now, space out the subplots...
 #f.tight_layout(pad=0.1)

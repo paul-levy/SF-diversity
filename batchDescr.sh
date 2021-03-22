@@ -47,7 +47,7 @@ source activate lcv-python
 ###   
 ########
 
-for run in {1..59}
+for run in {1..56}
 do
   #######
   ### Start 21.03.04 run
@@ -56,11 +56,11 @@ do
   # V1/ -- vec F1 adjustment with full dataset
   ## RVCs ONLY with NO phase adjustment (instead, vector correction for F1)
   python descr_fits.py $run 0 V1/ -1 1 0 1 0 0 2 0 &
-  python descr_fits.py $run 1 V1/ -1 1 0 1 0 0 2 0 &
-  python descr_fits.py $run 2 V1/ -1 1 0 1 0 0 2 0 &
-  python descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 & 
+  #python descr_fits.py $run 1 V1/ -1 1 0 1 0 0 2 0 &
+  #python descr_fits.py $run 2 V1/ -1 1 0 1 0 0 2 0 &
+  #python descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 & 
   # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
-  python descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 & 
+  #python descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 & 
 
   # V1_orig/ -- rvc_f0 and descr only
   #python descr_fits.py $run 0 V1_orig/ -1 0 1 1 0 0 2 0 &

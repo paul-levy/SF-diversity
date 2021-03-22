@@ -32,24 +32,36 @@ EXP_DIR=$1
 EXC_TYPE=$2
 LOSS=$3
 HPC=${4:0} 
-# default is zero, i.e. not HPC fits...
+NORM_TYPE=${5:1} # 1 means the original type of weighted gain control; 2 means the newer type# default is zero, i.e. not HPC fits...
 
 for run in {1..8}
 do
   
+  if [[ $NORM_TYPE -eq 1 ]]; then
+    # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 22 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 21 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    # pytorch mod; modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 22 21 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+  else
+    # ALT
+    # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 44 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 41 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    # pytorch mod; modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 55 41 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+  fi
+
   # jointLGN plots
   #python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 99 1 1 0 0 0.05 -1 1 & # no diff, not interpolated
   #python3.6 plot_diagnose_vLGN.py $run 2 1 V1_orig/ 99 1 1 0 0 0.05 -1 1 & # no diff, not interpolated
   #python3.6 plot_diagnose_vLGN.py $run 2 1 altExp/ 99 1 1 0 0 0.05 -1 1 & # no diff, not interpolated
-
-  # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 22 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-  # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 21 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-  # pytorch mod; modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-  # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 22 21 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
 
   # LGN type 1, pytorch model, poiss loss
   #python3.6 plot_diagnose_vLGN.py $run 2 2 V1/ 1 -1 1 0 0 0.05 -1 1 1 & # no diff, not interpolated

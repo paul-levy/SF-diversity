@@ -440,6 +440,8 @@ def lgnType_suffix(lgnType, lgnConType=1):
     conSuf = 'f'; # fixed
   elif lgnConType == 3: # as for 2, but M vs P weighting for RVC is yoked to the mWeight model parameter (optimized)
     conSuf = 'y'; # "yoked"
+  elif lgnConType == 4: # parvo-only front-end
+    conSuf = 'p';
 
   return '%s%s' % (lgnSuf, conSuf);
 
@@ -3687,7 +3689,7 @@ def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2, tr
       cons = np.vstack([comp for comp in trialInf['con']]);
     except: # we allow cellStruct to simply be an array of sfs...
       sfs = cellStruct;
-      warnings.warn('Your first argument is simply an array of spatial frequencies - it should include the full trial information, including SF and CON values');
+      #warnings.warn('Your first argument is simply an array of spatial frequencies - it should include the full trial information, including SF and CON values');
       cons = np.ones_like(sfs);
 
   # apply LGN stage, if specified - we apply equal M and P weight, since this is across a population of neurons, not just the one one uron under consideration

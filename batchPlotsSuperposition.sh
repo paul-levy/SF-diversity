@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source activate lcv-python
+source activate pytorch-lcv
 
 ### GUIDE (as of 19.11.05)
 # V1/ - use dataList_glx.npy, was 35 cells -- now 56 (as of m681)
@@ -11,19 +11,27 @@ source activate lcv-python
 # LGN/ - standard, 77 cells
 
 ## optional arguments after expDir/
-## - use_mod_resp (default is 0; put 1 to plot superposition with model responses)
+## - use_mod_resp (default is 0; put 1 to plot superposition with model responses; in 2, it uses the pytorch model fits)
 ## - fitType (default is 2 [weighted]; use 1 for flat; etc)
 ## - excType (1 for gauss deriv [default]; 2 for flex. gauss)
+## - useHPCfit (1 to use it; 0 for not)
+## - conType (what lgnConType for the model fit?)
+## - lgnFrontEnd (which lgnFrontEnd for the model fit?)
 
 for run in {1..8}
 do
   #python3.6 plot_superposition.py $run altExp/ & # with data
   #python3.6 plot_superposition.py $run V1/ & # with data
   #python3.6 plot_superposition.py $run LGN/ & # with data
-  python3.6 plot_superposition.py $run V1/ 1 1 2 & # model, flat, flex. gauss
-  python3.6 plot_superposition.py $run V1/ 1 2 2 & # model, wght, flex. gauss
-  python3.6 plot_superposition.py $run V1/ 1 1 1 & # model, flat, gauss deriv.
-  python3.6 plot_superposition.py $run V1/ 1 2 1 & # model, wght, gauss deriv.
+  # DATA
+  python3.6 plot_superposition.py $run V1/ 0 5 2 1 1 1 &
+  # Weighted model (5)
+  python3.6 plot_superposition.py $run V1/ 2 5 2 1 1 1 &
+  # Weighted model (2)
+  python3.6 plot_superposition.py $run V1/ 2 2 2 1 1 1 &
+  # Flat model
+  python3.6 plot_superposition.py $run V1/ 2 1 2 1 1 1 &
+
 done
 
 #python3.6 plot_superposition.py 1 LGN/

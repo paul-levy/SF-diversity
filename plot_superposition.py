@@ -9,7 +9,9 @@ import matplotlib.cm as cm
 import seaborn as sns
 import itertools
 import helper_fcns as hf
+import helper_fcns_sfBB as hf_sf
 import model_responses as mod_resp
+import model_responses_pytorch as mrpt
 import scipy.optimize as opt
 from scipy.stats.mstats import gmean as geomean
 import time
@@ -26,7 +28,7 @@ plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/p
 which_cell = int(sys.argv[1]);
 expDir    = sys.argv[2];
 if len(sys.argv) > 3:
-  use_mod_resp = int(sys.argv[3]);
+  use_mod_resp = int(sys.argv[3]); # if mod_resp is 2, then we are using pytorch model
 else:
   use_mod_resp = 0; # default is to NOT use model
 if len(sys.argv) > 4: # which type of normalization?
@@ -38,7 +40,35 @@ if len(sys.argv) > 5:
 else:
   excType = 1; # default is wght
 
+if len(sys.argv) > 6:
+  useHPCfit = int(sys.argv[6]);
+else:
+  useHPCfit = 1; # default is using the HPC fit
+
+if len(sys.argv) > 7:
+  conType = int(sys.argv[7]);
+else:
+  conType = None; # default is using the HPC fit
+
+if len(sys.argv) > 8:
+  lgnFrontEnd = int(sys.argv[8]);
+else:
+  lgnFrontEnd = None; # default is using the HPC fit
+
+if use_mod_resp == 2:
+  rvcAdj   = -1; # this means vec corrected F1, not phase adjustment F1...
+  _applyLGNtoNorm = 0; # don't apply the LGN front-end to the gain control weights
+  recenter_norm = 1;
+  newMethod = 1; # yes, use the "new" method for mrpt (not that new anymore, as of 21.03)
+  lossType = 1; # sqrt
+  _sigmoidSigma = 5;
+
 basePath = os.getcwd() + '/'
+if 'pl1465' in basePath or useHPCfit:
+  loc_str = 'HPC';
+else:
+  loc_str = '';
+
 rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
 if expDir == 'altExp/': # we don't adjust responses there...
   rvcName = None;
@@ -52,6 +82,20 @@ if use_mod_resp == 1:
     fitBase = 'fitList_200507';
   lossType = 1; # sqrt
   fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
+elif use_mod_resp == 2:
+  rvcName = None; # Use NONE if getting model responses, only
+  if excType == 1:
+    fitBase = 'fitList%s_210308_dG' % loc_str
+    if recenter_norm:
+      #fitBase = 'fitList%s_pyt_210312_dG' % loc_str
+      fitBase = 'fitList%s_pyt_210315_dG' % loc_str
+  elif excType == 2:
+    fitBase = 'fitList%s_pyt_210310' % loc_str
+    if recenter_norm:
+      #fitBase = 'fitList%s_pyt_210312' % loc_str
+      fitBase = 'fitList%s_pyt_210315' % loc_str
+  fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=conType, vecCorrected=-rvcAdj);
+
 # ^^^ EDIT rvc/descrFits/fitList names here; 
 
 ############
@@ -100,13 +144,13 @@ descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, mode
 ## now, let it run
 dataPath = basePath + expDir + 'structures/'
 save_loc = basePath + expDir + 'figures/'
-save_locSuper = save_loc + 'superposition_200714/'
+save_locSuper = save_loc + 'superposition_210315/'
 if use_mod_resp == 1:
   save_locSuper = save_locSuper + '%s/' % fitBase
 
 dataList = hf.np_smart_load(dataPath + dataListNm);
 descrFits = hf.np_smart_load(dataPath + descrFits_name);
-if use_mod_resp == 1:
+if use_mod_resp == 1 or use_mod_resp == 2:
   fitList = hf.np_smart_load(dataPath + fitList_nm);
 else:
   fitList = None;
@@ -128,7 +172,6 @@ curr_suppr = dict();
 ### Establish the plot, load cell-specific measures
 ############
 nRows, nCols = 6, 2;
-
 cellName = dataList['unitName'][which_cell-1];
 expInd = hf.get_exp_ind(dataPath, cellName)[0]
 S = hf.np_smart_load(dataPath + cellName + '_sfm.npy')
@@ -194,18 +237,52 @@ else: # otherwise, if it's complex, just get F0
   # why mult by stimDur? well, spikes are not rates but baseline is, so we convert baseline to count (i.e. not rate, too)
   spikes = spikes - baseline*hf.get_exp_params(expInd).stimDur; 
 
-_, _, respOrg, respAll = hf.organize_resp(spikes, expData, expInd);
+_, _, _, respAll = hf.organize_resp(spikes, expData, expInd); # only using respAll to get variance measures
 resps_data, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates);
 
 if fitList is None:
   resps = resps_data; # otherwise, we'll still keep resps_data for reference
 elif fitList is not None: # OVERWRITE the data with the model spikes!
-  curr_fit = fitList[which_cell-1]['params'];
-  modResp = mod_resp.SFMGiveBof(curr_fit, S, normType=fitType, lossType=lossType, expInd=expInd, cellNum=which_cell, excType=excType)[1];
-  if f1f0_rat < 1: # then subtract baseline..
-    modResp = modResp - baseline*hf.get_exp_params(expInd).stimDur; 
-  # now organize the responses
-  resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp, respsAsRates=False);
+  if use_mod_resp == 1:
+    curr_fit = fitList[which_cell-1]['params'];
+    modResp = mod_resp.SFMGiveBof(curr_fit, S, normType=fitType, lossType=lossType, expInd=expInd, cellNum=which_cell, excType=excType)[1];
+    if f1f0_rat < 1: # then subtract baseline..
+      modResp = modResp - baseline*hf.get_exp_params(expInd).stimDur; 
+    # now organize the responses
+    resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp, respsAsRates=False);
+  elif use_mod_resp == 2:
+    respMeasure = 1 if f1f0_rat>1 else 0;
+    resp_str = hf_sf.get_resp_str(respMeasure)
+    curr_fit = fitList[which_cell-1][resp_str]['params'];
+    model = mrpt.sfNormMod(curr_fit, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod, lgnConType=conType, applyLGNtoNorm=_applyLGNtoNorm)
+    ### get the vec-corrected responses, if applicable
+    if expInd > 1 and respMeasure == 1:
+      respOverwrite = hf.adjust_f1_byTrial(expData, expInd);
+    else:
+      respOverwrite = None;
+
+    dw = mrpt.dataWrapper(expData, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
+    modResp = model.forward(dw.trInf, respMeasure=respMeasure, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
+
+    if respMeasure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
+      blanks = np.where(dw.trInf['con']==0);
+      modResp[blanks] = 0;
+      # next, sum up across components
+      modResp = np.sum(modResps, axis=1);
+    # finally, make sure this fills out a vector of all responses (just have nan for non-modelled trials)
+    nTrialsFull = len(expData['num']);
+    modResp_full = np.nan * np.zeros((nTrialsFull, ));
+    modResp_full[dw.trInf['num']] = modResp;
+
+    # TODO: This is a work around for which measures are in rates vs. counts (DC vs F1, model vs data...)
+    stimDur = hf.get_exp_params(expInd).stimDur;
+    asRates = True; # if respMeasure == 1 else True; # CHECK???
+    divFactor = stimDur if respMeasure == 0 else 1;
+    modResp_full = np.divide(modResp_full, divFactor);
+    if respMeasure == 0: # if DC, then subtract baseline..., as determined from data (why not model? we aren't yet calc. response to no stim, though it can be done)
+      modResp_full = modResp_full - baseline*hf.get_exp_params(expInd).stimDur;
+    # now organize the responses
+    resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp_full, respsAsRates=asRates);
 
 predResps = resps[2];
 
@@ -489,7 +566,7 @@ if fitz is not None:
   rat_subset = np.array(sfErrsRat)[val_errs];
   ratStd_subset = np.array(sfErrsRatStd)[val_errs];
   #ratStd_subset = (1/np.log(2))*np.divide(np.array(sfErrsRatStd)[val_errs], rat_subset);
-  ax[5,1].scatter(all_sfs[val_sfs][sfInds][val_errs], rat_subset, color=clrs_sf[sfInds], clip_on=False)
+  ax[5,1].scatter(all_sfs[val_sfs][sfInds][val_errs], rat_subset, color=clrs_sf[sfInds][val_errs], clip_on=False)
   ax[5,1].errorbar(all_sfs[val_sfs][sfInds][val_errs], rat_subset, ratStd_subset, color='k', linestyle='-', clip_on=False, label='suppression tuning')
   ax[5,1].axhline(1, ls='--', color='k')
   ax[5,1].set_xlabel('sf (cpd)')
