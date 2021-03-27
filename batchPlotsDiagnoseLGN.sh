@@ -31,8 +31,8 @@ source activate pytorch-lcv
 EXP_DIR=$1
 EXC_TYPE=$2
 LOSS=$3
-HPC=${4:0} 
-NORM_TYPE=${5:1} # 1 means the original type of weighted gain control; 2 means the newer type# default is zero, i.e. not HPC fits...
+HPC=$4 
+NORM_TYPE=$5 # 1 means the original type of weighted gain control; 2 means the newer type# default is zero, i.e. not HPC fits...
 
 for run in {1..8}
 do

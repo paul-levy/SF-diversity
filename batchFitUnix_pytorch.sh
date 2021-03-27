@@ -77,7 +77,7 @@ for run in {1..41}; do
   #### New model fitting procedure/comparisons, per T.M.; started on 21.02.06
   #### - Rather than comparing V1-only, wght against LGN-stage, flat, we'll do 2x2 matrix:
   #### -- LGN stage will ALWAYS be present, but we toggle:
-  #### ---- flat (x) vs weighted gain control (y)
+  #### ---- flat (x) vs tuned gain control (y) vs. tuned, weighted gain control (z)
   #### ---- lgn stage with separate RVC for M&P (1) vs averaged RVC applied to both M&P (2)
   #### Last run per loss type:
   #### ---  sqrt: 21.02.09 20:43 (V1/, V1_BB; full matrix)
@@ -90,10 +90,14 @@ for run in {1..41}; do
   python3.6 model_responses_pytorch.py $run $EXP_DIR $EXC_TYPE $LOSS 1 1 0 1 0.10 1 1 -1 1 &
   # - (y1)
   python3.6 model_responses_pytorch.py $run $EXP_DIR $EXC_TYPE $LOSS 2 1 0 1 0.10 1 1 -1 1 &
+  # - (z1)
+  python3.6 model_responses_pytorch.py $run $EXP_DIR $EXC_TYPE $LOSS 5 1 0 1 0.10 1 1 -1 1 &
   # - (x2)
   python3.6 model_responses_pytorch.py $run $EXP_DIR $EXC_TYPE $LOSS 1 1 0 1 0.10 1 1 -1 2 &
   # - (y2)
   python3.6 model_responses_pytorch.py $run $EXP_DIR $EXC_TYPE $LOSS 2 1 0 1 0.10 1 1 -1 2 &
+  # - (z2)
+  python3.6 model_responses_pytorch.py $run $EXP_DIR $EXC_TYPE $LOSS 5 1 0 1 0.10 1 1 -1 2 &
     ################
   #### END current procedure (started 21.02)
   ################

@@ -129,7 +129,7 @@ if excType == 1:
   if recenter_norm:
     #fitBase = 'fitList%s_pyt_210314%s_dG' % (loc_str, rExpStr)
     #fitBase = 'fitList%s_pyt_210312_dG' % loc_str
-    fitBase = 'fitList%s_pyt_210315_dG' % loc_str
+    fitBase = 'fitList%s_pyt_210321_dG' % loc_str
 elif excType == 2:
   #fitBase = 'fitList_200507'; # excType 2
   #fitBase = 'fitList_pyt_210121' # excType 2
@@ -141,7 +141,7 @@ elif excType == 2:
   if recenter_norm:
     #fitBase = 'fitList%s_pyt_210314%s' % (loc_str, rExpStr)
     #fitBase = 'fitList%s_pyt_210312' % loc_str
-    fitBase = 'fitList%s_pyt_210315' % loc_str
+    fitBase = 'fitList%s_pyt_210321' % loc_str
 #fitBase = 'holdout_fitList_190513cA';
 
 if pytorch_mod == 1 and rvcAdj == -1:

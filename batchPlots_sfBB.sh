@@ -26,12 +26,20 @@ source activate pytorch-lcv
 
 EXC_TYPE=$1
 LOSS=$2
-HPC=${3:0}
-NORM_TYPE=${4:1} # 1 means the original type of weighted gain control; 2 means the newer type
+HPC=$3
+NORM_TYPE=$4
+WHICH_PLOT=$5
+
+if [[ $WHICH_PLOT -eq 1 ]]; then
+  PYCALL="plot_sfBB.py"
+else
+  PYCALL="plot_sfBB_sep.py"
+fi
+
+# 1 means the original type of weighted gain control; 2 means the newer type
 # default is zero, i.e. not HPC fits...
 
 # 20 cells if original datalist; 41 cells if dataList_210222
-
 for run in {1..41}
 do
   ######
@@ -41,23 +49,23 @@ do
   # --------------------------------------con--inp----cor-rExp-------
   if [[ $NORM_TYPE -eq 1 ]]; then
     # modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-    python3.6 plot_sfBB.py $run $EXC_TYPE $LOSS V1_BB/ 12 22 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
+    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
     # modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 plot_sfBB.py $run $EXC_TYPE $LOSS V1_BB/ 12 21 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
+    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 41 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
     # modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 plot_sfBB.py $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
+    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
     # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 plot_sfBB.py $run $EXC_TYPE $LOSS V1_BB/ 22 21 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
+    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
   else
     ### ALT of the above (with wghtGain (normType=5) instead of wght (norm=2))
     # modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-    python3.6 plot_sfBB.py $run $EXC_TYPE $LOSS V1_BB/ 15 44 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
+    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 15 44 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
     # modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 plot_sfBB.py $run $EXC_TYPE $LOSS V1_BB/ 15 41 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
+    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 15 41 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
     # modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 plot_sfBB.py $run $EXC_TYPE $LOSS V1_BB/ 15 11 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
+    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 15 11 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
     # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 plot_sfBB.py $run $EXC_TYPE $LOSS V1_BB/ 55 41 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
+    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 55 41 11 0 0 0.05 1 0 -1 1 $HPC & # no diff, not interpolated
   fi
 
   ######
