@@ -22,7 +22,7 @@ torch.autograd.set_detect_anomaly(True)
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
 force_earlyNoise = None; # if None, allow it as parameter; otherwise, force it to this value; used 0 for 210308-210315; None for 210321
 recenter_norm = 1;
-_schedule = False; # use scheduler or not???
+_schedule = True; # use scheduler or not??? True or False
 fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304, 210308/11/12/14, 210321
 spring2021_adj = 1; # further adjustment to make scale a sigmoid rather than abs; 210222
 if fall2020_adj:
@@ -41,13 +41,15 @@ _sigmoidDord = 5;
 _sigmoidGainNorm = 5;
 # --- and a flag for whether or not to include the LGN filter for the gain control
 _LGNforNorm = 0;
+### force_full datalist?
+force_full = 1;
 
 try:
   cellNum = int(sys.argv[1]);
 except:
   cellNum = np.nan;
 try:
-  dataListName = hf.get_datalist(sys.argv[2], force_full=0); # argv[2] is expDir
+  dataListName = hf.get_datalist(sys.argv[2], force_full=force_full); # argv[2] is expDir
 except:
   dataListName = None;
 
@@ -874,6 +876,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500
   global dataListName
+  global force_full
   
   ### Load the cell, set up the naming
   ########
@@ -904,6 +907,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           #fL_name = 'fitList%s_pyt_210312_dG' % (loc_str); # pyt for pytorch
           #fL_name = 'fitList%s_pyt_210314%s_dG' % (loc_str, rExpStr); # pyt for pytorch
           fL_name = 'fitList%s_pyt_210321_dG' % (loc_str); # pyt for pytorch
+          if force_full:
+            fL_name = 'fitList%s_pyt_210331_dG' % (loc_str); # pyt for pytorch
         #fL_name = 'fitList%s_pyt_210304_dG' % (loc_str); # pyt for pytorch; FULL datalists for V1_orig, altExpl
       elif excType == 2:
         #fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
@@ -918,6 +923,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           #fL_name = 'fitList%s_pyt_210312' % (loc_str); # pyt for pytorch
           #fL_name = 'fitList%s_pyt_210314%s' % (loc_str, rExpStr); # pyt for pytorch
           fL_name = 'fitList%s_pyt_210321' % (loc_str);
+          if force_full:
+            fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1019,7 +1026,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   normConst = normConst if initFromCurr==0 else curr_params[2];
   if rExp_gt1 is not None:
     respExp = 0 if initFromCurr==0 else curr_params[3];
-  else: # Make sigmoid-transformed?
+  else:
     respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
   if newMethod == 0:
     # easier to start with a small scalar and work up, rather than work down
@@ -1316,7 +1323,7 @@ if __name__ == '__main__':
       toPar = False;
 
     start = time.process_time();
-    dcOk = 0; f1Ok = 0; nTry = 10;
+    dcOk = 0; f1Ok = 0; nTry = 30;
     if cellNum >= 0:
       while not dcOk and nTry>0:
         try:
