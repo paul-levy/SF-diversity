@@ -28,7 +28,7 @@
 #       4 - Sach sum{[(exp-obs)^2]/[k+sigma^2]} where
 #           k := 0.01*max(obs); sigma := measured variance of the response
 #   11 - joint fitting (0 - no; 1 - yes) //see hf.dog_fit for details
-#   [12 - phase direction (pos or neg)]; default is pos
+#   [12 - phase direction (pos or neg)]; default is pos (1); neg (-1); or NEITHER (0)
 #   [13 - regularization for gain term (>0 means penalize for high gain)] default is 0
 
 ### GUIDE (as of 19.11.05)
@@ -55,12 +55,13 @@ do
 
   # V1/ -- vec F1 adjustment with full dataset
   ## RVCs ONLY with NO phase adjustment (instead, vector correction for F1)
-  python descr_fits.py $run 0 V1/ -1 1 0 1 0 0 2 0 &
-  #python descr_fits.py $run 1 V1/ -1 1 0 1 0 0 2 0 &
-  #python descr_fits.py $run 2 V1/ -1 1 0 1 0 0 2 0 &
-  #python descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 & 
+  #python descr_fits.py $run 0 V1/ -1 1 0 1 0 0 2 0 0 &
+  #python descr_fits.py $run 1 V1/ -1 1 0 1 0 0 2 0 0 &
+  #python descr_fits.py $run 2 V1/ -1 1 0 1 0 0 2 0 0 &
+  #python descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 0 &
   # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
-  #python descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 & 
+  #python descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 0 & # flex gauss
+  python descr_fits.py $run 0 V1/ -1 0 0 1 1 1 2 0 0 & # sach DoG
 
   # V1_orig/ -- rvc_f0 and descr only
   #python descr_fits.py $run 0 V1_orig/ -1 0 1 1 0 0 2 0 &

@@ -28,9 +28,11 @@ fitNamesFlat = ['%s_flat_chiSq.npy' % fitBase];
 ####
 dogNames = ['descrFits_190503_poiss_sach.npy', 'descrFits_191023_poiss_sach.npy', 'descrFits_191023_sach_sach.npy'];
 descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
-descrNames = ['descrFits_190503_sqrt_flex.npy', 'descrFits_190503_sqrt_flex.npy', 'descrFits_191023_sqrt_flex.npy'];
+descrNames = ['descrFits_210304_sqrt_flex.npy', 'descrFits_210304_sqrt_flex.npy', 'descrFits_210304_sqrt_flex.npy'];
+#descrNames = ['descrFits_190503_sqrt_flex.npy', 'descrFits_190503_sqrt_flex.npy', 'descrFits_191023_sqrt_flex.npy'];
 
-rvcNames = ['rvcFits_191023_f0_NR.npy', 'rvcFits_191023_f0_NR.npy', 'rvcFits_191023_NR_pos.npy'];
+rvcNames = ['rvcFits_210304_f0_NR.npy', 'rvcFits_210304_f0_NR.npy', 'rvcFits_210304_vecF1_NR.npy'];
+#rvcNames = ['rvcFits_191023_f0_NR.npy', 'rvcFits_191023_f0_NR.npy', 'rvcFits_191023_NR_pos.npy'];
 rvcMods = [1,1,1]; # 0-mov; 1-Nakarushton; 2-Peirce
 # rvcNames   = ['rvcFits_f0.npy'];
 # pack to easily tile
@@ -70,7 +72,7 @@ jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat
 from datetime import datetime
 suffix = datetime.today().strftime('%y%m%d')
 
-np.save(base_dir + 'jointList_V1_%s_vT%d_dvT%d' % (suffix, varExplThresh, dog_varExplThresh), jointList)
+np.save(base_dir + 'jointList_V1_take2_%s_vT%d_dvT%d' % (suffix, varExplThresh, dog_varExplThresh), jointList)
 
 ########################
 #### END V1

@@ -167,7 +167,8 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=r
   allCons = stimVals[1];
   allSfs = stimVals[2];
   try:
-    valCons = allCons[valConByDisp[disp]];
+    valConInds = valConByDisp[disp];
+    valCons = allCons[valConInds];
   except:
     warnings.warn('This experiment does not have dispersion level %d; returning empty arrays' % disp);
     return [], [], [], [];
@@ -183,7 +184,8 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=r
       except:
         rvcFits_curr = None;
   else:
-      rvcFits_curr = None;
+    rvcFits = dict();
+    rvcFits_curr = None;
 
   ######
   # simple cell
@@ -206,6 +208,7 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=r
 
       adjMeans   = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
       adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs);
+      # -- adjByTrial is series of nested lists: [nSfs x nConsValid x nComps x nRepeats]
     elif vecF1==1:
       adjByTrial = hf.adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3)
       # then, sum up the valid components per stimulus component
@@ -216,19 +219,35 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=r
       adjByTrialSum = np.sum(adjByTrialSum, axis=1);
       # get the mean resp organized by sfMix condition
       adjMeans, adjByTrialSum = hf.organize_resp(adjByTrialSum, cellStruct, expInd, respsAsRate=False)[2:];
+      # will need to transpose, since axis orders get switched when mixing single # slice with array slice of dim, too
+      adjMeans = np.transpose(adjMeans[disp,:,valConInds]);
+      adjByTrialSum = np.transpose(adjByTrialSum[disp,:,valConInds,:], (1,0,2)); 
+      # -- adjByTrialSum is series of [nSfs x nConsValid x nRepeats], i.e. we've already summed over each component within each repeat
     consRepeat = [valCons] * len(adjMeans);
 
+    ### NOTE: From vecF1==0 case, we know that 
+    ### --- adjMeans is list of lists, len 11; each sublist of len 9 (i.e. sfs x con)
+    ### --- adjByTrial as with adjMeans, but further subdivided to have nTr in inner-most list
+
     if disp > 0: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)
-      adjSumResp  = [np.sum(x, 1) if x else [] for x in adjMeans];
-      adjSemTr    = [[sem(np.sum(hf.switch_inner_outer(x), 1)) for x in y] for y in adjByTrial]
-      adjSemCompTr  = [[sem(hf.switch_inner_outer(x)) for x in y] for y in adjByTrial];
+      adjSumResp  = [np.sum(x, 1) if x else [] for x in adjMeans] if vecF1 == 0 else adjMeans;
+      # --- adjSemTr is [nSf x nValCon], i.e. s.e.m. per condition
+      adjSemTr    = [[sem(np.sum(hf.switch_inner_outer(x), 1)) for x in y] for y in adjByTrial] if vecF1 == 0 else [[sem(hf.nan_rm(x)) for x in y] for y in adjByTrialSum]
+      adjSemCompTr  = [[sem(hf.switch_inner_outer(x)) for x in y] for y in adjByTrial] if vecF1 == 0 else None;
       rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True, prevFits=rvcFits_curr);
     elif disp == 0:
-      adjSemTr   = [[sem(x) for x in y] for y in adjByTrialSum]; # keeping for backwards compatability? check when this one works
-      #adjSemTr   = [[sem(x) for x in y] for y in adjByTrial]; # keeping for backwards compatability? check when this one works
+      if vecF1 == 0:
+        adjSemTr   = [[sem(x) for x in y] for y in adjByTrial]; # keeping for backwards compatability? check when this one works
+      elif vecF1 == 1:
+        adjSemTr   = [[sem(hf.nan_rm(x)) for x in y] for y in adjByTrialSum]; # keeping for backwards compatability? check when this one works
       adjSemCompTr = adjSemTr; # for single gratings, there is only one component!
-      pdb.set_trace();
       rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True, prevFits=rvcFits_curr);
+    currResp = adjSumResp if disp > 0 else adjMeans
+    # --- if the responses we're fitting are [], then we just give np.nan for varExpl
+    varExpl = [hf.var_explained(hf.nan_rm(np.array(dat)), hf.nan_rm(hf.get_rvcResp(prms, valCons, rvcMod)), None) if dat != [] else np.nan for dat, prms in zip(currResp, all_opts)];
+    #print(all_loss)
+    #print(varExpl);
+
   ######
   # complex cell
   ######
@@ -266,17 +285,16 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=r
     # to ensure correct mapping of response to contrast, let's add "0" to the front of the list of contrasts
     consRepeat = [np.hstack((0, allCons[curr_cons]))] * len(adjMeans);
     rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr, mod=rvcMod, prevFits=rvcFits_curr);
+    varExpl = [hf.var_explained(hf.nan_rm(np.array(dat)), hf.nan_rm(hf.get_rvcResp(prms, np.hstack((0, allCons[curr_cons])), rvcMod)), None) for dat, prms in zip(adjMeans, all_opts)];
+    #print(all_loss)
+    #print(varExpl);
     # adjByTrial = spikerate;
     adjSemCompTr = []; # we're getting f0 - therefore cannot get individual component responses!
 
-  if os.path.isfile(data_loc + rvcNameFinal):
-      rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
-  else:
-      rvcFits = dict();
-
   # update stuff - load again in case some other run has saved/made changes
   if os.path.isfile(data_loc + rvcNameFinal):
-    print('reloading rvcFits...');
+    print('reloading rvcFits...(with a pause)');
+    sleep(hf.random_in_range([2,5])[0]) # just sleep to avoid multiply saves simultaneously
     rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
   if cell_num-1 not in rvcFits:
     rvcFits[cell_num-1] = dict();
@@ -288,6 +306,8 @@ def rvc_adjusted_fit(cell_num, data_loc, expInd, descrFitName_f0=None, rvcName=r
   rvcFits[cell_num-1][disp]['loss'] = all_loss;
   rvcFits[cell_num-1][disp]['params'] = all_opts;
   rvcFits[cell_num-1][disp]['conGain'] = all_conGains;
+  # compute variance explained!
+  rvcFits[cell_num-1][disp]['varExpl'] = varExpl
   rvcFits[cell_num-1][disp]['adjMeans'] = adjMeans;
   rvcFits[cell_num-1][disp]['adjByTr'] = adjByTrial
   rvcFits[cell_num-1][disp]['adjSem'] = adjSemTr;
@@ -352,10 +372,12 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName_f0, dLname=ex
     bestLoss = rvcFits[cell_num-1]['loss'];
     currParams = rvcFits[cell_num-1]['params'];
     conGains = rvcFits[cell_num-1]['conGain'];
+    varExpl = rvcFits[cell_num-1]['varExpl']; 
   else: # set values to NaN...
     bestLoss = np.ones((nDisps, nSfs)) * np.nan;
     currParams = np.ones((nDisps, nSfs, nParam)) * np.nan;
     conGains = np.ones((nDisps, nSfs)) * np.nan;
+    varExpl = np.ones((nDisps, nSfs)) * np.nan;
 
   for d in range(nDisps): # works for all disps
     val_sfs = hf.get_valid_sfs(data, d, valConByDisp[d][0], expInd); # any valCon will have same sfs
@@ -370,6 +392,7 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName_f0, dLname=ex
         bestLoss[d, sf] = loss[0];
         currParams[d, sf, :] = params[0][:]; # "unpack" the array
         conGains[d, sf] = conGain[0];
+        varExpl[d, sf] = hf.var_explained(hf.nan_rm(curr_resps), hf.nan_rm(hf.get_rvcResp(params[0], curr_conVals, rvcMod)), None);
 
   # update stuff - load again in case some other run has saved/made changes
   if os.path.isfile(data_loc + name_final):
@@ -380,6 +403,7 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=500, fLname = rvcName_f0, dLname=ex
   rvcFits[cell_num-1]['loss'] = bestLoss;
   rvcFits[cell_num-1]['params'] = currParams;
   rvcFits[cell_num-1]['conGain'] = conGains;
+  rvcFits[cell_num-1]['varExpl'] = varExpl;
 
   np.save(data_loc + name_final, rvcFits);
 
