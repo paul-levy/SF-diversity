@@ -495,6 +495,8 @@ def phase_fit_name(base, dir, byTrial=0):
     base = base + byTr + '_pos.npy';
   if dir == -1:
     base = base + byTr + '_neg.npy';
+  if dir is None or dir == 0:
+    base = base + '.npy';
   return base;
 
 def descrMod_name(DoGmodel):
@@ -1357,7 +1359,7 @@ def naka_rushton(con, params):
 
     return base + gain*np.divide(np.power(con, expon), np.power(con, expon*sExp) + np.power(c50, expon*sExp));
 
-def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False, prevFits=None):
+def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=False, prevFits=None):
    ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
        fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
@@ -1426,9 +1428,9 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False,
            i_base = 0;
          else:
            i_base = np.min(curr_amps) + random_in_range([-2.5, 2.5])[0];
-         i_gain = random_in_range([2, 8])[0] * np.max(curr_amps);
-         i_expon = 2;
-         i_c50 = 0.1;
+         i_gain = random_in_range([0.8, 1.2])[0] * (np.max(curr_amps) - i_base);
+         i_expon = random_in_range([1, 2])[0];
+         i_c50 = random_in_range([0.05, 0.6])[0];
          i_sExp = 1;
          init_params = [i_base, i_gain, i_expon, i_c50, i_sExp];
          if fix_baseline:
@@ -1444,11 +1446,14 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=False,
            s_bounds = (1, 2); # for now, but can adjust as needed (TODO)
          all_bounds = (b_bounds, g_bounds, e_bounds, c_bounds, s_bounds);
        # now optimize
-       to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
+       try:
+         to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
+       except:
+         continue; # this fit failed; try again
        opt_params = to_opt['x'];
        opt_loss = to_opt['fun'];
 
-       if opt_loss > best_loss:
+       if opt_loss > best_loss and ~np.isnan(best_loss):
          continue;
        else:
          best_loss = opt_loss;
@@ -1835,8 +1840,9 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
 
   return totalLoss;
 
-def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel):
+def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=None):
   ''' return the initial parameters for the DoG model, given the model choice and responses
+      --- if bounds is not None, then we'll ensure that each parameter is within the specified bounds
   '''
   np = numpy;
 
@@ -1874,6 +1880,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel):
     init_sig_left = random_in_range(range_denom)[0];
     init_sig_right = random_in_range(range_denom)[0];
     init_params = [init_base, init_amp, init_mu, init_sig_left, init_sig_right];
+
   ############
   ## SACH
   ############
@@ -1893,9 +1900,18 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel):
     init_freqFracSurr = random_in_range((.25, .35))[0];
     init_params = [init_gainCent, init_freqCent, init_gainFracSurr, init_freqFracSurr];
 
+  # For all -- try 
+  if bounds is not None:
+    try:
+      for (ii,prm),bound in zip(enumerate(init_params), bounds):
+        if prm < bound[0] or prm > bound[1]:
+          init_params[ii] = (bound[0]+bound[1])*random_in_range([0.25, 0.75])[0] # some value in-between the two bounds
+    except: # we end up here if bounds is somehow not equal in # of entries to init_params
+      pass; # not ideal, but the parent function should handle failures of initialization by trying again, anyway
+
   return init_params
 
-def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint=False, gain_reg=0, ref_varExpl=None, veThresh=70):
+def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=False, gain_reg=0, ref_varExpl=None, veThresh=70, prevFits=None):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint=True, (and DoGmodel is 1 or 2, i.e. not flexGauss), then we fit assuming
       a fixed ratio for the center-surround gains and [freq/radius]
@@ -1924,19 +1940,29 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
   # unpack responses
   resps_mean, resps_all, resps_sem, base_rate = resps;
+  base_rate = base_rate if base_rate is not None else np.nanmin(resps_mean)
 
   # next, let's compute some measures about the responses
-  max_resp = np.nanmax(resps_all);
+  if resps_all is not None:
+    max_resp = np.nanmax(resps_all);
+  else: # we don't really need to pass in resps_all
+    max_resp = np.nanmax(resps_mean);
 
   # and set up initial arrays
-  bestNLL = np.ones((nCons, )) * np.nan;
-  currParams = np.ones((nCons, nParam)) * np.nan;
-  varExpl = np.ones((nCons, )) * np.nan;
-  prefSf = np.ones((nCons, )) * np.nan;
-  charFreq = np.ones((nCons, )) * np.nan;
-  if joint==True:
-    overallNLL = np.nan;
-    params = np.nan;
+  if prevFits is None:
+    bestNLL = np.ones((nCons, )) * np.nan;
+    currParams = np.ones((nCons, nParam)) * np.nan;
+    varExpl = np.ones((nCons, )) * np.nan;
+    prefSf = np.ones((nCons, )) * np.nan;
+    charFreq = np.ones((nCons, )) * np.nan;
+    if joint==True:
+      overallNLL = np.nan;
+      params = np.nan;
+  else: # we've passed in existing fits!
+    bestNLL, currParams, varExpl, prefSf, charFreq = prevFits['NLL'], prevFits['params'], prevFits['varExpl'], prevFits['prefSf'], prevFits['charFreq'];
+    if joint==True:
+      overallNLL = prevFits['totalNLL'];
+      params = prevFits['paramList'];
 
   ### set bounds
   if DoGmodel == 0: # FLEX - flexible gaussian (i.e. two halves)
@@ -1977,7 +2003,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     if con not in valConByDisp[disp]:
       continue;
 
-    valSfInds = get_valid_sfs(None, disp, con, expInd, stimVals, validByStimVal); # we pass in None for data, since we're giving stimVals/validByStimVal, anyway
+    if validByStimVal is not None:
+      valSfInds = get_valid_sfs(None, disp, con, expInd, stimVals, validByStimVal); # we pass in None for data, since we're giving stimVals/validByStimVal, anyway
+    else: # then we aren't skipping any
+      valSfInds = np.arange(0,len(all_sfs));
     valSfVals = all_sfs[valSfInds];
 
     respConInd = np.where(np.asarray(valConByDisp[disp]) == con)[0];
@@ -2009,7 +2038,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       ###########
       ### pick initial params
       ###########
-      init_params = dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel)
+      init_params = dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, allBounds)
 
       # choose optimization method
       if np.mod(n_try, 2) == 0:
@@ -2018,7 +2047,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
           methodStr = 'TNC';
 
       obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint);
-      wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
+      try:
+        wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
+      except:
+        continue; # the fit has failed (bound issue, for example); so, go back to top of loop, try again
 
       # compare
       NLL = wax['fun'];
@@ -2057,7 +2089,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
           methodStr = 'TNC';
 
       obj = lambda params: DoG_loss(params, allResps, valSfVals, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint);
-      wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds);
+      try:
+        wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds);
+      except:
+        continue; # if that particular fit fails, go back and try again
 
       # compare
       NLL = wax['fun'];
@@ -2112,15 +2147,35 @@ def get_prefSF(flexGauss_fit):
    '''
    return flexGauss_fit[2];
 
-def compute_SF_BW(fit, height, sf_range):
+def compute_LSFV(fit, sfMod=0):
+    ''' Low spatial-frequency variance [LSFV] as computed in Xing et al 2004 '''
+    assert sfMod==0, "In hf.compute_LSFV; As of 21.03.30, only written for two-halved Gaussian sf model"
+    np = numpy;
 
-    # 1/16/17 - This was corrected in the lead up to SfN (sometime 11/16). I had been computing
-    # octaves not in log2 but rather in log10 - it is field convention to use
-    # log2!
+    logBase = 16
+    nSteps = 1000;
 
-    # Height is defined RELATIVE to baseline
-    # i.e. baseline = 10, peak = 50, then half height is NOT 25 but 30
+    # get descrFit, stim_sf, and descriptive responses
+    prefSf = get_prefSF(fit);
+    lowBound = prefSf/logBase
+    stim_sf = np.geomspace(lowBound, 10, nSteps) # go from prefSf/[logBase=16] up to 10 cpd0
+    resps = get_descrResp(fit, stim_sf, sfMod)
+
+    # lsfv calculation
+    wherePref = np.argmin(np.square(prefSf - stim_sf)); # i.e. which arg has prefSf?
+    lsfv_num = [resps[x]*np.square(np.log(stim_sf[x])/np.log(logBase) - np.log(stim_sf[wherePref])/np.log(logBase)) for x in np.arange(0, wherePref)]
+    lsfv_denom = [resps[x] for x in np.arange(0, wherePref)]
+    lsfv = np.sum(lsfv_num)/np.sum(lsfv_denom);
+
+    return lsfv;  
+
+def compute_SF_BW(fit, height, sf_range, which_half=0):
+    ''' if which_half = 0, use both-halves; if +1/-1, only return bandwidth at higher/lower SF end
+     Height is defined RELATIVE to baseline
+     i.e. baseline = 10, peak = 50, then half height is NOT 25 but 30
+    '''
     
+    prefSf = get_prefSF(fit);
     bw_log = numpy.nan;
     SF = numpy.empty((2, 1));
     SF[:] = numpy.nan;
@@ -2133,9 +2188,18 @@ def compute_SF_BW(fit, height, sf_range):
     right_full_bw = 2 * (fit[4] * sqrt(2*log(1/height)));
     right_cpd = fit[2] * math.exp((fit[4] * sqrt(2*math.log(1/height))));
 
-    if left_cpd > sf_range[0] and right_cpd < sf_range[-1]:
-        SF = [left_cpd, right_cpd];
-        bw_log = log(right_cpd / left_cpd, 2);
+    if which_half == 0:
+      if left_cpd > sf_range[0] and right_cpd < sf_range[-1]:
+          SF = [left_cpd, right_cpd];
+          bw_log = log(right_cpd / left_cpd, 2);
+    elif which_half == 1:
+      if right_cpd < sf_range[-1]:
+        SF = [prefSf, right_cpd]
+        bw_log = log(right_cpd / prefSf, 2);
+    elif which_half == -1:
+      if left_cpd > sf_range[0]:
+        SF = [left_cpd, prefSf]
+        bw_log = log(prefSf / left_cpd, 2);
 
     # otherwise we don't have defined BW!
     
@@ -2318,14 +2382,13 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       ###########
       ### basics (ori16, tf11, rfsize10, rvc10, sf11)
       ###########
-      try:
+      try: # try to get the basic list from superposition analysis
         basics_list = superAnalysis[cell_ind]['basics'];
-      except:
+      except: # but if it's not done, try to do those analyses here
         try:
           basic_names, basic_order = dataList['basicProgName'][cell_ind], dataList['basicProgOrder'];
-          # TODO: commented out get_basic_tunings
-          #basics_list = get_basic_tunings(basic_names, basic_order);
-          basics_list = None;
+          basics_list = get_basic_tunings(basic_names, basic_order);
+          #basics_list = None;
         except:
           basics_list = None;
 
@@ -2348,8 +2411,11 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       sfComCut = np.zeros((nDisps, nCons)) * np.nan; # center of mass, but with a restricted ("cut") set of SF
       f1f0_ratio = np.nan;
       # then, inferred from descriptive fits
+      lsfv = np.zeros((nDisps,nCons)) * np.nan; # LSFV as from Xing et al, 2004
       bwHalf = np.zeros((nDisps, nCons)) * np.nan;
+      bwHalf_split = np.zeros((nDisps, nCons, 2)) * np.nan; # [:,:,[lower,upper]]
       bw34 = np.zeros((nDisps, nCons)) * np.nan;
+      bw34_split = np.zeros((nDisps, nCons, 2)) * np.nan;
       pSf = np.zeros((nDisps, nCons)) * np.nan;
       sf70 = np.zeros((nDisps, nCons)) * np.nan;
       dog_sf70 = np.zeros((nDisps, nCons)) * np.nan;
@@ -2361,6 +2427,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       c50 = np.zeros((nDisps, nSfs)) * np.nan;
       c50_emp = np.zeros((nDisps, nSfs)) * np.nan;
       c50_eval = np.zeros((nDisps, nSfs)) * np.nan;
+      c50_varExpl = np.zeros((nDisps, nSfs)) * np.nan;
       # including from the DoG fits
       dog_pSf = np.zeros((nDisps, nCons)) * np.nan;
       dog_varExpl = np.zeros((nDisps, nCons)) * np.nan;
@@ -2368,8 +2435,11 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       # including the difference/ratio arrays; where present, extra dim of len=2 is for raw/normalized-to-con-change values
       sfVarDiffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
       sfComRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+      lsfvRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
       bwHalfDiffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+      bwHalfDiffs_split = np.zeros((nDisps, nCons, nCons, 2, 2)) * np.nan; # 2nd to last dim is [lower,upper] half rel. to peak
       bw34Diffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+      bw34Diffs_split = np.zeros((nDisps, nCons, nCons, 2, 2)) * np.nan; # 2nd to last dim is [lower,upper] half rel. to peak
       pSfRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
       pSfModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
 
@@ -2390,6 +2460,13 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       # bwHalf, bw34, pSf, sfVar, sfCom, sf75, dog_sf75, sf70, dog_sf70, sfE, dog_sfE
       # -- evaluated from data at 1:.33 contrast (only for single gratings)
       diffsAtThirdCon = np.zeros((nDisps, 11, )) * np.nan;
+      # nDisps, half/three-fourths, lower/upper
+      diffsAtThirdCon_bwSplit = np.zeros((nDisps, 2, 2, )) * np.nan;
+      # just a separate one for LSFV, since we don't know if it will be kept
+      diffsAtThirdCon_lsfv = np.zeros((nDisps, )) * np.nan;
+      
+      # let's also keep a simple array for the index for full, one-third, and lowest valid contrast given descr. sf fit
+      relDescr_inds = -1 * np.ones((nDisps, 3, ), dtype=int); # we'll only count indices >=0 as valid
 
       ## first, get mean/median/maximum response over all conditions
       respByCond = resps[0].flatten();
@@ -2470,8 +2547,12 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
               varExpl = descrFits[cell_ind]['varExpl'][d, c];
               if varExpl > varExplThresh:
                 # on data
-                ignore, bwHalf[d, c] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.5, sf_range=sf_range)
-                ignore, bw34[d, c] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.75, sf_range=sf_range)
+                lsfv[d, c] = compute_LSFV(descrFits[cell_ind]['params'][d, c, :]);
+                bwHalf[d, c] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.5, sf_range=sf_range)[1]
+                bw34[d, c] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.75, sf_range=sf_range)[1]
+                for splitInd,splitHalf in enumerate([-1,1]):
+                   bwHalf_split[d, c, splitInd] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.5, sf_range=sf_range, which_half=splitHalf)[1];
+                   bw34_split[d, c, splitInd] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.75, sf_range=sf_range, which_half=splitHalf)[1]
                 pSf[d, c] = descrFits[cell_ind]['params'][d, c, muLoc]
                 curr_params = descrFits[cell_ind]['params'][d, c, :];
                 sf70[d, c] = sf_highCut(curr_params, sfMod=0, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp);
@@ -2574,8 +2655,6 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
             dog_sfEModRat[d] = [np.log2(evalRatio), np.log2(evalRatio)/logConRat];
         except: # then likely, no rvc/descr fits...
           pass 
-
-
         #####################
         ## END OF TODO
         #####################
@@ -2589,11 +2668,13 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
             try: # if from fit_RVC_F0
                 c50[d, s] = get_c50(rvcMod, rvcFits[cell_ind]['params'][d, s, :]);
                 c50_emp[d, s], c50_eval[d, s] = c50_empirical(rvcMod, rvcFits[cell_ind]['params'][d, s, :]);
+                c50_varExpl[d, s] = rvcFits[cell_ind]['varExpl'][d,s];
             except: # might just be arranged differently...(not fit_rvc_f0)
                 try: # TODO: investigate why c50 param is saving for nan fits in hf.fit_rvc...
                   if ~np.isnan(rvcFits[cell_ind][d]['loss'][s]): # only add it if it's a non-NaN loss value...
                     c50[d, s] = get_c50(rvcMod, rvcFits[cell_ind][d]['params'][s]);
                     c50_emp[d, s], c50_eval[d, s] = c50_empirical(rvcMod, rvcFits[cell_ind][d]['params'][s]);
+                    c50_varExpl[d, s] = rvcFits[cell_ind][d]['varExpl'][s];
                 except: # then this dispersion does not have that SF value, but it's ok - we already have nan
                   pass;
 
@@ -2605,14 +2686,24 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
 
           diff = bwHalf[d,comb[1]] - bwHalf[d,comb[0]];
           bwHalfDiffs[d,comb[0],comb[1]] = [diff, diff/conChange];
-
+          # -- BW split, first lower, then upper 
+          for sideInd in [0,1]:
+            diff = bwHalf_split[d,comb[1],sideInd] - bwHalf_split[d,comb[0],sideInd]
+            bwHalfDiffs_split[d,comb[0],comb[1], sideInd, :] = [diff, diff/conChange];
           diff = bw34[d,comb[1]] - bw34[d,comb[0]];
           bw34Diffs[d,comb[0],comb[1]] = [diff, diff/conChange];
+          # -- BW split, first lower, then upper 
+          for sideInd in [0,1]:
+            diff = bw34_split[d,comb[1],sideInd] - bw34_split[d,comb[0],sideInd]
+            bw34Diffs_split[d,comb[0],comb[1], sideInd, :] = [diff, diff/conChange];
 
           # NOTE: For pSf, we will log2 the ratio, such that a ratio of 0 
           # reflects the prefSf remaining constant (i.e. log2(1/1)-->0)
           rat = pSf[d,comb[1]] / pSf[d,comb[0]];
           pSfRats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange];
+          # -- and we'll do the same for LSFV
+          rat = lsfv[d,comb[1]] / lsfv[d,comb[0]];
+          lsfvRats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange];
 
           ## now, model-free metrics
           sfVarDiffs[d,comb[0],comb[1]] = sfVar[d,comb[1]] - sfVar[d,comb[0]]
@@ -2648,6 +2739,19 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
           conToUse = val_con_by_disp[d][conInd];
           hiInd = int(np.where(np.round(cons[val_con_by_disp[d]], conDig) >= 0.9)[0]);
           hiInd = val_con_by_disp[d][hiInd];
+          relDescr_inds[d, 0] = hiInd; # highest
+          relDescr_inds[d, 1] = conToUse; # one-third
+          try:
+            valDescrFits = np.where(~np.isnan(pSf[d, :]))[0]; # might be empty (i.e. no fits which passed varExpl_thresh)
+            lowInd, hiInd = valDescrFits[0], valDescrFits[-1]; # get the lowest/highest indicies with a still-valid descriptive fit (if cI invalid, then pSf[d,cI] will be nan)
+            relDescr_inds[d, 2] = lowInd if cons[lowInd] < cons[hiInd] else hiInd;
+            print('full con: %.2f' % cons[relDescr_inds[d,0]]);
+            print('one-third con %.2f' % cons[relDescr_inds[d,1]]);
+            print('lowest val. descr. fit is at con %.2f' % cons[relDescr_inds[d,2]]);
+          except:
+            print('no valid descr fits: varExpls:');
+            print(descrFits[cell_ind]['varExpl'][d,:]);
+            pass
           diffsAtThirdCon[d, :] = np.array([bwHalfDiffs[d, conToUse, hiInd, rawInd],
                                    bw34Diffs[d, conToUse, hiInd, rawInd],
                                    pSfRats[d, conToUse, hiInd, rawInd],
@@ -2659,7 +2763,10 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
                                    dog_sf75Rats[d, conToUse, hiInd, rawInd],
                                    sfERats[d, conToUse, hiInd, rawInd],
                                    dog_sfERats[d, conToUse, hiInd, rawInd]]);
-
+          for metrInd,bw_split_curr in enumerate([bwHalfDiffs_split, bw34Diffs_split]):
+            diffsAtThirdCon_bwSplit[d,metrInd,:] = bw_split_curr[d, conToUse, hiInd, rawInd];
+          diffsAtThirdCon_lsfv[d] = lsfvRats[d, conToUse, hiInd, rawInd];
+ 
           
       print('\tdiffsAtThirdCon pSf||sf70||dogSf70 ...  = (%.2f, %.2f, %.2f)' % (diffsAtThirdCon[0, 2], diffsAtThirdCon[0, 5], diffsAtThirdCon[0, 6]));
       print('\tmodRat pSf||sf70||dogSf70 ...  = (%.2f, %.2f, %.2f)' % (pSfModRat[0, 1], sf70ModRat[0, 1], dog_sf70ModRat[0, 1]));
@@ -2668,8 +2775,11 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
                          ('sfComCut', sfComCut),
                          ('sfVar', sfVar),
                          ('f1f0_ratio', f1f0_ratio),
+                         ('lsfv', lsfv),
                          ('bwHalf', bwHalf),
+                         ('bwHalf_split', bwHalf_split),
                          ('bw34', bw34),
+                         ('bw34_split', bw34_split),
                          ('pSf', pSf),
                          ('sf70', sf70),
                          ('dog_sf70', dog_sf70),
@@ -2680,11 +2790,15 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
                          ('c50', c50),
                          ('c50_emp', c50_emp),
                          ('c50_eval', c50_eval),
+                         ('c50_varExpl', c50_varExpl),
                          ('dog_pSf', dog_pSf),
                          ('dog_charFreq', dog_charFreq),
                          ('dog_varExpl', dog_varExpl),
                          ('bwHalfDiffs', bwHalfDiffs),
+                         ('bwHalfDiffs_split', bwHalfDiffs_split),
                          ('bw34Diffs', bw34Diffs),
+                         ('bw34Diffs_split', bw34Diffs_split),
+                         ('lsfvRats', lsfvRats),
                          ('pSfRats', pSfRats),
                          ('pSfModRat', pSfModRat),
                          ('sf70Rats', sf70Rats),
@@ -2705,6 +2819,9 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
                          ('c50Rats', c50Rats),
                          ('suppressionIndex', supr_ind),
                          ('diffsAtThirdCon', diffsAtThirdCon),
+                         ('diffsAtThirdCon_bwSplit', diffsAtThirdCon_bwSplit),
+                         ('diffsAtThirdCon_lsfv', diffsAtThirdCon_lsfv),
+                         ('relDescr_inds', relDescr_inds),
                          ('mn_med_max', mn_med_max)
                          ]);
 
