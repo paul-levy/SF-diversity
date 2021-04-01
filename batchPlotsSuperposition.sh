@@ -18,19 +18,19 @@ source activate pytorch-lcv
 ## - conType (what lgnConType for the model fit?)
 ## - lgnFrontEnd (which lgnFrontEnd for the model fit?)
 
+EXP_DIR=$1
+
 for run in {1..8}
 do
   #python3.6 plot_superposition.py $run altExp/ & # with data
   #python3.6 plot_superposition.py $run V1/ & # with data
   #python3.6 plot_superposition.py $run LGN/ & # with data
   # DATA
-  python3.6 plot_superposition.py $run V1/ 0 5 2 1 1 1 &
+  python3.6 plot_superposition.py $run $EXP_DIR 0 5 2 1 1 1 &
   # Weighted model (5)
-  python3.6 plot_superposition.py $run V1/ 2 5 2 1 1 1 &
-  # Weighted model (2)
-  python3.6 plot_superposition.py $run V1/ 2 2 2 1 1 1 &
+  python3.6 plot_superposition.py $run $EXP_DIR 2 5 2 1 1 1 &
   # Flat model
-  python3.6 plot_superposition.py $run V1/ 2 1 2 1 1 1 &
+  python3.6 plot_superposition.py $run $EXP_DIR 2 1 2 1 1 1 &
 
 done
 

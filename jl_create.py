@@ -19,10 +19,17 @@ expNames = ['dataList.npy', 'dataList.npy', 'dataList_glx.npy']
 nExpts = len(expDirs);
 
 # these are usually same for all expts...we'll "tile" below
-# fitBase = 'fitList_190502cA';
-fitBase = 'fitList_191023c';
-fitNamesWght = ['%s_wght_chiSq.npy' % fitBase];
-fitNamesFlat = ['%s_flat_chiSq.npy' % fitBase];
+pytorch_mod = 1; #
+excType, lossType = 2, 1
+vecCorrected = 1
+useHPCfit = 1;
+normA, normB = 5, 1; # for weighted, 5 is wghtGain (2 is "old" weighted model)
+lgnA, lgnB = 1, 1; # (1) means have an LGN, original filters
+conA, conB = 1, 1; # (1) separate M&P; (2) is equal M+P; (4) is all parvo
+loc_str = 'HPC' if useHPCfit else '';
+fitBase = 'fitList%s_pyt_210331' % loc_str
+fitNamesWght = [hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=None)]
+fitNamesFlat = [hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=None)]
 ####
 # descrFits - loss type determined by comparison (choose best; see modCompare.ipynb::Descriptive Fits)
 ####
@@ -72,7 +79,7 @@ jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat
 from datetime import datetime
 suffix = datetime.today().strftime('%y%m%d')
 
-np.save(base_dir + 'jointList_V1_take2_%s_vT%d_dvT%d' % (suffix, varExplThresh, dog_varExplThresh), jointList)
+np.save(base_dir + 'jointList_V1_wMods_%s_vT%d_dvT%d' % (suffix, varExplThresh, dog_varExplThresh), jointList)
 
 ########################
 #### END V1

@@ -28,6 +28,10 @@ _sigmoidSigma = 5; # put a value (5, as of 21.03.10) or None (see model_response
 _sigmoidGainNorm = 5;
 recenter_norm = 1;
 
+f1_expCutoff = 2; # if 1, then all but V1_orig/ are allowed to have F1; if 2, then altExp/ is also excluded
+
+force_full = 1;
+
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
 from matplotlib import rcParams
 # TODO: migrate this to actual .mplstyle sheet
@@ -115,7 +119,7 @@ else:
   rExpStr = '';
 
 ### DATALIST
-expName = hf.get_datalist(expDir);
+expName = hf.get_datalist(expDir, force_full=force_full);
 ### FITLIST
 _applyLGNtoNorm = 0;
 # -- some params are sigmoid, we'll use this to unpack the true parameter
@@ -130,6 +134,8 @@ if excType == 1:
     #fitBase = 'fitList%s_pyt_210314%s_dG' % (loc_str, rExpStr)
     #fitBase = 'fitList%s_pyt_210312_dG' % loc_str
     fitBase = 'fitList%s_pyt_210321_dG' % loc_str
+    if force_full:
+      fitBase = 'fitList%s_pyt_210331_dG' % loc_str
 elif excType == 2:
   #fitBase = 'fitList_200507'; # excType 2
   #fitBase = 'fitList_pyt_210121' # excType 2
@@ -142,6 +148,9 @@ elif excType == 2:
     #fitBase = 'fitList%s_pyt_210314%s' % (loc_str, rExpStr)
     #fitBase = 'fitList%s_pyt_210312' % loc_str
     fitBase = 'fitList%s_pyt_210321' % loc_str
+    if force_full:
+      fitBase = 'fitList%s_pyt_210331' % loc_str
+
 #fitBase = 'holdout_fitList_190513cA';
 
 if pytorch_mod == 1 and rvcAdj == -1:
@@ -161,7 +170,6 @@ lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
 
 fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
 fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
-print('modA: %s\nmodB: %s\n' % (fitNameA, fitNameB))
 # what's the shorthand we use to refer to these models...
 wtStr = 'wt';
 # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
@@ -194,6 +202,8 @@ except:
 fitListA = hf.np_smart_load(data_loc + fitNameA);
 fitListB = hf.np_smart_load(data_loc + fitNameB);
 
+print('modA: %s\nmodB: %s\n' % (fitNameA, fitNameB))
+
 cellName = dataList['unitName'][cellNum-1];
 try:
   cellType = dataList['unitType'][cellNum-1];
@@ -213,9 +223,11 @@ loss_traj_A  = None;
 loss_traj_B = None;
 
 if pytorch_mod == 1:
-  if respMeasure is None:
+  if respMeasure is None and expInd > f1_expCutoff:
     f1f0_rat = hf.compute_f1f0(expData['sfm']['exp']['trial'], cellNum, expInd, loc_data=None)[0];
     respMeasure = int(f1f0_rat > 1);
+  else:
+    respMeasure = 0; # default to DC (since this might be an expt where we can only analyze DC)
   respStr = hf_sf.get_resp_str(respMeasure);
   modFit_A = fitListA[cellNum-1][respStr]['params'];
   modFit_B = fitListB[cellNum-1][respStr]['params'];
@@ -250,7 +262,7 @@ conTypes = [conA, conB];
 if pytorch_mod == 1:
   # get the correct, adjusted F1 response
   trialInf = expData['sfm']['exp']['trial'];
-  if expInd > 1 and respMeasure == 1:
+  if expInd > f1_expCutoff and respMeasure == 1:
     respOverwrite = hf.adjust_f1_byTrial(trialInf, expInd);
   else:
     respOverwrite = None;
@@ -268,12 +280,12 @@ if rvcAdj >= 0:
   # rvcMod=-1 tells the function call to treat rvcName as the fits, already (we loaded above!)
   spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=rvcFits, rvcMod=-1, descrFitName_f0=None, baseline_sub=False);
 elif rvcAdj == -1: # i.e. ignore the phase adjustment stuff...
-  if respMeasure == 1 and expInd > 1:
+  if respMeasure == 1 and expInd > f1_expCutoff:
     spikes_byComp = respOverwrite;
     # then, sum up the valid components per stimulus component
     allCons = np.vstack(expData['sfm']['exp']['trial']['con']).transpose();
     blanks = np.where(allCons==0);
-    spikes_byComp[blanks] = 0; # just set it to 0 if that component was blnak during the trial
+    spikes_byComp[blanks] = 0; # just set it to 0 if that component was blank during the trial
     spikes_rate = np.sum(spikes_byComp, axis=1);
     asRates = False; # TODO: Figure out if really as rates or not...
     rvcFlag = '_f1';
@@ -281,6 +293,8 @@ elif rvcAdj == -1: # i.e. ignore the phase adjustment stuff...
     spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=None, force_dc=True, baseline_sub=False); 
     rvcFlag = '_f0';
     asRates = True;
+
+print('got correct spike rates');
 
 # #### determine contrasts, center spatial frequency, dispersions
 # -- first, load varGain, since we'll need it just below if pytorch_mod==1, or later on otherwise (if lossType=3)
@@ -335,6 +349,12 @@ if pytorch_mod == 1:
     for cI in np.arange(nCon):
       varExplSF_A[dI, cI] = hf.var_explained(hf.nan_rm(expByCond[dI, :, cI]), hf.nan_rm(modByCondA[dI, :, cI]), None);
       varExplSF_B[dI, cI] = hf.var_explained(hf.nan_rm(expByCond[dI, :, cI]), hf.nan_rm(modByCondB[dI, :, cI]), None);
+
+  # save the varExpl in the fitList
+  fitListA[cellNum-1][respStr]['varExpl_con'] = varExplCon_A
+  fitListB[cellNum-1][respStr]['varExpl_con'] = varExplCon_B
+  fitListA[cellNum-1][respStr]['varExpl_SF'] = varExplSF_A
+  fitListB[cellNum-1][respStr]['varExpl_SF'] = varExplSF_B
 
   lossByCond_A = mrpt.loss_sfNormMod(mrpt._cast_as_tensor(mr_A), mrpt._cast_as_tensor(spikes_rate), lossType=lossType, varGain=mrpt._cast_as_tensor(varGains[0]), debug=1)[1].detach().numpy();
   lossByCond_B = mrpt.loss_sfNormMod(mrpt._cast_as_tensor(mr_B), mrpt._cast_as_tensor(spikes_rate), lossType=lossType, varGain=mrpt._cast_as_tensor(varGains[1]), debug=1)[1].detach().numpy();
@@ -740,7 +760,17 @@ else:
 lgnStr = ' mWt=%.2f|%.2f' % (mWt_A, mWt_B);
 
 f.legend(fontsize='large');
-f.suptitle('%s #%d (%s), loss %.2f|%.2f%s' % (cellType, cellNum, cellName, loss_A, loss_B, lgnStr));
+varExpl_A = hf.var_explained(hf.nan_rm(respMean), hf.nan_rm(modAvgs[0]), None);
+varExpl_B = hf.var_explained(hf.nan_rm(respMean), hf.nan_rm(modAvgs[1]), None);
+###
+if pytorch_mod == 1:
+  fitListA[cellNum-1][respStr]['varExpl'] = varExpl_A;
+  fitListB[cellNum-1][respStr]['varExpl'] = varExpl_B;
+  # save the var explained!
+  print('saving varExplained in: %s' % (data_loc+fitNameA));
+  np.save(data_loc + fitNameA, fitListA);
+  np.save(data_loc + fitNameB, fitListB);
+f.suptitle('%s #%d (%s), loss %.2f|%.2f%s [varExpl=%.2f|%.2f]' % (cellType, cellNum, cellName, loss_A, loss_B, lgnStr, varExpl_A, varExpl_B));
 	        
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc
@@ -1037,7 +1067,7 @@ plt.text(0.5, 0.5, 'prefSf: %.3f, %.3f' % (modFits[0][0], modFits[1][0]), fontsi
 if excType == 1:
   plt.text(0.5, 0.4, 'derivative order: %.3f, %.3f' % (modFits[0][1], modFits[1][1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 elif excType == 2:
-  plt.text(0.5, 0.4, 'sig: %.2f|%.2f, %.2f|%.2f' % (modFits[0][1], modFits[0][-1], modFits[1][1], modFits[1][-1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+  plt.text(0.5, 0.4, 'sig: %.2f|%.2f, %.2f|%.2f' % (modFits[0][1], modFits[0][-1-np.sign(lgnTypes[0])], modFits[1][1], modFits[1][-1-np.sign(lgnTypes[1])]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 #respScalars = [_sigmoidScale/(1+np.exp(-x)) for x in [modFits[0][4], modFits[1][4]]];
 respScalars = [modFits[0][4], modFits[1][4]]; # don't transform them, since we want to know the real value of the optimized parameter
 plt.text(0.5, 0.3, 'response scalar: %.3f, %.3f' % (respScalars[0], respScalars[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
@@ -1154,7 +1184,7 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
 
           rvcAx[plt_x][plt_y].text(min(all_cons[v_cons]), 0.8*maxResp, '%.2f, %.2f' % (varExplCon_A[d, sf_ind], varExplCon_B[d, sf_ind]), ha='left', wrap=True, fontsize=25);
 
-          rvcAx[plt_x][plt_y].set_xscale('log', basex=10); # was previously symlog, linthreshx=0.01
+          rvcAx[plt_x][plt_y].set_xscale('log', base=10); # was previously symlog, linthreshx=0.01
           if col_ind == 0:
             rvcAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
             rvcAx[plt_x][plt_y].set_ylabel('response (spikes/s)', fontsize='medium');

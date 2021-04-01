@@ -25,6 +25,9 @@ warnings.filterwarnings('once');
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
 
+force_full=1; # force getting the full datalist!
+f1_expCutoff = 2; # if 1, then altExp will be allowed to have F1 analyzed; if 2, then only V1/ and V1_BB/
+
 which_cell = int(sys.argv[1]);
 expDir    = sys.argv[2];
 if len(sys.argv) > 3:
@@ -69,11 +72,14 @@ if 'pl1465' in basePath or useHPCfit:
 else:
   loc_str = '';
 
-rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
+#rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
+rvcName = 'rvcFits_210304';
+rvcFits = None; # pre-define this as None; will be overwritten if available/needed
 if expDir == 'altExp/': # we don't adjust responses there...
   rvcName = None;
-dFits_base = 'descrFits_191023';
-dMod_num, dLoss_num = 1, 4; # see hf.descrFit_name/descrMod_name/etc for details
+dFits_base = 'descrFits_210304';
+#dFits_base = 'descrFits_191023';
+dMod_num, dLoss_num = 0, 2; # see hf.descrFit_name/descrMod_name/etc for details
 if use_mod_resp == 1:
   rvcName = None; # Use NONE if getting model responses, only
   if excType == 1:
@@ -88,12 +94,12 @@ elif use_mod_resp == 2:
     fitBase = 'fitList%s_210308_dG' % loc_str
     if recenter_norm:
       #fitBase = 'fitList%s_pyt_210312_dG' % loc_str
-      fitBase = 'fitList%s_pyt_210315_dG' % loc_str
+      fitBase = 'fitList%s_pyt_210331_dG' % loc_str
   elif excType == 2:
     fitBase = 'fitList%s_pyt_210310' % loc_str
     if recenter_norm:
       #fitBase = 'fitList%s_pyt_210312' % loc_str
-      fitBase = 'fitList%s_pyt_210315' % loc_str
+      fitBase = 'fitList%s_pyt_210331' % loc_str
   fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=conType, vecCorrected=-rvcAdj);
 
 # ^^^ EDIT rvc/descrFits/fitList names here; 
@@ -127,14 +133,16 @@ rcParams['font.size'] = 20;
 ############
 # load everything
 ############
-dataListNm = hf.get_datalist(expDir);
+dataListNm = hf.get_datalist(expDir, force_full=force_full);
 #if expDir == 'V1/':
 #  dataListNm = 'dataList.npy';
 #else:
 #  dataListNm = 'dataList_glx.npy';
 descrFits_f0 = None;
 if expDir == 'V1/' or expDir == 'altExp/':
-  rvcMod = 1;
+  rvcMod = 1; # i.e. Naka-rushton (1)
+  rvcDir = None; # None if we're doing vec-corrected
+  vecF1 = 1;
 elif expDir == 'LGN/':
   rvcMod = 0; 
 
@@ -144,11 +152,12 @@ descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, mode
 ## now, let it run
 dataPath = basePath + expDir + 'structures/'
 save_loc = basePath + expDir + 'figures/'
-save_locSuper = save_loc + 'superposition_210315/'
+save_locSuper = save_loc + 'superposition_210331/'
 if use_mod_resp == 1:
   save_locSuper = save_locSuper + '%s/' % fitBase
 
 dataList = hf.np_smart_load(dataPath + dataListNm);
+print('Trying to load descrFits at: %s' % (dataPath + descrFits_name));
 descrFits = hf.np_smart_load(dataPath + descrFits_name);
 if use_mod_resp == 1 or use_mod_resp == 2:
   fitList = hf.np_smart_load(dataPath + fitList_nm);
@@ -178,15 +187,18 @@ S = hf.np_smart_load(dataPath + cellName + '_sfm.npy')
 expData = S['sfm']['exp']['trial'];
 
 # 0th, let's load the basic tuning characterizations AND the descriptive fit
-dfit_curr = descrFits[which_cell-1]['params'][0,-1,:]; # single grating, highest contrast
+try:
+  dfit_curr = descrFits[which_cell-1]['params'][0,-1,:]; # single grating, highest contrast
+except:
+  dfit_curr = None;
 # - then the basics
 try:
   basic_names, basic_order = dataList['basicProgName'][which_cell-1], dataList['basicProgOrder']
-  #basics = hf.get_basic_tunings(basic_names, basic_order);
+  basics = hf.get_basic_tunings(basic_names, basic_order);
 except:
   basics = None;
 ### TEMPORARY: save the "basics" in curr_suppr; should live on its own, though; TODO
-#curr_suppr['basics'] = basics;
+curr_suppr['basics'] = basics;
 
 try:
   oriBW, oriCV = basics['ori']['bw'], basics['ori']['cv'];
@@ -217,28 +229,45 @@ except:
 ############
 f1f0_rat = hf.compute_f1f0(expData, which_cell, expInd, dataPath, descrFitName_f0=descrFits_f0)[0];
 curr_suppr['f1f0'] = f1f0_rat;
+respMeasure = 1 if f1f0_rat > 1 else 0;
 
-if (f1f0_rat > 1 or expDir == 'LGN/') and expDir != 'altExp/' : # i.e. if we're looking at a simple cell, then let's get F1
-  if rvcName is not None:
-    try:
-      rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod);
-    except:
-      rvcFits = None;
+if vecF1 == 1:
+  # get the correct, adjusted F1 response
+  if expInd > f1_expCutoff and respMeasure == 1:
+    respOverwrite = hf.adjust_f1_byTrial(expData, expInd);
   else:
-    rvcFits = None
-  spikes_byComp = hf.get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
+    respOverwrite = None;
+
+if (respMeasure == 1 or expDir == 'LGN/') and expDir != 'altExp/' : # i.e. if we're looking at a simple cell, then let's get F1
+  if vecF1 == 1:
+    spikes_byComp = respOverwrite
+    # then, sum up the valid components per stimulus component
+    allCons = np.vstack(expData['con']).transpose();
+    blanks = np.where(allCons==0);
+    spikes_byComp[blanks] = 0; # just set it to 0 if that component was blank during the trial
+  else:
+    if rvcName is not None:
+      try:
+        rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
+      except:
+        rvcFits = None;
+    else:
+      rvcFits = None
+    spikes_byComp = hf.get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
   spikes = np.array([np.sum(x) for x in spikes_byComp]);
-  rates = True; # when we get the spikes from rvcFits, they've already been converted into rates (in hf.get_all_fft)
+  rates = True if vecF1 == 0 else False; # when we get the spikes from rvcFits, they've already been converted into rates (in hf.get_all_fft)
   baseline = None; # f1 has no "DC", yadig?
 else: # otherwise, if it's complex, just get F0
+  respMeasure = 0;
   spikes = hf.get_spikes(expData, get_f0=1, rvcFits=None, expInd=expInd);
   rates = False; # get_spikes without rvcFits is directly from spikeCount, which is counts, not rates!
   baseline = hf.blankResp(expData, expInd)[0]; # we'll plot the spontaneous rate
   # why mult by stimDur? well, spikes are not rates but baseline is, so we convert baseline to count (i.e. not rate, too)
   spikes = spikes - baseline*hf.get_exp_params(expInd).stimDur; 
 
-_, _, _, respAll = hf.organize_resp(spikes, expData, expInd); # only using respAll to get variance measures
-resps_data, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates);
+#print('###\nGetting spikes (data): rates? %d\n###' % rates);
+_, _, _, respAll = hf.organize_resp(spikes, expData, expInd, respsAsRate=rates); # only using respAll to get variance measures
+resps_data, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates, modsAsRate=rates);
 
 if fitList is None:
   resps = resps_data; # otherwise, we'll still keep resps_data for reference
@@ -249,14 +278,13 @@ elif fitList is not None: # OVERWRITE the data with the model spikes!
     if f1f0_rat < 1: # then subtract baseline..
       modResp = modResp - baseline*hf.get_exp_params(expInd).stimDur; 
     # now organize the responses
-    resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp, respsAsRates=False);
-  elif use_mod_resp == 2:
-    respMeasure = 1 if f1f0_rat>1 else 0;
+    resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp, respsAsRates=False, modsAsRate=False);
+  elif use_mod_resp == 2: # then pytorch model!
     resp_str = hf_sf.get_resp_str(respMeasure)
     curr_fit = fitList[which_cell-1][resp_str]['params'];
     model = mrpt.sfNormMod(curr_fit, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod, lgnConType=conType, applyLGNtoNorm=_applyLGNtoNorm)
     ### get the vec-corrected responses, if applicable
-    if expInd > 1 and respMeasure == 1:
+    if expInd > f1_expCutoff and respMeasure == 1:
       respOverwrite = hf.adjust_f1_byTrial(expData, expInd);
     else:
       respOverwrite = None;
@@ -268,21 +296,22 @@ elif fitList is not None: # OVERWRITE the data with the model spikes!
       blanks = np.where(dw.trInf['con']==0);
       modResp[blanks] = 0;
       # next, sum up across components
-      modResp = np.sum(modResps, axis=1);
+      modResp = np.sum(modResp, axis=1);
     # finally, make sure this fills out a vector of all responses (just have nan for non-modelled trials)
     nTrialsFull = len(expData['num']);
     modResp_full = np.nan * np.zeros((nTrialsFull, ));
     modResp_full[dw.trInf['num']] = modResp;
 
-    # TODO: This is a work around for which measures are in rates vs. counts (DC vs F1, model vs data...)
-    stimDur = hf.get_exp_params(expInd).stimDur;
-    asRates = True; # if respMeasure == 1 else True; # CHECK???
-    divFactor = stimDur if respMeasure == 0 else 1;
-    modResp_full = np.divide(modResp_full, divFactor);
     if respMeasure == 0: # if DC, then subtract baseline..., as determined from data (why not model? we aren't yet calc. response to no stim, though it can be done)
       modResp_full = modResp_full - baseline*hf.get_exp_params(expInd).stimDur;
+
+    # TODO: This is a work around for which measures are in rates vs. counts (DC vs F1, model vs data...)
+    stimDur = hf.get_exp_params(expInd).stimDur;
+    asRates = False;
+    #divFactor = stimDur if asRates == 0 else 1;
+    #modResp_full = np.divide(modResp_full, divFactor);
     # now organize the responses
-    resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp_full, respsAsRates=asRates);
+    resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp_full, respsAsRates=asRates, modsAsRate=asRates);
 
 predResps = resps[2];
 
@@ -373,7 +402,7 @@ sfPeak = np.argmax(sfRef); # stupid/simple, but just get the rvc for the max res
 v_cons_single = val_con_by_disp[0]
 rvcRef = hf.nan_rm(respMean[0, sfPeak, v_cons_single]);
 # now, if possible, let's also plot the RVC fit
-if rvcName is not None:
+if rvcFits is not None:
   rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod);
   rel_rvc = rvcFits[0]['params'][sfPeak]; # we get 0 dispersion, peak SF
   plt_cons = np.geomspace(all_cons[0], all_cons[-1], 50);
@@ -662,8 +691,11 @@ pdfSv.close();
 #########
 ### Finally, add this "superposition" to the newest 
 #########
+
 if fitList is None:
-  super_name = 'superposition_analysis_200608.npy';
+  from datetime import datetime
+  suffix = datetime.today().strftime('%y%m%d')
+  super_name = 'superposition_analysis_%s.npy' % suffix;
 else:
   super_name = 'superposition_analysis_mod%s.npy' % hf.fitType_suffix(fitType);
 

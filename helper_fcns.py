@@ -2,6 +2,7 @@ import math, numpy, random
 from scipy.stats import norm, mode, poisson, nbinom, sem
 from scipy.stats.mstats import gmean as geomean
 from numpy.matlib import repmat
+from helper_fcns_sfBB import get_resp_str
 import scipy.optimize as opt
 import os, sys
 import importlib as il
@@ -168,16 +169,21 @@ def np_smart_load(file_path, encoding_str='latin1', allow_pickle=True):
    if not os.path.isfile(file_path):
      return [];
    loaded = [];
-   while(True):
+   nTry = 10;
+   while(nTry > 0):
      try:
          loaded = numpy.load(file_path, encoding=encoding_str, allow_pickle=True).item();
          break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-        sleep_time = random_in_range([5, 15])[0];
+        sleep_time = random_in_range([3, 5])[0];
         sleep(sleep_time); # i.e. wait for 10 seconds
      except EOFError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-        sleep_time = random_in_range([5, 15])[0];
+        sleep_time = random_in_range([3, 5])[0];
         sleep(sleep_time); # i.e. wait for 10 seconds
+     except: # pickling error???
+        sleep_time = random_in_range([3, 5])[0];
+        sleep(sleep_time); # i.e. wait for 10 seconds
+     nTry -= 1 #don't try indefinitely!
 
    return loaded;
 
@@ -2326,7 +2332,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     dogFits = np_smart_load(data_loc + dog_nm);
     rvcFits = np_smart_load(data_loc + rv_nm);
     try:
-      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_200608.npy');
+      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_200401.npy');
     except:
       superAnalysis = None;
 
@@ -2497,6 +2503,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       # let's figure out if simple or complex
       f1f0_ratio = compute_f1f0(tr, cell_ind+1, expInd, data_loc, dF_nm)[0]; # f1f0 ratio is 0th output
       force_dc = False; force_f1 = False;
+      respMeasure = 0; # assume it's DC by default
       if expDir == 'LGN/':
         force_f1 = True;
       if expDir == 'V1_orig/' or expDir == 'altExp/':
@@ -2507,6 +2514,9 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
         baseline_resp = blankResp(tr, expInd, spikes=spikes_rate, spksAsRate=True)[0];
       else:
         baseline_resp = None;
+        respMeasure = 1; # then it's actually F1!
+      # set the respMeasure in the meta dictionary
+      meta['respMeasure'] = respMeasure;
 
       for d in range(nDisps):
 
@@ -2828,22 +2838,64 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       ###########
       ### model
       ###########
-      try:
-        nllW, paramsW = [fitListWght[cell_ind]['NLL'], fitListWght[cell_ind]['params']];
-        nllF, paramsF = [fitListFlat[cell_ind]['NLL'], fitListFlat[cell_ind]['params']];
-        # and other other future measures?
+      if 'pyt' in fLW_nm: # i.e. it's a pytorch fit; we'll assume that if one is pytorch fit, the other is, too!
+         try:
+            respStr = get_resp_str(respMeasure);
+            nllW, paramsW = [fitListWght[cell_ind][respStr]['NLL'], fitListWght[cell_ind][respStr]['params']];
+            nllF, paramsF = [fitListFlat[cell_ind][respStr]['NLL'], fitListFlat[cell_ind][respStr]['params']];
+            try:
+               # first, for weighted model
+               varExplW = fitListWght[cell_ind][respStr]['varExpl'];
+               varExplW_SF = fitListWght[cell_ind][respStr]['varExpl_SF'];
+               varExplW_con = fitListWght[cell_ind][respStr]['varExpl_con'];
+               # then, flat model
+               varExplF = fitListFlat[cell_ind][respStr]['varExpl'];
+               varExplF_SF = fitListFlat[cell_ind][respStr]['varExpl_SF'];
+               varExplF_con = fitListFlat[cell_ind][respStr]['varExpl_con'];
+            except:
+               varExplW, varExplW_SF, varExplW_con = None, None, None
+               varExplF, varExplF_SF, varExplF_con = None, None, None
+            
+            model = dict([('NLL_wght', nllW),
+                        ('params_wght', paramsW),
+                        ('NLL_flat', nllF),
+                        ('params_flat', paramsF),
+                        ('varExplW', varExplW),
+                        ('varExplW_SF', varExplW_SF),
+                        ('varExplW_con', varExplW_con),
+                        ('varExplF', varExplF),
+                        ('varExplF_SF', varExplF_SF),
+                        ('varExplF_con', varExplF_con)
+                       ])
+         except:
+            model = dict([('NLL_wght', np.nan),
+                          ('params_wght', []),
+                          ('NLL_flat', np.nan),
+                          ('params_flat', []),
+                          ('varExplW', None),
+                          ('varExplW_SF', None),
+                          ('varExplW_con', None),
+                          ('varExplF', None),
+                          ('varExplF_SF', None),
+                          ('varExplF_con', None)
+                       ])
+      else:
+        try:
+          nllW, paramsW = [fitListWght[cell_ind]['NLL'], fitListWght[cell_ind]['params']];
+          nllF, paramsF = [fitListFlat[cell_ind]['NLL'], fitListFlat[cell_ind]['params']];
+          # and other other future measures?
 
-        model = dict([('NLL_wght', nllW),
-                     ('params_wght', paramsW),
-                     ('NLL_flat', nllF),
-                     ('params_flat', paramsF)
-                    ])
-      except: # then no model fit!
-        model = dict([('NLL_wght', np.nan),
-                     ('params_wght', []),
-                     ('NLL_flat', np.nan),
-                     ('params_flat', [])
-                    ])
+          model = dict([('NLL_wght', nllW),
+                       ('params_wght', paramsW),
+                       ('NLL_flat', nllF),
+                       ('params_flat', paramsF)
+                      ])
+        except: # then no model fit!
+          model = dict([('NLL_wght', np.nan),
+                       ('params_wght', []),
+                       ('NLL_flat', np.nan),
+                       ('params_flat', [])
+                      ])
 
       ###########
       ### now, gather all together in one dictionary
@@ -2853,7 +2905,6 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
                          ('model', model),
                          ('superpos', suppr),
                          ('basics', basics_list)]);
-
 
       jointList.append(cellSummary);
 
@@ -3217,8 +3268,7 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                     val_tr = val_con & val_sf & valid_disp[0] # why valid_disp[0]? we want single grating presentations!
 
                     if np.all(np.unique(val_tr) == False):
-                        #print('empty...');
-                        continue;
+                        continue; # empty ....
                     
                     curr_pred = curr_pred + np.mean(respToUse[val_tr]/respDiv);
                     curr_var = curr_var + np.var(respToUse[val_tr]/respDiv);
@@ -3373,7 +3423,8 @@ def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', rvcMod=0, direc=1
   ''' simple function to return the rvc fits needed for adjusting responses
   '''
   if expInd > 2: # no adjustment for V1, altExp as of now (19.08.28)
-    rvcFits = np_smart_load(str(loc_data + rvc_fit_name(rvcName, rvcMod, direc, vecF1=vecF1)));
+    fitName = str(loc_data + rvc_fit_name(rvcName, rvcMod, direc, vecF1=vecF1));
+    rvcFits = np_smart_load(fitName);
     try:
       rvcFits = rvcFits[cellNum-1];
     except: # if the RVC fits haven't been done...

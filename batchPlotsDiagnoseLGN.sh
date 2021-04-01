@@ -33,10 +33,13 @@ EXC_TYPE=$2
 LOSS=$3
 HPC=$4 
 NORM_TYPE=$5 # 1 means the original type of weighted gain control; 2 means the newer type# default is zero, i.e. not HPC fits...
+START=$6
+END=$7
 
-for run in {1..8}
+### for run in {1..N_CELLS}
+
+for (( run=$START; run<=$END; run++ ))
 do
-  
   if [[ $NORM_TYPE -eq 1 ]]; then
     # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
     python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 22 11 -1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
