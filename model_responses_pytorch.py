@@ -42,14 +42,15 @@ _sigmoidGainNorm = 5;
 # --- and a flag for whether or not to include the LGN filter for the gain control
 _LGNforNorm = 0;
 ### force_full datalist?
-force_full = 1;
+expDir = sys.argv[2];
+force_full = 0 if expDir == 'V1_BB/' else 1;
 
 try:
   cellNum = int(sys.argv[1]);
 except:
   cellNum = np.nan;
 try:
-  dataListName = hf.get_datalist(sys.argv[2], force_full=force_full); # argv[2] is expDir
+  dataListName = hf.get_datalist(expDir, force_full=force_full); # argv[2] is expDir
 except:
   dataListName = None;
 
@@ -872,9 +873,9 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=7500, learning_rate=0.10, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None): # learning rate 0.04ish (on 20.03.06; 0.15 seems too high - 21.01.26)
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=15000, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None): # learning rate 0.04ish on 20.03.06 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
-  # --- max_epochs usually 7500
+  # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   global dataListName
   global force_full
   
@@ -1100,7 +1101,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   if scheduler:
     # value of 0.5 per Billy (21.02.09); patience is # of epochs before we start to reduce the LR
     LR_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', 
-                                                              factor=0.5, patience=int(max_epochs/15)); 
+                                                              factor=0.3, patience=int(max_epochs/15)); # factor was 0.5 when learning rate was 0.10; 0.15 when lr was 0.20
 
   # - then data
   # - predefine some arrays for tracking loss
@@ -1248,7 +1249,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   # now the step list, if needed
   if trackSteps and NLL < currNLL:
     if os.path.exists(loc_data + stepListName):
-      stepList = hf.np_smart_load(str(loc_data + stepListName));
+      try:
+        stepList = hf.np_smart_load(str(loc_data + stepListName));
+      except: # if the file is corrupted in some way...
+        stepList = dict();
     else:
       stepList = dict();
     if cellNum-1 not in stepList:
@@ -1323,7 +1327,8 @@ if __name__ == '__main__':
       toPar = False;
 
     start = time.process_time();
-    dcOk = 0; f1Ok = 0; nTry = 30;
+    dcOk = 0; f1Ok = 0 if (expDir == 'V1/' or expDir == 'V1_BB/') else 1; # i.e. we don't bother fitting F1 if fit is from V1_orig/ or altExp/
+    nTry = 30;
     if cellNum >= 0:
       while not dcOk and nTry>0:
         try:
@@ -1335,7 +1340,7 @@ if __name__ == '__main__':
           pass;
         nTry -= 1;
       # now, do F1 fits
-      nTry=10; # reset nTry...
+      nTry=30; # reset nTry...
       while not f1Ok and nTry>0:
         try:
           setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # then F1
