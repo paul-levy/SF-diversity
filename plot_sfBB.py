@@ -197,10 +197,11 @@ if fitBase is not None:
   fitListB = hf.np_smart_load(data_loc + fitNameB);
 
   try:
-    fit_detailsA = hf.np_smart_load(data_loc + fitNameA.replace('.npy', '_details.npy'));
-    fit_detailsB = hf.np_smart_load(data_loc + fitNameB.replace('.npy', '_details.npy'));
-    fit_detailsA = fit_detailsA[cellNum-1];
-    fit_detailsB = fit_detailsB[cellNum-1];
+    # using context manager approach to save memory
+    with hf.np_smart_load(data_loc + fitNameA.replace('.npy', '_details.npy')) as fit_detailsA_all:
+      fit_detailsA = fit_detailsA_all[cellNum-1];
+    with hf.np_smart_load(data_loc + fitNameB.replace('.npy', '_details.npy')) as fit_detailsB_all:
+      fit_detailsB = fit_detailsB_all[cellNum-1];
   except:
     fit_detailsA = None; fit_detailsB = None;
 
