@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import scipy.optimize as opt
 import os
@@ -13,6 +14,7 @@ import pdb
 # flatten
 
 # descrMod_name
+# flexible_Gauss - Descriptive function used to describe/fit SF tuning
 # DiffOfGauss - difference of gaussian models - formulation discussed with Tony
 # DoGsach - difference of gaussian models - formulation discussed in Sach Sokol's NYU thesis
 # var_explained - compute the variance explained given data/model fit
@@ -31,7 +33,6 @@ import pdb
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
-# flexible_Gauss - Descriptive function used to describe/fit SF tuning
 # blankResp - return mean/std of blank responses (i.e. baseline firing rate) for Sach's experiment
 # tabulateResponses - Organizes measured and model responses for Sach's experiment
 # random_in_range - random real number between a and b
@@ -39,22 +40,30 @@ import pdb
 # writeDataTxt - write [sf mean sem] for a given cell/contrast
 # writeCellTxt - call writeDataTxt for all contrasts for a cell
 
+def nan_rm(x):
+   return x[~np.isnan(x)];
+
 def np_smart_load(file_path, encoding_str='latin1'):
 
    if not os.path.isfile(file_path):
      return [];
    loaded = [];
-   while(True):
+
+   nTry = 10;
+   while(nTry > 0):
      try:
-         loaded = np.load(file_path, encoding=encoding_str).item();
-         print('loaded');
+         loaded = np.load(file_path, encoding=encoding_str, allow_pickle=True).item();
          break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-         sleep_time = random_in_range([5, 15])[0];
-         sleep(sleep_time); # i.e. wait for 10 seconds
+        sleep_time = random_in_range([3, 5])[0];
+        sleep(sleep_time); # i.e. wait for 10 seconds
      except EOFError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-         sleep_time = random_in_range([5, 15])[0];
-         sleep(sleep_time); # i.e. wait for 10 seconds
+        sleep_time = random_in_range([3, 5])[0];
+        sleep(sleep_time); # i.e. wait for 10 seconds
+     except: # pickling error???
+        sleep_time = random_in_range([3, 5])[0];
+        sleep(sleep_time); # i.e. wait for 10 seconds
+     nTry -= 1 #don't try indefinitely!
 
    return loaded;
 
@@ -138,6 +147,27 @@ def descrFit_name(lossType, descrBase=None, modelName = None):
 
 ##
 
+def flexible_Gauss(params, stim_sf, minThresh=0.1):
+    # The descriptive model used to fit cell tuning curves - in this way, we
+    # can read off preferred SF, octave bandwidth, and response amplitude
+
+    respFloor       = params[0];
+    respRelFloor    = params[1];
+    sfPref          = params[2];
+    sigmaLow        = params[3];
+    sigmaHigh       = params[4];
+
+    # Tuning function
+    sf0   = [x/sfPref for x in stim_sf];
+
+    sigma = np.multiply(sigmaLow, [1]*len(sf0));
+
+    sigma[[x for x in range(len(sf0)) if sf0[x] > 1]] = sigmaHigh;
+
+    shape = [np.exp(-pow(np.log(x), 2) / (2*pow(y, 2))) for x, y in zip(sf0, sigma)];
+                
+    return [max(minThresh, respFloor + respRelFloor*x) for x in shape];
+
 def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf):
   ''' Difference of gaussians 
   gain      - overall gain term
@@ -176,6 +206,8 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf):
 
 def get_descrResp(params, stim_sf, DoGmodel):
   # returns only pred_spikes
+  if DoGmodel == 0:
+    pred_spikes = flexible_Gauss(params, stim_sf);
   if DoGmodel == 1:
     pred_spikes, _ = DoGsach(*params, stim_sf=stim_sf);
   elif DoGmodel == 2:
@@ -191,23 +223,27 @@ def var_expl_direct(obs_mean, pred_mean):
     
   return var_expl(pred_mean, obs_mean, obs_grand_mean);
 
-def var_explained(data, modParams, contrast, DoGmodel=1):
+def var_explained(data, modParams, whichInd, DoGmodel=1, rvcModel=None):
   ''' given a set of responses and model parameters, compute the variance explained by the model (DoGsach)
+      --- whichInd is either the contrast index (if doing SF tuning)
+                              or SF index (if doing RVCs)
   '''
   resp_dist = lambda x, y: np.sum(np.square(x-y))/np.maximum(len(x), len(y))
   var_expl = lambda m, r, rr: 100 * (1 - resp_dist(m, r)/resp_dist(r, rr));
 
   respsSummary, stims, allResps = tabulateResponses(data); # Need to fit on f1 
   f1 = respsSummary[1];
-  obs_mean = f1['mean'][contrast, :];
+  if rvcModel is None: # SF
+    all_sfs = stims[1];
+    obs_mean = f1['mean'][whichInd, :];
+  else:
+    all_cons = stims[0];
+    obs_mean = f1['mean'][:, whichInd];
 
-  NLL = 0;
-  all_sfs = stims[1];
-
-  if DoGmodel == 1:
-    pred_mean, _ = DoGsach(*modParams, stim_sf=all_sfs);
-  if DoGmodel == 2:
-    pred_mean, _ = DiffOfGauss(*modParams, stim_sf=all_sfs);
+  if rvcModel is None: # then we're doing vExp for SF tuning
+    pred_mean = get_descrResp(modParams, all_sfs, DoGmodel);
+  else: # then we've getting RVC responses!
+    pred_mean = get_rvcResp(modParams, cons, rvcMod)
 
   obs_grand_mean = np.mean(obs_mean) * np.ones_like(obs_mean); # make sure it's the same shape as obs_mean
     
@@ -217,10 +253,7 @@ def dog_prefSf(modParams, all_sfs, dog_model=1):
   ''' Compute the preferred SF given a set of DoG parameters
   '''
   sf_bound = (np.min(all_sfs), np.max(all_sfs));
-  if dog_model == 1:
-    obj = lambda sf: -DoGsach(*modParams, stim_sf=sf)[0];
-  elif dog_model == 2:
-    obj = lambda sf: -DiffOfGauss(*modParams, stim_sf=sf)[0];
+  obj = lambda sf: -get_descrResp(modParams, stim_sf=sf, DoGmodel=dog_model)[0];
   init_sf = np.median(all_sfs);
   optz = opt.minimize(obj, init_sf, bounds=(sf_bound, ))
   return optz['x'];
@@ -257,10 +290,12 @@ def dog_prefSfMod(descrFit, allCons, varThresh=65):
 
 def dog_charFreq(prms, DoGmodel=1):
   if DoGmodel == 1:
-      r_c = prms[1];
-      f_c = 1/(np.pi*r_c)
+     r_c = prms[1];
+     f_c = 1/(np.pi*r_c)
   elif DoGmodel == 2:
-      f_c = prms[1];
+     f_c = prms[1];
+  else:
+     f_c = np.nan;
 
   return f_c;
 
@@ -421,12 +456,45 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, resps_std=None, join
     
   return NLL;
 
-def dog_init_params(resps_curr, all_sfs, DoGmodel):
+def dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate):
   ''' return the initial parameters for the DoG model, given the model choice and responses
   '''
   maxResp       = np.max(resps_curr);
   freqAtMaxResp = all_sfs[np.argmax(resps_curr)];
 
+  ############
+  ## FLEX
+  ############
+  if DoGmodel == 0:
+    # set initial parameters - a range from which we will pick!
+    if base_rate <= 3 or np.isnan(base_rate): # will be NaN if getting f1 responses
+        range_baseline = (0, 3);
+    else:
+        range_baseline = (0.5 * base_rate, 1.5 * base_rate);
+    range_amp = (0.5 * maxResp, 1.25 * maxResp);
+
+    max_sf_index = np.argmax(resps_curr); # what sf index gives peak response?
+    mu_init = all_sfs[max_sf_index];
+
+    if max_sf_index == 0: # i.e. smallest SF center gives max response...
+        range_mu = (mu_init/2, all_sfs[max_sf_index + np.minimum(3, len(all_sfs)-1)]);
+    elif max_sf_index+1 == len(all_sfs): # i.e. highest SF center is max
+        range_mu = (all_sfs[max_sf_index-np.minimum(3, len(all_sfs)-1)], mu_init);
+    else:
+        range_mu = (all_sfs[max_sf_index-1], all_sfs[max_sf_index+1]); # go +-1 indices from center
+
+    log_bw_lo = 0.75; # 0.75 octave bandwidth...
+    log_bw_hi = 2; # 2 octave bandwidth...
+    denom_lo = bw_log_to_lin(log_bw_lo, mu_init)[0]; # get linear bandwidth
+    denom_hi = bw_log_to_lin(log_bw_hi, mu_init)[0]; # get lin. bw (cpd)
+    range_denom = (denom_lo, denom_hi); # don't want 0 in sigma 
+
+    init_base = random_in_range(range_baseline)[0]; # NOTE addition of [0] to "unwrap" random_in_range value
+    init_amp = random_in_range(range_amp)[0];
+    init_mu = random_in_range(range_mu)[0];
+    init_sig_left = random_in_range(range_denom)[0];
+    init_sig_right = random_in_range(range_denom)[0];
+    init_params = [init_base, init_amp, init_mu, init_sig_left, init_sig_right];
   ############
   ## SACH
   ############
@@ -460,7 +528,10 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
       outputs: bestNLL, currParams, varExpl, prefSf, charFreq, [overallNLL, paramList; if joint=True]
   '''
   nCons = len(all_cons);
-  nParam = 4;
+  if DoGmodel == 0:
+    nParam = 5;
+  else:
+    nParam = 4;
 
   # unpack responses
   resps_mean = resps['mean'];
@@ -485,6 +556,13 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
     params = np.nan;
 
   ### set bounds
+  if DoGmodel == 0:
+    min_bw = 1/4; max_bw = 10; # ranges in octave bandwidth
+    bound_baseline = (0, max_resp);
+    bound_range = (0, 1.5*max_resp);
+    bound_mu = (0.01, 10);
+    bound_sig = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
+    allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
   if DoGmodel == 1:
     bound_gainCent = (1e-3, None);
     bound_radiusCent= (1e-3, None);
@@ -512,6 +590,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
 
   ### organize responses -- and fit, if joint=False
   allResps = []; allRespsSem = []; valCons = []; start_incl = 0; incl_inds = [];
+  base_rate = np.min(resps_mean.flatten());
   for con in range(nCons):
     if all_cons[con] == 0: # skip 0 contrast...
         continue;
@@ -547,7 +626,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
       ###########
       ### pick initial params
       ###########
-      init_params = dog_init_params(resps_curr, all_sfs, DoGmodel)
+      init_params = dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate)
 
       # choose optimization method
       if np.mod(n_try, 2) == 0:
@@ -675,6 +754,15 @@ def naka_rushton(con, params):
       sExp = 1; # otherwise, it's just 1
 
     return base + gain*np.divide(np.power(con, expon), np.power(con, expon*sExp) + np.power(c50, expon*sExp));
+
+def get_rvcResp(params, cons, rvcMod):
+  # returns only pred_spikes
+  if rvcMod == 0:
+    mod = get_rvc_model();
+    pred_spikes = mod(*params, cons);
+  elif rvcMod == 1 or rvcMod == 2:
+    pred_spikes = naka_rushton(cons, params);
+  return pred_spikes;
 
 def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=True, prevFits=None):
    ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
@@ -844,27 +932,6 @@ def fix_params(params_in):
     # R(Sf) = R0 + K_e * EXP(-(SF-mu)^2 / 2*(sig_e)^2) - K_i * EXP(-(SF-mu)^2 / 2*(sig_i)^2)
 
     return [abs(x) for x in params_in] 
-
-def flexible_Gauss(params, stim_sf, minThresh=0.1):
-    # The descriptive model used to fit cell tuning curves - in this way, we
-    # can read off preferred SF, octave bandwidth, and response amplitude
-
-    respFloor       = params[0];
-    respRelFloor    = params[1];
-    sfPref          = params[2];
-    sigmaLow        = params[3];
-    sigmaHigh       = params[4];
-
-    # Tuning function
-    sf0   = [x/sfPref for x in stim_sf];
-
-    sigma = np.multiply(sigmaLow, [1]*len(sf0));
-
-    sigma[[x for x in range(len(sf0)) if sf0[x] > 1]] = sigmaHigh;
-
-    shape = [np.exp(-pow(np.log(x), 2) / (2*pow(y, 2))) for x, y in zip(sf0, sigma)];
-                
-    return [max(minThresh, respFloor + respRelFloor*x) for x in shape];
 
 def blankResp(data):
   blanks = np.where(data['cont'] == 0);

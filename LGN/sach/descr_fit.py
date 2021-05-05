@@ -27,7 +27,10 @@ def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0):
   rvcNameFinal = hf.rvc_fit_name(rvcName, rvcMod);
   # first, load the file if it already exists
   if os.path.isfile(data_loc + rvcNameFinal):
-      rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
+      try:
+        rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
+      except:
+        rvcFits = np.load(data_loc + rvcNameFinal, allow_pickle=True).item();
       try:
         rvcFits_curr = rvcFits[cell_num-1];
       except:
@@ -51,10 +54,15 @@ def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0):
   cons = [all_cons] * len(resps); # tile
 
   rvc_model, all_opts, all_conGain, all_loss = hf.rvc_fit(resps, cons, var=respsSEM, mod=rvcMod, prevFits=rvcFits_curr);
+  varExpl = [hf.var_expl_direct(dat, hf.get_rvcResp(prms, all_cons, rvcMod)) for dat, prms in zip(resps, all_opts)];
 
   if os.path.isfile(data_loc + rvcNameFinal):
     print('reloading rvcFits...');
-    rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
+    try:
+      rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
+    except:
+      rvcFits = np.load(data_loc + rvcNameFinal, allow_pickle=True).item();
+
   if cell_num-1 not in rvcFits:
     rvcFits[cell_num-1] = dict();
     rvcFits[cell_num-1] = dict();
@@ -62,6 +70,7 @@ def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0):
   rvcFits[cell_num-1]['loss'] = all_loss;
   rvcFits[cell_num-1]['params'] = all_opts;
   rvcFits[cell_num-1]['conGain'] = all_conGain;
+  rvcFits[cell_num-1]['varExpl'] = varExpl;
 
   np.save(data_loc + rvcNameFinal, rvcFits);
 
@@ -78,17 +87,25 @@ def invalid(params, bounds):
 
 def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1, joint=False):
 
-    nParam = 4;
+    if DoGmodel == 0:
+      nParam = 5;
+    else:
+      nParam = 4;
     
     # load cell information
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits_s191205zSub';
+    fLname = 'descrFits_s210304';
+    #fLname = 'descrFits_s191205zSub';
     if joint==True:
       try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
         modStr  = hf.descrMod_name(DoGmodel);
-        ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr));
+        fitName = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr)
+        try:
+          ref_fits = hf.np_smart_load(data_loc + fitName);
+        except:
+          ref_fits = np.load(data_loc + fitName, allow_pickle=True).item();
         ref_varExpl = ref_fits[cell_num-1]['varExpl'];
       except:
         ref_varExpl = None;
@@ -96,14 +113,16 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     else:
       ref_varExpl = None; # set to None as default
 
-
     mod_str = hf.descrMod_name(DoGmodel);
     fLname = str(data_loc + hf.descrFit_name(loss_type, fLname, mod_str));
 
     if os.path.isfile(fLname):
+      try:
         descrFits = hf.np_smart_load(fLname);
+      except:
+        descrFits = np.load(fLname, allow_pickle=True).item();
     else:
-        descrFits = dict();
+      descrFits = dict();
 
     data = dataList[cell_num-1]['data'];
     
@@ -132,7 +151,10 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     # before we update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(fLname):
       print('reloading descrFits...');
-      descrFits = hf.np_smart_load(fLname);
+      try:
+        descrFits = hf.np_smart_load(fLname);
+      except:
+        descrFits = np.load(fLname, allow_pickle=True).item();
     if cell_num-1 not in descrFits:
       descrFits[cell_num-1] = dict(); # and previously created NaN for everything
     else: # overwrite the default NaN for everything
@@ -180,7 +202,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
 if __name__ == '__main__':
 
     data_loc = '/users/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/LGN/sach/structures/';
-    rvcBase = 'rvcFits_191201'
+    rvcBase = 'rvcFits_210304'
+    #rvcBase = 'rvcFits_191201'
 
     print('Running cell ' + sys.argv[1] + '...');
 
@@ -191,6 +214,6 @@ if __name__ == '__main__':
     DoGmodel = int(sys.argv[5])
     is_joint = int(sys.argv[6]);
 
-    #rvc_fit(cellNum, data_loc, rvcBase, rvcModel); 
+    rvc_fit(cellNum, data_loc, rvcBase, rvcModel); 
     fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel, is_joint);
 

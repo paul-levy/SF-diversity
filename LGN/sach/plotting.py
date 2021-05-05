@@ -43,8 +43,8 @@ cellStruct = allData[which_cell-1];
 # #### Load descriptive model fits, RVC Naka-Rushton fits, [comp. model fits]
 zSub = 1; # are we loading fits that were fit to responses adjusted s.t. the lowest value is 1?
 
-fLname = 'descrFits_s191023';
-#fLname = 'descrFits_s191205zSub_joint';
+#fLname = 'descrFits_s191023';
+fLname = 'descrFits_s210304';
 if sf_loss_type == 1:
   loss_str = '_poiss';
 elif sf_loss_type == 2:
@@ -53,6 +53,8 @@ elif sf_loss_type == 3:
   loss_str = '_sach';
 elif sf_loss_type == 4:
   loss_str = '_varExpl';
+if sf_DoG_model == 0:
+  mod_str = '_flex';
 if sf_DoG_model == 1:
   mod_str = '_sach';
 elif sf_DoG_model == 2:
@@ -64,7 +66,7 @@ descrFits = descrFits[which_cell-1]; # just get this cell
 
 rvcMod = 0;
 rvcSuff = helper_fcns.rvc_mod_suff(rvcMod);
-rvcBase = 'rvcFits_191023';
+rvcBase = 'rvcFits_210304';
 rvcFits = helper_fcns.np_smart_load(dataPath + helper_fcns.rvc_fit_name(rvcBase, rvcMod));
 rvcFits = rvcFits[which_cell-1];
 

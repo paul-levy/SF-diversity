@@ -7,13 +7,17 @@ source activate lcv-python
 	# 2 - square root
 	# 3 - sach's loss function (See descr_fit.py)
 # third param is DoG model (sf tuning):
+        # 0 - flex gauss
 	# 1 - sach's
 	# 2 - tony's 
 # 4th param is load from file (1; Tony's fits) or use params from my fits (0) --- use 0
 
+DOG_MOD=${1:=1}
+DOG_LOSS=${2:=3}
+
 for run in {1..34}
 do
-  python plotting.py $run 3 1 0 & 
+  python plotting.py $run $DOG_LOSS $DOG_MOD 0 & 
   #python plotting.py $run 3 1 0 & 
 done
 
