@@ -35,33 +35,65 @@ source activate lcv-python
 # altExp   - standard, 8 cells
 # LGN/ - standard, 77 cells
 
-for run in {1..59}
-do 
-  ### For 21.03.04 fits
-  python plot_descr.py $run V1/ 0 2 0 -1 1 1 &
-  ### OLD
-  #python plot_descr.py $run LGN/ 0 2 0 1 0 1 0 &
-  #python plot_descr.py $run LGN/ 1 4 0 1 0 1 1 &
-  #python plot_descr.py $run V1/ 0 2 0 1 1 1 1 &
-  #python plot_descr.py $run altExp/ 0 2 0 0 1 1 1 &
-  #python plot_descr.py $run V1_orig/ 0 2 0 0 1 1 1 &
-  #python plot_descr.py $run altExp/ 0 2 0 1 1 1 1 &
-  #python plot_descr.py $run LGN/ 1 1 0 1 0 1 1 &
-done
+EXP_DIR=$1
+DOG_MOD=$2
+LOSS_TYPE=${3:=2}
 
+# note: dog_mod=0 means flex; 1 means sach (DoG)
 
-#python plot_descr.py 3 LGN/ 1 4 0 1 0 1 1
-#python plot_descr.py 8 LGN/ 1 4 0 1 0 1 1 
-#python plot_descr.py 19 LGN/ 1 4 0 1 0 1 1 
-#python plot_descr.py 24 LGN/ 1 4 0 1 0 1 1 
-#python plot_descr.py 25 LGN/ 1 4 0 1 0 1 1 
-#python plot_descr.py 28 LGN/ 1 4 0 1 0 1 1 
-#python plot_descr.py 31 LGN/ 1 4 0 1 0 1 1 
-#python plot_descr.py 33 LGN/ 1 4 0 1 0 1 1 
-#python plot_descr.py 41 LGN/ 1 4 0 1 0 1 1 
-#python plot_descr.py 45 LGN/ 1 4 0 1 0 1 1 
-#python plot_descr.py 53 LGN/ 1 4 0 1 0 1 1 
-#python plot_descr.py 54 LGN/ 1 4 0 1 0 1 1 
-#python plot_descr.py 70 LGN/ 1 4 0 1 0 1 1 
+if [ "$EXP_DIR" = "V1/" ]; then
+  for run in {1..18}
+  do 
+    python3.6 plot_descr.py $run V1/ $DOG_MOD 2 0 -1 1 1 &
+  done
+  wait
+  for run in {19..36}
+  do 
+    python3.6 plot_descr.py $run V1/ $DOG_MOD 2 0 -1 1 1 &
+  done
+  wait
+  for run in {37..56}
+  do 
+    python3.6 plot_descr.py $run V1/ $DOG_MOD 2 0 -1 1 1 &
+  done
+fi
+if [ "$EXP_DIR" = "LGN/" ]; then
+  for run in {1..25}
+  do 
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE 0 1 0 1 0 &
+  done
+  wait
+  for run in {26..50}
+  do 
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE 0 1 0 1 0 &
+  done
+  wait
+  for run in {50..77}
+  do 
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE 0 1 0 1 0 &
+  done
+fi
+if [ "$EXP_DIR" = "V1_orig/" ]; then
+  for run in {1..20}
+  do 
+    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD 2 0 0 1 1 &
+  done
+  wait
+  for run in {21..40}
+  do 
+    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD 2 0 0 1 1 &
+  done
+  wait
+  for run in {41..59}
+  do 
+    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD 2 0 0 1 1 &
+  done
+ fi
+if [ "$EXP_DIR" = "altExp/" ]; then
+  for run in {1..8}
+  do 
+    python3.6 plot_descr.py $run altExp/ $DOG_MOD 2 0 0 1 1 &
+  done
+fi
 
 # leave a blank line at the end

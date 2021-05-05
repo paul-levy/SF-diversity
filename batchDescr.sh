@@ -47,7 +47,7 @@ source activate lcv-python
 ###   
 ########
 
-for run in {1..56}
+for run in {1..77} # 56
 do
   #######
   ### Start 21.03.04 run
@@ -61,7 +61,7 @@ do
   #python descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 0 &
   # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
   #python descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 0 & # flex gauss
-  python descr_fits.py $run 0 V1/ -1 0 0 1 1 1 2 0 0 & # sach DoG
+  #python descr_fits.py $run 0 V1/ -1 0 0 1 1 1 2 0 0 & # sach DoG
 
   # V1_orig/ -- rvc_f0 and descr only
   #python descr_fits.py $run 0 V1_orig/ -1 0 1 1 0 0 2 0 &
@@ -72,6 +72,15 @@ do
   #python descr_fits.py $run 0 altExp/ -1 0 1 1 0 0 2 0 &
   # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
   #python descr_fits.py $run 0 altExp/ -1 0 0 1 1 0 2 0 & 
+
+  ## LGN - phase adjustment (will be done iff LGN/ 1; not if LGN/ 0 ) and F1 rvc
+  #python descr_fits.py $run 0 LGN/ 1 0 0 0 0 0 3 1 &
+  #python descr_fits.py $run 0 LGN/ 0 1 0 0 0 0 3 1 &
+  #python descr_fits.py $run 1 LGN/ 0 1 0 0 0 0 3 1 &
+  #python descr_fits.py $run 2 LGN/ 0 1 0 0 0 0 3 1 &
+  #python descr_fits.py $run 3 LGN/ 0 1 0 0 0 0 3 1 &
+  #python descr_fits.py $run 0 LGN/ 0 0 0 0 1 0 2 0 0 & # flex gauss, not joint
+  #python descr_fits.py $run 0 LGN/ 0 0 0 0 1 1 2 0 0 & # sach DoG, not joint
 
   #######
   ### END 21.03.04 run
