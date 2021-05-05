@@ -33,6 +33,9 @@ _sigmoidGainNorm = 5;
 recenter_norm = 1; # recenter the tuned normalization around 1?
 useCoreFit = 1; # if useCoreFit, then we'll plot the model response to the sfBB_var* experiments, if applicable
 _globalMin = 1e-10;
+# if None, then we keep the plots as is; if a number, then we create a gray shaded box encompassing that much STD of the base response
+# -- by plotting a range of base responses rather than just the mean, we can see how strong the variations in base or base+mask responses are
+plt_base_band = 1; # e.g. if 1, then we plot +/- 0.5 std; if 2, then we plot +/- 1 std; and so on
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
 from matplotlib import rcParams
@@ -518,6 +521,13 @@ for measure in [0,1]:
             ax[1+ii, 2*measure].axhline(floors[0], linestyle='--', color='b', label=labels_ref[0])
         # i.e. always put the baseOnly reference line...
         ax[1+ii, 2*measure].axhline(floors[1], linestyle='--', color='k', label=labels_ref[1])
+        if plt_base_band is not None:
+          # -- and as +/- X std?
+          stdTot = plt_base_band; # this will also serve as the total STD range to encompass
+          one_std = np.std(baseOnly);
+          sfMin, sfMax = np.nanmin(maskSf), np.nanmax(maskSf);
+          ax[1+ii, 2*measure].add_patch(matplotlib.patches.Rectangle([sfMin, floors[1]-0.5*stdTot*one_std], sfMax-sfMin, stdTot*one_std, alpha=0.1, color='k'))
+
         ax[1+ii, 2*measure].legend(fontsize='small');
 
     # RVC across SF
@@ -550,6 +560,12 @@ for measure in [0,1]:
             ax[1+ii, 1+2*measure].axhline(floors[0], linestyle='--', color='b', label=labels_ref[0])
         # i.e. always put the baseOnly reference line...
         ax[1+ii, 1+2*measure].axhline(floors[1], linestyle='--', color='k', label=labels_ref[1])
+        if plt_base_band is not None:
+          # -- and as +/- X std?
+          stdTot = plt_base_band; # this will also serve as the total STD range to encompass
+          one_std = np.std(baseOnly);
+          sfMin, sfMax = np.nanmin(maskSf), np.nanmax(maskSf);
+          ax[1+ii, 1+2*measure].add_patch(matplotlib.patches.Rectangle([sfMin, floors[1]-0.5*stdTot*one_std], sfMax-sfMin, stdTot*one_std, alpha=0.1, color='k'))
         ax[1+ii, 1+2*measure].legend(fontsize='small');
 
     ### joint tuning (mask only)
@@ -1241,6 +1257,12 @@ if fitBase is None or useCoreFit:
               ax[1+ij, 2*measure].axhline(baseline, linestyle='--', color='r', label=labels_ref[0])
             # i.e. always put the baseOnly reference line...
             ax[1+ij, 2*measure].axhline(base_mn, linestyle='--', color='b', label=labels_ref[1])
+            if plt_base_band is not None:
+              # -- and as +/- X std?
+              stdTot = plt_base_band; # this will also serve as the total STD range to encompass
+              one_std = np.std(baseOnly);
+              sfMin, sfMax = np.nanmin(maskSf), np.nanmax(maskSf);
+              ax[1+ij, 2*measure].add_patch(matplotlib.patches.Rectangle([sfMin, base_mn-0.5*stdTot*one_std], sfMax-sfMin, stdTot*one_std, alpha=0.1, color='k'))
             ax[1+ij, 2*measure].legend();
 
           # RVC across SF
@@ -1273,6 +1295,12 @@ if fitBase is None or useCoreFit:
                   ax[1+ij, 1+2*measure].axhline(floors[0], linestyle='--', color='r', label=labels_ref[0])
               # i.e. always put the baseOnly reference line...
               ax[1+ij, 1+2*measure].axhline(floors[1], linestyle='--', color='b', label=labels_ref[1])
+              if plt_base_band is not None:
+                # -- and as +/- X std?
+                stdTot = plt_base_band; # this will also serve as the total STD range to encompass
+                one_std = np.std(baseOnly);
+                sfMin, sfMax = np.nanmin(maskSf), np.nanmax(maskSf);
+                ax[1+ij, 1+2*measure].add_patch(matplotlib.patches.Rectangle([sfMin, base_mn-0.5*stdTot*one_std], sfMax-sfMin, stdTot*one_std, alpha=0.1, color='k'))
               ax[1+ij, 1+2*measure].legend(fontsize='small');
 
           ### What's the loss evaluated on these data?
