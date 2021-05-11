@@ -407,7 +407,7 @@ def compute_f1f0(trial_inf):
   ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio
       This will be used to determine simple versus complex
   '''
-  stimDur = 1; # for now, all sfBB_* experiments have a 1 second stim dur
+  stimDur = 1; # for now (latest check as of 21.05.10), all sfBB_* experiments have a 1 second stim dur
 
   ######
   # why are we keeping the trials with max response at F0 (always) and F1 (if present)? Per discussion with Tony, 

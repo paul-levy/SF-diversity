@@ -335,8 +335,6 @@ respMatrixDC, respMatrixF1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, 
 respMatrixDC_onlyMask, respMatrixF1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, vecCorrectedF1=vecCorrected, onsetTransient=onsetCurr); # i.e. get the maskONLY response
 # and get the mask+base response (but f1 at mask TF)
 _, respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, vecCorrectedF1=vecCorrected, onsetTransient=onsetCurr); # i.e. get the maskONLY response
-#_, rMF1_mTf_noVec = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, vecCorrectedF1=0, onsetTransient=onsetCurr);
-#pdb.set_trace();
 
 # -- if vecCorrected, let's just take the "r" elements, not the phi information
 if vecCorrected:
@@ -1179,8 +1177,6 @@ if fitBase is None or useCoreFit:
               data_B_baseTf = respMatrix_B_f1[ii];
               mod_mean_A = baseMean_mod_f1[0][ii][0];
               mod_mean_B = baseMean_mod_f1[1][ii][0];
-
-          #pdb.set_trace();
 
           if measure == 0:
             data_sub = np.copy(data);

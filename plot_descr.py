@@ -83,14 +83,12 @@ save_loc = loc_base + expDir + 'figures/';
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_210503';
+descrBase = 'descrFits_210509';
+#descrBase = 'descrFits_210503';
 #descrBase = 'descrFits_210304';
-#descrBase = 'descrFits_200714';
 #descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
 #descrBase = 'descrFits_200507'; # for altExp
 #descrBase = 'descrFits_190503';
-#descrBase = 'descrFits_191003';
-#descrBase = 'descrFits_191201';
 if descrJnt == 1:
   descrBase = '%s_joint' % descrBase;
 ### RVCFITS

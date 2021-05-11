@@ -16,7 +16,7 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
 df_f0 = None;
-dogName = 'descrFits_210505';
+dogName = 'descrFits_210509';
 phAdvName = 'phaseAdvanceFits_210304'
 #phAdvName = 'phaseAdvanceFits_200714'
 rvcName_f0 = 'rvcFits_210304_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model

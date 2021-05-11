@@ -108,6 +108,7 @@ import warnings
 # jl_perCell - how to oranize everything, given a cell (called by jl_create, in a loop)
 # jl_create - create the jointList
 # jl_get_metric_byCon()
+# jl_get_metric_highComp()
 
 ######
 ## IV. return to fits/analysis (part ii)
@@ -1545,7 +1546,7 @@ def var_explained(data_resps, modParams, sfVals, dog_model = 2, baseline=0):
   else:
     # compute model responses
     if dog_model == 0:
-      mod_resps = flexible_Gauss(modParams, stim_sf=sfVals);
+      mod_resps = flexible_Gauss_np(modParams, stim_sf=sfVals);
     if dog_model == 1:
       mod_resps = DoGsach(*modParams, stim_sf=sfVals, baseline=baseline)[0];
     if dog_model == 2:
@@ -1639,7 +1640,8 @@ def descr_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11), base
   sf_samps = np.geomspace(all_sfs[0], all_sfs[-1], 500);
   sf_evals = np.argmax([obj(x) for x in sf_samps]);
   sf_peak = sf_samps[sf_evals];
-  return sf_peak;
+
+  return sf_peak
 
 def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65, dog_model=2, prefMin=0.1, highCut=None, base_sub=None):
   ''' Given a descrFit dict for a cell, compute a fit for the prefSf as a function of contrast
@@ -1857,7 +1859,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
 
   return totalLoss;
 
-def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=None):
+def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=None, fracSig=1):
   ''' return the initial parameters for the DoG model, given the model choice and responses
       --- if bounds is not None, then we'll ensure that each parameter is within the specified bounds
   '''
@@ -1890,12 +1892,14 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
     denom_lo = bw_log_to_lin(log_bw_lo, mu_init)[0]; # get linear bandwidth
     denom_hi = bw_log_to_lin(log_bw_hi, mu_init)[0]; # get lin. bw (cpd)
     range_denom = (denom_lo, denom_hi); # don't want 0 in sigma 
+    if fracSig:
+      range_sigmaHigh = (0.2, 2);
 
     init_base = random_in_range(range_baseline)[0]; # NOTE addition of [0] to "unwrap" random_in_range value
     init_amp = random_in_range(range_amp)[0];
     init_mu = random_in_range(range_mu)[0];
     init_sig_left = random_in_range(range_denom)[0];
-    init_sig_right = random_in_range(range_denom)[0];
+    init_sig_right = random_in_range(range_sigmaHigh)[0] if fracSig else random_in_range(range_denom)[0];
     init_params = [init_base, init_amp, init_mu, init_sig_left, init_sig_right];
 
   ############
@@ -1929,13 +1933,14 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
 
   return init_params
 
-def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=False, gain_reg=0, ref_varExpl=None, veThresh=70, prevFits=None, baseline_DoG=True):
+def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=False, gain_reg=0, ref_varExpl=None, veThresh=70, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint=True, (and DoGmodel is 1 or 2, i.e. not flexGauss), then we fit assuming
       a fixed ratio for the center-surround gains and [freq/radius]
       - i.e. of the 4 DoG parameters, 2 are fit separately for each contrast, and 2 are fit 
         jointly across all contrasts!
       - note that ref_varExpl (optional) will be of the same form that the output for varExpl will be
+      --- fracSig: if on, then the right-half (high SF) of the flex. gauss tuning curve is expressed as a fraction of the lower half
 
       inputs: self-explanatory, except for resps, which should be [resps_mean, resps_all, resps_sem, base_rate]
       outputs: bestNLL, currParams, varExpl, prefSf, charFreq, [overallNLL, paramList; if joint=True]
@@ -1978,7 +1983,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       overallNLL = np.nan;
       params = np.nan;
   else: # we've passed in existing fits!
-    bestNLL, currParams, varExpl, prefSf, charFreq = prevFits['NLL'][disp,:], prevFits['params'][disp,:], prevFits['varExpl'][disp,:], prevFits['prefSf'][disp,:], prevFits['charFreq'][disp,:];
+    if noDisp:
+      bestNLL, currParams, varExpl, prefSf, charFreq = prevFits['NLL'], prevFits['params'], prevFits['varExpl'], prevFits['prefSf'], prevFits['charFreq'];
+    else:
+      bestNLL, currParams, varExpl, prefSf, charFreq = prevFits['NLL'][disp,:], prevFits['params'][disp,:], prevFits['varExpl'][disp,:], prevFits['prefSf'][disp,:], prevFits['charFreq'][disp,:];
     if joint==True:
       overallNLL = prevFits['totalNLL'];
       params = prevFits['paramList'];
@@ -1990,7 +1998,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     bound_range = (0, 1.5*max_resp);
     bound_mu = (0.01, 10);
     bound_sig = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
-    allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
+    if fracSig:
+      bound_sigFrac = (0.2, 2);
+      allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sigFrac);
+    else:
+      allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
   elif DoGmodel == 1: # SACH
     bound_gainCent = (1e-3, None);
     bound_radiusCent= (1e-3, None);
@@ -2007,13 +2019,13 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     bound_gainCent = (1e-3, None);
     bound_freqCent= (1e-1, 2e1); # let's set the charFreq upper bound at 20 cpd (is that ok?)
     if joint==True:
-      bound_gainRatio = (1e-3, 1); # surround gain always less than center gain
-      bound_freqRatio = (1e-1, 1); # surround freq always less than ctr freq
+      bound_gainRatio = (1e-3, 3);
+      bound_freqRatio = (1e-1, 1); 
       # we'll add to allBounds later, reflecting joint gain/radius ratios common across all cons
       allBounds = (bound_gainRatio, bound_freqRatio);
     elif joint==False:
-      bound_gainFracSurr = (1e-3, 1);
-      bound_freqFracSurr = (1e-1, 1);
+      bound_gainFracSurr = (1e-3, 2); # surround gain always less than center gain NOTE: SHOULD BE (1e-3, 1)
+      bound_freqFracSurr = (5e-2, 1); # surround freq always less than ctr freq NOTE: SHOULD BE (1e-1, 1)
       allBounds = (bound_gainCent, bound_freqCent, bound_gainFracSurr, bound_freqFracSurr);
 
   ### organize responses -- and fit, if joint=False
@@ -2028,6 +2040,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     else: # then we aren't skipping any
       valSfInds = np.arange(0,len(all_sfs));
     valSfVals = all_sfs[valSfInds];
+    # ensure all are strictly GT 0
+    valSfVals = valSfVals[valSfVals>0];
 
     respConInd = np.where(np.asarray(valConByDisp[disp]) == con)[0];
     resps_curr = resps_mean[disp, valSfInds, con];
@@ -2192,7 +2206,7 @@ def compute_LSFV(fit, sfMod=0):
 
     return lsfv;  
 
-def compute_SF_BW(fit, height, sf_range, which_half=0, sfMod=0, baseline=None):
+def compute_SF_BW(fit, height, sf_range, which_half=0, sfMod=0, baseline=None, fracSig=1):
     ''' if which_half = 0, use both-halves; if +1/-1, only return bandwidth at higher/lower SF end
      Height is defined RELATIVE to baseline
      i.e. baseline = 10, peak = 50, then half height is NOT 25 but 30
@@ -2213,8 +2227,12 @@ def compute_SF_BW(fit, height, sf_range, which_half=0, sfMod=0, baseline=None):
       left_cpd = fit[2] * exp(-(fit[3] * sqrt(2*log(1/height))));
 
       # right-half
-      right_full_bw = 2 * (fit[4] * sqrt(2*log(1/height)));
-      right_cpd = fit[2] * math.exp((fit[4] * sqrt(2*math.log(1/height))));
+      if fracSig:
+        sigRight = fit[3]*fit[4];
+      else:
+        sigRight = fit[3];
+      right_full_bw = 2 * (sigRight * sqrt(2*log(1/height)));
+      right_cpd = fit[2] * exp((sigRight * sqrt(2*log(1/height))));
 
     elif sfMod==1 or sfMod==2: # we'll do this numerically rather than in closed form
       prefSf = descr_prefSf(fit, dog_model=sfMod, all_sfs=sf_range)
@@ -2281,8 +2299,8 @@ def flexible_Gauss(params, stim_sf, minThresh=0.1):
                 
     return [max(minThresh, respFloor + respRelFloor*x) for x in shape];
 
-def flexible_Gauss_np(params, stim_sf, minThresh=0.1):
-    # REPLACEMENT for flexible_Gauss in numpy
+def flexible_Gauss_np(params, stim_sf, minThresh=0.1, fracSig=1):
+    # REPLACEMENT for flexible_Gauss in numpy (i.e. written with numpy funcs rather than math/python-default funcs]
     # The descriptive model used to fit cell tuning curves - in this way, we
     # can read off preferred SF, octave bandwidth, and response amplitude
 
@@ -2291,6 +2309,8 @@ def flexible_Gauss_np(params, stim_sf, minThresh=0.1):
     sfPref          = params[2];
     sigmaLow        = params[3];
     sigmaHigh       = params[4];
+    if fracSig:
+      sigmaHigh = sigmaHigh*params[3]; # i.e. the true sigmaHigh value is params[4]*params[3]
 
     np = numpy;
     # Tuning function
@@ -2336,7 +2356,7 @@ def get_rvcResp(params, curr_cons, rvcMod):
 ##################################################################
 ##################################################################
 
-def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0):
+def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1):
 
    np = numpy;
    print('%s/%d' % (expDir, 1+cell_ind));
@@ -2345,17 +2365,37 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    ### meta parameters      
    ###########
    # get experiment name, load cell
-   if isSach:
-     expName = dataList[cell_ind]['progName'];
-     expInd = np.nan; # not applicable...
-     cell = dataList[cell_ind];
-     data = cell['data'];
-     from LGN.sach.helper_fcns import tabulateResponses as sachTabulate
-     tabulated = sachTabulate(data);
-     stimVals = [[1], tabulated[1][0], tabulated[1][1]] # disp X con X SF
-     val_con_by_disp = [range(0,len(stimVals[1]))]; # all cons are valid, since we don't have dispersions
-     # F1 means, expanded to have disp dimension at front; we also transpose so that it's [disp X sf X con], as it is in other expts
-     sfTuning = np.expand_dims(np.transpose(tabulated[0][1]['mean']), axis=0);
+   if isSach or isBB: # if it's Sach or Bauman+Bonds
+     if isSach:
+       expName = dataList[cell_ind]['progName'];
+       expInd = np.nan; # not applicable...
+       cell = dataList[cell_ind];
+       data = cell['data'];
+       from LGN.sach.helper_fcns import tabulateResponses as sachTabulate
+       tabulated = sachTabulate(data);
+       stimVals = [[1], tabulated[1][0], tabulated[1][1]] # disp X con X SF
+       val_con_by_disp = [range(0,len(stimVals[1]))]; # all cons are valid, since we don't have dispersions
+       # F1 means, expanded to have disp dimension at front; we also transpose so that it's [disp X sf X con], as it is in other expts
+       sfTuning = np.expand_dims(np.transpose(tabulated[0][1]['mean']), axis=0);
+     if isBB:
+       ### As of 21.05.10, we will only consider the maskOnly responses, at the corresponding response measure (DC or F1, by f1:f0 ratio)
+       expName = dataList['unitName'][cell_ind]
+       expInd = -1;
+       cell = np_smart_load(data_loc + expName + '_sfBB.npy');
+       expInfo = cell['sfBB_core']; # we ONLY analyze sfBB_core in this jointList (as of 21.05.10)
+       tr = expInfo['trial'];
+       from helper_fcns_sfBB import compute_f1f0 as bb_compute_f1f0
+       from helper_fcns_sfBB import get_mask_resp
+       f1f0_ind = bb_compute_f1f0(expInfo)[0] > 1; # if simple, then index with 1; else, 0
+       maskSf, maskCon = expInfo['maskSF'], expInfo['maskCon'];
+       stimVals = [[1], maskCon, maskSf] # disp X con X SF
+       val_con_by_disp = [range(0, len(stimVals[1]))]; # all cons are valid, since we don't have dispersions
+       # the following returns [con, sf, [mn,sem]]
+       maskResps = get_mask_resp(expInfo, withBase=0, vecCorrectedF1=1, returnByTr=1);
+       maskMeans = maskResps[f1f0_ind][:,:,0]; # only get the mean response (i.e. ignore SEM), access only DC or F1
+       maskAll = maskResps[f1f0_ind + 2]; # this gets all, organized as [con,sf,trial], just for DC or F1, appropriately
+       # means by condition, expanded to have disp dimension at front; we also transpose so that it's [disp X sf X con], as it is in other expts
+       sfTuning = np.expand_dims(np.transpose(maskMeans), axis=0);
    else:
      expName = dataList['unitName'][cell_ind];
      expInd = get_exp_ind(data_loc, expName)[0];
@@ -2432,6 +2472,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    f1f0_ratio = np.nan;
    # then, inferred from descriptive fits
    lsfv = np.zeros((nDisps,nCons)) * np.nan; # LSFV as from Xing et al, 2004
+   bw_sigma = np.zeros((nDisps, nCons, 2)) * np.nan; # what's the left/right sigma parameter from the flex gauss fit?
    bwHalf = np.zeros((nDisps, nCons)) * np.nan;
    bwHalf_split = np.zeros((nDisps, nCons, 2)) * np.nan; # [:,:,[lower,upper]]
    bw34 = np.zeros((nDisps, nCons)) * np.nan;
@@ -2500,8 +2541,8 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    relDescr_inds = -1 * np.ones((nDisps, 4, ), dtype=int); # we'll only count indices >=0 as valid
 
    ## first, get mean/median/maximum response over all conditions
-   if isSach:
-     respByCond = data['f1'];
+   if isSach or isBB: # we can use ternary, since we can safely assume that ONLY one of isSach or isBB is true
+     respByCond = data['f1'] if isSach else maskAll.flatten();
    else:
      respByCond = resps[0].flatten();
    mn_med_max = np.array([np.nanmean(respByCond), np.nanmedian(respByCond), np.nanmax(respByCond)])
@@ -2516,9 +2557,13 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      supr_ind = np.nan;
 
    # let's figure out if simple or complex
-   if isSach:
-     f1f0_ratio = np.nan
-     respMeasure = 1; # we look at F1 for sach (LGN data)
+   if isSach or isBB:
+     if isSach:
+       f1f0_ratio = np.nan
+       respMeasure = 1; # we look at F1 for sach (LGN data)
+     if isBB:
+       f1f0_ratio = bb_compute_f1f0(expInfo)[0]; # yes, we're duplicating this (have already computed by this point)
+       respMeasure = f1f0_ratio > 1;
    else:
      f1f0_ratio = compute_f1f0(tr, cell_ind+1, expInd, data_loc, dF_nm)[0]; # f1f0 ratio is 0th output
      respMeasure = 0; # assume it's DC by default
@@ -2576,7 +2621,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
          cut_sfs, cut_resps = np.array(stimVals[2])[cut_sf], sfTuning[d, cut_sf, c];
          sfComCut[d, c] = sf_com(cut_resps, cut_sfs)
 
-       # first, DoG fit - ASSUMES SACH
+       # first, DoG fit
        if cell_ind in dogFits:
          try:
            varExpl = dogFits[cell_ind]['varExpl'][d, c];
@@ -2610,6 +2655,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
              bwHalf[d, c] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.5, sf_range=sf_range)[1]
              bw34[d, c] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.75, sf_range=sf_range)[1]
              for splitInd,splitHalf in enumerate([-1,1]):
+                bw_sigma[d, c, splitInd] = descrFits[cell_ind]['params'][d, c, 3+splitInd]
                 bwHalf_split[d, c, splitInd] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.5, sf_range=sf_range, which_half=splitHalf)[1];
                 bw34_split[d, c, splitInd] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.75, sf_range=sf_range, which_half=splitHalf)[1]
              pSf[d, c] = descrFits[cell_ind]['params'][d, c, muLoc]
@@ -2807,6 +2853,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                       ('sfVar', sfVar),
                       ('f1f0_ratio', f1f0_ratio),
                       ('lsfv', lsfv),
+                      ('bw_sigma', bw_sigma),
                       ('bwHalf', bwHalf),
                       ('dog_bwHalf', dog_bwHalf),
                       ('bwHalf_split', bwHalf_split),
@@ -2974,7 +3021,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     dogFits = np_smart_load(data_loc + dog_nm);
     rvcFits = np_smart_load(data_loc + rv_nm);
     try:
-      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_200401.npy');
+      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_210401.npy');
     except:
       superAnalysis = None;
 
@@ -2985,8 +3032,6 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     else: 
       nCells = len(dataList['unitName']);
       isSach = 0;
-
-    #out = jl_perCell(3, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach)
 
     if toPar:
       perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach)
@@ -3028,7 +3073,7 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02):
   # how to handle contrast? for each cell, find the contrast that is valid for that dispersion and matches the con_lvl
   # to within some tolerance (e.g. +/- 0.01, i.e. 1% contrast)
 
-  for ind, i in enumerate(jointList.keys()): #range(nCells):
+  for ind, i in enumerate(jointList.keys()): #range(nCells): # holdover from when jointList was list rather than dict
       #######
       # get structure, metadata, etc
       #######
@@ -3054,6 +3099,37 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02):
       output[ind] = curr_metr[disp][full_con_ind];
 
   return output;
+
+def jl_get_metric_highComp(jointList, metric, whichMod, atLowest, disp=0, extraInds=None):
+    ''' This should work for most (all?) descriptive metrics in the jointList
+        Will return the two metrics (high, comp) and the corresponding comparison contrasts
+
+        jointList -- the joint list (dictionary)
+        metric    -- string (e.g. pSf or dog_varExpl)
+        whichMod  -- 0 for flex. gauss, 1 for DoG
+        atLowest  -- 0 if at fixed one-third contrast; 1 if at lowest contrast
+        disp      -- integer, 0 for single gratings
+        extraInds -- is there an extra dimension to index? if so, pass it in
+    '''
+    np = numpy;
+
+    dogAdd = whichMod & atLowest
+    comp = 1 + atLowest + dogAdd
+    
+    highInd = np.array([jointList[x]['metrics']['relDescr_inds'][disp,0] for x in jointList.keys()]);
+    # compInd will first be at one third (when i==0), then at lowest valid contrast...
+    compInd = np.array([jointList[x]['metrics']['relDescr_inds'][disp,comp] for x in jointList.keys()]);
+    
+    if extraInds is None:
+        highSf = np.array([jointList[key]['metrics'][metric][disp, hI] for key,hI in zip(jointList.keys(), highInd)])
+        compSf = np.array([jointList[key]['metrics'][metric][disp, cI] for key,cI in zip(jointList.keys(), compInd)])
+    else:
+        highSf = np.array([jointList[key]['metrics'][metric][disp, hI, extraInds] for key,hI in zip(jointList.keys(), highInd)])
+        compSf = np.array([jointList[key]['metrics'][metric][disp, cI, extraInds] for key,cI in zip(jointList.keys(), compInd)])
+    
+    compCons = np.array([jointList[x]['metadata']['stimVals'][1][conInd] for x,conInd in zip(jointList.keys(), compInd)]);
+    
+    return highSf, compSf, compCons
 
 ##################################################################
 ##################################################################
@@ -4076,7 +4152,7 @@ def evalSigmaFilter(filter, scale, offset, evalSfs):
 
   params = filter['params'];  
   if filter['type'] == 1: # flexibleGauss
-    filterShape = numpy.array(flexible_Gauss(params, evalSfs, 0)); # 0 is baseline/minimum value of flexible_Gauss
+    filterShape = numpy.array(flexible_Gauss_np(params, evalSfs, 0)); # 0 is baseline/minimum value of flexible_Gauss
   elif filter['type'] == 2:
     filterShape = deriv_gauss(params, evalSfs)[0]; # take the first output argument only
 
@@ -4371,13 +4447,24 @@ def oriTune(oriVals, oriResps, oriResps_std=None, baselineSub = False, nOpts = 3
     init_ds = dsEst + random_in_range([-0.1, 0.1])[0];
     init_r0 = random_in_range([0.5, 1])[0] * np.min(oriResps)
     init_params = [init_a, init_w, init_xc, init_ds, init_r0];
+    # make sure the ints are within the bounds
+    for (ii,prm),bound in zip(enumerate(init_params), allBounds):
+      compLow = -np.Inf if bound[0] is None else bound[0];
+      compHigh = np.Inf if bound[1] is None else bound[1];
+      if prm < compLow or prm > compHigh:
+        try:
+          init_params[ii] = bound[0]*random_in_range([1.25, 1.75])[0]
+        except:
+          init_params[ii] = bound[1]*random_in_range([0.25, 0.75])[0]
+
+
     if np.mod(i, 2) == 0:
-      wax = opt.minimize(obj, init_params, bounds=allBounds, method='TNC');
+       wax = opt.minimize(obj, init_params, bounds=allBounds, method='TNC');
     else:
-      wax = opt.minimize(obj, init_params, bounds=allBounds, method='L-BFGS-B');
+       wax = opt.minimize(obj, init_params, bounds=allBounds, method='L-BFGS-B');
     if best_loss is np.nan or wax['fun'] < best_loss:
-      best_loss = wax['fun'];
-      best_params = wax['x'];
+       best_loss = wax['fun'];
+       best_params = wax['x'];
 
   oriParams = best_params;
   oriPrefRad = oriParams[2];
@@ -4403,7 +4490,7 @@ def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False, nOpts = 30):
   '''
   np = numpy;
 
-  mod = lambda params, tfVals: flexible_Gauss(params, stim_sf=tfVals);
+  mod = lambda params, tfVals: flexible_Gauss_np(params, stim_sf=tfVals);
   # set bounds
   min_bw = 1/4; max_bw = 10; # ranges in octave bandwidth
   bound_baseline = (0, np.max(tfResps));
@@ -4418,14 +4505,14 @@ def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False, nOpts = 30):
   best_params = []; best_loss = np.nan; 
   modObj = lambda params: numpy.sum(numpy.square(mod(params, tfVals) - tfResps));
   for i in np.arange(nOpts):
-    init_params = dog_init_params(tfResps, np.min(tfResps), tfVals, tfVals, DoGmodel=0);
+    init_params = dog_init_params(tfResps, np.min(tfResps), tfVals, tfVals, DoGmodel=0, bounds=allBounds);
     if np.mod(i, 2) == 0:
-      wax = opt.minimize(modObj, init_params, bounds=allBounds, method='TNC');
+       wax = opt.minimize(modObj, init_params, bounds=allBounds, method='TNC');
     else:
-      wax = opt.minimize(modObj, init_params, bounds=allBounds, method='L-BFGS-B');
+       wax = opt.minimize(modObj, init_params, bounds=allBounds, method='L-BFGS-B');
     if best_loss is np.nan or wax['fun'] < best_loss:
-      best_loss = wax['fun'];
-      best_params = wax['x'];
+       best_loss = wax['fun'];
+       best_params = wax['x'];
 
   tfParams = best_params;
   
@@ -4445,7 +4532,7 @@ def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False, nOpts = 30):
   mod = lambda params, tfVals: DoGsach(*params, tfVals);
   modObj = lambda params: numpy.sum(numpy.square(mod(params, tfVals) - tfResps));
   for i in np.arange(nOpts):
-    init_params = dog_init_params(tfResps, np.min(tfResps), tfVals, tfVals, 1); # sach is dogModel 1
+    init_params = dog_init_params(tfResps, np.min(tfResps), tfVals, tfVals, 1, bounds=allBounds); # sach is dogModel 1
     if np.mod(i, 2) == 0:
       wax = opt.minimize(modObj, init_params, bounds=allBounds, method='TNC');
     else:

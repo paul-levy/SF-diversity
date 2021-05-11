@@ -33,10 +33,11 @@ fitNamesFlat = [hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrect
 # descrFits - loss type determined by comparison (choose best; see modCompare.ipynb::Descriptive Fits)
 ####
 dogMod = 2; # 1 (sach) or 2 (Tony)
-dogNames = ['descrFits_210503_sqrt_tony.npy', 'descrFits_210503_sqrt_tony.npy', 'descrFits_210503_sqrt_tony.npy'];
+dogNames = ['descrFits_210505_sqrt_tony.npy', 'descrFits_210505_sqrt_tony.npy', 'descrFits_210505_sqrt_tony.npy'];
+#dogNames = ['descrFits_210503_sqrt_tony.npy', 'descrFits_210503_sqrt_tony.npy', 'descrFits_210503_sqrt_tony.npy'];
 #dogNames = ['descrFits_210304_sqrt_sach.npy', 'descrFits_210304_sqrt_sach.npy', 'descrFits_210304_sqrt_sach.npy'];
 descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
-descrNames = ['descrFits_210304_sqrt_flex.npy', 'descrFits_210304_sqrt_flex.npy', 'descrFits_210304_sqrt_flex.npy'];
+descrNames = ['descrFits_210509_sqrt_flex.npy', 'descrFits_210509_sqrt_flex.npy', 'descrFits_210509_sqrt_flex.npy'];
 #descrNames = ['descrFits_190503_sqrt_flex.npy', 'descrFits_190503_sqrt_flex.npy', 'descrFits_191023_sqrt_flex.npy'];
 
 rvcNames = ['rvcFits_210304_f0_NR.npy', 'rvcFits_210304_f0_NR.npy', 'rvcFits_210304_vecF1_NR.npy'];
@@ -115,8 +116,10 @@ fitNamesFlat = ['%s_flat_chiSq.npy' % fitBase];
 ####
 #dogNames = ['descrFits_s210304_sach_sach.npy'];
 #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
+dogMod = 2; # 1 (sach) or 2 (Tony)
 dogNames = ['descrFits_210503_sqrt_tony.npy', 'descrFits_s210304_sqrt_tony.npy'];
 #dogNames = ['descrFits_210304_sach_sach.npy', 'descrFits_s210304_sach_sach.npy'];
+descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
 descrNames = ['descrFits_210304_sqrt_flex.npy', 'descrFits_s210304_sqrt_flex.npy'];
 #dogNames = ['descrFits_191023_sach_sach.npy'];
 #descrNames = ['descrFits_200507_sqrt_flex.npy'];
@@ -152,7 +155,7 @@ sf_range = [0.01, 10]; # allowed values of 'mu' for fits - see descr_fit.py for 
 
 # NOTE: the real code for creating the jointList has been moved to helper_fcns!
 # WARNING: This takes ~10 minutes (as of 09.06.19)
-jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, dog_varExplThresh=dog_varExplThresh)
+jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod)
 
 from datetime import datetime
 suffix = datetime.today().strftime('%y%m%d')
