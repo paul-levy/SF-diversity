@@ -17,11 +17,8 @@
 
 source activate pytorch-lcv
 
-for run in {1..41}
-do
-  #######
-  ### Start 21.03.04 run
-  #######
-  python3.6 descr_fits_sfBB.py $run 1 1 1 0 &
+FIT_RVC=$1
+FIT_SFS=$2
+SF_MOD=$3
 
-done
+python3.6 descr_fits_sfBB.py -141 $FIT_RVC $FIT_SFS 1 $SF_MOD # -141 means from cell 1 to cell 41

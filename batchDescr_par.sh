@@ -70,8 +70,8 @@ if [ "$EXP_DIR" = "V1/" ]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
     # -- responses derived from vecF1 corrections, if F1 responses
     python3.6 descr_fits.py -156 0 V1/ -1 0 0 1 1 0 2 0 0 # flex gauss
-    python3.6 descr_fits.py -156 0 V1/ -1 0 0 1 1 1 2 0 0 # sach DoG
-    python3.6 descr_fits.py -156 0 V1/ -1 0 0 1 1 2 2 0 0 # Tony DoG
+    #python3.6 descr_fits.py -156 0 V1/ -1 0 0 1 1 1 2 0 0 # sach DoG
+    #python3.6 descr_fits.py -156 0 V1/ -1 0 0 1 1 2 2 0 0 # Tony DoG
   fi
 fi
 
@@ -83,8 +83,8 @@ if [ "$EXP_DIR" = "V1_orig/" ]; then
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
     python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 0 2 0 # flex. gauss
-    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 1 2 0 # sach DoG
-    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 2 2 0 # Tony DoG
+    #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 1 2 0 # sach DoG
+    #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 2 2 0 # Tony DoG
   fi
 fi
 
@@ -96,8 +96,8 @@ if [ "$EXP_DIR" = "altExp/" ]; then
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
     python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 0 2 0 # flex. gauss
-    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 1 2 0 # sach DoG
-    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 2 2 0 # Tony DoG
+    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 1 2 0 # sach DoG
+    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 2 2 0 # Tony DoG
   fi
 fi
 
@@ -120,8 +120,8 @@ if [ "$EXP_DIR" = "LGN/" ]; then
   if [[ $DESCR_FIT -eq 1 ]]; then
     # Descr fits (based on Movshon RVCs)
     python3.6 descr_fits.py -177 0 LGN/ 0 0 0 0 1 0 2 0 0 # flex gauss, not joint
-    python3.6 descr_fits.py -177 0 LGN/ 0 0 0 0 1 1 2 0 0 # sach DoG, not joint (sqrt)
-    python3.6 descr_fits.py -177 0 LGN/ 0 0 0 0 1 2 2 0 0 # Tony DoG, not joint (sqrt)
+    #python3.6 descr_fits.py -177 0 LGN/ 0 0 0 0 1 1 2 0 0 # sach DoG, not joint (sqrt)
+    #python3.6 descr_fits.py -177 0 LGN/ 0 0 0 0 1 2 2 0 0 # Tony DoG, not joint (sqrt)
     #python3.6 descr_fits.py -177 0 LGN/ 0 0 0 0 1 1 4 0 0 # sach DoG, not joint (sach loss)
   fi
 fi
