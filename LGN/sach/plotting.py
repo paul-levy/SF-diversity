@@ -43,8 +43,8 @@ cellStruct = allData[which_cell-1];
 # #### Load descriptive model fits, RVC Naka-Rushton fits, [comp. model fits]
 zSub = 1; # are we loading fits that were fit to responses adjusted s.t. the lowest value is 1?
 
-#fLname = 'descrFits_s191023';
-fLname = 'descrFits_s210304';
+fLname = 'descrFits_s210509';
+#fLname = 'descrFits_s210304';
 if sf_loss_type == 1:
   loss_str = '_poiss';
 elif sf_loss_type == 2:

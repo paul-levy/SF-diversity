@@ -147,7 +147,7 @@ def descrFit_name(lossType, descrBase=None, modelName = None):
 
 ##
 
-def flexible_Gauss(params, stim_sf, minThresh=0.1):
+def flexible_Gauss(params, stim_sf, minThresh=0.1, fracSig=1):
     # The descriptive model used to fit cell tuning curves - in this way, we
     # can read off preferred SF, octave bandwidth, and response amplitude
 
@@ -156,6 +156,8 @@ def flexible_Gauss(params, stim_sf, minThresh=0.1):
     sfPref          = params[2];
     sigmaLow        = params[3];
     sigmaHigh       = params[4];
+    if fracSig:
+      sigmaHigh = sigmaHigh*params[3]; # i.e. the true sigmaHigh value is params[4]*params[3]
 
     # Tuning function
     sf0   = [x/sfPref for x in stim_sf];
@@ -456,7 +458,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, resps_std=None, join
     
   return NLL;
 
-def dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate):
+def dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate, fracSig=1):
   ''' return the initial parameters for the DoG model, given the model choice and responses
   '''
   maxResp       = np.max(resps_curr);
@@ -493,7 +495,7 @@ def dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate):
     init_amp = random_in_range(range_amp)[0];
     init_mu = random_in_range(range_mu)[0];
     init_sig_left = random_in_range(range_denom)[0];
-    init_sig_right = random_in_range(range_denom)[0];
+    init_sig_right = random_in_range((0.2, 2))[0] if fracSig else random_in_range(range_denom)[0];
     init_params = [init_base, init_amp, init_mu, init_sig_left, init_sig_right];
   ############
   ## SACH
@@ -516,7 +518,7 @@ def dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate):
 
   return init_params
 
-def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=False, ref_varExpl=None, veThresh=65):
+def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=False, ref_varExpl=None, veThresh=65, fracSig=1):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint=True, (and DoGmodel is 1 or 2, i.e. not flexGauss), then we fit assuming
       a fixed ratio for the center-surround gains and [freq/radius]
@@ -562,7 +564,11 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
     bound_range = (0, 1.5*max_resp);
     bound_mu = (0.01, 10);
     bound_sig = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
-    allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
+    if fracSig:
+      bound_sigFrac = (0.2, 2);
+      allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sigFrac);
+    else:
+      allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
   if DoGmodel == 1:
     bound_gainCent = (1e-3, None);
     bound_radiusCent= (1e-3, None);
@@ -626,7 +632,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
       ###########
       ### pick initial params
       ###########
-      init_params = dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate)
+      init_params = dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate, fracSig=fracSig)
 
       # choose optimization method
       if np.mod(n_try, 2) == 0:

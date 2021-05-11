@@ -11,8 +11,9 @@ source activate lcv-python
 
 DOG_MOD=${1:=1}
 DOG_LOSS=${2:=3}
+RVC_MOD=${3:=0}
 
 for run in {1..34}
 do
-  python3.6 descr_fit.py $run 0 250 $DOG_LOSS $DOG_MOD 0 & 
+  python3.6 descr_fit.py $run $RVC_MOD 250 $DOG_LOSS $DOG_MOD 0 & 
 done
