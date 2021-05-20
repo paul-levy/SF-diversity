@@ -13,10 +13,10 @@ data_suff = 'V1_BB/structures/';
 
 expName = hf.get_datalist('V1_BB/');
 
-sfName = 'descrFits_210509';
-rvcName = 'rvcFits_210509';
+sfName = 'descrFits_210520';
+rvcName = 'rvcFits_210520';
 
-def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, jointSf=False, toSave=1):
+def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, jointSf=False, toSave=1, fracSig=1):
   ''' Separate fits for DC, F1 
       -- for DC: [maskOnly, mask+base]
       -- for F1: [maskOnly, mask+base {@mask TF}] '''
@@ -136,7 +136,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
           sfFit_curr = None
 
         # -- by default, loss_type=2 (meaning sqrt loss); why expand dims and transpose? dog fits assumes the data is in [disp,sf,con] and we just have [con,sf]
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), None, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1) # noDisp=1 means that we don't index dispersion when accessins prevFits
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), None, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig) # noDisp=1 means that we don't index dispersion when accessins prevFits
 
         curr_sf[resp_str][wK] = dict();
         curr_sf[resp_str][wK]['NLL'] = nll;
@@ -205,6 +205,8 @@ if __name__ == '__main__':
   rvc_mod    = int(sys.argv[4]);
   sf_mod     = int(sys.argv[5]);
 
+  fracSig = 1; # why fracSig =1? For V1 fits, we want to contrasin the upper-half sigma of the two-half gaussian as a fraction of the lower half
+
   if asMulti:
     from functools import partial
     import multiprocessing as mp
@@ -212,7 +214,7 @@ if __name__ == '__main__':
 
     with mp.Pool(processes = nCpu) as pool:
       # if we're doing as parallel, do NOT save
-      fit_perCell = partial(make_descr_fits, fit_rvc=fit_rvc, fit_sf=fit_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0); 
+      fit_perCell = partial(make_descr_fits, fit_rvc=fit_rvc, fit_sf=fit_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig); 
 
       fits = zip(*pool.map(fit_perCell, range(start_cell, end_cell+1)));
       rvc_fits, sf_fits = fits; # unpack

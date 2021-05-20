@@ -13,14 +13,13 @@ data_suff = 'structures/';
 
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 #expName = 'dataList_glx_mr.npy'
-#df_f0 = 'descrFits_200507_sqrt_flex.npy';
+df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-df_f0 = None;
-dogName = 'descrFits_210509';
+dogName = 'descrFits_210520';
 phAdvName = 'phaseAdvanceFits_210304'
 #phAdvName = 'phaseAdvanceFits_200714'
-rvcName_f0 = 'rvcFits_210304_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-rvcName_f1 = 'rvcFits_210304';
+rvcName_f0 = 'rvcFits_210520_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f1 = 'rvcFits_210520';
 
 ## model recovery???
 modelRecov = 0;
@@ -194,6 +193,7 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
   ######
   # simple cell
   ######
+  adjByTrialCorr = None # create the corrected adjByTrialCorr as None, so we know if we've actually made the corrections (iff getting F1 resp AND vecF1 correction)
   if f1f0 > 1 or force_f1 is True:
     # calling phase_advance fit, use the phAdv_model and optimized paramters to compute the true response amplitude
     # given the measured/observed amplitude and phase of the response
@@ -218,9 +218,9 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
       # then, sum up the valid components per stimulus component
       allCons = np.vstack(data['con']).transpose();
       blanks = np.where(allCons==0);
-      adjByTrialSum = np.copy(adjByTrial);
-      adjByTrialSum[blanks] = 0; # just set it to 0 if that component was blnak during the trial
-      adjByTrialSum = np.sum(adjByTrialSum, axis=1);
+      adjByTrialCorr = np.copy(adjByTrial);
+      adjByTrialCorr[blanks] = 0; # just set it to 0 if that component was blnak during the trial
+      adjByTrialSum = np.sum(adjByTrialCorr, axis=1);
       # get the mean resp organized by sfMix condition
       adjMeans, adjByTrialSum = hf.organize_resp(adjByTrialSum, cellStruct, expInd, respsAsRate=False)[2:];
       # will need to transpose, since axis orders get switched when mixing single # slice with array slice of dim, too
@@ -319,7 +319,7 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
   curr_fits['conGain'] = all_conGains;
   curr_fits['varExpl'] = varExpl;
   curr_fits['adjMeans'] = adjMeans;
-  curr_fits['adjByTr'] = adjByTrial;
+  curr_fits['adjByTr'] = adjByTrial if adjByTrialCorr is None else adjByTrialCorr; # we pass in the version of rvcFits which have the non-present stim comps zero'd out
   curr_fits['adjSem'] = adjSemTr;
   curr_fits['adjSemComp'] = adjSemCompTr;
 
@@ -441,7 +441,7 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False):
+def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1):
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
   '''
@@ -470,8 +470,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, fo
   # get expInd, load rvcFits [if existing, and specified]
   expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1]);
   print('Making descriptive SF fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
+  #pdb.set_trace();
   if force_dc is False and get_rvc == 1: # NOTE: as of 19.09.16 (well, earlier, actually), rvcFits are on F0 or F1, depending on simple/complex designation - in either case, they are both already as rates!
-    rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num, rvcName=rvcName, rvcMod=rvcMod, vecF1=vecF1); # see default arguments in helper_fcns.py
+    rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num, rvcName=rvcName, rvcMod=rvcMod, direc=dir, vecF1=vecF1); # see default arguments in helper_fcns.py
   else:
     rvcFits = None;
 
@@ -494,7 +495,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, fo
     recovSpikes = None;
   # force DC spikes if is_f0 == 1
   # -- we'll ask which response measure is returned (DC or F1) so that we can pass in None for base_rate if it's F1 (will become 0)
-  spks, which_measure = hf.get_adjusted_spikerate(data, cell_num, expInd, data_loc, rvcName, rvcMod, baseline_sub=False, force_dc=force_dc, force_f1=force_f1, return_measure=1);
+  # ---- NOTE: We pass in rvcMod=-1 so that we know we're passing in the already loaded rvcFit for that cell
+  spks, which_measure = hf.get_adjusted_spikerate(data, cell_num, expInd, data_loc, rvcName=rvcFits, rvcMod=-1, baseline_sub=False, force_dc=force_dc, force_f1=force_f1, return_measure=1, vecF1=vecF1);
 
   # Note that if rvcFits is not None, then spks will be rates already
   # ensure the spikes array is a vector of overall response, not split by component 
@@ -527,7 +529,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, fo
   ### here is where we do the real fitting!
   for d in range(nDisps): # works for all disps
     # a separate fitting call for each dispersion
-    nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits)
+    nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig)
 
     # before we update stuff - load again IF we are saving within this function (in case some other run has saved/made changes)
     if os.path.isfile(data_loc + fLname) and to_save:
@@ -649,6 +651,7 @@ if __name__ == '__main__':
       force_dc = False;
 
     vecF1 = 1 if ph_fits == -1 else 0;
+    fracSig = 0 if data_dir == 'LGN/' else 1; # we only enforce the "upper-half sigma as fraction of lower half" for V1 cells!
 
     if asMulti:
       from functools import partial
@@ -695,7 +698,8 @@ if __name__ == '__main__':
       if descr_fits == 1:
         
         with mp.Pool(processes = nCpu) as pool:
-          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=100, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1);
+          dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
+          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=100, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig);
           dogFits = pool.map(descr_perCell, range(start_cell, end_cell+1));
 
           print('debug');
@@ -734,7 +738,7 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1);
       if descr_fits == 1:
-        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1);
+        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, fracSig=fracSig);
 
       if rvcF0_fits == 1:
         fit_RVC_f0(cell_num, data_loc=dataPath, rvcMod=rvc_model);
