@@ -52,7 +52,6 @@ def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0):
   resps = [f1['mean'][:, x] for x in range(n_v_sfs)];
   respsSEM = [f1['sem'][:, x] for x in range(n_v_sfs)];
   cons = [all_cons] * len(resps); # tile
-
   rvc_model, all_opts, all_conGain, all_loss = hf.rvc_fit(resps, cons, var=respsSEM, mod=rvcMod, prevFits=rvcFits_curr);
   varExpl = [hf.var_expl_direct(dat, hf.get_rvcResp(prms, all_cons, rvcMod)) for dat, prms in zip(resps, all_opts)];
 
@@ -85,7 +84,7 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1, joint=False):
+def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1, joint=False, fracSig=0):
 
     if DoGmodel == 0:
       nParam = 5;
@@ -96,9 +95,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits_s210509';
+    fLname = 'descrFits_s210520';
     #fLname = 'descrFits_s210304';
-    #fLname = 'descrFits_s191205zSub';
+
     if joint==True:
       try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
         modStr  = hf.descrMod_name(DoGmodel);
@@ -147,7 +146,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
       paramList = np.nan;
 
     # now, we fit!
-    nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit(f1, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=joint, ref_varExpl=ref_varExpl);
+    nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit(f1, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=joint, ref_varExpl=ref_varExpl, fracSig=fracSig);
 
     # before we update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(fLname):
@@ -203,8 +202,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
 if __name__ == '__main__':
 
     data_loc = '/users/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/LGN/sach/structures/';
-    rvcBase = 'rvcFits_210304'
-    #rvcBase = 'rvcFits_191201'
+    rvcBase = 'rvcFits_210520'
+
+    fracSig = 0; # should be unconstrained, per Tony (21.05.19) for LGN fits
 
     print('Running cell ' + sys.argv[1] + '...');
 
@@ -218,5 +218,5 @@ if __name__ == '__main__':
     if rvcModel >= 0:
       rvc_fit(cellNum, data_loc, rvcBase, rvcModel); 
     if DoGmodel >= 0:
-      fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel, is_joint);
+      fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel, is_joint, fracSig=fracSig);
 

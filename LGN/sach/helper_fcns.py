@@ -823,13 +823,15 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=True, 
            b_rat = 0;
          else:
            b_rat = random_in_range([0.0, 0.2])[0];
-         init_params = [b_rat*np.max(curr_amps), (2+3*b_rat)*np.max(curr_amps), random_in_range([0.05, 0.5])[0]]; 
+         # for mod==0, params are [b {offset}, k {gain}, c0 {c50}]
+         k_random_factor = random_in_range([0.5,2])[0];
+         init_params = [b_rat*np.max(curr_amps), k_random_factor*(2+3*b_rat)*np.max(curr_amps), random_in_range([0.05, 0.5])[0]]; 
          if fix_baseline:
            b_bounds = (0, 0);
          else:
            b_bounds = (None, 0);
          k_bounds = (0, None);
-         c0_bounds = (1e-2, 1);
+         c0_bounds = (5e-3, 1);
          all_bounds = (b_bounds, k_bounds, c0_bounds); # set all bounds
        elif mod == 1 or mod == 2: # bad initialization as of now...
          if fix_baseline: # correct if we're fixing the baseline at 0
@@ -854,11 +856,14 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=True, 
            s_bounds = (1, 2); # for now, but can adjust as needed (TODO)
          all_bounds = (b_bounds, g_bounds, e_bounds, c_bounds, s_bounds);
        # now optimize
-       to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
+       try:
+         to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
+       except:
+         continue; # this fit failed; try again without breaking the run
        opt_params = to_opt['x'];
        opt_loss = to_opt['fun'];
 
-       if opt_loss > best_loss:
+       if opt_loss > best_loss and ~np.isnan(best_loss):
          continue;
        else:
          best_loss = opt_loss;

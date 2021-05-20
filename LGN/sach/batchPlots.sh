@@ -10,15 +10,19 @@ source activate lcv-python
         # 0 - flex gauss
 	# 1 - sach's
 	# 2 - tony's 
-# 4th param is load from file (1; Tony's fits) or use params from my fits (0) --- use 0
+# 4th param is RVC model
+        # 0 - Tony
+        # 1 - NR
+        # 2 - Pierce NR
+# 5th param is load from file (1; Tony's fits) or use params from my fits (0) --- use 0
 
 DOG_MOD=${1:=1}
 DOG_LOSS=${2:=3}
+RVC_MOD=${3:=0}
 
 for run in {1..34}
 do
-  python plotting.py $run $DOG_LOSS $DOG_MOD 0 & 
-  #python plotting.py $run 3 1 0 & 
+  python plotting.py $run $DOG_LOSS $DOG_MOD $RVC_MOD 0 & 
 done
 
  
