@@ -823,13 +823,15 @@ def compute_f1_byTrial(cellStruct, expInd, whichSpikes=1, binWidth=1e-3):
 
   return resp_amp, resp_phase;
 
-def adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3):
+def adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3, toSum=0):
   ''' Correct the F1 ampltiudes for each trial (in order) by: [akin to hf_sfBB.adjust_f1_byTrial)
       - Projecting the full, i.e. (r, phi) FT vector onto the (vector) mean phase
         across all trials of a given condition
       - NOTE: Will not work with expInd == 1, since we don't have integer cycles for computing F1, anyway
-
-      Return: retrurn [nTr, nComp] of scalar F1 rates after vector adjustment
+      - by default (whichSpikes=1), we use the sorted spike times, if available
+      - if toSum, set the value for blank components to 0 and add up across components
+      Return: return [nTr, nComp] of scalar F1 rates after vector adjustment
+              OR     nTr of scalar rates if toSum==1
   '''
   np = numpy;
   conDig = 3; # round contrast to the thousandth
@@ -876,6 +878,14 @@ def adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3):
 
         adjusted_f1_rate[val_trials, :] = resp_proj;
 
+  if toSum:
+    # then, sum up the valid components per stimulus component
+    allCons = np.vstack(data['con']).transpose();
+    blanks = np.where(allCons==0);
+    adjByTrialSum = np.copy(adjusted_f1_rate);
+    adjByTrialSum[blanks] = 0; # just set it to 0 if that component was blnak during the trial
+    adjusted_f1_rate = np.sum(adjByTrialSum, axis=1);
+
   return adjusted_f1_rate;
 
 def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, descrFitName_f1=None):
@@ -903,8 +913,12 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, des
   spike_times = np.array([trial_inf['spikeTimes'][x] for x in all_trs]);
   psth, bins = make_psth(spike_times, stimDur=stimDur);
   all_tf = np.array([trial_inf['tf'][0][val_tr] for val_tr in all_trs]); # just take first grating (only will ever analyze single gratings)
-  power, rel_power, full_ft = spike_fft(np.array(psth), tfs=all_tf, stimDur=stimDur);
-  f1rates = rel_power; # f1 is already a rate (i.e. spks [or power] / sec); just unpack
+
+  f1rates = adjust_f1_byTrial(trial_inf, expInd, toSum=1)
+  if f1rates is None: # for V1_orig/, we'll compute the old way, since adjust_f1_byTrial will return None
+    power, rel_power, full_ft = spike_fft(np.array(psth), tfs=all_tf, stimDur=stimDur);
+    f1rates = rel_power; # f1 is already a rate (i.e. spks [or power] / sec); just unpack
+
   f1rates_org = organize_resp(f1rates, trial_inf, expInd, respsAsRate=True)[2];
   rates_org = [f0rates_org, f1rates_org];
 
@@ -1404,6 +1418,8 @@ def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=False, 
 
      if var:
        loss_weights = np.divide(1, var[i]);
+       if np.any(np.isnan(loss_weights)):
+         loss_weights = np.ones_like(curr_amps); # if we have NaN, then we ignore the var...
      else:
        loss_weights = np.ones_like(curr_amps);
      if mod == 0:
@@ -2371,6 +2387,13 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        expInd = np.nan; # not applicable...
        cell = dataList[cell_ind];
        data = cell['data'];
+       cellTypeOrig = dataList[cell_ind]['cellType'];
+       if cellTypeOrig == 'M-cell':
+          cellType = 'magno';
+       elif cellTypeOrig == 'P-cell':
+          cellType = 'parvo';
+       else: # all other types, just keep as is...
+          cellType = cellTypeOrig
        from LGN.sach.helper_fcns import tabulateResponses as sachTabulate
        tabulated = sachTabulate(data);
        stimVals = [[1], tabulated[1][0], tabulated[1][1]] # disp X con X SF
@@ -2380,6 +2403,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      if isBB:
        ### As of 21.05.10, we will only consider the maskOnly responses, at the corresponding response measure (DC or F1, by f1:f0 ratio)
        expName = dataList['unitName'][cell_ind]
+       cellType = dataList['unitArea'][cell_ind];
        expInd = -1;
        cell = np_smart_load(data_loc + expName + '_sfBB.npy');
        expInfo = cell['sfBB_core']; # we ONLY analyze sfBB_core in this jointList (as of 21.05.10)
@@ -2406,6 +2430,11 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      tr = cell['sfm']['exp']['trial']
      spks = get_spikes(tr, get_f0=1, expInd=expInd, rvcFits=None); # just to be explicit - no RVC fits right now
      sfTuning = organize_resp(spks, tr, expInd=expInd)[2]; # responses: nDisp x nSf x nCon
+     try:
+        cellType = dataList['unitType'][cell_ind];
+     except: 
+        # TODO: note, this is dangerous; thus far, only V1 cells don't have 'unitType' field in dataList, so we can safely do this
+        cellType = 'V1'; 
 
    meta = dict([('fullPath', data_loc),
                ('cellNum', cell_ind+1),
@@ -2418,6 +2447,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                ('expName', expName),
                ('expInd', expInd),
                ('stimVals', stimVals),
+               ('cellType', cellType),
                ('val_con_by_disp', val_con_by_disp)]);
 
    ###########
@@ -2485,6 +2515,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    sfE = np.zeros((nDisps, nCons)) * np.nan;
    dog_sfE = np.zeros((nDisps, nCons)) * np.nan;
    sfVarExpl = np.zeros((nDisps, nCons)) * np.nan;
+   conGain = np.zeros((nDisps, nSfs)) * np.nan;
    c50 = np.zeros((nDisps, nSfs)) * np.nan;
    c50_emp = np.zeros((nDisps, nSfs)) * np.nan;
    c50_eval = np.zeros((nDisps, nSfs)) * np.nan;
@@ -2730,12 +2761,14 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        if cell_ind in rvcFits:
          # on data
          try: # if from fit_RVC_F0
+             conGain[d, s] = rvcFits[cell_ind]['conGain'][d,s];
              c50[d, s] = get_c50(rvcMod, rvcFits[cell_ind]['params'][d, s, :]);
              c50_emp[d, s], c50_eval[d, s] = c50_empirical(rvcMod, rvcFits[cell_ind]['params'][d, s, :]);
              c50_varExpl[d, s] = rvcFits[cell_ind]['varExpl'][d,s];
          except: # might just be arranged differently...(not fit_rvc_f0)
              try: # TODO: investigate why c50 param is saving for nan fits in hf.fit_rvc...
                if ~np.isnan(rvcFits[cell_ind][d]['loss'][s]): # only add it if it's a non-NaN loss value...
+                 conGain[d, s] = rvcFits[cell_ind][d]['conGain'][s];
                  c50[d, s] = get_c50(rvcMod, rvcFits[cell_ind][d]['params'][s]);
                  c50_emp[d, s], c50_eval[d, s] = c50_empirical(rvcMod, rvcFits[cell_ind][d]['params'][s]);
                  c50_varExpl[d, s] = rvcFits[cell_ind][d]['varExpl'][s];
@@ -2869,6 +2902,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                       ('dog_sf75', dog_sf75),
                       ('sfE', sfE),
                       ('dog_sfE', dog_sfE),
+                      ('conGain', conGain),
                       ('c50', c50),
                       ('c50_emp', c50_emp),
                       ('c50_eval', c50_eval),
@@ -3034,7 +3068,9 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       isSach = 0;
 
     if toPar:
-      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach)
+      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod)
+
+      perCell_summary(3);
 
       nCpu = mp.cpu_count();
       with mp.Pool(processes = nCpu) as pool:
@@ -3469,7 +3505,7 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                     
     return [respMean, respStd, predMean, predStd], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
 
-def organize_adj_responses(data, rvcFits, expInd):
+def organize_adj_responses(data, rvcFits, expInd, vecF1=0):
   ''' Used as a wrapper to call the organize_adj_responses function for a given experiment
       BUT, also has organize_adj_responses for newer experiments ( see "except" assoc. with main try)
       We set the organize_adj_responses separately for each experiment since some versions don't have adjusted responses
@@ -3497,16 +3533,21 @@ def organize_adj_responses(data, rvcFits, expInd):
       val_sfs = get_valid_sfs(data, d_ind, c_ind_total, expInd, stimVals=conds, validByStimVal=val_by_stim_val);
       for s_ind_val, s_ind_total in enumerate(val_sfs):
         val_trials = get_valid_trials(data, d_ind, c_ind_total, s_ind_total, expInd, stimVals=conds, validByStimVal=val_by_stim_val)[0];
-        # this is why we enumerate val_cons above - the index into val_cons is how we index into rvcFits
-        curr_resps = rvcFits[d_ind]['adjByTr'][s_ind_total][c_ind_val];
-        if d_ind > 0:
-          try: # well, if the cell is simple & this is mixture stimulus, then we need to do this
-            curr_flipped = switch_inner_outer(curr_resps, asnp=True);
-            adjResps[val_trials] = curr_flipped;
-          except: # otherwise, we "flatten" the incoming list
-            adjResps[val_trials] = curr_resps.flatten();
-        if d_ind == 0:
-            adjResps[val_trials] = curr_resps.flatten();
+        if vecF1: # adjByTr are organized differently in these cases...
+          # NOTE: We will only make it to this code if we're getting F1 responses and they are vecF1 corrected
+          for vT in val_trials[0]: # cannot be done with list comprehension? I think, bc we're doing assignment
+            adjResps[vT] = rvcFits[d_ind]['adjByTr'][vT] # non-valid stimComps will be zero'd anyway!
+        else:
+          # this is why we enumerate val_cons above - the index into val_cons is how we index into rvcFits
+          curr_resps = rvcFits[d_ind]['adjByTr'][s_ind_total][c_ind_val];
+          if d_ind > 0:
+            try: # well, if the cell is simple & this is mixture stimulus, then we need to do this
+              curr_flipped = switch_inner_outer(curr_resps, asnp=True);
+              adjResps[val_trials] = curr_flipped;
+            except: # otherwise, we "flatten" the incoming list
+              adjResps[val_trials] = curr_resps.flatten();
+          if d_ind == 0:
+              adjResps[val_trials] = curr_resps.flatten();
      
   return adjResps;
 
@@ -3569,10 +3610,12 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False):
 
     return rateOr, rateCo, rateSfMix, allSfMix;  
 
-def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes = None):
+def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes = None, vecF1=0):
   ''' Get trial-by-trial spike count
       Given the data (S.sfm.exp.trial), if rvcFits is None, simply return saved spike count;
                                         else return the adjusted spike counts (e.g. LGN, expInd 3)
+      --- If we pass in rvcFits, we can optionally specify if it's a vecF1 fit (will need to access...
+      --- -- the responses differently in that case)
   '''
 
   if overwriteSpikes is not None: # as of 19.05.02, used for fitting model recovery spikes
@@ -3587,7 +3630,7 @@ def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes 
       warnings.warn('Should pass in expInd; defaulting to 3');
       expInd = 3; # should be specified, but just in case
     try:
-      spikes = organize_adj_responses(data, rvcFits, expInd);
+      spikes = organize_adj_responses(data, rvcFits, expInd, vecF1);
     except: # in case this does not work...
       warnings.warn('Tried to access f1 adjusted responses, defaulting to F1/F0 request');
       if get_f0 == 1:
@@ -3612,7 +3655,7 @@ def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', rvcMod=0, direc=1
 
   return rvcFits;
 
-def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMod=0, descrFitName_f0=None, descrFitName_f1=None, force_dc=False, force_f1=False, baseline_sub=True, return_measure=False):
+def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMod=0, vecF1=0, descrFitName_f0=None, descrFitName_f1=None, force_dc=False, force_f1=False, baseline_sub=True, return_measure=False):
   ''' wrapper function which will call needed subfunctions to return dc-subtracted spikes by trial
       note: rvcMod = -1 is the code indicating that rvcName is actually the fits, already!
       OUTPUT: SPIKES (as rate, per s), baseline subtracted (default, if DC); responses are per stimulus, not per component
@@ -3620,7 +3663,7 @@ def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMo
   '''
   f1f0_rat = compute_f1f0(expData, which_cell, expInd, dataPath, descrFitName_f0=descrFitName_f0, descrFitName_f1=descrFitName_f1)[0];
   stimDur = get_exp_params(expInd).stimDur; # may need this value
-
+  
   ### i.e. if we're looking at a simple cell, then let's get F1
   if (f1f0_rat > 1 and force_dc is False) or force_f1 is True:
       if rvcMod == -1: # then rvcName is the rvcFits, already!
@@ -3630,7 +3673,7 @@ def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMo
           rvcFits = get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod);
         else:
           rvcFits = None
-      spikes_byComp = get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
+      spikes_byComp = get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd, vecF1=vecF1);
       spikes = numpy.array([numpy.sum(x) for x in spikes_byComp]);
       rates = True; # when we get the spikes from rvcFits, they've already been converted into rates (in get_all_fft)
       baseline = None; # f1 has no "DC", yadig? 
@@ -3638,7 +3681,7 @@ def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMo
       which_measure = 1; # i.e. F1 spikes
   ### then complex cell, so let's get F0
   else:
-      spikes = get_spikes(expData, get_f0=1, rvcFits=None, expInd=expInd);
+      spikes = get_spikes(expData, get_f0=1, rvcFits=None, expInd=expInd, vecF1=vecF1);
       rates = False; # get_spikes without rvcFits is directly from spikeCount, which is counts, not rates!
       if baseline_sub: # as of 19.11.07, this is optional, but default
         baseline = blankResp(expData, expInd)[0]; # we'll plot the spontaneous rate
