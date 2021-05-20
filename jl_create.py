@@ -12,8 +12,8 @@ import itertools
 ########################
 # expDirs (and expNames must always be of the right length, i.e. specify for each expt dir 
 ## V1 version
-expDirs = ['V1_orig/', 'altExp/', 'V1/']
-expNames = ['dataList.npy', 'dataList.npy', 'dataList_glx.npy']
+expDirs = ['V1_orig/', 'altExp/', 'V1/', 'V1_BB'/]
+expNames = ['dataList.npy', 'dataList.npy', 'dataList_glx.npy', 'dataList_210222.npy']
 
 nExpts = len(expDirs);
 
@@ -33,14 +33,14 @@ fitNamesFlat = [hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrect
 # descrFits - loss type determined by comparison (choose best; see modCompare.ipynb::Descriptive Fits)
 ####
 dogMod = 2; # 1 (sach) or 2 (Tony)
-dogNames = ['descrFits_210505_sqrt_tony.npy', 'descrFits_210505_sqrt_tony.npy', 'descrFits_210505_sqrt_tony.npy'];
+dogNames = ['descrFits_210517_sqrt_tony.npy', 'descrFits_210517_sqrt_tony.npy', 'descrFits_210517_sqrt_tony.npy'];
 #dogNames = ['descrFits_210503_sqrt_tony.npy', 'descrFits_210503_sqrt_tony.npy', 'descrFits_210503_sqrt_tony.npy'];
 #dogNames = ['descrFits_210304_sqrt_sach.npy', 'descrFits_210304_sqrt_sach.npy', 'descrFits_210304_sqrt_sach.npy'];
 descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
-descrNames = ['descrFits_210509_sqrt_flex.npy', 'descrFits_210509_sqrt_flex.npy', 'descrFits_210509_sqrt_flex.npy'];
+descrNames = ['descrFits_210517_sqrt_flex.npy', 'descrFits_210517_sqrt_flex.npy', 'descrFits_210517_sqrt_flex.npy'];
 #descrNames = ['descrFits_190503_sqrt_flex.npy', 'descrFits_190503_sqrt_flex.npy', 'descrFits_191023_sqrt_flex.npy'];
 
-rvcNames = ['rvcFits_210304_f0_NR.npy', 'rvcFits_210304_f0_NR.npy', 'rvcFits_210304_vecF1_NR.npy'];
+rvcNames = ['rvcFits_210517_f0_NR.npy', 'rvcFits_210517_f0_NR.npy', 'rvcFits_210517_vecF1_NR.npy'];
 #rvcNames = ['rvcFits_191023_f0_NR.npy', 'rvcFits_191023_f0_NR.npy', 'rvcFits_191023_NR_pos.npy'];
 rvcMods = [1,1,1]; # 0-mov; 1-Nakarushton; 2-Peirce
 # rvcNames   = ['rvcFits_f0.npy'];
@@ -117,16 +117,16 @@ fitNamesFlat = ['%s_flat_chiSq.npy' % fitBase];
 #dogNames = ['descrFits_s210304_sach_sach.npy'];
 #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
 dogMod = 2; # 1 (sach) or 2 (Tony)
-dogNames = ['descrFits_210503_sqrt_tony.npy', 'descrFits_s210304_sqrt_tony.npy'];
+dogNames = ['descrFits_210520_sqrt_tony.npy', 'descrFits_s210520_sqrt_tony.npy'];
 #dogNames = ['descrFits_210304_sach_sach.npy', 'descrFits_s210304_sach_sach.npy'];
 descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
-descrNames = ['descrFits_210304_sqrt_flex.npy', 'descrFits_s210304_sqrt_flex.npy'];
+descrNames = ['descrFits_210520_sqrt_flex.npy', 'descrFits_s210520_sqrt_flex.npy'];
 #dogNames = ['descrFits_191023_sach_sach.npy'];
 #descrNames = ['descrFits_200507_sqrt_flex.npy'];
 
 #rvcNames = ['rvcFits_191023_pos.npy']; 
 #rvcMods = [0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
-rvcNames = ['rvcFits_210304_pos.npy', 'rvcFits_210304.npy']; 
+rvcNames = ['rvcFits_210520_pos.npy', 'rvcFits_210520.npy']; 
 rvcMods = [0,0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
 #rvcNames = ['rvcFits_210304.npy']; 
 #rvcMods = [0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
@@ -158,7 +158,8 @@ sf_range = [0.01, 10]; # allowed values of 'mu' for fits - see descr_fit.py for 
 jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod)
 
 from datetime import datetime
-suffix = datetime.today().strftime('%y%m%d')
+suffix = '210518'
+#suffix = datetime.today().strftime('%y%m%d')
 
 np.save(base_dir + 'jointList_LGN_%s_vT%d_dvT%d' % (suffix, varExplThresh, dog_varExplThresh), jointList)
 

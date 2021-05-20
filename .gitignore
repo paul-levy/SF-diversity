@@ -16,6 +16,7 @@ altExp/structures/m*
 **/__pycache__/
 __pycache__/**
 __pycache__/
+jointList*.npy
 **/.DS_Store
 **/._.DS_Store*
 .DS_Store

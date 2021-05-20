@@ -58,6 +58,7 @@ minWidth = 4;
 lblSize = 40;
 
 peakFrac = 0.75; # plot fall of to peakFrac of peak, rather than peak or charFreq
+inclLegend = 0;
 
 cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
@@ -83,7 +84,7 @@ save_loc = loc_base + expDir + 'figures/';
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_210509';
+descrBase = 'descrFits_210517';
 #descrBase = 'descrFits_210503';
 #descrBase = 'descrFits_210304';
 #descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
@@ -95,7 +96,7 @@ if descrJnt == 1:
 #rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
 #rvcBase = 'rvcFits_200714'; # direc flag & '.npy' are adde
-rvcBase = 'rvcFits_210304';
+rvcBase = 'rvcFits_210517';
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
@@ -135,6 +136,7 @@ if rvcAdj == 1:
   rvcFits = hf.np_smart_load(data_loc + hf.rvc_fit_name(rvcBase, modNum=rvcMod, dir=dir, vecF1=vecF1)); # i.e. positive
   force_baseline = False; # plotting baseline will depend on F1/F0 designation
 if rvcAdj == 0:
+  vecF1 = None
   rvcFits = hf.np_smart_load(data_loc + rvcBase + '_f0_NR.npy');
   force_baseline = True;
 rvcFits = rvcFits[cellNum-1];
@@ -160,7 +162,8 @@ else:
   force_f1 = False;
 rvcSuff = hf.rvc_mod_suff(rvcMod);
 rvcBase = '%s%s' % (rvcBase, rvcFlag);
-spikes_rate, which_measure = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcBase, rvcMod=rvcMod, descrFitName_f0 = fLname, baseline_sub=False, force_dc=force_dc, force_f1=force_f1, return_measure=True);
+# NOTE: We pass in the rvcFits where rvcBase[name] goes, and use -1 in rvcMod to indicate that we've already loaded the fits
+spikes_rate, which_measure = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcFits, rvcMod=-1, descrFitName_f0 = fLname, baseline_sub=False, force_dc=force_dc, force_f1=force_f1, return_measure=True, vecF1=vecF1);
 # let's also get the baseline
 if force_baseline or (f1f0rat < 1 and expDir != 'LGN/'): # i.e. if we're in LGN, DON'T get baseline, even if f1f0 < 1 (shouldn't happen)
   baseline_resp = hf.blankResp(trialInf, expInd, spikes=spikes_rate, spksAsRate=True)[0];
@@ -256,7 +259,6 @@ for d in range(nDisps):
             dispAx[d][c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
             #dispAx[d][c_plt_ind, ii].plot(char_freq, 1, linestyle='None', marker='v', label='$f_c$', color=currClr, alpha=1); # plot at y=1
 
-        dispAx[d][c_plt_ind, 0].legend();
         dispAx[d][c_plt_ind, 0].set_title('D%02d: contrast: %.3f' % (d+1, all_cons[v_cons[c]]));
 
         ### right side of plots - BASELINE SUBTRACTED IF COMPLEX CELL
@@ -307,8 +309,8 @@ for d in range(nDisps):
           dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
 
 	  # Set ticks out, remove top/right axis, put ticks only on bottom/left
-          dispAx[d][c_plt_ind, i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
-          dispAx[d][c_plt_ind, i].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...	
+          #dispAx[d][c_plt_ind, i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
+          #dispAx[d][c_plt_ind, i].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...	
           sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
 
         dispAx[d][c_plt_ind, 0].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
@@ -364,7 +366,7 @@ for d in range(nDisps):
           plot_resp = plot_resp - to_sub;
 
         curr_line, = dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], '-o', clip_on=False, \
-                                       color=col, label=str(np.round(all_cons[v_cons[c]], 2)));
+                                       color=col, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
         lines.append(curr_line);
  
         # plot descr fit [1]
@@ -388,13 +390,13 @@ for d in range(nDisps):
       dispAx[d][i].set_xlabel('sf (c/deg)'); 
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
-      dispAx[d][i].tick_params(labelsize=15, width=2, length=16, direction='out');
-      dispAx[d][i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+      #dispAx[d][i].tick_params(labelsize=15, width=2, length=16, direction='out');
+      #dispAx[d][i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
       sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
 
       dispAx[d][i].set_ylabel('resp above baseline (sps)');
       dispAx[d][i].set_title('D%02d - sf tuning' % (d+1));
-      dispAx[d][i].legend(); 
+      dispAx[d][i].legend(fontsize='large'); 
 
 saveName = "/allCons_%scell_%03d.pdf" % (logSuffix, cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
@@ -412,7 +414,7 @@ mixCons = hf.get_exp_params(expInd).nCons;
 minResp = np.min(np.min(np.min(respMean[~np.isnan(respMean)])));
 maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
 
-f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(20, 15));
+f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(nDisps*9, mixCons*8));
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
 
@@ -424,7 +426,7 @@ for d in range(nDisps):
     
     for c in reversed(range(n_v_cons)):
         c_plt_ind = n_v_cons - c - 1;
-        sfMixAx[c_plt_ind, d].set_title('con:' + str(np.round(all_cons[v_cons[c]], 2)))
+        sfMixAx[c_plt_ind, d].set_title('con: %s%%' % str(int(100*(np.round(all_cons[v_cons[c]], 2)))));
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);
         
         sfVals = all_sfs[v_sfs];
@@ -455,24 +457,30 @@ for d in range(nDisps):
         pSf = hf.descr_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
         if c_plt_ind == 0 and d==0: # only make the legend here
           sfMixAx[c_plt_ind, d].plot(ctr, 1, linestyle='None', marker='v', label='c.o.m.', color=dataClr, clip_on=False); # plot at y=1
-          sfMixAx[c_plt_ind, d].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr, clip_on=False); # plot at y=1
+          if pSf > 0.1 and pSf < 10:
+            sfMixAx[c_plt_ind, d].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=modClr, clip_on=False); # plot at y=1
         else:
           sfMixAx[c_plt_ind, d].plot(ctr, 1, linestyle='None', marker='v', color=dataClr, clip_on=False); # plot at y=1
-          sfMixAx[c_plt_ind, d].plot(pSf, 1, linestyle='None', marker='v', color=modClr, clip_on=False); # plot at y=1
+          if pSf > 0.1 and pSf < 10:
+            sfMixAx[c_plt_ind, d].plot(pSf, 1, linestyle='None', marker='v', color=modClr, clip_on=False); # plot at y=1
 
         sfMixAx[c_plt_ind, d].set_xlim((np.min(all_sfs), np.max(all_sfs)));
         sfMixAx[c_plt_ind, d].set_ylim((np.minimum(-5, minResp-5), 1.25*maxResp)); # ensure that 0 is included in the range of the plot!
         sfMixAx[c_plt_ind, d].set_xscale('log');
-        sfMixAx[c_plt_ind, d].set_xlabel('sf (c/deg)');
-        sfMixAx[c_plt_ind, d].set_ylabel('resp (sps)');
+        if d == 0:
+          if c_plt_ind == 0:
+            sfMixAx[c_plt_ind, d].set_ylabel('resp (sps)');
+          if c_plt_ind == mixCons-1:
+            sfMixAx[c_plt_ind, d].set_xlabel('sf (c/deg)');
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
-        sfMixAx[c_plt_ind, d].tick_params(labelsize=15, width=1, length=8, direction='out');
-        sfMixAx[c_plt_ind, d].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
+        #sfMixAx[c_plt_ind, d].tick_params(labelsize=15, width=1, length=8, direction='out');
+        #sfMixAx[c_plt_ind, d].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...
         sns.despine(ax=sfMixAx[c_plt_ind, d], offset=10, trim=False);
 
 f.legend();
 f.suptitle('%s #%d (%s; f1f0 %.2f)' % (cellType, cellNum, cellName, f1f0rat));
+#f.tight_layout(rect=[0, 0, 1, 0.97])
 	        
 allFigs = [f]; 
 saveName = "/cell_%03d.pdf" % (cellNum)
@@ -567,7 +575,7 @@ for d in range(nDisps):
         if forceLog == 1:
           rvcAx[plt_x][plt_y].set_ylim((minResp_toPlot, 1.25*maxResp));
           rvcAx[plt_x][plt_y].set_yscale('log'); # double log
-          rvcAx[plt_x][plt_y].set_aspect('equal');
+          rvcAx[plt_x][plt_y].set_aspect('equal'); 
      
         try:
           curr_varExpl = rvcFits[d]['varExpl'][sf_ind] if rvcAdj else rvcFits['varExpl'][d, sf_ind];
@@ -577,8 +585,8 @@ for d in range(nDisps):
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         sns.despine(ax = rvcAx[plt_x][plt_y], offset = 10, trim=False);
-        rvcAx[plt_x][plt_y].tick_params(labelsize=lblSize, width=majWidth, direction='out');
-        rvcAx[plt_x][plt_y].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
+        #rvcAx[plt_x][plt_y].tick_params(labelsize=lblSize, width=majWidth, direction='out');
+        #rvcAx[plt_x][plt_y].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
 
     fCurr.tight_layout(rect=[0, 0.03, 1, 0.95])
 
@@ -661,8 +669,8 @@ for d in range(nDisps):
       crfAx[d][i].set_xlabel('contrast');
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
-      crfAx[d][i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
-      crfAx[d][i].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
+      #crfAx[d][i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
+      #crfAx[d][i].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
       sns.despine(ax = crfAx[d][i], offset=10, trim=False);
 
       crfAx[d][i].set_ylabel('resp above baseline (sps)');
