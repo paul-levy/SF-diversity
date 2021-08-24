@@ -13,41 +13,58 @@ data_suff = 'V1_BB/structures/';
 
 expName = hf.get_datalist('V1_BB/');
 
-sfName = 'descrFits_210520';
-rvcName = 'rvcFits_210520';
+sfName = 'descrFits_210721';
+rvcName = 'rvcFits_210721';
 
 def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, jointSf=False, toSave=1, fracSig=1):
   ''' Separate fits for DC, F1 
       -- for DC: [maskOnly, mask+base]
-      -- for F1: [maskOnly, mask+base {@mask TF}] '''
+      -- for F1: [maskOnly, mask+base {@mask TF}] 
+      For asMulti fits (i.e. when done in parallel) we do the following to reduce multiple loading of files/race conditions
+      --- we'll pass in the previous fits as fit_rvc and/or fit_sf
+      --- we'll pass in [cellNum, cellName] as cellNum
+  '''
   
   expName = 'sfBB_core';
 
-  dlName = hf.get_datalist('V1_BB/');
-  dataList = hf.np_smart_load(data_path + dlName);
-  unitNm = dataList['unitName'][cellNum-1];
+  if len(cellNum) > 1:
+    cellNum, unitNm = cellNum;
+    print('cell %d {%s}' % (cellNum, unitNm));
+  else:
+    dlName = hf.get_datalist('V1_BB/');
+    dataList = hf.np_smart_load(data_path + dlName);
+    unitNm = dataList['unitName'][cellNum-1];
+  print('loading cell');
   cell = hf.np_smart_load('%s%s_sfBB.npy' % (data_path, unitNm));
   expInfo = cell[expName]
   byTrial = expInfo['trial'];
 
-  if fit_rvc == 1: # load existing rvcFits, if there
+  if fit_rvc == 1 or fit_rvc is not None: # load existing rvcFits, if there
     rvcNameFinal = hf.rvc_fit_name(rvcName, rvcMod, None, vecF1);
-    if os.path.isfile(data_path + rvcNameFinal):
-      rvcFits = hf.np_smart_load(data_path + rvcNameFinal);
-      try:
-        rvcFits_curr = rvcFits[cellNum-1];
-      except:
-        rvcFits_curr = None
+    if fit_rvc == 1:
+      if os.path.isfile(data_path + rvcNameFinal):
+        rvcFits = hf.np_smart_load(data_path + rvcNameFinal);
+    else: # otherwise, we have passed it in as fit_sf to avoid race condition during multiprocessing (i.e. multiple threads trying to load the same file)
+      rvcFits = fit_rvc;
+    try:
+      rvcFits_curr = rvcFits[cellNum-1];
+    except:
+      rvcFits_curr = None;
 
-  if fit_sf == 1:
+  if fit_sf == 1 or fit_sf is not None:
     modStr = hf.descrMod_name(sfMod);
     sfNameFinal = hf.descrFit_name(loss_type, descrBase=sfName, modelName=modStr); # descrLoss order is lsq/sqrt/poiss/sach
-    if os.path.isfile(data_path + sfNameFinal):
-      sfFits = hf.np_smart_load(data_path + sfNameFinal);
-      try:
-        sfFits_curr = sfFits[cellNum-1];
-      except:
-        sfFits_curr = None
+    if fit_sf == 1:
+      if os.path.isfile(data_path + sfNameFinal):
+        sfFits = hf.np_smart_load(data_path + sfNameFinal);
+    else: # otherwise, we have passed it in as fit_sf to avoid race condition during multiprocessing (i.e. multiple threads trying to load the same file)
+      sfFits = fit_sf;
+    try:
+      sfFits_curr = sfFits[cellNum-1];
+      print('---prev sf!');
+    except:
+      sfFits_curr = None;
+      print('---NO PREV sf!');
   
   #########
   ### Get the responses - base only, mask+base [base F1], mask only (mask F1)
@@ -88,7 +105,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
     curr_rvc[resp_str] = dict();
     curr_sf[resp_str] = dict();
 
-    if fit_rvc == 1:
+    if fit_rvc == 1 or fit_rvc is not None:
       ''' Fit RVCs responses (see helper_fcns.rvc_fit for details) for:
           --- F0: mask alone (7 sfs)
                   mask + base together (7 sfs)
@@ -117,7 +134,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
         curr_rvc[resp_str][wK]['varExpl'] = adjMeans;
         # END of rvc fit
 
-    if fit_sf == 1:
+    if fit_sf == 1 or fit_sf is not None:
       ''' Fit SF tuning responses (see helper_fcns.dog_fit for details) for:
           --- F0: mask alone (7 cons)
                   mask + base together (7 cons)
@@ -136,7 +153,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
           sfFit_curr = None
 
         # -- by default, loss_type=2 (meaning sqrt loss); why expand dims and transpose? dog fits assumes the data is in [disp,sf,con] and we just have [con,sf]
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), None, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig) # noDisp=1 means that we don't index dispersion when accessins prevFits
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), None, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig, n_repeats=50) # noDisp=1 means that we don't index dispersion when accessins prevFits
 
         curr_sf[resp_str][wK] = dict();
         curr_sf[resp_str][wK]['NLL'] = nll;
@@ -204,6 +221,7 @@ if __name__ == '__main__':
   fit_sf     = int(sys.argv[3]);
   rvc_mod    = int(sys.argv[4]);
   sf_mod     = int(sys.argv[5]);
+  loss_type  = int(sys.argv[6]); # default will be 2 (i.e. sqrt)
 
   fracSig = 1; # why fracSig =1? For V1 fits, we want to contrasin the upper-half sigma of the two-half gaussian as a fraction of the lower half
 
@@ -212,11 +230,23 @@ if __name__ == '__main__':
     import multiprocessing as mp
     nCpu = mp.cpu_count();
 
+    # to avoid race conditions, load the previous fits beforehand; and the datalist
+    rvcNameFinal = hf.rvc_fit_name(rvcName, rvc_mod, None, vecF1=1); # DEFAULT is vecF1 adjustment
+    modStr = hf.descrMod_name(sf_mod);
+    sfNameFinal = hf.descrFit_name(loss_type, descrBase=sfName, modelName=modStr); # descrLoss order is lsq/sqrt/poiss/sach
+
+    pass_rvc = hf.np_smart_load('%s%s%s' % (basePath, data_suff, rvcNameFinal)) if fit_rvc else None;
+    pass_sf = hf.np_smart_load('%s%s%s' % (basePath, data_suff, sfNameFinal)) if fit_sf else None;
+
+    dataList = hf.np_smart_load('%s%s%s' % (basePath, data_suff, hf.get_datalist('V1_BB/')));
+
+    #make_descr_fits((10, dataList['unitName'][10]), fit_rvc=pass_rvc, fit_sf=pass_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig)
+
     with mp.Pool(processes = nCpu) as pool:
       # if we're doing as parallel, do NOT save
-      fit_perCell = partial(make_descr_fits, fit_rvc=fit_rvc, fit_sf=fit_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig); 
 
-      fits = zip(*pool.map(fit_perCell, range(start_cell, end_cell+1)));
+      fit_perCell = partial(make_descr_fits, fit_rvc=pass_rvc, fit_sf=pass_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig); 
+      fits = zip(*pool.map(fit_perCell, zip(range(start_cell, end_cell+1), dataList['unitName'])));
       rvc_fits, sf_fits = fits; # unpack
 
       ### do the saving HERE!

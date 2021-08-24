@@ -15,11 +15,14 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_210520';
-phAdvName = 'phaseAdvanceFits_210304'
-#phAdvName = 'phaseAdvanceFits_200714'
-rvcName_f0 = 'rvcFits_210520_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-rvcName_f1 = 'rvcFits_210520';
+dogName = 'descrFits_210721';
+#dogName = 'descrFits_210524';
+#phAdvName = 'phaseAdvanceFits_210524'
+phAdvName = 'phaseAdvanceFits_210721'
+rvcName_f0 = 'rvcFits_210721_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f1 = 'rvcFits_210721';
+#rvcName_f0 = 'rvcFits_210524_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+#rvcName_f1 = 'rvcFits_210524';
 
 ## model recovery???
 modelRecov = 0;
@@ -90,8 +93,13 @@ def phase_advance_fit(cell_num, expInd, data_loc, phAdvName=phAdvName, to_save=1
   assert expInd>2, "In phase_advance_fit; we can only fit ph-amp relationship for experiments with \
                     careful component TF; expInd 1, 2 do not meet this requirement."
 
-  dataList = hf.np_smart_load(data_loc + expName);
-  cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
+  if len(cell_num) > 1:
+    cell_num, cellName = cell_num;
+  else:
+    dataList = hf.np_smart_load(data_loc + expName);
+    assert dataList!=[], "data file not found!"
+    cellName = dataList['unitName'][cell_num-1];
+  cellStruct = hf.np_smart_load(data_loc + cellName + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
   phAdvName = hf.phase_fit_name(phAdvName, dir);
 
@@ -110,11 +118,6 @@ def phase_advance_fit(cell_num, expInd, data_loc, phAdvName=phAdvName, to_save=1
   # recall that nConds = nCons * nSfs
   allCons = [conVals] * nConds; # repeats list and nests
   phAdv_model, all_opts, all_phAdv, all_loss = hf.phase_advance(allAmp, allPhi, allCons, allTf);
-
-  if os.path.isfile(data_loc + phAdvName):
-      phFits = hf.np_smart_load(data_loc + phAdvName);
-  else:
-      phFits = dict();
 
   # update stuff - load again in case some other run has saved/made changes
   curr_fit = dict();
@@ -143,6 +146,9 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
       - If vecF1=0: Piggy-back off of phase_advance_fit above, get prepared to project the responses onto the proper phase to get the correct amplitude
       - If vecF1=1: Do the vector-averaging across conditions to get the mean response per condition
       -- the vecF1=1 approach was started in late 2020/early 2021, a smarter approach for V1 than doing phase-adjustment, per se
+
+      For asMulti fits (i.e. when done in parallel) we do the following to reduce multiple loading of files/race conditions
+      --- we'll pass in [cell_num, cellName] as cell_num [to avoid loading datalist]
   '''
   assert expInd>2, "In rvc_adjusted_fit; we can only evaluate F1 for experiments with \
                     careful component TF; expInd 1, 2 do not meet this requirement.\nUse fit_RVC_f0 instead"
@@ -150,12 +156,14 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
   #########
   ### load data/metadata
   #########
-  dataList = hf.np_smart_load(data_loc + expName);
-  cellName = dataList['unitName'][cell_num-1];
+  if len(cell_num) > 1:
+    cell_num, cellName = cell_num;
+  else:
+    dataList = hf.np_smart_load(data_loc + expName);
+    cellName = dataList['unitName'][cell_num-1];
   cellStruct = hf.np_smart_load(data_loc + cellName + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
   rvcNameFinal = hf.rvc_fit_name(rvcName, rvcMod, dir, vecF1);
-  expInd = hf.get_exp_ind(data_loc, cellName)[0];
 
   #########
   ### compute f1/f0, gather data of experiment/trials
@@ -347,9 +355,13 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=100, fLname = rvcName_f0, dLname=ex
     nParam = 5; # naka rushton is 4, peirce modification is 5 (but for NR, we just add a fixed parameter for #5)
 
   # load cell information
-  dataList = hf.np_smart_load(data_loc + dLname);
-  assert dataList!=[], "data file not found!"
-  cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
+  if len(cell_num) > 1:
+    cell_num, cellName = cell_num;
+  else:
+    dataList = hf.np_smart_load(data_loc + dLname);
+    assert dataList!=[], "data file not found!"
+    cellName = dataList['unitName'][cell_num-1]
+  cellStruct = hf.np_smart_load(data_loc + cellName + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
   # get expInd, load rvcFits [if existing]
   expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1]);
@@ -444,6 +456,9 @@ def invalid(params, bounds):
 def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1):
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
+
+      For asMulti fits (i.e. when done in parallel) we do the following to reduce multiple loading of files/race conditions
+      --- we'll pass in [cell_num, cellName] as cell_num [to avoid loading datalist]
   '''
   if DoGmodel == 0:
     nParam = 5;
@@ -462,15 +477,25 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, fo
   else:
     ref_varExpl = None; # set to None as default      
 
-  # load cell information
-  dataList = hf.np_smart_load(data_loc + dLname);
-  assert dataList!=[], "data file not found!"
-  cellStruct = hf.np_smart_load(data_loc + dataList['unitName'][cell_num-1] + '_sfm.npy');
+  #########
+  ### load data/metadata
+  #########
+  if len(cell_num) > 1:
+    cell_num, cellName = cell_num;
+  else:
+    dataList = hf.np_smart_load(data_loc + dLname);
+    assert dataList!=[], "data file not found!"
+    cellName = dataList['unitName'][cell_num-1];
+  cellStruct = hf.np_smart_load(data_loc + cellName + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
   # get expInd, load rvcFits [if existing, and specified]
-  expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1]);
+  try:
+    overwriteExpName = dataList['expType'][cell_num-1]
+  except:
+    overwriteExpName = None
+  expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1], overwriteExpName);
   print('Making descriptive SF fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
-  #pdb.set_trace();
+
   if force_dc is False and get_rvc == 1: # NOTE: as of 19.09.16 (well, earlier, actually), rvcFits are on F0 or F1, depending on simple/complex designation - in either case, they are both already as rates!
     rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num, rvcName=rvcName, rvcMod=rvcMod, direc=dir, vecF1=vecF1); # see default arguments in helper_fcns.py
   else:
@@ -636,10 +661,18 @@ if __name__ == '__main__':
     dL = hf.np_smart_load(dataPath + expName);
     if asMulti:
       unitNames = [dL['unitName'][ind-1] for ind in range(start_cell, end_cell+1)];
-      expInds = [hf.get_exp_ind(dataPath, name)[0] for name in unitNames];
+      try:
+        overwriteNames = [dL['expType'][ind-1] for ind in range(start_cell, end_cell+1)];
+        expInds = [hf.get_exp_ind(dataPath, name, overwriteName)[0] for name, overwriteName in zip(unitNames, overwriteNames)];
+      except:
+        expInds = [hf.get_exp_ind(dataPath, name)[0] for name in unitNames];
     else:
       unitName = dL['unitName'][cell_num-1];
-      expInd = hf.get_exp_ind(dataPath, unitName)[0];
+      try: 
+        overwriteName = dL['expType'][cell_num-1];
+        expInd = hf.get_exp_ind(dataPath, unitName, overwriteName)[0];
+      except:
+        expInd = hf.get_exp_ind(dataPath, unitName)[0];
 
     if data_dir == 'LGN/':
       force_f1 = True; # must be F1!
@@ -651,7 +684,8 @@ if __name__ == '__main__':
       force_dc = False;
 
     vecF1 = 1 if ph_fits == -1 else 0;
-    fracSig = 0 if data_dir == 'LGN/' else 1; # we only enforce the "upper-half sigma as fraction of lower half" for V1 cells!
+    fracSig = 1;
+    #fracSig = 0 if data_dir == 'LGN/' else 1; # we only enforce the "upper-half sigma as fraction of lower half" for V1 cells!
 
     if asMulti:
       from functools import partial
@@ -662,7 +696,7 @@ if __name__ == '__main__':
       if ph_fits == 1:
         with mp.Pool(processes = nCpu) as pool:
           ph_perCell = partial(phase_advance_fit, data_loc=dataPath, disp=disp, dir=dir, returnMod=0, to_save=0); 
-          phFits = pool.starmap(ph_perCell, zip(range(start_cell, end_cell+1), expInds));
+          phFits = pool.starmap(ph_perCell, zip(zip(range(start_cell, end_cell+1), dL['unitName']), expInds));
           ### do the saving HERE!
           phAdvName = hf.phase_fit_name(phAdvName, dir);
           if os.path.isfile(dataPath + phAdvName):
@@ -678,7 +712,7 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         with mp.Pool(processes = nCpu) as pool:
           rvc_perCell = partial(rvc_adjusted_fit, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, returnMod=0, to_save=0);
-          rvcFits = pool.starmap(rvc_perCell, zip(range(start_cell, end_cell+1), expInds));
+          rvcFits = pool.starmap(rvc_perCell, zip(zip(range(start_cell, end_cell+1), dL['unitName']), expInds));
 
           ### do the saving HERE!
           rvcNameFinal = hf.rvc_fit_name(rvcName_f1, rvc_model, dir, vecF1);
@@ -700,7 +734,7 @@ if __name__ == '__main__':
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
           descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=100, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig);
-          dogFits = pool.map(descr_perCell, range(start_cell, end_cell+1));
+          dogFits = pool.map(descr_perCell, zip(range(start_cell, end_cell+1), dL['unitName']));
 
           print('debug');
           ### do the saving HERE!
@@ -718,7 +752,7 @@ if __name__ == '__main__':
       if rvcF0_fits == 1:
         with mp.Pool(processes = nCpu) as pool:
           rvc_perCell = partial(fit_RVC_f0, data_loc=dataPath, rvcMod=rvc_model, to_save=0, returnDict=1);
-          rvcFits = pool.map(rvc_perCell, range(start_cell, end_cell+1));
+          rvcFits = pool.map(rvc_perCell, zip(range(start_cell, end_cell+1), dL['unitName']));
 
           ### do the saving HERE!
           rvcNameFinal = '%s%s.npy' % (rvcName_f0, hf.rvc_mod_suff(rvc_model));

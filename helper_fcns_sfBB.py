@@ -441,7 +441,7 @@ def compute_f1f0(trial_inf):
   # note: the below lines will help us avoid including trials for which the f0 is negative (after baseline subtraction!)
   # i.e. we will not include trials with below-baseline f0 responses in our f1f0 calculation
   val_inds = np.logical_and(~np.isnan(f0all), ~np.isnan(f1all));
-  f0rate_posInd = np.where(np.logical_and(val_inds, f0rate>0))[0];
+  f0rate_posInd = np.where(np.logical_and(val_inds, f0all>0))[0];
   f0rate_pos = f0all[f0rate_posInd];
   f1rate_pos = f1all[f0rate_posInd];
 
