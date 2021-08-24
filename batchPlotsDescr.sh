@@ -33,7 +33,7 @@ source activate lcv-python
 # V1_orig/ - model recovery (dataList_mr; mr_fitList...), 10 cells
 # V1_orig/ - standard, 59 cells
 # altExp   - standard, 8 cells
-# LGN/ - standard, 77 cells
+# LGN/ - standard, 81 cells
 
 EXP_DIR=$1
 DOG_MOD=$2
@@ -42,20 +42,20 @@ LOSS_TYPE=${3:=2}
 # note: dog_mod=0 means flex; 1 means sach (DoG)
 
 if [ "$EXP_DIR" = "V1/" ]; then
-  for run in {1..18}
+  for run in {1..45}
   do 
     python3.6 plot_descr.py $run V1/ $DOG_MOD 2 0 -1 1 1 &
   done
   wait
-  for run in {19..36}
+  for run in {46..81}
   do 
     python3.6 plot_descr.py $run V1/ $DOG_MOD 2 0 -1 1 1 &
   done
   wait
-  for run in {37..56}
-  do 
-    python3.6 plot_descr.py $run V1/ $DOG_MOD 2 0 -1 1 1 &
-  done
+  #for run in {37..56}
+  #do 
+  #  python3.6 plot_descr.py $run V1/ $DOG_MOD 2 0 -1 1 1 &
+  #done
 fi
 if [ "$EXP_DIR" = "LGN/" ]; then
   for run in {1..25}
@@ -68,7 +68,7 @@ if [ "$EXP_DIR" = "LGN/" ]; then
     python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE 0 1 0 1 0 &
   done
   wait
-  for run in {50..77}
+  for run in {50..81}
   do 
     python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE 0 1 0 1 0 &
   done

@@ -5,7 +5,8 @@ import os
 
 import pdb
 
-dirs = ['V1/', 'V1_orig/', 'altExp/']; # which experiments are we grabbing from?
+#dirs = ['LGN/'];
+#dirs = ['V1/', 'V1_orig/', 'altExp/']; # which experiments are we grabbing from?
 to_check = ['structures/', 'recordings/']; # which subdirs are we looking in for files to copy?
 file_ending = ['*.npy', '*sfMix*.xml']; # in structures/, we copy .npy; in recordings/, we copy .xml
 splits = ['_sfm', '_|#']; # for structures/, split just based on _sfm; for recordings, first "_" or "#"

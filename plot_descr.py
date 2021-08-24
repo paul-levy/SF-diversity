@@ -81,10 +81,14 @@ loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
+fracSig = 1;
+#fracSig = 0 if expDir == 'LGN/' else 1; # we only enforce the "upper-half sigma as fraction of lower half" for V1 cells! 
+
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_210517';
+descrBase = 'descrFits_210721';
+#descrBase = 'descrFits_210524';
 #descrBase = 'descrFits_210503';
 #descrBase = 'descrFits_210304';
 #descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
@@ -96,7 +100,8 @@ if descrJnt == 1:
 #rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
 #rvcBase = 'rvcFits_200714'; # direc flag & '.npy' are adde
-rvcBase = 'rvcFits_210517';
+#rvcBase = 'rvcFits_210524';
+rvcBase = 'rvcFits_210721';
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
@@ -125,7 +130,11 @@ try:
 except: 
   # TODO: note, this is dangerous; thus far, only V1 cells don't have 'unitType' field in dataList, so we can safely do this
   cellType = 'V1'; 
-expInd   = hf.get_exp_ind(data_loc, cellName)[0];
+try:
+  overwriteExpName = dataList['expType'][cellNum-1];
+except:
+  overwriteExpName = None;
+expInd   = hf.get_exp_ind(data_loc, cellName, overwriteExpName)[0];
 
 if expInd <= 2: # if expInd <= 2, then there cannot be rvcAdj, anyway!
   rvcAdj = 0; # then we'll load just below!
@@ -162,6 +171,9 @@ else:
   force_f1 = False;
 rvcSuff = hf.rvc_mod_suff(rvcMod);
 rvcBase = '%s%s' % (rvcBase, rvcFlag);
+
+#force_dc = True
+
 # NOTE: We pass in the rvcFits where rvcBase[name] goes, and use -1 in rvcMod to indicate that we've already loaded the fits
 spikes_rate, which_measure = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcFits, rvcMod=-1, descrFitName_f0 = fLname, baseline_sub=False, force_dc=force_dc, force_f1=force_f1, return_measure=True, vecF1=vecF1);
 # let's also get the baseline
@@ -210,15 +222,16 @@ refTxt ='ref';
 fDisp = []; dispAx = [];
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
+
 for d in range(nDisps):
     
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(2*10, n_v_cons*10), sharey=False);
+    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(2*10, n_v_cons*12), sharey=False);
     fDisp.append(fCurr)
-    dispAx.append(dispCurr);
-    
+    dispAx.append(dispCurr);    
+
     minResp = np.min(np.min(respMean[d, ~np.isnan(respMean[d, :, :])]));
     maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
     
@@ -241,7 +254,7 @@ for d in range(nDisps):
 
         ## plot descr fit
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp);
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig);
         dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=currClr, label='descr. fit');
 
         ## if flexGauss plot peak & frac of peak
@@ -278,7 +291,7 @@ for d in range(nDisps):
 
           # plot descriptive model fit -- and inferred characteristic frequency (or peak...)
           prms_curr = descrParams[d, v_cons[c]];
-          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp);
+          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig);
           descr_curr = descrResp - to_sub;
           abvThresh = [descr_curr>minResp_toPlot]
           dispAx[d][c_plt_ind, 1].plot(sfs_plot[abvThresh], descr_curr[abvThresh], color=currClr, label='descr. fit', clip_on=False)
@@ -306,7 +319,8 @@ for d in range(nDisps):
             print('cell % has bad sfs' % cellNum);
         
           dispAx[d][c_plt_ind, i].set_xscale('log');
-          dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
+          if c_plt_ind == len(v_cons)-1:
+            dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
 
 	  # Set ticks out, remove top/right axis, put ticks only on bottom/left
           #dispAx[d][c_plt_ind, i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
@@ -371,7 +385,7 @@ for d in range(nDisps):
  
         # plot descr fit [1]
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp);
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig);
         dispAx[d][1].plot(sfs_plot, descrResp-to_sub, color=col);
 
     for i in range(len(dispCurr)):
@@ -446,7 +460,7 @@ for d in range(nDisps):
 
         # plot descrFit
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp);
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig);
         if c_plt_ind == 0 and d==0: # only make the legend here
           sfMixAx[c_plt_ind, d].plot(sfs_plot, descrResp, label=modTxt, color=modClr);
         else:
@@ -949,7 +963,7 @@ for d in range(1): #nDisps
   for c_itr, c in enumerate(val_cons):
     curr_params = descrCurr[c];
     curr_sfs = plt_sfs;
-    descrResps[c_itr, range(len(curr_sfs))] = hf.get_descrResp(curr_params, curr_sfs, descrMod, baseline=baseline_resp);
+    descrResps[c_itr, range(len(curr_sfs))] = hf.get_descrResp(curr_params, curr_sfs, descrMod, baseline=baseline_resp, fracSig=fracSig);
 
   ovr_min = np.minimum(np.min(curr_resps), np.minimum(np.min(rvcResps), np.min(descrResps)))
   ovr_max = np.maximum(np.max(curr_resps), np.maximum(np.max(rvcResps), np.max(descrResps)))

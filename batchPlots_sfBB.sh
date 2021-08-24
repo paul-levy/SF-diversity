@@ -17,7 +17,7 @@
 # 6 param is diffPlot (i.e. plot everything relative to flat model prediction)
 # 7 param is interpModel (i.e. interpolate model?)
 # 8th param is kMult (0.01, 0.05, 0.10, usually...)
-# 9th param is whether (1) or not (0) to do vector correction F1...
+# 9th param is whether (1) or not (0) to do vector correction F1
 # 10th param is whether to include the onset transient correction for F1 responses (use onsetDur in mS to use (e.g. 100); 0 to do without)
 # 11th param is respExpFixed (-1 for not fixed, then specific value for a fit with fixed respExp [e.g. 1 or 2])
 # 12th param is std/sem as variance measure: (1 sem (default))
@@ -40,7 +40,7 @@ fi
 # default is zero, i.e. not HPC fits...
 
 # 20 cells if original datalist; 41 cells if dataList_210222
-for run in {1..41}
+for run in {1..58}
 do
   ######
   ## New version, model fits - the doubled (i.e. two-digit) inputs are, in order, normTypes, (lgn)conTypes, lgnFrontEnd

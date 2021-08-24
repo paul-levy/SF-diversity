@@ -37,7 +37,7 @@
 # V1_orig/ - model recovery (dataList_mr; mr_fitList...), 10 cells
 # V1_orig/ - standard, 59 cells
 # altExp   - standard, 8 cells
-# LGN/ - standard, 77 cells
+# LGN/ - standard, 88 cells (as of 21.05.24)
 
 source activate lcv-python
 
@@ -56,22 +56,22 @@ if [ "$EXP_DIR" = "V1/" ]; then
   if [[ $RVC_FIT -eq 1 ]]; then
     ## RVCs ONLY with NO phase adjustment (instead, vector correction for F1)
     # -- Naka-Rushton
-    python3.6 descr_fits.py -156 0 V1/ -1 1 0 1 0 0 2 0 0
-    python3.6 descr_fits.py -156 1 V1/ -1 1 0 1 0 0 2 0 0
-    python3.6 descr_fits.py -156 2 V1/ -1 1 0 1 0 0 2 0 0
-    python3.6 descr_fits.py -156 3 V1/ -1 1 0 1 0 0 2 0 0
+    python3.6 descr_fits.py -181 0 V1/ -1 1 0 1 0 0 2 0 0 
+    python3.6 descr_fits.py -181 1 V1/ -1 1 0 1 0 0 2 0 0
+    python3.6 descr_fits.py -181 2 V1/ -1 1 0 1 0 0 2 0 0
+    python3.6 descr_fits.py -181 3 V1/ -1 1 0 1 0 0 2 0 0
     # -- Movshon RVC
-    python3.6 descr_fits.py -156 0 V1/ -1 1 0 0 0 0 2 0 0
-    python3.6 descr_fits.py -156 1 V1/ -1 1 0 0 0 0 2 0 0
-    python3.6 descr_fits.py -156 2 V1/ -1 1 0 0 0 0 2 0 0
-    python3.6 descr_fits.py -156 3 V1/ -1 1 0 0 0 0 2 0 0
+    python3.6 descr_fits.py -181 0 V1/ -1 1 0 0 0 0 2 0 0
+    python3.6 descr_fits.py -181 1 V1/ -1 1 0 0 0 0 2 0 0
+    python3.6 descr_fits.py -181 2 V1/ -1 1 0 0 0 0 2 0 0
+    python3.6 descr_fits.py -181 3 V1/ -1 1 0 0 0 0 2 0 0
   fi
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
     # -- responses derived from vecF1 corrections, if F1 responses
-    python3.6 descr_fits.py -156 0 V1/ -1 0 0 1 1 0 2 0 0 # flex gauss
-    python3.6 descr_fits.py -156 0 V1/ -1 0 0 1 1 2 2 0 0 # Tony DoG
-    #python3.6 descr_fits.py -156 0 V1/ -1 0 0 1 1 1 2 0 0 # sach DoG
+    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 0 2 0 0 # flex gauss
+    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 2 2 0 0 # Tony DoG
+    #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 1 2 0 0 # sach DoG
   fi
 fi
 
@@ -80,6 +80,7 @@ if [ "$EXP_DIR" = "V1_orig/" ]; then
     # V1_orig/ -- rvc_f0 and descr only
     python3.6 descr_fits.py -159 0 V1_orig/ -1 0 1 1 0 0 2 0
   fi
+  wait
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
     python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 0 2 0 # flex. gauss
@@ -93,6 +94,7 @@ if [ "$EXP_DIR" = "altExp/" ]; then
     # altExp/ -- rvc_f0 and descr only
     python3.6 descr_fits.py -108 0 altExp/ -1 0 1 1 0 0 2 0
   fi
+  wait
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
     python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 0 2 0 # flex. gauss
@@ -106,23 +108,24 @@ if [ "$EXP_DIR" = "LGN/" ]; then
   ## LGN - phase adjustment (will be done iff LGN/ 1; not if LGN/ 0 ) and F1 rvc
   if [[ $RVC_FIT -eq 1 ]]; then
     # phase adj
-    python3.6 descr_fits.py -177 0 LGN/ 1 0 0 0 0 0 3 1
+    python3.6 descr_fits.py -181 0 LGN/ 1 0 0 0 0 0 3 1
     # RVC (movshon)
-    python3.6 descr_fits.py -177 0 LGN/ 0 1 0 0 0 0 3 1
-    python3.6 descr_fits.py -177 1 LGN/ 0 1 0 0 0 0 3 1
-    python3.6 descr_fits.py -177 2 LGN/ 0 1 0 0 0 0 3 1
-    python3.6 descr_fits.py -177 3 LGN/ 0 1 0 0 0 0 3 1
+    python3.6 descr_fits.py -181 0 LGN/ 0 1 0 0 0 0 3 1
+    python3.6 descr_fits.py -181 1 LGN/ 0 1 0 0 0 0 3 1
+    python3.6 descr_fits.py -181 2 LGN/ 0 1 0 0 0 0 3 1
+    python3.6 descr_fits.py -181 3 LGN/ 0 1 0 0 0 0 3 1
     # RVC (Naka-Rushton)
-    python3.6 descr_fits.py -177 0 LGN/ 0 1 0 1 0 0 3 1
-    python3.6 descr_fits.py -177 1 LGN/ 0 1 0 1 0 0 3 1
-    python3.6 descr_fits.py -177 2 LGN/ 0 1 0 1 0 0 3 1
-    python3.6 descr_fits.py -177 3 LGN/ 0 1 0 1 0 0 3 1
+    python3.6 descr_fits.py -181 0 LGN/ 0 1 0 1 0 0 3 1
+    python3.6 descr_fits.py -181 1 LGN/ 0 1 0 1 0 0 3 1
+    python3.6 descr_fits.py -181 2 LGN/ 0 1 0 1 0 0 3 1
+    python3.6 descr_fits.py -181 3 LGN/ 0 1 0 1 0 0 3 1
   fi
+  wait
   if [[ $DESCR_FIT -eq 1 ]]; then
     # Descr fits (based on Movshon RVCs)
-    python3.6 descr_fits.py -177 0 LGN/ 0 0 0 0 1 0 2 0 1 # flex gauss, not joint
-    python3.6 descr_fits.py -177 0 LGN/ 0 0 0 0 1 2 2 0 1 # Tony DoG, not joint (sqrt)
-    #python3.6 descr_fits.py -177 0 LGN/ 0 0 0 0 1 1 2 0 1 # sach DoG, not joint (sqrt)
-    #python3.6 descr_fits.py -177 0 LGN/ 0 0 0 0 1 1 4 0 1 # sach DoG, not joint (sach loss)
+    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 0 2 0 1 # flex gauss, not joint
+    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 2 0 1 # Tony DoG, not joint (sqrt)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 0 1 # sach DoG, not joint (sqrt)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 0 1 # sach DoG, not joint (sach loss)
   fi
 fi

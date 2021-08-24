@@ -12,8 +12,8 @@ import itertools
 ########################
 # expDirs (and expNames must always be of the right length, i.e. specify for each expt dir 
 ## V1 version
-expDirs = ['V1_orig/', 'altExp/', 'V1/', 'V1_BB'/]
-expNames = ['dataList.npy', 'dataList.npy', 'dataList_glx.npy', 'dataList_210222.npy']
+expDirs = ['V1_orig/', 'altExp/', 'V1/', 'V1_BB/']
+expNames = ['dataList.npy', 'dataList.npy', 'dataList_210721.npy', 'dataList_210721.npy']
 
 nExpts = len(expDirs);
 
@@ -33,16 +33,16 @@ fitNamesFlat = [hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrect
 # descrFits - loss type determined by comparison (choose best; see modCompare.ipynb::Descriptive Fits)
 ####
 dogMod = 2; # 1 (sach) or 2 (Tony)
-dogNames = ['descrFits_210517_sqrt_tony.npy', 'descrFits_210517_sqrt_tony.npy', 'descrFits_210517_sqrt_tony.npy'];
+dogNames = ['descrFits_210517_sqrt_tony.npy', 'descrFits_210517_sqrt_tony.npy', 'descrFits_210721_sqrt_tony.npy', 'descrFits_210721_sqrt_tony.npy'];
 #dogNames = ['descrFits_210503_sqrt_tony.npy', 'descrFits_210503_sqrt_tony.npy', 'descrFits_210503_sqrt_tony.npy'];
 #dogNames = ['descrFits_210304_sqrt_sach.npy', 'descrFits_210304_sqrt_sach.npy', 'descrFits_210304_sqrt_sach.npy'];
 descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
-descrNames = ['descrFits_210517_sqrt_flex.npy', 'descrFits_210517_sqrt_flex.npy', 'descrFits_210517_sqrt_flex.npy'];
+descrNames = ['descrFits_210517_sqrt_flex.npy', 'descrFits_210517_sqrt_flex.npy', 'descrFits_210721_sqrt_flex.npy', 'descrFits_210721_sqrt_flex.npy'];
 #descrNames = ['descrFits_190503_sqrt_flex.npy', 'descrFits_190503_sqrt_flex.npy', 'descrFits_191023_sqrt_flex.npy'];
 
-rvcNames = ['rvcFits_210517_f0_NR.npy', 'rvcFits_210517_f0_NR.npy', 'rvcFits_210517_vecF1_NR.npy'];
+rvcNames = ['rvcFits_210517_f0_NR.npy', 'rvcFits_210517_f0_NR.npy', 'rvcFits_210721_vecF1_NR.npy', 'rvcFits_210721_vecF1_NR.npy'];
 #rvcNames = ['rvcFits_191023_f0_NR.npy', 'rvcFits_191023_f0_NR.npy', 'rvcFits_191023_NR_pos.npy'];
-rvcMods = [1,1,1]; # 0-mov; 1-Nakarushton; 2-Peirce
+rvcMods = [1,1,1,1]; # 0-mov; 1-Nakarushton; 2-Peirce
 # rvcNames   = ['rvcFits_f0.npy'];
 # pack to easily tile
 expt = [expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods];

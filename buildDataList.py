@@ -38,7 +38,8 @@ def update_data_list(loc_data, dl_name, recArea):
 
   #########
   ### now, let's get the corresponding basic characterization files!
-  ###### IF MANUAL EDIT OF DATALIST (just to add basic list) START HERE
+  ###### IF MANUAL EDIT OF DATALIST (just to add basic list) RUN THIS NEXT LINE
+  ###### -- and then simply patch the basic_list, basic_order to the loaded datalist, and save (np.save(path, dataList))
   #########
   basic_list, _, _, basic_order = bl.build_basic_lists(unitName, '', loc='V1_orig/', subfolder='recordings/', folderByExpt=False, reduceNums=True);
 

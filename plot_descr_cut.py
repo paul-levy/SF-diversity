@@ -77,6 +77,8 @@ loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
+fracSig = 0 if expDir == 'LGN/' else 1; # we only enforce the "upper-half sigma as fraction of lower half" for V1 cells! 
+
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
@@ -240,7 +242,7 @@ for ii, cond in enumerate(conds):
 
     # plot descrFit
     prms_curr = descrParams[curr_disp, curr_con];
-    descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp);
+    descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig);
     sfMixAx[plt_ind_row, plt_ind_col].plot(sfs_plot, descrResp, color=modClr);
         
     # plot prefSF, center of mass

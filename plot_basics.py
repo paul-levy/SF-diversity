@@ -42,8 +42,14 @@ if len(sys.argv) > 4:
 else:
   forceSimple = None;
 
-rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
+basic_suffix = '_210721';
+
+rvcName = 'rvcFits_210721'; #'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
+#rvcName = 'rvcFits_210524'; #'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
 rvcMod = 1; # naka rushton (1); 
+rvcAdj = -1;
+dir = None if rvcAdj == -1 else 1;
+vecF1 = 1 if rvcAdj == -1 else 0
 
 loc_base = os.getcwd() + '/';
 
@@ -51,11 +57,18 @@ data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
 ### Load datalist, specific cell information
-dataListNm = hf.get_datalist(expDir);
+dataListNm = hf.get_datalist(expDir, force_full=1);
 dataList = hf.np_smart_load(data_loc + dataListNm);
 
 cellName = dataList['unitName'][cellNum-1];
-expInd = hf.get_exp_ind(data_loc, cellName)[0]
+try:
+  overwriteExpName = dataList['expType'][cellNum-1]
+except:
+  if 'm684' in cellName or 'm685' in cellName: # dumb workaround
+    overwriteExpName = 'sfBB';
+  else:
+    overwriteExpName = None
+expInd = hf.get_exp_ind(data_loc, cellName, overwriteExpName)[0]
 try:
   cellType = dataList['unitType'][cellNum-1];
 except:
@@ -66,13 +79,17 @@ except:
 nrow, ncol = 3, 2;
 f, ax = plt.subplots(nrow, ncol, figsize=(ncol*10, nrow*10));
 
+# Load sfMix response, regardless
+if expInd > 0:
+  S = hf.np_smart_load(data_loc + cellName + '_sfm.npy') # assuming sfm, as of now..
+elif expInd == -1: # for now..
+  S = hf.np_smart_load(data_loc + cellName + '_sfBB.npy')
+
 if compareSfMix == 1:
 
   #############
   ### Let's load the sfMix responses, just for comparison (we can compare sf and rvc responses)
   #############
-
-  S = hf.np_smart_load(data_loc + cellName + '_sfm.npy')
   expData = S['sfm']['exp']['trial'];
 
   ### compute f1f0 ratio, and load the corresponding F0 or F1 responses
@@ -80,7 +97,7 @@ if compareSfMix == 1:
 
   if f1f0_rat > 1 or expDir == 'LGN/': # i.e. if we're looking at a simple cell, then let's get F1
     if rvcName is not None:
-      rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcName, rvcMod=rvcMod);
+      rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcName, rvcMod=rvcMod, direc=dir, vecF1=vecF1);
     else:
       rvcFits = None
     spikes_byComp = hf.get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
@@ -124,9 +141,15 @@ else:
 #  forceSimple = 0;
 ###
 
-basic_names, basic_order = dataList['basicProgName'][cellNum-1], dataList['basicProgOrder']
-basics = hf.get_basic_tunings(basic_names, basic_order, forceSimple)
-# - and get the basic characterization outputs
+try:
+  basic_names, basic_order = dataList['basicProgName'][cellNum-1], dataList['basicProgOrder']
+  basics = hf.get_basic_tunings(basic_names, basic_order, forceSimple)
+except:
+  # we've already put the basics in the data structure...
+  basic_names = ['','','','',''];
+  basic_order = ['rf', 'sf', 'tf', 'rvc', 'ori']; # order doesn't matter if they are already loaded
+  basics = hf.get_basic_tunings(basic_names, basic_order, forceSimple, preProc=S)
+## - and get the basic characterization outputs
 [rf, tf, sf, rvc, ori] = [basics[x] for x in ['rfsize', 'tf', 'sf', 'rvc', 'ori']];
 
 ### Now, let's show the f1f0 ratio in the basic characterizations vs the sfMix
@@ -181,25 +204,25 @@ if rvc is not None:
   # NOTE: we do NOT subtract the baseline for RVC in plotting nor in fitting
   if respInd == 0:
     ax[0, 0].axhline(rvc['rvc_exp']['blank']['mean'], linestyle='dashed', color='k', label='rvc10 baseline');
-  ax[0, 0].errorbar(convals, mean, stderr, fmt='o', color='k');
+  ax[0, 0].errorbar(convals, mean, stderr, fmt='o', color='k', clip_on=False);
   # model (fit to baseline subtracted, if complex cell)
   modNum = rvc['rvcMod'];
   plt_cons = np.geomspace(convals[0], convals[-1], 100);
   mod_resp = hf.get_rvcResp(rvc['params'], plt_cons, modNum)
   c50 = rvc['c50']; c50_eval = rvc['c50_eval'];
-  ax[0, 0].plot(c50, 0, 'kv', label='c50/eval (%d%%, %d%%) at %.1f cpd' % (100*c50, 100*c50_eval, rvc10_sf));
+  ax[0, 0].plot(c50, 0, 'kv', label='c50/eval (%d%%, %d%%) at %.1f cpd' % (100*c50, 100*c50_eval, rvc10_sf), clip_on=False);
   ax[0, 0].semilogx(plt_cons, mod_resp, 'k-')
   ax[0, 0].set_xlabel('contrast (%%)');
 
 ### NOW, let's also plot the RVC for the nearest optimal SF as it appears in sfMix
 # if possible, let's also plot the RVC fit from sfMix's prefSf RVC
-if rvcName is not None and (expDir == 'V1/' or expDir == 'LGN/'): 
+if rvcName is not None and (expDir == 'V1/' or expDir == 'LGN/') and compareSfMix: 
   # we CANNOT do this for V1_orig; we SHOULD be able to do for altExp 
   #TODO: will need to fix how we get the parameters to account for differing way in 
   # fit_rvc_f0 vs. rvc_adjusted_fit on how we store parameters [d,sf,prm] vs. [d]['params'][sf]
   if plt_cons is None: # else, let's just use the plt_cons from the rvc10 experiment
     plt_cons = np.geomspace(convals[0], convals[-1], 100);
-  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcName, rvcMod=rvcMod);
+  rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcName, rvcMod=rvcMod, direc=dir, vecF1=vecF1);
   rel_rvcs = [rvcFits[0]['params'][sfInd] for sfInd in (sfPeak, sfComp)]; # we get 0 dispersion, peak SF
   c50s = [hf.get_c50(rvcMod, rel_rvc) for rel_rvc in rel_rvcs];
   c50_emps = [hf.c50_empirical(rvcMod, rel_rvc)[1] for rel_rvc in rel_rvcs]; # determine c50 by optimization, numerical approx. (take the latter)
@@ -208,7 +231,7 @@ if rvcName is not None and (expDir == 'V1/' or expDir == 'LGN/'):
     rvcmodResps = [rvc_mod(*rel_rvc, plt_cons) for rel_rvc in rel_rvcs];
   else: # i.e. mod=1 or mod=2
     rvcmodResps = [hf.naka_rushton(plt_cons, rel_rvc) for rel_rvc in rel_rvcs];
-  [ax[0, 0].plot(plt_cons, rvcmodResp, color=clr, linestyle='-', label='rvc fit (c50/eval=%d%%, %d%%)' % (100*c50, 100*c50_eval)) for rvcmodResp,c50,c50_eval,clr in zip(rvcmodResps, c50s, c50_emps, rvcRefsColor)]
+  [ax[0, 0].plot(plt_cons, rvcmodResp, color=clr, linestyle='-', label='rvc fit (c50/eval=%d%%, %d%%)' % (100*c50, 100*c50_eval), clip_on=False) for rvcmodResp,c50,c50_eval,clr in zip(rvcmodResps, c50s, c50_emps, rvcRefsColor)]
   # and save it
 ### and plot the data from sfMix
 if baseline_sfMix is not None: # add back the baseline if complex cel
@@ -234,8 +257,8 @@ if rf is not None:
     baseline = rf['rf_exp']['blank']['mean'];
     diskResp = diskResp - baseline;
     annResp = annResp - baseline;
-  ax[0, 1].errorbar(diskVals, diskResp, diskStdErr, fmt='o', color='k', label='disk');
-  ax[0, 1].errorbar(annVals, annResp, annStdErr, fmt='o', color='r', label='annulus');
+  ax[0, 1].errorbar(diskVals, diskResp, diskStdErr, fmt='o', color='k', label='disk', clip_on=False);
+  ax[0, 1].errorbar(annVals, annResp, annStdErr, fmt='o', color='r', label='annulus', clip_on=False);
   # then the model fits
   ax[0, 1].semilogx(rf['to_plot']['diams'], rf['to_plot']['resps'], 'k-');
   ax[0, 1].semilogx(rf['to_plot']['ann'], rf['to_plot']['ann_resp'], 'r-');
@@ -254,11 +277,11 @@ if sf is not None:
   sfstderr = sfstderr[:,0, respInd];
   if respInd == 0:
     sfresps = sfresps - sf['sf_exp']['blank']['mean'];
-  ax[1, 1].errorbar(sfvals, sfresps, sfstderr, fmt='o', color='k');
+  ax[1, 1].errorbar(sfvals, sfresps, sfstderr, fmt='o', color='k', clip_on=False);
   # model
   plt_sfs = np.geomspace(sfvals[0], sfvals[-1], 100);
   mod_resp = hf.flexible_Gauss(sf['sfParams'], plt_sfs)
-  ax[1, 1].plot(sf['charFreq'], 0, 'kv', label='char freq (%.1f cpd)' % sf['charFreq'])
+  ax[1, 1].plot(sf['charFreq'], 0, 'kv', label='char freq (%.1f cpd)' % sf['charFreq'], clip_on=False)
   ax[1, 1].semilogx(plt_sfs, mod_resp, 'k-')
   ax[1, 1].set_title('SF: Peak %.1f cyc/deg, bw %.1f oct' % (sf['sfPref'], sf['sfBW_oct']))
   ax[1, 1].set_xlabel('spatial frequency (cyc/sec)');
@@ -266,7 +289,9 @@ if compareSfMix == 1:
   # also plot the sfMix high contrast, single grating sf tuning
   ### plot reference tuning [row 1 (i.e. 2nd row)]
   ax[1, 1].errorbar(all_sfs, sfRef, sfRefSEM, color='r', fmt='o', label='ref. tuning (d0, high con)', clip_on=False)
+ax[1, 1].set_xlim([5e-2, 2e1]);
 ax[1, 1].legend();
+
 
 #############
 ### TF tuning
@@ -278,15 +303,16 @@ if tf is not None:
   mean, stderr = tfresps[:,0, respInd], tfstderr[:,0, respInd];
   if respInd == 0:
     mean = mean - tf['tf_exp']['blank']['mean'];
-  ax[1, 0].errorbar(tfvals, mean, stderr, fmt='o', color='k');
+  ax[1, 0].errorbar(tfvals, mean, stderr, fmt='o', color='k', clip_on=False);
   # model
   plt_tfs = np.geomspace(tfvals[0], tfvals[-1], 100);
   mod_resp = hf.flexible_Gauss(tf['tfParams'], plt_tfs)
-  ax[1, 0].plot(tf['charFreq'], 0, 'kv', label='char freq (%.1f Hz)' % tf['charFreq'])
+  ax[1, 0].plot(tf['charFreq'], 0, 'kv', label='char freq (%.1f Hz)' % tf['charFreq'], clip_on=False)
   ax[1, 0].semilogx(plt_tfs, mod_resp, 'k-')
   ax[1, 0].set_title('TF: Peak %.1f Hz, bw %.1f oct' % (tf['tfPref'], tf['tfBW_oct']))
   ax[1, 0].set_xlabel('temporal frequency (cyc/sec)');
   #ax[1, 0].legend();
+ax[1, 0].set_xlim([4e-1, 3e1]);
 
 #############
 ### Orientation tuning
@@ -298,12 +324,12 @@ if ori is not None:
   mean, stderr = oriresps[:, respInd], oristderr[:, respInd];
   if respInd == 0:
     mean = mean - ori['ori_exp']['blank']['mean'];
-  ax[2, 0].errorbar(orivals, mean, stderr, fmt='o', color='k');
+  ax[2, 0].errorbar(orivals, mean, stderr, fmt='o', color='k', clip_on=False);
   # model
   plt_oris = np.linspace(0, 2*np.pi, 100);
   oriMod, _ = hf.get_ori_mod();
   mod_resp = oriMod(*ori['params'], plt_oris)
-  ax[2, 0].plot(np.rad2deg(plt_oris), mod_resp, 'k-');
+  ax[2, 0].plot(np.rad2deg(plt_oris), mod_resp, 'k-', clip_on=False);
   ax[2, 0].set_title('Peak %d deg, bw %d deg, cv %.2f, ds %.2f' % (ori['pref'], ori['bw'], ori['cv'], ori['DS']))
   ax[2, 0].set_xlabel('orientation (deg)');
   #ax[2, 0].legend();
@@ -321,7 +347,7 @@ elif forceSimple == 1:
   suff = '_F1';
 
 saveName = "/cell_%03d%s.pdf" % (cellNum, suff)
-full_save = os.path.dirname(str(save_loc + 'basics/'));
+full_save = os.path.dirname(str(save_loc + 'basics%s/' % basic_suffix));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(str(full_save + saveName));

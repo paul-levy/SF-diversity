@@ -12,10 +12,86 @@ source activate lcv-python
 
 ### expDir/ compareSfMix forceSimple
 
-for run in {1..20}
-do
-  python plot_basics.py $run V1_BB/ 0 0 &
-  python plot_basics.py $run V1_BB/ 0 1 &
-done
+EXP_DIR=$1
 
-# leave a blank line at the end
+if [ "$EXP_DIR" = "V1_BB/" ]; then
+  for run in {1..30}
+  do
+    python plot_basics.py $run V1_BB/ 0 0 &
+    python plot_basics.py $run V1_BB/ 0 1 &
+  done
+  wait
+  for run in {31..58}
+  do
+    python plot_basics.py $run V1_BB/ 0 0 &
+    python plot_basics.py $run V1_BB/ 0 1 &
+  done
+  wait
+fi
+
+if [ "$EXP_DIR" = "V1/" ]; then
+  for run in {1..45}
+  do 
+    python3.6 plot_basics.py $run $EXP_DIR 0 0 &
+    python3.6 plot_basics.py $run $EXP_DIR 0 1 &
+  done
+  wait
+  for run in {46..81}
+  do 
+    python3.6 plot_basics.py $run $EXP_DIR 0 0 &
+    python3.6 plot_basics.py $run $EXP_DIR 0 1 &
+  done
+  wait
+fi
+
+if [ "$EXP_DIR" = "LGN/" ]; then
+  for run in {1..25}
+  do 
+    python3.6 plot_basics.py $run $EXP_DIR 0 0 &
+    python3.6 plot_basics.py $run $EXP_DIR 0 1 &
+  done
+  wait
+  for run in {26..50}
+  do 
+    python3.6 plot_basics.py $run $EXP_DIR 0 0 &
+    python3.6 plot_basics.py $run $EXP_DIR 0 1 &
+  done
+  wait
+  for run in {50..81}
+  do 
+    python3.6 plot_basics.py $run $EXP_DIR 0 0 &
+    python3.6 plot_basics.py $run $EXP_DIR 0 1 &
+  done
+  wait
+fi
+
+if [ "$EXP_DIR" = "V1_orig/" ]; then
+  for run in {1..20}
+  do 
+    python3.6 plot_basics.py $run $EXP_DIR 0 0 &
+    python3.6 plot_basics.py $run $EXP_DIR 0 1 &
+  done
+  wait
+  for run in {21..40}
+  do 
+    python3.6 plot_basics.py $run $EXP_DIR 0 0 &
+    python3.6 plot_basics.py $run $EXP_DIR 0 1 &
+  done
+  wait
+  for run in {41..59}
+  do 
+    python3.6 plot_basics.py $run $EXP_DIR 0 0 &
+    python3.6 plot_basics.py $run $EXP_DIR 0 1 &
+  done
+  wait
+fi
+
+if [ "$EXP_DIR" = "altExp/" ]; then
+  for run in {1..8}
+  do 
+    python3.6 plot_basics.py $run $EXP_DIR 0 0 &
+    python3.6 plot_basics.py $run $EXP_DIR 0 1 &
+  done
+  wait
+fi
+

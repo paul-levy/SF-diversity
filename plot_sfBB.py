@@ -31,7 +31,11 @@ _sigmoidRespExp = None; # 3 or None, as of 21.03.14
 _sigmoidSigma = 5; # put a value (5) or None (see model_responses_pytorch.py for details)
 _sigmoidGainNorm = 5;
 recenter_norm = 1; # recenter the tuned normalization around 1?
-useCoreFit = 1; # if useCoreFit, then we'll plot the model response to the sfBB_var* experiments, if applicable
+#######
+## TODO: note useCoreFit is now 0
+#######
+useCoreFit = 0; # if useCoreFit, then we'll plot the model response to the sfBB_var* experiments, if applicable
+#######
 _globalMin = 1e-10;
 # if None, then we keep the plots as is; if a number, then we create a gray shaded box encompassing that much STD of the base response
 # -- by plotting a range of base responses rather than just the mean, we can see how strong the variations in base or base+mask responses are
@@ -142,6 +146,9 @@ if onsetTransient > 0:
 else:
   onsetCurr = None;
 
+# EXPIND ::: TODO: Make this smarter?
+expInd = -1;
+
 ### FITLIST
 _applyLGNtoNorm = 0;
 # -- some params are sigmoid, we'll use this to unpack the true parameter
@@ -221,7 +228,6 @@ if fitBase is not None:
   lgnTypes = [lgnA, lgnB];
   conTypes = [conA, conB];
 
-  expInd = -1;
   newMethod = 1;
 
   mod_A_dc  = mrpt.sfNormMod(modFit_A_dc, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm)
@@ -1299,8 +1305,9 @@ if fitBase is None or useCoreFit:
                 ax[1+ij, 1+2*measure].add_patch(matplotlib.patches.Rectangle([sfMin, base_mn-0.5*stdTot*one_std], sfMax-sfMin, stdTot*one_std, alpha=0.1, color='k'))
               ax[1+ij, 1+2*measure].legend(fontsize='small');
 
-          ### What's the loss evaluated on these data?
-          ax[4, 2*measure].text(0.5, 0.5, 'loss A|B = %.2f|%.2f' % (loss_A[measure], loss_B[measure]));
+          if useCoreFit:
+            ### What's the loss evaluated on these data?
+            ax[4, 2*measure].text(0.5, 0.5, 'loss A|B = %.2f|%.2f' % (loss_A[measure], loss_B[measure]));
           '''
           ### Loss trajectory
           # temp try...plot contour and trajectory of best fit...
