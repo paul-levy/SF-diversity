@@ -15,12 +15,12 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = '__descrFits_210721';
+dogName = 'descrFits_210721';
 #dogName = 'descrFits_210524';
 #phAdvName = 'phaseAdvanceFits_210524'
-phAdvName = '__phaseAdvanceFits_210721'
+phAdvName = 'phaseAdvanceFits_210721'
 rvcName_f0 = 'rvcFits_210721_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-rvcName_f1 = '__rvcFits_210721';
+rvcName_f1 = 'rvcFits_210721';
 #rvcName_f0 = 'rvcFits_210524_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 #rvcName_f1 = 'rvcFits_210524';
 
@@ -93,7 +93,7 @@ def phase_advance_fit(cell_num, expInd, data_loc, phAdvName=phAdvName, to_save=1
   assert expInd>2, "In phase_advance_fit; we can only fit ph-amp relationship for experiments with \
                     careful component TF; expInd 1, 2 do not meet this requirement."
 
-  if len(cell_num) > 1:
+  if not isinstance(cell_num, int):
     cell_num, cellName = cell_num;
   else:
     dataList = hf.np_smart_load(data_loc + expName);
@@ -130,6 +130,8 @@ def phase_advance_fit(cell_num, expInd, data_loc, phAdvName=phAdvName, to_save=1
     if os.path.isfile(data_loc + phAdvName):
       print('reloading phAdvFits...');
       phFits = hf.np_smart_load(data_loc + phAdvName);
+    else:
+      phFits = dict();
     phFits[cell_num-1] = curr_fit;
     np.save(data_loc + phAdvName, phFits);
     print('saving phase advance fit for cell ' + str(cell_num));
@@ -156,7 +158,7 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
   #########
   ### load data/metadata
   #########
-  if len(cell_num) > 1:
+  if not isinstance(cell_num, int):
     cell_num, cellName = cell_num;
   else:
     dataList = hf.np_smart_load(data_loc + expName);
@@ -355,7 +357,7 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=100, fLname = rvcName_f0, dLname=ex
     nParam = 5; # naka rushton is 4, peirce modification is 5 (but for NR, we just add a fixed parameter for #5)
 
   # load cell information
-  if len(cell_num) > 1:
+  if not isinstance(cell_num, int):
     cell_num, cellName = cell_num;
   else:
     dataList = hf.np_smart_load(data_loc + dLname);
@@ -480,7 +482,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, fo
   #########
   ### load data/metadata
   #########
-  if len(cell_num) > 1:
+  if not isinstance(cell_num, int):
     cell_num, cellName = cell_num;
   else:
     dataList = hf.np_smart_load(data_loc + dLname);

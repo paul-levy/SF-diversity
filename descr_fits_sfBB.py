@@ -27,7 +27,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
   
   expName = 'sfBB_core';
 
-  if len(cellNum) > 1:
+  if not isinstance(cellNum, int):
     cellNum, unitNm = cellNum;
     print('cell %d {%s}' % (cellNum, unitNm));
   else:

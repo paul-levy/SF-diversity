@@ -2579,7 +2579,13 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        basic_names, basic_order = dataList['basicProgName'][cell_ind], dataList['basicProgOrder'];
        basics_list = get_basic_tunings(basic_names, basic_order);
      except:
-       basics_list = None;
+       try:
+         # we've already put the basics in the data structure... (i.e. post-sorting 2021 data)
+         basic_names = ['','','','',''];
+         basic_order = ['rf', 'sf', 'tf', 'rvc', 'ori']; # order doesn't matter if they are already loaded
+         basics_list = get_basic_tunings(basic_names, basic_order, preProc=cell)
+       except:
+         basics_list = None;
 
    ###########
    ### metrics (inferred data measures)
@@ -3169,7 +3175,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     dogFits = np_smart_load(data_loc + dog_nm);
     rvcFits = np_smart_load(data_loc + rv_nm);
     try:
-      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_210401.npy');
+      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_210824.npy');
     except:
       superAnalysis = None;
 
