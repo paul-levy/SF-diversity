@@ -15,12 +15,12 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_210721';
+dogName = '__descrFits_210721';
 #dogName = 'descrFits_210524';
 #phAdvName = 'phaseAdvanceFits_210524'
-phAdvName = 'phaseAdvanceFits_210721'
+phAdvName = '__phaseAdvanceFits_210721'
 rvcName_f0 = 'rvcFits_210721_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-rvcName_f1 = 'rvcFits_210721';
+rvcName_f1 = '__rvcFits_210721';
 #rvcName_f0 = 'rvcFits_210524_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 #rvcName_f1 = 'rvcFits_210524';
 
@@ -364,7 +364,7 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=100, fLname = rvcName_f0, dLname=ex
   cellStruct = hf.np_smart_load(data_loc + cellName + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
   # get expInd, load rvcFits [if existing]
-  expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1]);
+  expInd, expName = hf.get_exp_ind(data_loc, cellName);
   print('Making RVC (F0) fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
 
   name_final = '%s%s.npy' % (fLname, hf.rvc_mod_suff(rvcMod));
@@ -493,7 +493,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, fo
     overwriteExpName = dataList['expType'][cell_num-1]
   except:
     overwriteExpName = None
-  expInd, expName = hf.get_exp_ind(data_loc, dataList['unitName'][cell_num-1], overwriteExpName);
+  expInd, expName = hf.get_exp_ind(data_loc, cellName, overwriteExpName);
   print('Making descriptive SF fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
 
   if force_dc is False and get_rvc == 1: # NOTE: as of 19.09.16 (well, earlier, actually), rvcFits are on F0 or F1, depending on simple/complex designation - in either case, they are both already as rates!
