@@ -95,7 +95,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits_s210520';
+    fLname = 'descrFits_s210721';
+    #fLname = 'descrFits_s210520';
     #fLname = 'descrFits_s210304';
 
     if joint==True:
@@ -202,7 +203,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
 if __name__ == '__main__':
 
     data_loc = '/users/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/LGN/sach/structures/';
-    rvcBase = 'rvcFits_210520'
+    #rvcBase = 'rvcFits_210520'
+    rvcBase = 'rvcFits_210721'
 
     fracSig = 0; # should be unconstrained, per Tony (21.05.19) for LGN fits
 

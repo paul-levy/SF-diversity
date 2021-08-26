@@ -47,69 +47,183 @@ source activate lcv-python
 ###   
 ########
 
-for run in {1..89} # 56
-do
-  #######
-  ### Start 21.03.04 run
-  #######
+EXP_DIR=$1
+RVC_FIT=$2
+DESCR_FIT=$3
 
-  # V1/ -- vec F1 adjustment with full dataset
-  ## RVCs ONLY with NO phase adjustment (instead, vector correction for F1)
-  python descr_fits.py $run 0 V1/ -1 1 0 1 0 0 2 0 0 &
-  #python descr_fits.py $run 1 V1/ -1 1 0 1 0 0 2 0 0 &
-  #python descr_fits.py $run 2 V1/ -1 1 0 1 0 0 2 0 0 &
-  #python descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 0 &
-  # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
-  #python descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 0 & # flex gauss
-  #python descr_fits.py $run 0 V1/ -1 0 0 1 1 1 2 0 0 & # sach DoG
+if [ "$EXP_DIR" = "V1/" ]; then
+  if [[ $RVC_FIT -eq 1 ]]; then
+    ## RVCs ONLY with NO phase adjustment (instead, vector correction for F1)
+    # -- Naka-Rushton
+    for run in {1..40}
+    do
+      python3.6 descr_fits.py $run 0 V1/ -1 1 0 1 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 1 V1/ -1 1 0 1 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 2 V1/ -1 1 0 1 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 0 &
+      # -- Movshon RVC
+      python3.6 descr_fits.py $run 0 V1/ -1 1 0 0 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 1 V1/ -1 1 0 0 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 2 V1/ -1 1 0 0 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 3 V1/ -1 1 0 0 0 0 2 0 0 &
+    done
+    wait
+    for run in {41..81}
+    do
+      python3.6 descr_fits.py $run 0 V1/ -1 1 0 1 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 1 V1/ -1 1 0 1 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 2 V1/ -1 1 0 1 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 0 &
+      # -- Movshon RVC
+      python3.6 descr_fits.py $run 0 V1/ -1 1 0 0 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 1 V1/ -1 1 0 0 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 2 V1/ -1 1 0 0 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 3 V1/ -1 1 0 0 0 0 2 0 0 &
+    done
+    wait
+  fi
+  if [[ $DESCR_FIT -eq 1 ]]; then
+    # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
+    # -- responses derived from vecF1 corrections, if F1 responses
+    for run in {1..40}
+    do
+      python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 0 &# flex gauss
+      python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 2 2 0 0 &# Tony DoG
+      #python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 1 2 0 0 &# sach DoG
+    done
+    wait
+    for run in {41..81}
+    do
+      python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 0 &# flex gauss
+      python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 2 2 0 0 &# Tony DoG
+      #python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 1 2 0 0 &# sach DoG
+    done
+    wait
+  fi
+fi
 
-  # V1_orig/ -- rvc_f0 and descr only
-  #python descr_fits.py $run 0 V1_orig/ -1 0 1 1 0 0 2 0 &
-  # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
-  #python descr_fits.py $run 0 V1_orig/ -1 0 0 1 1 0 2 0 & 
+if [ "$EXP_DIR" = "V1_orig/" ]; then
+  if [[ $RVC_FIT -eq 1 ]]; then
+    for run in {1..30}
+    do
+      # V1_orig/ -- rvc_f0 and descr only
+      python3.6 descr_fits.py $run 0 V1_orig/ -1 0 1 1 0 0 2 0 &
+    done
+    wait
+    for run in {31..59}
+    do
+      # V1_orig/ -- rvc_f0 and descr only
+      python3.6 descr_fits.py $run 0 V1_orig/ -1 0 1 1 0 0 2 0 &
+    done
+    wait
+  fi
+  wait
+  if [[ $DESCR_FIT -eq 1 ]]; then
+    for run in {1..30}
+    do
+      # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
+      python3.6 descr_fits.py $run 0 V1_orig/ -1 0 0 1 1 0 2 0 &# flex. gauss
+      python3.6 descr_fits.py $run 0 V1_orig/ -1 0 0 1 1 2 2 0 &# Tony DoG
+      #python3.6 descr_fits.py $run 0 V1_orig/ -1 0 0 1 1 1 2 0 &# sach DoG
+    done
+    wait
+    for run in {31..59}
+    do
+      # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
+      python3.6 descr_fits.py $run 0 V1_orig/ -1 0 0 1 1 0 2 0 &# flex. gauss
+      python3.6 descr_fits.py $run 0 V1_orig/ -1 0 0 1 1 2 2 0 &# Tony DoG
+      #python3.6 descr_fits.py $run 0 V1_orig/ -1 0 0 1 1 1 2 0 &# sach DoG
+    done
+    wait
+  fi
+fi
 
-  # altExp/ -- rvc_f0 and descr only
-  #python descr_fits.py $run 0 altExp/ -1 0 1 1 0 0 2 0 &
-  # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
-  #python descr_fits.py $run 0 altExp/ -1 0 0 1 1 0 2 0 & 
+if [ "$EXP_DIR" = "altExp/" ]; then
+  if [[ $RVC_FIT -eq 1 ]]; then
+    for run in {1..8}
+    do
+      # altExp/ -- rvc_f0 and descr only
+      python3.6 descr_fits.py $run 0 altExp/ -1 0 1 1 0 0 2 0 &
+    done
+    wait
+  fi
+  wait
+  if [[ $DESCR_FIT -eq 1 ]]; then
+    for run in {1..8}
+    do
+      # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
+      python3.6 descr_fits.py $run 0 altExp/ -1 0 0 1 1 0 2 0 &# flex. gauss
+      python3.6 descr_fits.py $run 0 altExp/ -1 0 0 1 1 2 2 0 &# Tony DoG
+      #python3.6 descr_fits.py $run 0 altExp/ -1 0 0 1 1 1 2 0 &# sach DoG
+    done
+    wait
+  fi
+fi
 
+if [ "$EXP_DIR" = "LGN/" ]; then
   ## LGN - phase adjustment (will be done iff LGN/ 1; not if LGN/ 0 ) and F1 rvc
-  #python descr_fits.py $run 0 LGN/ 1 0 0 0 0 0 3 1 &
-  #python descr_fits.py $run 0 LGN/ 0 1 0 0 0 0 3 1 &
-  #python descr_fits.py $run 1 LGN/ 0 1 0 0 0 0 3 1 &
-  #python descr_fits.py $run 2 LGN/ 0 1 0 0 0 0 3 1 &
-  #python descr_fits.py $run 3 LGN/ 0 1 0 0 0 0 3 1 &
-  #python descr_fits.py $run 0 LGN/ 0 0 0 0 1 0 2 0 0 & # flex gauss, not joint
-  #python descr_fits.py $run 0 LGN/ 0 0 0 0 1 1 2 0 0 & # sach DoG, not joint
-
-  #######
-  ### END 21.03.04 run
-  #######
-
-  ## LGN - phase adjustment (will be done iff LGN/ 1; not if LGN/ 0 ) and F1 rvc
-  #python descr_fits.py $run 0 LGN/ 1 0 0 0 0 0 3 1 &
-  #python descr_fits.py $run 0 LGN/ 0 1 0 0 0 0 3 1 &
-  #python descr_fits.py $run 1 LGN/ 0 1 0 0 0 0 3 1 &
-  #python descr_fits.py $run 2 LGN/ 0 1 0 0 0 0 3 1 &
-  #python descr_fits.py $run 3 LGN/ 0 1 0 0 0 0 3 1 &
-
-  ## V1 - phase adjustment and F1 rvc
-  #python descr_fits.py $run 0 altExp/ 1 0 0 1 0 0 3 1 # phAdv fits, only; each cell, in turn (not in background)
-  #python descr_fits.py $run 0 V1/ 1 0 0 1 0 0 3 1 & # phAdv fits, only; each cell, in turn (not in background)
-  #python descr_fits.py $run 0 V1/ 0 1 0 1 0 0 3 1 & # without phAdv fits
-  #python descr_fits.py $run 1 V1/ 0 1 0 1 0 0 3 1 &
-  #python descr_fits.py $run 2 V1/ 0 1 0 1 0 0 3 1 &
-  #python descr_fits.py $run 3 V1/ 0 1 0 1 0 0 3 1 & 
-
-  # V1 - descr fits
-  #python descr_fits.py $run 0 V1/ 0 0 0 1 1 0 2 0 &
-  #python descr_fits.py $run 0 altExp/ 1 0 0 1 0 0 2 0
-  #python descr_fits.py $run 0 altExp/ 0 1 0 1 0 0 2 0 &
-  #python descr_fits.py $run 1 altExp/ 0 1 0 1 0 0 2 0 &
-  #python descr_fits.py $run 2 altExp/ 0 1 0 1 0 0 2 0 &
-  #python descr_fits.py $run 3 altExp/ 0 1 0 1 0 0 2 0 &
-  #python descr_fits.py $run 0 altExp/ 0 0 0 1 1 0 2 0 &
-  #python descr_fits.py $run 0 V1_orig/ 0 0 1 1 1 0 2 0 &
-
-  #python descr_fits.py $run 0 altExp/ 0 0 1 1 0 0 1 0 &
-done
+  if [[ $RVC_FIT -eq 1 ]]; then
+    for run in {1..38}
+    do
+      # phase adj
+      python3.6 descr_fits.py $run 0 LGN/ 1 0 0 0 0 0 3 1 &
+    done
+    wait
+    for run in {39..77}
+    do
+      # phase adj
+      python3.6 descr_fits.py $run 0 LGN/ 1 0 0 0 0 0 3 1 &
+    done
+    wait
+  fi
+  if [[ $RVC_FIT -eq 1 ]]; then
+    for run in {1..38}
+    do
+      # RVC (movshon)
+      python3.6 descr_fits.py $run 0 LGN/ 0 1 0 0 0 0 3 1 &
+      python3.6 descr_fits.py $run 1 LGN/ 0 1 0 0 0 0 3 1 &
+      python3.6 descr_fits.py $run 2 LGN/ 0 1 0 0 0 0 3 1 &
+      python3.6 descr_fits.py $run 3 LGN/ 0 1 0 0 0 0 3 1 &
+      # RVC (Naka-Rushton)
+      python3.6 descr_fits.py $run 0 LGN/ 0 1 0 1 0 0 3 1 &
+      python3.6 descr_fits.py $run 1 LGN/ 0 1 0 1 0 0 3 1 &
+      python3.6 descr_fits.py $run 2 LGN/ 0 1 0 1 0 0 3 1 &
+      python3.6 descr_fits.py $run 3 LGN/ 0 1 0 1 0 0 3 1 &
+    done
+    wait
+    for run in {39..77}
+    do
+      # RVC (movshon)
+      python3.6 descr_fits.py $run 0 LGN/ 0 1 0 0 0 0 3 1 &
+      python3.6 descr_fits.py $run 1 LGN/ 0 1 0 0 0 0 3 1 &
+      python3.6 descr_fits.py $run 2 LGN/ 0 1 0 0 0 0 3 1 &
+      python3.6 descr_fits.py $run 3 LGN/ 0 1 0 0 0 0 3 1 &
+      # RVC (Naka-Rushton)
+      python3.6 descr_fits.py $run 0 LGN/ 0 1 0 1 0 0 3 1 &
+      python3.6 descr_fits.py $run 1 LGN/ 0 1 0 1 0 0 3 1 &
+      python3.6 descr_fits.py $run 2 LGN/ 0 1 0 1 0 0 3 1 &
+      python3.6 descr_fits.py $run 3 LGN/ 0 1 0 1 0 0 3 1 &
+    done
+    wait
+  fi
+  if [[ $DESCR_FIT -eq 1 ]]; then
+    for run in {1..38}
+    do
+      # Descr fits (based on Movshon RVCs)
+      python3.6 descr_fits.py $run 0 LGN/ 0 0 0 0 1 0 2 0 1 &# flex gauss, not joint
+      python3.6 descr_fits.py $run 0 LGN/ 0 0 0 0 1 2 2 0 1 &# Tony DoG, not joint (sqrt)
+      #python3.6 descr_fits.py $run 0 LGN/ 0 0 0 0 1 1 2 0 1 &# sach DoG, not joint (sqrt)
+      #python3.6 descr_fits.py $run 0 LGN/ 0 0 0 0 1 1 4 0 1 &# sach DoG, not joint (sach loss)
+    done
+    wait
+    for run in {39..77}
+    do
+      # Descr fits (based on Movshon RVCs)
+      python3.6 descr_fits.py $run 0 LGN/ 0 0 0 0 1 0 2 0 1 &# flex gauss, not joint
+      python3.6 descr_fits.py $run 0 LGN/ 0 0 0 0 1 2 2 0 1 &# Tony DoG, not joint (sqrt)
+      #python3.6 descr_fits.py $run 0 LGN/ 0 0 0 0 1 1 2 0 1 &# sach DoG, not joint (sqrt)
+      #python3.6 descr_fits.py $run 0 LGN/ 0 0 0 0 1 1 4 0 1 &# sach DoG, not joint (sach loss)
+    done
+    wait
+  fi
+fi

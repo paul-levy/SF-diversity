@@ -337,7 +337,7 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
 
   if to_save:
     np.save(data_loc + rvcNameFinal, rvcFits);
-    print('saving rvc fit for cell %d, disp %d' % (cell_num, disp));
+    print('saving rvc fit [%s] for cell %d, disp %d' % (rvcNameFinal, cell_num, disp));
 
   if returnMod:
     return rvc_model, all_opts, all_conGains, adjMeans;

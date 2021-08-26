@@ -15,13 +15,13 @@ source activate lcv-python
 EXP_DIR=$1
 
 if [ "$EXP_DIR" = "V1_BB/" ]; then
-  for run in {1..30}
+  for run in {1..25}
   do
     python plot_basics.py $run V1_BB/ 0 0 &
     python plot_basics.py $run V1_BB/ 0 1 &
   done
   wait
-  for run in {31..58}
+  for run in {26..47}
   do
     python plot_basics.py $run V1_BB/ 0 0 &
     python plot_basics.py $run V1_BB/ 0 1 &

@@ -855,6 +855,8 @@ def compute_f1_byTrial(cellStruct, expInd, whichSpikes=1, binWidth=1e-3):
       Use: Will be used in conjunction with the adjust_f1_byTrial
   '''
   np = numpy;
+
+  stimDur = get_exp_params(expInd).stimDur;
  
   if 'sfm' in cellStruct: 
     data = cellStruct['sfm']['exp']['trial'];
@@ -864,11 +866,11 @@ def compute_f1_byTrial(cellStruct, expInd, whichSpikes=1, binWidth=1e-3):
   # first, make the PSTH for each trial (only extract output [0], which is the psth)
   if whichSpikes == 1:
     try:
-      psth = make_psth(data['spikeTimesGLX']['spikeTimes'], 1e-3, 2)[0];
+      psth = make_psth(data['spikeTimesGLX']['spikeTimes'], binWidth, stimDur)[0]; # CORRECTED ON 21.08.26
     except:
       whichSpikes = 0;
   if whichSpikes == 0:
-    psth = make_psth(data['spikeTimes'], 1e-3, 2)[0];
+    psth = make_psth(data['spikeTimes'], binWidth, stimDur)[0]; # CORRECTED ON 21.08.26
   # then, get the stimulus TF values
   all_tf = np.vstack(data['tf']);
   # with this, we can extract the F1 rates at those TF values
@@ -938,6 +940,7 @@ def adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3, 
           resp_proj = np.multiply(r_byTrial[val_trials, :], np.cos(np.deg2rad(phi_mean) - np.deg2rad(phase_rel_stim)));
 
         adjusted_f1_rate[val_trials, :] = resp_proj;
+          
 
   if toSum:
     # then, sum up the valid components per stimulus component

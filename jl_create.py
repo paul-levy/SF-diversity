@@ -99,7 +99,7 @@ np.save(base_dir + 'jointList_V1_wMods_%s_vT%d_dvT%d' % (suffix, varExplThresh, 
 #expDirs = ['LGN/']
 #expNames = ['dataList.npy']
 expDirs = ['LGN/', 'LGN/sach/'];
-expNames = ['dataList.npy', 'sachData.npy']
+expNames = ['dataList_210721.npy', 'sachData.npy']
 #expDirs = ['LGN/sach/'];
 #expNames = ['sachData.npy']
 
@@ -117,16 +117,16 @@ fitNamesFlat = ['%s_flat_chiSq.npy' % fitBase];
 #dogNames = ['descrFits_s210304_sach_sach.npy'];
 #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
 dogMod = 2; # 1 (sach) or 2 (Tony)
-dogNames = ['descrFits_210520_sqrt_tony.npy', 'descrFits_s210520_sqrt_tony.npy'];
+dogNames = ['descrFits_210721_sqrt_tony.npy', 'descrFits_s210721_sqrt_tony.npy'];
 #dogNames = ['descrFits_210304_sach_sach.npy', 'descrFits_s210304_sach_sach.npy'];
 descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
-descrNames = ['descrFits_210520_sqrt_flex.npy', 'descrFits_s210520_sqrt_flex.npy'];
+descrNames = ['descrFits_210721_sqrt_flex.npy', 'descrFits_s210721_sqrt_flex.npy'];
 #dogNames = ['descrFits_191023_sach_sach.npy'];
 #descrNames = ['descrFits_200507_sqrt_flex.npy'];
 
 #rvcNames = ['rvcFits_191023_pos.npy']; 
 #rvcMods = [0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
-rvcNames = ['rvcFits_210520_pos.npy', 'rvcFits_210520.npy']; 
+rvcNames = ['rvcFits_210721_pos.npy', 'rvcFits_210721.npy']; 
 rvcMods = [0,0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
 #rvcNames = ['rvcFits_210304.npy']; 
 #rvcMods = [0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
@@ -158,8 +158,8 @@ sf_range = [0.01, 10]; # allowed values of 'mu' for fits - see descr_fit.py for 
 jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod)
 
 from datetime import datetime
-suffix = '210518'
-#suffix = datetime.today().strftime('%y%m%d')
+#suffix = '210518'
+suffix = datetime.today().strftime('%y%m%d')
 
 np.save(base_dir + 'jointList_LGN_%s_vT%d_dvT%d' % (suffix, varExplThresh, dog_varExplThresh), jointList)
 
