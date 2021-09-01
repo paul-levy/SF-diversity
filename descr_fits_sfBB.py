@@ -245,7 +245,7 @@ if __name__ == '__main__':
     with mp.Pool(processes = nCpu) as pool:
       # if we're doing as parallel, do NOT save
 
-      fit_perCell = partial(make_descr_fits, fit_rvc=pass_rvc, fit_sf=pass_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig); 
+      fit_perCell = partial(make_descr_fits, fit_rvc=pass_rvc, fit_sf=pass_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig, loss_type=loss_type); 
       fits = zip(*pool.map(fit_perCell, zip(range(start_cell, end_cell+1), dataList['unitName'])));
       rvc_fits, sf_fits = fits; # unpack
 
@@ -276,5 +276,5 @@ if __name__ == '__main__':
         np.save(dataPath + sfNameFinal, sfFits);
 
   else:
-    make_descr_fits(cell_num, fit_rvc=fit_rvc, fit_sf=fit_sf, rvcMod=rvc_mod, sfMod=sf_mod);
+    make_descr_fits(cell_num, fit_rvc=fit_rvc, fit_sf=fit_sf, rvcMod=rvc_mod, sfMod=sf_mod, loss_type=loss_type);
 

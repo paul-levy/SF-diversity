@@ -1980,7 +1980,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
         range_baseline = (0, 3);
     else:
         range_baseline = (0.5 * base_rate, 1.5 * base_rate);
-    range_amp = (0.5 * maxResp, 1.25 * maxResp);
+    range_amp = (0.4 * maxResp, 0.8 * maxResp); # was [0.5, 1.25]
 
     max_sf_index = np.argmax(resps_curr); # what sf index gives peak response?
     mu_init = valSfVals[max_sf_index];
@@ -1992,13 +1992,16 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
     else:
         range_mu = (valSfVals[max_sf_index-1], valSfVals[max_sf_index+1]); # go +-1 indices from center
 
-    log_bw_lo = 0.75; # 0.75 octave bandwidth...
-    log_bw_hi = 2; # 2 octave bandwidth...
-    denom_lo = bw_log_to_lin(log_bw_lo, mu_init)[0]; # get linear bandwidth
-    denom_hi = bw_log_to_lin(log_bw_hi, mu_init)[0]; # get lin. bw (cpd)
+    denom_lo = 0.2; # better to start narrow...
+    denom_hi = 0.7; # ... in order to avoid broad tuning curve which optimizes to flat
     range_denom = (denom_lo, denom_hi); # don't want 0 in sigma 
+    #log_bw_lo = 0.2; # previously, was 0.75 octave bandwidth...
+    #log_bw_hi = 0.7; # previously, was 2 octave bandwidth...
+    #denom_lo = bw_log_to_lin(log_bw_lo, mu_init)[0]; # get linear bandwidth
+    #denom_hi = bw_log_to_lin(log_bw_hi, mu_init)[0]; # get lin. bw (cpd)
+    #range_denom = (denom_lo, denom_hi); # don't want 0 in sigma 
     if fracSig:
-      range_sigmaHigh = (0.2, 4); # allow the fracSig value to go above the bound used for V1, since we adjust if bound is there
+      range_sigmaHigh = (0.2, 0.75); # allow the fracSig value to go above the bound used for V1, since we adjust if bound is there
 
     init_base = random_in_range(range_baseline)[0]; # NOTE addition of [0] to "unwrap" random_in_range value
     init_amp = random_in_range(range_amp)[0];
@@ -2038,7 +2041,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
 
   return init_params
 
-def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=False, gain_reg=0, ref_varExpl=None, veThresh=70, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0):
+def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=False, gain_reg=0, ref_varExpl=None, veThresh=70, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint=True, (and DoGmodel is 1 or 2, i.e. not flexGauss), then we fit assuming
       a fixed ratio for the center-surround gains and [freq/radius]
@@ -2173,7 +2176,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       continue;
 
     ### otherwise, we're really going to fit here! [i.e. if joint is False]
-    #save_all = [];
+    if debug:
+      save_all = [];
     import timeit
 
     for n_try in range(n_repeats):
@@ -2193,7 +2197,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
  
       #pdb.set_trace();
 
-      obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline);
+      obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1);
       try:
         wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
       except:
@@ -2203,7 +2207,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       NLL = wax['fun'];
       params = wax['x'];
 
-      #save_all.append(wax);
+      if debug:
+        save_all.append([wax, init_params]);
 
       if np.isnan(bestNLL[con]) or NLL < bestNLL[con]:
         bestNLL[con] = NLL;
@@ -2213,7 +2218,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         charFreq[con] = dog_charFreq(params, DoGmodel=DoGmodel);
 
   if joint==False: # then we're DONE
-    return bestNLL, currParams, varExpl, prefSf, charFreq, None, None; # placeholding None for overallNLL, params [full list]
+    if debug:
+      return bestNLL, currParams, varExpl, prefSf, charFreq, None, None, save_all; # placeholding None for overallNLL, params [full list]
+    else:
+      return bestNLL, currParams, varExpl, prefSf, charFreq, None, None; # placeholding None for overallNLL, params [full list]
 
   ### NOW, we do the fitting if joint=True
   if joint==True:
@@ -2275,7 +2283,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       charFreq[respConInd] = dog_charFreq(curr_params, DoGmodel=DoGmodel);    
 
     # and NOW, we can return!
-    return bestNLL, currParams, varExpl, prefSf, charFreq, overallNLL, params;
+    if debug:
+      return bestNLL, currParams, varExpl, prefSf, charFreq, overallNLL, params, None; # None should be save_all
+    else:
+      return bestNLL, currParams, varExpl, prefSf, charFreq, overallNLL, params;
 ##
 
 def deriv_gauss(params, stimSf = numpy.logspace(numpy.log10(0.1), numpy.log10(10), 101)):
