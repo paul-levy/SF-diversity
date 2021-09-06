@@ -15,12 +15,12 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_210721';
+dogName = 'descrFits_210901';
 #dogName = 'descrFits_210524';
 #phAdvName = 'phaseAdvanceFits_210524'
-phAdvName = 'phaseAdvanceFits_210721'
-rvcName_f0 = 'rvcFits_210721_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-rvcName_f1 = 'rvcFits_210721';
+phAdvName = 'phaseAdvanceFits_210901'
+rvcName_f0 = 'rvcFits_210901_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f1 = 'rvcFits_210901';
 #rvcName_f0 = 'rvcFits_210524_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 #rvcName_f1 = 'rvcFits_210524';
 
@@ -141,7 +141,7 @@ def phase_advance_fit(cell_num, expInd, data_loc, phAdvName=phAdvName, to_save=1
   else:
     return curr_fit;
 
-def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=1, expName=expName, force_f1=False, rvcMod=0, vecF1=0, returnMod=1, n_repeats=100):
+def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=1, expName=expName, force_f1=False, rvcMod=0, vecF1=0, returnMod=1, n_repeats=25):
   ''' With the corrected response amplitudes, fit the RVC model
       - as of 19.11.07, we will fit non-baseline subtracted responses 
           (F1 have baseline of 0 always, but now we will not subtract baseline from F0 responses)
@@ -346,7 +346,7 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
 
 ### 1.1 RVC fits without adjusted responses (organized like SF tuning)
 
-def fit_RVC_f0(cell_num, data_loc, n_repeats=100, fLname = rvcName_f0, dLname=expName, modelRecov=modelRecov, normType=normType, rvcMod=0, to_save=1, returnDict=0):
+def fit_RVC_f0(cell_num, data_loc, n_repeats=25, fLname = rvcName_f0, dLname=expName, modelRecov=modelRecov, normType=normType, rvcMod=0, to_save=1, returnDict=0): # n_repeats was 100, before 21.09.01
   # TODO: Should replace spikes with baseline subtracted spikes?
   # NOTE: n_repeats not used (19.05.06)
   # normType used iff modelRecv == 1
@@ -455,7 +455,7 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=0):
+def fit_descr_DoG(cell_num, data_loc, n_repeats=25, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=0): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
@@ -514,7 +514,17 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, fo
     descrFits = dict();
   
 
-  # now, get the spikes (adjusted, if needed) and organize for fitting
+  ######
+  ### now, get the spikes (adjusted, if needed) and organize for fitting
+  ######
+  # first, get the set of stimulus values:
+  _, stimVals, valConByDisp, validByStimVal, _ = hf.tabulate_responses(data, expInd);
+  all_disps = stimVals[0];
+  all_cons = stimVals[1];
+
+  nDisps = len(all_disps);
+  nCons = len(all_cons);
+
   # TODO: Add recovery spikes...
   if modelRecov == 1:
     recovSpikes = hf.get_recovInfo(cellStruct, normType)[1];
@@ -529,19 +539,13 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=100, loss_type=3, DoGmodel=1, fo
   # ensure the spikes array is a vector of overall response, not split by component 
   spks_sum = np.array([np.sum(x) for x in spks]);
 
+  # IF we are re-sampling for bootstrapping, that will happen in hf.organize_resp (such that the resampling occurs within each condition separately)
+  # TODO: Put bootstuff here???
   _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True);  
   resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
   base_rate = hf.blankResp(cellStruct, expInd, spks_sum, spksAsRate=True)[0] if which_measure==0 else None;
   
   print('Doing the work, now');
-
-  # first, get the set of stimulus values:
-  _, stimVals, valConByDisp, validByStimVal, _ = hf.tabulate_responses(data, expInd);
-  all_disps = stimVals[0];
-  all_cons = stimVals[1];
-
-  nDisps = len(all_disps);
-  nCons = len(all_cons);
 
   # then, set the default values (NaN for everything)
   bestNLL = np.ones((nDisps, nCons)) * np.nan;
@@ -739,7 +743,7 @@ if __name__ == '__main__':
         
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
-          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=100, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig);
+          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=25, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig); # n_repeats was 100, before 21.09.01
           dogFits = pool.map(descr_perCell, zip(range(start_cell, end_cell+1), dL['unitName']));
 
           print('debug');

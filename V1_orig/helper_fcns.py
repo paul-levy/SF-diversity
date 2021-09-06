@@ -12,6 +12,7 @@ import pdb
 ## (kept)
 # Functions:
 
+# nan_rm - remove NaN from array
 # get_center_con    - given a family and contrast index, returns the contrast level
 # get_num_comps
 # organize_modResp - Organizes measured and model responses 
@@ -41,6 +42,9 @@ import pdb
 # getConstraints     - get list of constraints for optimization
 
 ######
+
+def nan_rm(x):
+   return x[~numpy.isnan(x)];
 
 def get_center_con(family, contrast):
 
@@ -95,9 +99,10 @@ def get_num_comps(con):
 
   return num_comps
 
-def organize_modResp(modResp, expStructure, mask=None):
+def organize_modResp(modResp, expStructure, mask=None, resample=False):
     # 01.18.19 - changed order of SF & CON in arrays to match organize_resp from other experiments
     # the blockIDs are fixed...
+    # - resample: bootstrap resampling -- applies only to rateSfMix/allSfMix
     nFam = 5;
     nCon = 2;
     nCond = 11; # 11 sfCenters for sfMix
@@ -148,8 +153,13 @@ def organize_modResp(modResp, expStructure, mask=None):
                 indCond = numpy.where(expStructure['blockID'][mask] == iB);   
                 if len(indCond[0]) > 0:
                     #print('setting up ' + str((iE, iW, iC)) + ' with ' + str(len(indCond[0])) + 'trials');
-                    rateSfMix[iW, iC, conInd] = numpy.nanmean(modResp[mask][indCond]);
-                    allSfMix[iW, iC, conInd, 0:len(indCond[0])] = modResp[mask][indCond];
+                    if resample:
+                      non_nan = nan_rm(modResp[mask][indCond]);
+                      resps = numpy.random.choice(non_nan, len(non_nan));
+                    else:
+                      resps = modResp[mask][indCond];
+                    rateSfMix[iW, iC, conInd] = numpy.nanmean(resps);
+                    allSfMix[iW, iC, conInd, 0:len(resps])] = resps;
                     iC = iC+1;
                  
     return rateOr, rateCo, rateSfMix, allSfMix;

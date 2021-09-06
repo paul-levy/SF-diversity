@@ -24,6 +24,7 @@ import warnings
 # nan_rm        - remove nan from array
 # bw_lin_to_log
 # bw_log_to_lin
+# resample_array  - resample array if specified
 # sf_highCut      - compute the (high) SF at which the response falls to X (a fraction) of the peak
 # sf_com          - model-free calculation of the tuning curve's center-of-mass
 # sf_var          - model-free calculation of the variance in the measured responses
@@ -214,6 +215,15 @@ def bw_log_to_lin(log_bw, pref_sf):
     lin_bw = more_half - less_half;
     
     return lin_bw, sf_range
+
+def resample_array(resample, arr):
+  # NOTE: by default, this allows resampling with replacement
+  if resample:
+    non_nan = nan_rm(arr);
+    curr_resps = numpy.random.choice(non_nan, len(non_nan));
+    return curr_resps;
+  else:
+    return arr;                  
 
 def sf_highCut(params, sfMod, frac, sfRange=(0.1, 10), baseline_sub=None):
   ''' given a fraction of peak response (e.g. 0.5 or 1/e or...), compute the frequency (above the peak)
@@ -1236,10 +1246,11 @@ def polar_vec_mean(amps, phases, sem=0):
 
    return all_r, all_phi, all_r_std, all_phi_var;
 
-def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, all_trials=0):
+def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3, all_trials=0, resample=False):
   ''' for a given cell and condition or set of conditions, compute the mean amplitude and phase
       also return the temporal frequencies which correspond to each condition
       if all_trials=1, then return the individual trial responses (i.e. not just avg over all repeats for a condition)
+      - if resample==True, then we'll resample the trials to create a bootstrap set of responses/trials
   '''
   stimDur = get_exp_params(expInd).stimDur;
 
@@ -1272,6 +1283,10 @@ def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3,
       # compute the fourier amplitudes
       psth_val, _ = make_psth(data['spikeTimes'][val_trials], binWidth=psth_binWidth, stimDur=stimDur);
       _, rel_amp, full_fourier = spike_fft(psth_val, curr_tf, stimDur)
+
+      #if resample: # COULD make this as part of resample_array function (or separate function)...but for now, it lives here (21.09)
+      #  new_inds = numpy.random.randint(0, len(rel_amp), len(rel_amp));
+      #  rel_amp, ph_rel_stim, curr_tf = rel_amp[new_inds], ph_rel_stim[rel_inds], curr_tf[rel_inds]
 
       if disp == 0:
         # compute mean, gather
@@ -3492,7 +3507,7 @@ def get_isolated_responseAdj(data, trials, adjByTrial):
 
 ##
 
-def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False, modsAsRate=False):
+def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False, modsAsRate=False, resample=False):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
         (ii) all_disps, all_cons, all_sfs - i.e. the stimulus conditions of the experiment
@@ -3596,10 +3611,10 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                 if np.all(np.unique(valid_tr) == False):
                     continue;
                     
-                respMean[d, sf, con] = np.mean(respToUse[valid_tr]/respDiv);
-                respStd[d, sf, con] = np.std(respToUse[valid_tr]/respDiv);
-                #respMean[d, sf, con] = np.mean(data['spikeCount'][valid_tr]/stimDur);
-                #respStd[d, sf, con] = np.std((data['spikeCount'][valid_tr]/stimDur));
+                curr_resps = resample_array(resample, respToUse[valid_tr]); # will just be respToUse[valid_tr] if resample==0
+
+                respMean[d, sf, con] = np.mean(curr_resps/respDiv);
+                respStd[d, sf, con] = np.std(curr_resps/respDiv);
                 
                 curr_pred = 0;
                 curr_var = 0; # variance (std^2) adds
@@ -3616,10 +3631,10 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                     if np.all(np.unique(val_tr) == False):
                         continue; # empty ....
                     
-                    curr_pred = curr_pred + np.mean(respToUse[val_tr]/respDiv);
-                    curr_var = curr_var + np.var(respToUse[val_tr]/respDiv);
-                    #curr_pred = curr_pred + np.mean(data['spikeCount'][val_tr]/stimDur);
-                    #curr_var = curr_var + np.var(data['spikeCount'][val_tr]/stimDur);
+                    curr_resps = resample_array(resample, respToUse[val_tr]); # will just be the array if resample==0
+
+                    curr_pred = curr_pred + np.mean(curr_resps/respDiv);
+                    curr_var = curr_var + np.var(curr_resps/respDiv);
                     
                 predMean[d, sf, con] = curr_pred;
                 predStd[d, sf, con] = np.sqrt(curr_var);
@@ -3630,7 +3645,9 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                       divFactor = 1;
                     else: # default behavior
                       divFactor = stimDur;
-                    modRespOrg[d, sf, con, 0:nTrCurr] = np.divide(modResp[valid_tr], divFactor);
+ 
+                    curr_modResp = resample_array(resample, modResp[valid_tr]); # will just be the array if resample==0
+                    modRespOrg[d, sf, con, 0:nTrCurr] = np.divide(curr_modResp, divFactor);
 
             if np.any(~np.isnan(respMean[d, :, con])):
                 if ~np.isnan(np.nanmean(respMean[d, :, con])):
@@ -3684,10 +3701,12 @@ def organize_adj_responses(data, rvcFits, expInd, vecF1=0):
      
   return adjResps;
 
-def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False):
+def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, resample=False):
     ''' organizes the responses by condition given spikes, experiment structure, and expInd
         mask will be None OR list of trials to consider (i.e. trials not in mask/where mask is false are ignored)
         - respsAsRate: are "spikes" already in rates? if yes, pass in "True"; otherwise, we'll divide by stimDur to get rate
+        - resample: if True, we'll resample the data to create a bootstrapped set of data
+        -- NOTE: resample applies only to rateSfMix and allSfMix 
     '''
     # the blockIDs are fixed...
     exper = get_exp_params(expInd);
