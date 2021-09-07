@@ -15,12 +15,12 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_210901';
+dogName = 'descrFits_210907';
 #dogName = 'descrFits_210524';
 #phAdvName = 'phaseAdvanceFits_210524'
 phAdvName = 'phaseAdvanceFits_210901'
-rvcName_f0 = 'rvcFits_210901_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-rvcName_f1 = 'rvcFits_210901';
+rvcName_f0 = 'rvcFits_210907_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f1 = 'rvcFits_210907';
 #rvcName_f0 = 'rvcFits_210524_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 #rvcName_f1 = 'rvcFits_210524';
 
@@ -455,13 +455,43 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats=25, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=0): # n_repeats was 100, before 21.09.01
+def fit_descr_empties(nDisps, nCons, nParam, joint=False, nBoots=1):
+  ''' Just create the empty numpy arrays that we'll fill up 
+      -- TODO: Do I need this control statement or can it be cleaned up?
+  '''
+  nBoots = 1 if nBoots <= 0 else nBoots;
+
+  ## Yes, I'm pre-pending the nBoots dimensions, but if it's one, we'll use np.squeeze at the end to remove that
+  # Set the default values (NaN for everything)
+  bestNLL = np.ones((nBoots, nDisps, nCons)) * np.nan;
+  currParams = np.ones((nBoots, nDisps, nCons, nParam)) * np.nan;
+  varExpl = np.ones((nBoots, nDisps, nCons)) * np.nan;
+  prefSf = np.ones((nBoots, nDisps, nCons)) * np.nan;
+  charFreq = np.ones((nBoots, nDisps, nCons)) * np.nan;
+  if joint==True:
+    totalNLL = np.ones((nBoots, nDisps, )) * np.nan;
+    paramList = np.ones((nBoots, nDisps, ), dtype='O') * np.nan;
+  else:
+    totalNLL = None;
+    paramList = None;
+
+  return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList;
+
+ 
+def fit_descr_DoG(cell_num, data_loc, n_repeats=5, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=5): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
       For asMulti fits (i.e. when done in parallel) we do the following to reduce multiple loading of files/race conditions
       --- we'll pass in [cell_num, cellName] as cell_num [to avoid loading datalist]
+   
+      If nBoots=0 (default, we just fit once to the original data, i.e. not resamples)
   '''
+  # Set up whether we will bootstrap straight away
+  resample = False if nBoots <= 0 else True;
+  nBoots = 1 if nBoots <= 0 else nBoots;
+
+
   if DoGmodel == 0:
     nParam = 5;
   else:
@@ -508,12 +538,11 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=25, loss_type=3, DoGmodel=1, for
   prevFits = None; # default to none, but we'll try to load previous fits...
   if os.path.isfile(data_loc + fLname):
     descrFits = hf.np_smart_load(data_loc + fLname);
-    if cell_num-1 in descrFits:
+    if cell_num-1 in descrFits and not resample: # again, if we are resampling, we do NOT want previous fits
       prevFits = descrFits[cell_num-1];
   else:
     descrFits = dict();
   
-
   ######
   ### now, get the spikes (adjusted, if needed) and organize for fitting
   ######
@@ -540,71 +569,88 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=25, loss_type=3, DoGmodel=1, for
   spks_sum = np.array([np.sum(x) for x in spks]);
 
   # IF we are re-sampling for bootstrapping, that will happen in hf.organize_resp (such that the resampling occurs within each condition separately)
-  # TODO: Put bootstuff here???
-  _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True);  
-  resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
-  base_rate = hf.blankResp(cellStruct, expInd, spks_sum, spksAsRate=True)[0] if which_measure==0 else None;
-  
-  print('Doing the work, now');
+  # First, set the default values (NaN for everything)
+  bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramlist = fit_descr_empties(nDisps, nCons, nParam, joint, nBoots);
 
-  # then, set the default values (NaN for everything)
-  bestNLL = np.ones((nDisps, nCons)) * np.nan;
-  currParams = np.ones((nDisps, nCons, nParam)) * np.nan;
-  varExpl = np.ones((nDisps, nCons)) * np.nan;
-  prefSf = np.ones((nDisps, nCons)) * np.nan;
-  charFreq = np.ones((nDisps, nCons)) * np.nan;
-  if joint==True:
-    totalNLL = np.ones((nDisps, )) * np.nan;
-    paramList = np.ones((nDisps, ), dtype='O') * np.nan;
+  #import cProfile
 
-  ### here is where we do the real fitting!
-  for d in range(nDisps): # works for all disps
-    # a separate fitting call for each dispersion
-    if debug:
-      nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1)
-      pdb.set_trace();
-    else:
-      nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig)
+  for boot_i in range(nBoots):
 
-    # before we update stuff - load again IF we are saving within this function (in case some other run has saved/made changes)
-    if os.path.isfile(data_loc + fLname) and to_save:
-      #print('reloading descrFits...');
-      descrFits = hf.np_smart_load(data_loc + fLname);
-      if cell_num-1 in descrFits:
-        bestNLL = descrFits[cell_num-1]['NLL'];
-        currParams = descrFits[cell_num-1]['params'];
-        varExpl = descrFits[cell_num-1]['varExpl'];
-        prefSf = descrFits[cell_num-1]['prefSf'];
-        charFreq = descrFits[cell_num-1]['charFreq'];
-        if joint==True:
-          totalNLL = descrFits[cell_num-1]['totalNLL'];
-          paramList = descrFits[cell_num-1]['paramList'];
+    print('iteration %d' % boot_i);
+
+    _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=resample);
+    resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
+    base_rate = hf.blankResp(cellStruct, expInd, spks_sum, spksAsRate=True)[0] if which_measure==0 else None;
+
+    print('Doing the work, now');
+
+    ### here is where we do the real fitting!
+    for d in range(nDisps): # works for all disps
+      # a separate fitting call for each dispersion
+      #pr = cProfile.Profile()
+      #pr.enable()
+
+      if debug:
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1)
       else:
-        descrFits[cell_num-1] = dict();
-    else:
-      descrFits[cell_num-1] = dict();
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig)
 
-    # now, what we do, depends on if joint or not
-    if joint==True:
-      if np.isnan(totalNLL[d]) or totNLL < totalNLL[d]: # then UPDATE!
-        totalNLL[d] = totNLL;
-        paramList[d] = totPrm;
-        bestNLL[d, :] = nll;
-        currParams[d, :, :] = prms;
-        varExpl[d, :] = vExp;
-        prefSf[d, :] = pSf;
-        charFreq[d, :] = cFreq;
-    else:
-      # must check separately for each contrast
-      for con in reversed(range(nCons)):
-        if con not in valConByDisp[d]:
-          continue;
-        if np.isnan(bestNLL[d, con]) or nll[con] < bestNLL[d, con]: # then UPDATE!
-          bestNLL[d, con] = nll[con];
-          currParams[d, con, :] = prms[con];
-          varExpl[d, con] = vExp[con];
-          prefSf[d, con] = pSf[con];
-          charFreq[d, con] = cFreq[con];
+      #pr.disable()
+      #pr.print_stats(sort='time')
+      #pdb.set_trace();
+
+      # before we update stuff - load again IF we are saving within this function (in case some other run has saved/made changes)
+      if os.path.isfile(data_loc + fLname) and to_save:
+        descrFits = hf.np_smart_load(data_loc + fLname);
+        if cell_num-1 in descrFits and not resample: # i.e. if we are not resampling, then that means it's just a one-off, real fit; otherwise, we don't want to do this!
+          bestNLL = descrFits[cell_num-1]['NLL'];
+          currParams = descrFits[cell_num-1]['params'];
+          varExpl = descrFits[cell_num-1]['varExpl'];
+          prefSf = descrFits[cell_num-1]['prefSf'];
+          charFreq = descrFits[cell_num-1]['charFreq'];
+          if joint==True:
+            totalNLL = descrFits[cell_num-1]['totalNLL'];
+            paramList = descrFits[cell_num-1]['paramList'];
+        else:
+          descrFits[cell_num-1] = dict();
+      elif to_save and not resample: # otherwise, we won't use this...
+        descrFits[cell_num-1] = dict();
+
+      ###
+      # now, what we do depends on:
+      # -- bootstrap? (i.e. if resample, we ALWAYS replace)
+      # -- joint?
+      if joint==True:
+        if resample or np.isnan(totalNLL[d]) or totNLL < totalNLL[d]: # then UPDATE!
+          totalNLL[boot_i, d] = totNLL;
+          paramList[boot_i, d] = totPrm;
+          bestNLL[boot_i, d, :] = nll;
+          currParams[boot_i, d, :, :] = prms;
+          varExpl[boot_i, d, :] = vExp;
+          prefSf[boot_i, d, :] = pSf;
+          charFreq[boot_i, d, :] = cFreq;
+      else:
+        # must check separately for each contrast
+        for con in reversed(range(nCons)):
+          if con not in valConByDisp[d]:
+            continue;
+          if resample or np.isnan(bestNLL[d, con]) or nll[con] < bestNLL[d, con]: # then UPDATE!
+            bestNLL[boot_i, d, con] = nll[con];
+            currParams[boot_i, d, con, :] = prms[con];
+            varExpl[boot_i, d, con] = vExp[con];
+            prefSf[boot_i, d, con] = pSf[con];
+            charFreq[boot_i, d, con] = cFreq[con];
+
+    # After any possible bootstrap iterations, we pack everything up and get ready to return the results
+    if not resample: # i.e. not bootstrap, then we'll call np.squeeze to remove the extra 0th dimension
+      bestNLL = np.squeeze(bestNLL, axis=0);
+      currParams = np.squeeze(currParams, axis=0);
+      varExpl = np.squeeze(varExpl, axis=0);
+      prefSf = np.squeeze(prefSf, axis=0);
+      charFreq = np.squeeze(charFreq, axis=0);
+      if joint==True:
+        paramList = np.squeeze(paramList, axis=0);
+        totalNLL = np.squeeze(totalNLL, axis=0);
 
     curr_fit = dict();
     curr_fit['NLL'] = bestNLL;
@@ -617,13 +663,13 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=25, loss_type=3, DoGmodel=1, for
       curr_fit['paramList'] = paramList;
 
     # update the previous fit, and go back for the next dispersion
-    prevFits = curr_fit;
+    prevFits = curr_fit if not resample else None;
     # -- and save, if that's what we're doing here
-    if to_save:
+    if to_save and boot_i == nBoots-1: # i.e. this is the final boot iteration
       descrFits[cell_num-1] = curr_fit;
       np.save(data_loc + fLname, descrFits);
       print('saving for cell ' + str(cell_num));
-    
+
   # after all dispersions, return the current fit
   if returnDict:
     return curr_fit;
@@ -743,7 +789,7 @@ if __name__ == '__main__':
         
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
-          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=25, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig); # n_repeats was 100, before 21.09.01
+          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=5, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig); # n_repeats was 100, before 21.09.01
           dogFits = pool.map(descr_perCell, zip(range(start_cell, end_cell+1), dL['unitName']));
 
           print('debug');
@@ -771,7 +817,6 @@ if __name__ == '__main__':
             rvcFitNPY = hf.np_smart_load(dataPath + rvcNameFinal);
           else:
             rvcFitNPY = dict();
-          
           for iii, rvcFit in enumerate(rvcFits):
             rvcFitNPY[iii] = rvcFit;
           np.save(dataPath + rvcNameFinal, rvcFitNPY)

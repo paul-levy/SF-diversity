@@ -2454,17 +2454,16 @@ def flexible_Gauss_np(params, stim_sf, minThresh=0.1, fracSig=1):
     if fracSig:
       sigmaHigh = sigmaHigh*params[3]; # i.e. the true sigmaHigh value is params[4]*params[3]
 
-    np = numpy;
     # Tuning function
-    sf0   = np.divide(stim_sf, sfPref);
+    sf0   = numpy.divide(stim_sf, sfPref);
 
-    sigma = np.full_like(sf0, sigmaLow);
-    whereSigHigh = np.where(sf0>1);
+    sigma = numpy.full_like(sf0, sigmaLow);
+    whereSigHigh = numpy.where(sf0>1);
     sigma[whereSigHigh] = sigmaHigh;
 
-    shape = np.exp(-np.divide(np.square(np.log(sf0)), 2*np.square(sigma)))
+    shape = numpy.exp(-numpy.divide(numpy.square(numpy.log(sf0)), 2*numpy.square(sigma)))
                 
-    return np.maximum(minThresh, respFloor + respRelFloor*shape);
+    return numpy.maximum(minThresh, respFloor + respRelFloor*shape);
 
 def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1, baseline=0, fracSig=1):
   ''' returns only pred_spikes; 0 is flexGauss.; 1 is DoG sach; 2 is DoG (tony)
@@ -2472,7 +2471,6 @@ def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1, baseline=0, fracSig=
       --- i.e. if we use it, we're simply adding the baseline response to the data, so the model fit is on top of that
   '''
   if DoGmodel == 0:
-    #pred_spikes = flexible_Gauss(params, stim_sf=stim_sf, minThresh=minThresh);
     pred_spikes = flexible_Gauss_np(params, stim_sf=stim_sf, minThresh=minThresh, fracSig=fracSig);
   elif DoGmodel == 1:
     pred_spikes, _ = DoGsach(*params, stim_sf=stim_sf, baseline=baseline);
@@ -2488,7 +2486,6 @@ def get_rvcResp(params, curr_cons, rvcMod):
   elif rvcMod == 1 or rvcMod == 2:
     pred_spikes = naka_rushton(curr_cons, params);
   return pred_spikes;
-
 
 ##################################################################
 ##################################################################
@@ -3754,10 +3751,10 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, re
       # TODO: handle non-"none" mask in v1_hf.organize_modResp!
       v1_dir = exper.dir.replace('/', '.');
       v1_hf = il.import_module(v1_dir + 'helper_fcns');
-      _, _, rateSfMix, allSfMix = v1_hf.organize_modResp(spikes, data, mask);
+      _, _, rateSfMix, allSfMix = v1_hf.organize_modResp(spikes, data, mask, resample=resample);
     else:
       # NOTE: we are getting the modRespOrg output of tabulate_responses, and ensuring the spikes are treated as rates (or raw counts) based on how they are passed in here
-      allSfMix  = tabulate_responses(expStructure, expInd, spikes, mask, modsAsRate = respsAsRate)[4];
+      allSfMix  = tabulate_responses(expStructure, expInd, spikes, mask, modsAsRate = respsAsRate, resample=resample)[4];
       rateSfMix = numpy.nanmean(allSfMix, -1);
 
     return rateOr, rateCo, rateSfMix, allSfMix;  
