@@ -6,7 +6,7 @@ from scipy.stats.mstats import gmean
 from scipy.stats import ks_2samp, kstest, linregress
 import itertools
 
-#'''
+'''
 ########################
 #### V1
 ########################
@@ -87,8 +87,8 @@ np.save(base_dir + 'jointList_V1_wMods_%s_vT%d_dvT%d' % (suffix, varExplThresh, 
 ########################
 #### END V1
 ########################
-#'''
 '''
+#'''
 
 ########################
 #### LGN
@@ -148,8 +148,8 @@ jointList = []; # we'll pack dictionaries in a list...
 #### these are now defaults in hf.jl_create - but here, nonetheless, for reference!
 
 # any parameters we need for analysis below?
-varExplThresh = 70; # i.e. only include if the fit explains >X (e.g. 75)% variance
-dog_varExplThresh = 70; # i.e. only include if the fit explains >X (e.g. 75)% variance
+varExplThresh = 60; # i.e. only include if the fit explains >X (e.g. 75)% variance
+dog_varExplThresh = 60; # i.e. only include if the fit explains >X (e.g. 75)% variance
 
 sf_range = [0.01, 10]; # allowed values of 'mu' for fits - see descr_fit.py for details
 
@@ -163,4 +163,4 @@ suffix = datetime.today().strftime('%y%m%d')
 
 np.save(base_dir + 'jointList_LGN_%s_vT%d_dvT%d' % (suffix, varExplThresh, dog_varExplThresh), jointList)
 
-'''
+#'''

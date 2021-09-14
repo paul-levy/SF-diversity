@@ -48,7 +48,7 @@ zSub = 1; # are we loading fits that were fit to responses adjusted s.t. the low
 #######
 
 
-fLname = 'descrFits_s210509';
+fLname = 'descrFits_s210721';
 #fLname = 'descrFits_s210304';
 if sf_loss_type == 1:
   loss_str = '_poiss';
@@ -70,7 +70,8 @@ descrFits = helper_fcns.np_smart_load(dataPath + fLname_full);
 descrFits = descrFits[which_cell-1]; # just get this cell
 
 rvcSuff = helper_fcns.rvc_mod_suff(rvcMod);
-rvcBase = 'rvcFits_210304';
+rvcBase = 'rvcFits_210721';
+#rvcBase = 'rvcFits_210304';
 rvcFits = helper_fcns.np_smart_load(dataPath + helper_fcns.rvc_fit_name(rvcBase, rvcMod));
 rvcFits = rvcFits[which_cell-1];
 

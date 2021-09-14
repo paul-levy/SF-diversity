@@ -44,17 +44,17 @@ LOSS_TYPE=${3:=2}
 if [ "$EXP_DIR" = "V1/" ]; then
   for run in {1..45}
   do 
-    python3.6 plot_descr.py $run V1/ $DOG_MOD 2 0 -1 1 1 &
+    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE 0 -1 1 1 &
   done
   wait
   for run in {46..81}
   do 
-    python3.6 plot_descr.py $run V1/ $DOG_MOD 2 0 -1 1 1 &
+    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE 0 -1 1 1 &
   done
   wait
   #for run in {37..56}
   #do 
-  #  python3.6 plot_descr.py $run V1/ $DOG_MOD 2 0 -1 1 1 &
+  #  python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE 0 -1 1 1 &
   #done
 fi
 if [ "$EXP_DIR" = "LGN/" ]; then
@@ -76,23 +76,23 @@ fi
 if [ "$EXP_DIR" = "V1_orig/" ]; then
   for run in {1..20}
   do 
-    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD 2 0 0 1 1 &
+    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD $LOSS_TYPE 0 0 1 1 &
   done
   wait
   for run in {21..40}
   do 
-    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD 2 0 0 1 1 &
+    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD $LOSS_TYPE 0 0 1 1 &
   done
   wait
   for run in {41..59}
   do 
-    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD 2 0 0 1 1 &
+    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD $LOSS_TYPE 0 0 1 1 &
   done
  fi
 if [ "$EXP_DIR" = "altExp/" ]; then
   for run in {1..8}
   do 
-    python3.6 plot_descr.py $run altExp/ $DOG_MOD 2 0 0 1 1 &
+    python3.6 plot_descr.py $run altExp/ $DOG_MOD $LOSS_TYPE 0 0 1 1 &
   done
 fi
 
