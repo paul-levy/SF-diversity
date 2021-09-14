@@ -27,9 +27,10 @@
 #       3 - poiss [was previously default]
 #       4 - Sach sum{[(exp-obs)^2]/[k+sigma^2]} where
 #           k := 0.01*max(obs); sigma := measured variance of the response
-#   11 - joint fitting (0 - no; 1 - yes) //see hf.dog_fit for details
-#   [12 - phase direction (pos or neg)]; default is pos (1); neg (-1); or NEITHER (0)
-#   [13 - regularization for gain term (>0 means penalize for high gain)] default is 0
+#   11 - bootstrap fits (0 - no; nBoots[>0] - yes) //see hf.dog_fit for details
+#   12 - joint fitting (0 - no; 1 - yes) //see hf.dog_fit for details
+#   [13 - phase direction (pos or neg)]; default is pos (1); neg (-1); or NEITHER (0)
+#   [14 - regularization for gain term (>0 means penalize for high gain)] default is 0
 
 ### GUIDE (as of 19.11.05)
 # V1/ - use dataList_glx.npy, was 35 cells -- now 56 (as of m681)
@@ -57,28 +58,28 @@ if [ "$EXP_DIR" = "V1/" ]; then
     # -- Naka-Rushton
     for run in {1..40}
     do
-      python3.6 descr_fits.py $run 0 V1/ -1 1 0 1 0 0 2 0 0 &
-      python3.6 descr_fits.py $run 1 V1/ -1 1 0 1 0 0 2 0 0 &
-      python3.6 descr_fits.py $run 2 V1/ -1 1 0 1 0 0 2 0 0 &
-      python3.6 descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 0 V1/ -1 1 0 1 0 0 2 0 0 0 &
+      python3.6 descr_fits.py $run 1 V1/ -1 1 0 1 0 0 2 0 0 0 &
+      python3.6 descr_fits.py $run 2 V1/ -1 1 0 1 0 0 2 0 0 0 &
+      python3.6 descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 0 0 &
       # -- Movshon RVC
-      python3.6 descr_fits.py $run 0 V1/ -1 1 0 0 0 0 2 0 0 &
-      python3.6 descr_fits.py $run 1 V1/ -1 1 0 0 0 0 2 0 0 &
-      python3.6 descr_fits.py $run 2 V1/ -1 1 0 0 0 0 2 0 0 &
-      python3.6 descr_fits.py $run 3 V1/ -1 1 0 0 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 0 V1/ -1 1 0 0 0 0 2 0 0 0 &
+      python3.6 descr_fits.py $run 1 V1/ -1 1 0 0 0 0 2 0 0 0 &
+      python3.6 descr_fits.py $run 2 V1/ -1 1 0 0 0 0 2 0 0 0 &
+      python3.6 descr_fits.py $run 3 V1/ -1 1 0 0 0 0 2 0 0 0 &
     done
     wait
     for run in {41..81}
     do
-      python3.6 descr_fits.py $run 0 V1/ -1 1 0 1 0 0 2 0 0 &
-      python3.6 descr_fits.py $run 1 V1/ -1 1 0 1 0 0 2 0 0 &
-      python3.6 descr_fits.py $run 2 V1/ -1 1 0 1 0 0 2 0 0 &
-      python3.6 descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 0 V1/ -1 1 0 1 0 0 2 0 0 0 &
+      python3.6 descr_fits.py $run 1 V1/ -1 1 0 1 0 0 2 0 0 0 &
+      python3.6 descr_fits.py $run 2 V1/ -1 1 0 1 0 0 2 0 0 0 &
+      python3.6 descr_fits.py $run 3 V1/ -1 1 0 1 0 0 2 0 0 0 &
       # -- Movshon RVC
-      python3.6 descr_fits.py $run 0 V1/ -1 1 0 0 0 0 2 0 0 &
-      python3.6 descr_fits.py $run 1 V1/ -1 1 0 0 0 0 2 0 0 &
-      python3.6 descr_fits.py $run 2 V1/ -1 1 0 0 0 0 2 0 0 &
-      python3.6 descr_fits.py $run 3 V1/ -1 1 0 0 0 0 2 0 0 &
+      python3.6 descr_fits.py $run 0 V1/ -1 1 0 0 0 0 2 0 0 0 &
+      python3.6 descr_fits.py $run 1 V1/ -1 1 0 0 0 0 2 0 0 0 &
+      python3.6 descr_fits.py $run 2 V1/ -1 1 0 0 0 0 2 0 0 0 &
+      python3.6 descr_fits.py $run 3 V1/ -1 1 0 0 0 0 2 0 0 0 &
     done
     wait
   fi
@@ -87,16 +88,16 @@ if [ "$EXP_DIR" = "V1/" ]; then
     # -- responses derived from vecF1 corrections, if F1 responses
     for run in {1..40}
     do
-      python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 0 &# flex gauss
-      python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 2 2 0 0 &# Tony DoG
-      #python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 1 2 0 0 &# sach DoG
+      python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 0 0 & # flex gauss
+      python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 2 2 0 0 0 & # Tony DoG
+      #python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 1 2 0 0 0 & # sach DoG
     done
     wait
     for run in {41..81}
     do
-      python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 0 &# flex gauss
-      python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 2 2 0 0 &# Tony DoG
-      #python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 1 2 0 0 &# sach DoG
+      python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 0 2 0 0 0 & # flex gauss
+      python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 2 2 0 0 0 & # Tony DoG
+      #python3.6 descr_fits.py $run 0 V1/ -1 0 0 1 1 1 2 0 0 0 & # sach DoG
     done
     wait
   fi

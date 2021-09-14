@@ -1284,9 +1284,9 @@ def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3,
       psth_val, _ = make_psth(data['spikeTimes'][val_trials], binWidth=psth_binWidth, stimDur=stimDur);
       _, rel_amp, full_fourier = spike_fft(psth_val, curr_tf, stimDur)
 
-      #if resample: # COULD make this as part of resample_array function (or separate function)...but for now, it lives here (21.09)
-      #  new_inds = numpy.random.randint(0, len(rel_amp), len(rel_amp));
-      #  rel_amp, ph_rel_stim, curr_tf = rel_amp[new_inds], ph_rel_stim[rel_inds], curr_tf[rel_inds]
+      if resample: # COULD make this as part of resample_array function (or separate function)...but for now, it lives here (21.09.13)
+        new_inds = numpy.random.randint(0, len(rel_amp), len(rel_amp));
+        rel_amp, ph_rel_stim, curr_tf = rel_amp[new_inds], ph_rel_stim[rel_inds], curr_tf[rel_inds]
 
       if disp == 0:
         # compute mean, gather
@@ -1466,13 +1466,16 @@ def naka_rushton(con, params):
 
     return base + gain*np.divide(np.power(con, expon), np.power(con, expon*sExp) + np.power(c50, expon*sExp));
 
-def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=False, prevFits=None):
+def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=False, prevFits=None, cond=None):
    ''' Given the mean amplitude of responses (by contrast value) over a range of contrasts, compute the model
        fit which describes the response amplitude as a function of contrast as described in Eq. 3 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
-       Optionally, can include a measure of variability in each response to perform weighted least squares
-       Optionally, can include mod = 0 (as above) or 1 (Naka-Rushton) or 2 (Peirce 2007 modification of Naka-Rushton)
+       -- Optionally, can include a measure of variability in each response to perform weighted least squares
+       -- Optionally, can include mod = 0 (as above) or 1 (Naka-Rushton) or 2 (Peirce 2007 modification of Naka-Rushton)
+       -- Optional: cond (will be [disp, sf] tuple, e.g. (0, 3)...), only used during fit_rvc_f0 calls
        RETURNS: rvc_model (the model equation), list of the optimal parameters, and the contrast gain measure
+         OR
+                the above, but packaged as a dictionary
        Vectorized - i.e. accepts arrays of amp/con arrays
    '''
 
@@ -1513,9 +1516,17 @@ def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=False, 
        best_loss = 1e6; # start with high value
        best_params = []; conGain = [];
      else: # load the previous best_loss/params/conGain
-       best_loss = prevFits['loss'][i];
-       best_params = prevFits['params'][i];
-       conGain = prevFits['conGain'][i];
+       if n_amps == 1: # then this is fit_rvc_f0, organized differently
+         best_loss = prevFits['loss'][cond];
+         best_params = prevFits['params'][cond];
+         conGain = prevFits['conGain'][cond];
+       else:
+         best_loss = prevFits['loss'][i];
+         best_params = prevFits['params'][i];
+         conGain = prevFits['conGain'][i];
+       # make sure that the value is not None, and replace with an arbitrarily large value, if so
+       if np.isnan(best_loss):
+         best_loss = 1e6; # We don't want a NaN loss
 
      for rpt in range(n_repeats):
 
@@ -3320,7 +3331,7 @@ def jl_get_metric_highComp(jointList, metric, whichMod, atLowest, disp=0, extraI
 ##################################################################
 ##################################################################
 
-def blankResp(cellStruct, expInd, spikes=None, spksAsRate=False, returnRates=False):
+def blankResp(cellStruct, expInd, spikes=None, spksAsRate=False, returnRates=False, resample=False):
     ''' optionally, pass in array of spikes (by trial) and flag for whether those spikes are rates or counts over the whole trial
         mu/std_err are ALWAYS rates
     '''
@@ -3337,7 +3348,7 @@ def blankResp(cellStruct, expInd, spikes=None, spksAsRate=False, returnRates=Fal
     else:
       divFactor = get_exp_params(expInd).stimDur;
 
-    blank_tr = spikes[numpy.isnan(tr['con'][0])];
+    blank_tr = resample_array(resample, spikes[numpy.isnan(tr['con'][0])]);
     mu = numpy.mean(numpy.divide(blank_tr, divFactor));
     std_err = sem(numpy.divide(blank_tr, divFactor));
     if returnRates:
@@ -3644,7 +3655,12 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                       divFactor = stimDur;
  
                     curr_modResp = resample_array(resample, modResp[valid_tr]); # will just be the array if resample==0
-                    modRespOrg[d, sf, con, 0:nTrCurr] = np.divide(curr_modResp, divFactor);
+                    try:
+                      if nTrCurr <1 or len(curr_modResp)==0:
+                        print('uhoh: d/sf/con %d/%d/%d -- %d trial(s) [resp=%.2f] out of %d in the data' % (d, sf, con, nTrCurr, curr_modResp, len(val_tr)));
+                      modRespOrg[d, sf, con, 0:nTrCurr] = np.divide(curr_modResp, divFactor);
+                    except:
+                      pass
 
             if np.any(~np.isnan(respMean[d, :, con])):
                 if ~np.isnan(np.nanmean(respMean[d, :, con])):
