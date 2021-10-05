@@ -1,4 +1,5 @@
 import numpy as np
+import itertools
 import helper_fcns as hf
 from scipy.stats import sem
 
@@ -10,6 +11,7 @@ import pdb
 # get_resp_str - return 'dc' or 'f1' depending in which response measure we're using
 # get_mask_base_inds - the answer is in the name! 0 index for mask, 1 for base (when array is [...,2]
 # get_valid_trials - get the list of valid trials corresponding to a particular stimulus condition
+# resample_all_cond - resample an array of arbitrary size, specifying across which axis
 
 ### Organize responses
 # get_baseOnly_resp - get the response to the base stimulus ONLY
@@ -80,6 +82,36 @@ def get_valid_trials(expInfo, maskOn, baseOn, whichCon=None, whichSf=None, baseC
     return val_trials, stimPh, stimTf; # why not stimSf, stimCon -- those are specified in the function call!
   else:
     return val_trials;    
+
+def resample_all_cond(resample, array, axis=-1):
+  ''' Assuming array of responses [X,Y,...,Z], resample accordingly
+      NOTE: We assume we resample at axis = I, then all axes>I are yoked
+      NOTE: This function modifies the input array -- ensure that this is what we want (i.e. copy array beforehand)
+  '''
+  
+  ######
+  ## Yes, the code here is a bit obtuse - however, there are a few tricks which are as follows:
+  ## - 1. We use itertools.product on *[range(x) for x in shape], which translates to itertools.product(range(shape[0]), ..., range(shape[axis]))
+  ## ------ i.e. we can iterate over an arbitrary number of dimensions, all of which are BEFORE the specified axis on which we resample
+  ## - 2. non_nan = ....np.atleast_2d()
+  ## ------ to account for the possibility that axis is NOT the last axis, we want to make sure that we get the # of non_nan entries along that axis, and not any
+  ## ------ further axes (i.e. if axis=3, we don't want to know how many non-nan are in axis=4)
+  ## ------ By expanding to at least 2d, we assure that (..., axis=0) works even if axis=-1
+  ## - 3. preSamp_dim + (X, ) is making into a tuple what we normally pass in as an array [X] to allow the flexibility of preSamp_dim to remain as a tuple
+  ######
+
+  if resample:
+    preSamp_shape = array.shape[0:axis];
+    # This line creates a loop where we iterate through each dimension in the array before "axis"
+    # -- i.e. if array is [4, 3, 2], we will go from [0,0,:] to [3,2,:]
+    for preSamp_dim in itertools.product(*[range(x) for x in preSamp_shape]):
+      non_nan = np.where(~np.any(np.isnan(np.atleast_2d(array[preSamp_dim])), axis=0))[0];
+      new_inds = np.random.choice(non_nan, len(non_nan));
+      array[preSamp_dim + (range(len(non_nan)),)] = array[preSamp_dim + (new_inds,)]
+
+    return array;
+  else:
+    return array;
 
 ### ORGANIZING RESPONSES ###
 
@@ -167,7 +199,7 @@ def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecC
   return [baseResp_dc, baseResp_f1], [baseSummary_dc, baseSummary_f1], unique_pairs;
 
 
-def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=0, onsetTransient=None):
+def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=0, onsetTransient=None, resample=False):
   ''' return the DC, F1 matrices [mean, s.e.m.] for responses to the mask only in the sfBB_* series 
       For programs (e.g. sfBB_varSF) with multiple base conditions, the order returned here is guaranteed
       to be the same as the unique base conditions given in get_baseOnly_resp
@@ -281,7 +313,7 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
                 respMatrixF1[mcI, msI, 1, :] = [vec_means[1][whichInd], vec_means[3][whichInd]];
               except: # we'll end up here if the condition we're analyzing in a "subset of data" case has NO valid trials
                 pass; # we're already pre-populated with NaN
-            else:
+            else: # i.e. for model responses, in particular
               if maskF1 == 1:
                 currF1 = f1_mask[f1Mask_indexing];
               else:

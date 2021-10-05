@@ -20,8 +20,10 @@ import warnings
 
 ### I. basics
 
-# np_smart_load - be smart about using numpy load
-# nan_rm        - remove nan from array
+# np_smart_load   - be smart about using numpy load
+# nan_rm          - remove nan from array
+# sigmoid         - return a sigmoid evaluated at the input values
+# arcmin_to_deg   - go from arcmin to deg (or reverse)                   
 # bw_lin_to_log
 # bw_log_to_lin
 # resample_array  - resample array if specified
@@ -80,7 +82,7 @@ import warnings
 # naka_rushton - naka-rushton form of the response-versus-contrast, with flexibility to evaluate super-saturating RVCs (Peirce 2007)
 # rvc_fit - fit response versus contrast with a model used in Movshon/Kiorpes/+ 2005
 
-# DiffOfGauss - standard difference of gaussians
+# DiffOfGauss - standard difference of gaussians (from Levitt et al, 2001)
 # DoGsach - difference of gaussians as implemented in sach's thesis
 # var_explained - compute the variance explained for a given model fit/set of responses
 # chiSq      - compute modified chiSq loss value as described in Cavanaugh et al
@@ -100,7 +102,11 @@ import warnings
 # get_prefSF - Given a set of parameters for a flexible gaussian fit, return the preferred SF
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
 # fix_params - Intended for parameters of flexible Gaussian, makes all parameters non-negative
-# flexible_Gauss - Descriptive function used to describe/fit SF tuning
+# DEPRECATED - flexible_Gauss - DEPRECATED -- replace with flexible_Gauss_np, as needed
+# flexible_Gauss_np - As above, but written in numpy (rather than math)
+# dog_to_four - For the parker-hawken model, convert the spatial DoG into the Fourier domain
+# parker_hawken_transform - Transform the parameters into their more interpretable DoG-friendly form
+# parker_hawken - Run the d-DoG-S model from Parker & Hawken 1987 and 1988
 # get_descrResp - get the SF descriptive response
 
 #######
@@ -196,6 +202,15 @@ def np_smart_load(file_path, encoding_str='latin1', allow_pickle=True):
 def nan_rm(x):
    return x[~numpy.isnan(x)];
 
+def sigmoid(x):
+  return 1.0 / (1 + numpy.exp(-x));
+
+def arcmin_to_deg(x, reverse=False):
+  if reverse: # i.e. go from deg to arcmin
+    return x*60;
+  else:
+    return x/60;
+
 def bw_lin_to_log( lin_low, lin_high ):
     ''' Given the low/high sf in cpd, returns number of octaves separating the
         two values
@@ -250,27 +265,36 @@ def sf_highCut(params, sfMod, frac, sfRange=(0.1, 10), baseline_sub=None):
   else:
     return match_sf;
 
-def sf_com(resps, sfs):
+def sf_com(resps, sfs, logSF=True):
   ''' model-free calculation of the tuning curve's center-of-mass
       input: resps, sfs (np arrays; sfs in linear cpd)
       output: center of mass of tuning curve (in linear cpd)
   '''
   np = numpy;
-  com = lambda resp, sf: np.dot(np.log2(sf), np.array(resp))/np.sum(resp);
+  if logSF:
+    com = np.dot(np.log2(sfs), np.array(resps))/np.sum(resps);
+  else:
+    com = np.dot(sfs, np.array(resps))/np.sum(resps);
   try:
-    return np.power(2, com(resps, sfs));
+    if logSF:
+      return np.power(2, com);
+    else:
+      return com;
   except:
     return np.nan
 
-def sf_var(resps, sfs, sf_cm):
+def sf_var(resps, sfs, sf_cm, logSF=True):
   ''' model-free calculation of the tuning curve's center-of-mass
       input: resps, sfs (np arrays), and center of mass (sfs, com in linear cpd)
       output: variance measure of tuning curve
   '''
   np = numpy;
-  sfVar = lambda cm, resp, sf: np.dot(resp, np.abs(np.log2(sf)-np.log2(cm)))/np.sum(resp);
+  if logSF:
+    sfVar = np.dot(resps, np.abs(np.log2(sfs)-np.log2(sf_cm)))/np.sum(resps);
+  else:
+    sfVar = np.dot(resps, np.abs(sfs-sf_cm))/np.sum(resps);
   try:
-    return sfVar(sf_cm, resps, sfs);
+    return sfVar;
   except:
     return np.nan
 
@@ -586,6 +610,8 @@ def descrMod_name(DoGmodel):
     modStr = 'sach';
   elif DoGmodel == 2:
     modStr = 'tony';
+  elif DoGmodel == 3:
+    modStr = 'ddogs';
   return modStr;
 
 def descrLoss_name(lossType):
@@ -1286,7 +1312,11 @@ def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3,
 
       if resample: # COULD make this as part of resample_array function (or separate function)...but for now, it lives here (21.09.13)
         new_inds = numpy.random.randint(0, len(rel_amp), len(rel_amp));
-        rel_amp, ph_rel_stim, curr_tf = rel_amp[new_inds], ph_rel_stim[rel_inds], curr_tf[rel_inds]
+        rel_amp, ph_rel_stim = rel_amp[new_inds], ph_rel_stim[new_inds]
+        #if len(curr_tf[0]) > 1:
+        #  pdb.set_trace();
+        # must handle tf separately, to keep it as a list (rather than np array)
+        curr_tf = [curr_tf[i] for i in new_inds];
 
       if disp == 0:
         # compute mean, gather
@@ -1512,7 +1542,7 @@ def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=False, 
        lam1 = 5; # lambda parameter for regularization
        obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params)))) + lam1*(params[-1]-1); # params[-1] is "sExp"
 
-     if prevFits is None:
+     if prevFits is None or 'loss' not in prevFits: # if prevFits is not the right dictionary!
        best_loss = 1e6; # start with high value
        best_params = []; conGain = [];
      else: # load the previous best_loss/params/conGain
@@ -1623,24 +1653,33 @@ def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf, baseline=0, computeNorm=0):
     tune = baseline + np.maximum(0, gain*(np.exp(-np.square(stim_sf/f_c)) - gain_s * np.exp(-np.square(stim_sf/(f_c*j_s))))); 
     return tune, [];
 
-def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, computeNorm=0):
+def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, computeNorm=0, parker_hawken_equiv=True):
   ''' Difference of gaussians as described in Sach's thesis
   [0] gain_c    - gain of the center mechanism
   [1] r_c       - radius of the center
   [2] gain_s    - gain of surround mechanism
   [3] r_s       - radius of surround
   --- Note that if baseline is non-zero, we'll add this to the response but it is NOT optimized, as of 21.05.03
+  --- If parker_hawken_equiv, we change the multiplictive terms in front of the exp to be in parallel with Parker-Hawken model
+  ------ DEFAULT IS TRUE, MEANING NOT BACKWARD COMPATIBLE (gain term will have multiplicative scalar offset)
   '''
   np = numpy;
   if computeNorm == 1:
-    dog = lambda f: baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(f*np.pi*r_s)));
+    if parker_hawken_equiv:
+      dog = lambda f: baseline + np.maximum(0, gain_c*np.sqrt(np.pi)*r_c*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*np.exp(-np.square(f*np.pi*r_s)));
+    else:
+      dog = lambda f: baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(f*np.pi*r_s)));
 
     norm = np.max(dog(stim_sf));
     dog_norm = lambda f: dog(f) / norm;
 
     return dog(stim_sf), dog_norm(stim_sf);
   else:
-    tune = baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(stim_sf*np.pi*r_s)));
+    if parker_hawken_equiv:
+      tune = baseline + gain_c*np.sqrt(np.pi)*r_c*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*np.exp(-np.square(stim_sf*np.pi*r_s));
+      #tune = baseline + np.maximum(0, gain_c*np.sqrt(np.pi)*r_c*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*np.exp(-np.square(stim_sf*np.pi*r_s)));
+    else:
+      tune = baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(stim_sf*np.pi*r_s)));
     return tune, [];
  
 def var_explained(data_resps, modParams, sfVals, dog_model = 2, baseline=0):
@@ -1657,13 +1696,7 @@ def var_explained(data_resps, modParams, sfVals, dog_model = 2, baseline=0):
   if sfVals is None:
     mod_resps = modParams;
   else:
-    # compute model responses # TODO: Replace with get_descrResp() call
-    if dog_model == 0:
-      mod_resps = flexible_Gauss_np(modParams, stim_sf=sfVals);
-    if dog_model == 1:
-      mod_resps = DoGsach(*modParams, stim_sf=sfVals, baseline=baseline)[0];
-    if dog_model == 2:
-      mod_resps = DiffOfGauss(*modParams, stim_sf=sfVals, baseline=baseline)[0];
+    mod_resps = get_descrResp(modParams, stim_sf=sfVals, DoGmodel=dog_model);
 
   try:
     return var_expl(mod_resps, data_resps, data_mean);
@@ -1755,7 +1788,7 @@ def descr_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11), base
   sf_evals = np.argmax(tuning);
   sf_peak = sf_samps[sf_evals];
 
-  return sf_peak
+  return sf_peak;
 
 def dog_prefSfMod(descrFit, allCons, disp=0, varThresh=65, dog_model=2, prefMin=0.1, highCut=None, base_sub=None):
   ''' Given a descrFit dict for a cell, compute a fit for the prefSf as a function of contrast
@@ -1806,7 +1839,7 @@ def dog_charFreq(prms, DoGmodel=1):
   ''' Compute the characteristic frequency given a set of DoG model parameters
       Here, we use the Enroth-Cugell, Robson (1966) definition of charFreq (1/e fall off in the center mechanism strength)
   '''
-  if DoGmodel == 0:
+  if DoGmodel == 0 or DoGmodel == 3:
       f_c = numpy.nan; # Cannot compute charFreq without DoG model fit (see sandbox_careful.ipynb)
   elif DoGmodel == 1: # sach
       r_c = prms[1];
@@ -1872,7 +1905,7 @@ def dog_get_param(params, DoGmodel, metric):
   '''
   np = numpy;
 
-  if DoGmodel == 0:
+  if DoGmodel == 0 or DoGmodel == 3:
     return np.nan; # we cannot compute from that form of the model!
   if metric == 'gc': # i.e. center gain
     if DoGmodel == 1: # sach
@@ -1904,7 +1937,7 @@ def dog_get_param(params, DoGmodel, metric):
 
 ## - for fitting DoG models
 
-def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, gain_reg = 0, minThresh=0.1, joint=False, baseline=0, fracSig=1, enforceMaxPenalty=1):
+def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, gain_reg = 0, minThresh=0.1, joint=False, baseline=0, fracSig=1, enforceMaxPenalty=1, sach_equiv_p_h=True):
   '''Given the model params (i.e. sach or tony formulation)), the responses, sf values
   return the loss
   loss_type: 1 - lsq
@@ -1915,6 +1948,9 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
   DoGmodel: 0 - flexGauss (not DoG...)
             1 - sach
             2 - tony
+            3 - ddogs (d-DoG-S, from Parker and Hawken, 1988)
+
+    - sach_equiv_p_h==True means that we use the version of the Sach DoG model in which the scalars are equivalent to those in the parker-hawken model
 
     - if joint=True, then resps, resps_std will be arrays in which to index
     - if enforceMaxPenalty, then we add a penalty if the maximum model response is more than 50% larger than the maximum data response
@@ -1957,7 +1993,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
         print('NOTICE: check if this gives separate max for each condition (dog_loss in helper_fcns');
         max_data = np.max(curr_resps);
 
-    pred_spikes = get_descrResp(curr_params, sfs, DoGmodel, minThresh, baseline, fracSig);
+    pred_spikes = get_descrResp(curr_params, sfs, DoGmodel, minThresh, baseline, fracSig, sach_equiv_p_h=sach_equiv_p_h);
     if enforceMaxPenalty: # check if this gives separate max for each condition
       max_mod = get_descrResp(curr_params, np.array([descr_prefSf(curr_params, DoGmodel)]), DoGmodel, minThresh, baseline, fracSig)[0];
       applyPen = 1 if (max_mod-1.40*max_data)>0 else 0;
@@ -1990,7 +2026,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
 
   return totalLoss;
 
-def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=None, fracSig=1):
+def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=None, fracSig=1, sach_equiv_p_h=True):
   ''' return the initial parameters for the DoG model, given the model choice and responses
       --- if bounds is not None, then we'll ensure that each parameter is within the specified bounds
   '''
@@ -2036,14 +2072,37 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
     init_sig_right = random_in_range(range_sigmaHigh)[0] if fracSig else random_in_range(range_denom)[0];
     init_params = [init_base, init_amp, init_mu, init_sig_left, init_sig_right];
 
+  #############
+  ## Parker-Hawken (difference of DoG with separation, i.e. d-DoG-S; see Parker & Hawken 1987, 1988)
+  #############
+  elif DoGmodel == 3:
+    # for reference: sigmoid([-/+]1.09)~= 0.25/0.75, sigmoid(0) = 0.5, sigmoid([-/+]2.94)~=0.05/0.95
+    init_kc1 = random_in_range((100, 800))[0];
+    init_kc2 = random_in_range((0.2, 0.6))[0] * init_kc1; # start out with kc2 is smaller than kc1
+    init_kS_rel1, init_kS_rel2 = random_in_range((0, 3), size=2); # will be used as input to sigmoid
+    init_xc1 = random_in_range((0.1, 0.4))[0];
+    #init_xs1, init_xs2 = random_in_range((0.25, 0.5), size=2);
+    init_A = random_in_range((1.5, 3))[0]; # this specifies how large xs1 is relative to xc1 (no sigmoid)
+    #init_A = random_in_range((-2.9, -1.09))[0]; # this specifies how large xc1 is relative to xs1 (via sigmoid); center mechanism ~15% of surround in size; for xc2w
+    init_B = random_in_range((1.05, 3))[0]; # how large is xc2 relative to xc1 (non-sigmoid)
+    init_C = random_in_range((2, 3.5))[0]; # how large is xs2 relative to xc2 (non-sigmoid)
+    init_gPr = random_in_range((-1.09, 1.09))[0]; # input to sigmoid (alone); 
+    init_sPr = random_in_range((-3, -1.09))[0]; # input to sigmoid, fraction of limit (2*(xc1+xc2));
+    
+    init_params = [init_kc1, init_xc1, init_kS_rel1, init_A, 
+                   init_kc2, init_B, init_kS_rel2, init_C,
+                   init_gPr, init_sPr];
+
   ############
   ## SACH
   ############
   elif DoGmodel == 1:
-    init_gainCent = 5e2*random_in_range((1, 300))[0];
-    #init_gainCent = random_in_range((maxResp, 100*maxResp))[0];
     init_radiusCent = random_in_range((0.02, 0.5))[0];
-    init_gainSurr = init_gainCent * random_in_range((0.01, 0.5))[0];
+    if sach_equiv_p_h: # then, to get maxResp, gainCent should be maxResp/{np.sqrt(pi)*radiusCent}
+      init_gainCent = maxResp/(init_radiusCent*np.sqrt(np.pi)) * random_in_range((0.7, 1.3))[0]; # 
+    else: # just keeping for backwards compatability
+      init_gainCent = 5e2*random_in_range((1, 300))[0];
+    init_gainSurr = init_gainCent * random_in_range((0.3, 0.8))[0]; # start with a stronger surround
     init_radiusSurr = init_radiusCent * random_in_range((0.75, 7))[0];
     init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
   ############
@@ -2084,8 +2143,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
   if DoGmodel == 0:
     joint=False; # we cannot fit the flex gauss model jointly!
     nParam = 5;
-  else: # and joint can stay as specified
+  elif DoGmodel == 1 or DoGmodel == 2: # and joint can stay as specified
     nParam = 4;
+  elif DoGmodel == 3: # d-DoG-S (Parker, Hawken)
+    nParam = 10; # for now, since we do not enforce kc1-ks2 = kc2-ks2 (see Parker, Hawken, 1987, bottom of p.255)
 
   ### organize stimulus information, responses
   all_disps = stimVals[0];
@@ -2107,7 +2168,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     max_resp = np.nanmax(resps_mean);
 
   # and set up initial arrays
-  if prevFits is None:
+  if prevFits is None or 'NLL' not in prevFits: # no existing fits, or not of correct format
     bestNLL = np.ones((nCons, )) * np.nan;
     currParams = np.ones((nCons, nParam)) * np.nan;
     varExpl = np.ones((nCons, )) * np.nan;
@@ -2116,11 +2177,12 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     if joint==True:
       overallNLL = np.nan;
       params = np.nan;
-  else: # we've passed in existing fits!
+  else:
     if noDisp:
       bestNLL, currParams, varExpl, prefSf, charFreq = prevFits['NLL'], prevFits['params'], prevFits['varExpl'], prevFits['prefSf'], prevFits['charFreq'];
     else:
       bestNLL, currParams, varExpl, prefSf, charFreq = prevFits['NLL'][disp,:], prevFits['params'][disp,:], prevFits['varExpl'][disp,:], prevFits['prefSf'][disp,:], prevFits['charFreq'][disp,:];
+
     if joint==True:
       overallNLL = prevFits['totalNLL'];
       params = prevFits['paramList'];
@@ -2161,6 +2223,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       bound_gainFracSurr = (1e-3, 2); # surround gain always less than center gain NOTE: SHOULD BE (1e-3, 1)
       bound_freqFracSurr = (5e-2, 1); # surround freq always less than ctr freq NOTE: SHOULD BE (1e-1, 1)
       allBounds = (bound_gainCent, bound_freqCent, bound_gainFracSurr, bound_freqFracSurr);
+  elif DoGmodel == 3: # d-DoG-S
+    kc_bound = (0, None); sigmoid_bound = (None, None); # params that are input to sigmoids are unbounded
+    xc_bound = (1e-3, None); gtMult_bound = (1, 7); # (1, None) multiplier limit when we want param >= mult*orig_param [greaterThan-->gt]
+    allBounds = (kc_bound, xc_bound, sigmoid_bound, gtMult_bound, 
+                 kc_bound, gtMult_bound, sigmoid_bound, gtMult_bound, sigmoid_bound, sigmoid_bound);
 
   ### organize responses -- and fit, if joint=False
   allResps = []; allRespsSem = []; start_incl = 0; incl_inds = [];
@@ -2430,28 +2497,6 @@ def fix_params(params_in):
 
     return [abs(x) for x in params_in] 
 
-def flexible_Gauss(params, stim_sf, minThresh=0.1):
-    # The descriptive model used to fit cell tuning curves - in this way, we
-    # can read off preferred SF, octave bandwidth, and response amplitude
-
-    respFloor       = params[0];
-    respRelFloor    = params[1];
-    sfPref          = params[2];
-    sigmaLow        = params[3];
-    sigmaHigh       = params[4];
-
-    # Tuning function
-    sf0   = [x/sfPref for x in stim_sf];
-
-    sigma = numpy.multiply(sigmaLow, [1]*len(sf0));
-
-    sigma[[x for x in range(len(sf0)) if sf0[x] > 1]] = sigmaHigh;
-
-    # hashtag:uglyPython
-    shape = [math.exp(-pow(math.log(x), 2) / (2*pow(y, 2))) for x, y in zip(sf0, sigma)];
-                
-    return [max(minThresh, respFloor + respRelFloor*x) for x in shape];
-
 def flexible_Gauss_np(params, stim_sf, minThresh=0.1, fracSig=1):
     # REPLACEMENT for flexible_Gauss in numpy (i.e. written with numpy funcs rather than math/python-default funcs]
     # The descriptive model used to fit cell tuning curves - in this way, we
@@ -2476,17 +2521,125 @@ def flexible_Gauss_np(params, stim_sf, minThresh=0.1, fracSig=1):
                 
     return numpy.maximum(minThresh, respFloor + respRelFloor*shape);
 
-def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1, baseline=0, fracSig=1):
+def dog_to_four(k, x, f, s=0):
+
+    return k * numpy.sqrt(numpy.pi) * (x+s) * numpy.exp(-numpy.square(numpy.pi*f*(x+s)));
+
+def parker_hawken_transform(params, twoDim=False, space_in_arcmin=False):
+    # Given the parameterization used for optimization, convert to "real", i.e. interpretable, parameters
+    # -- non-default for easier interpretation, return spatial parameters in arcmin
+
+    kc1, xc1, kS_rel1, A = params[0:4];
+    kc2, B, kS_rel2, C = params[4:8];
+    if twoDim:
+      gPr, Spr, yh = params[8:]; # pr for prime
+    else:
+      gPr, Spr = params[8:]; # pr for prime (i.e. S')
+
+    # Transform the parameters
+    g   = sigmoid(gPr);
+    # --- 
+    # - xc1 is first priority to specify (directly parameterized)
+    # - then, we get xs1 relative to xc1 (xs1 >= xc1 and xs1 <= Z*xc1, e.g. Z=4) 
+    xs1 = A*xc1;
+    # - in parallel, xc2 relative to xc1 (xc2>=xc1)
+    xc2 = B*xc1;
+    # finally, xs2 relative to xc2 (xs2>=xc2)
+    xs2 = C*xc2;
+    S   = xc1 + sigmoid(Spr)*2*(0.5*xc1+xc2); # now, we enforce that S is at minimum equal to xc1; with limit S<2(xc1+xc2), we say {S+xc1} < 2(0.5*xc1 + xc2)
+    ks1 = sigmoid(kS_rel1)*kc1;
+    ks2 = sigmoid(kS_rel2)*kc2;
+    
+    params[2] = ks1;
+    params[3] = xs1;
+    params[5] = xc2;
+    params[6] = ks2;
+    params[7] = xs2;
+    params[8] = g;
+    params[9] = S;
+
+    if space_in_arcmin:
+       sp_prms = [1, 3, 5, 7, 9];
+       for i in sp_prms:
+         params[i] = arcmin_to_deg(params[i], reverse=True);
+  
+    return params;
+
+def parker_hawken(params, stim_sf=None, twoDim=False, inSpace=False, spaceRange=0.5, debug=False):
+    ''' space value (xc_i, xs_i) are specified in degrees of visual angle, i.e. 60 arcminuntes = 1 (deg)
+        --- smart parameterization to enforce limits
+        Limits:
+        - xc_1 <= xc_2
+        - xc_i < xs_i
+        - S < 2*(xc_1 + xc_2)
+        - 0 <= g <= 1
+        - ks_i <= kc_i
+        THUS,
+        - xc1 = A*xc2, where A will be used as input to sigmoid, thus bounded between [0, 1]
+        - xc_i = B*xs_i, where B will be used as input to sigmoid, thus bounded between [0, 1)
+        - S = C*2*(xc_1 + xc_2), where C will be used ...
+        - g will be input to sigmoid
+        - ks_i = D*kc_i where D will be used ...
+    '''
+
+    np = numpy;
+
+    # we don't want to modify the original params, so we pass in a copy
+    params_corr = parker_hawken_transform(np.copy(params), twoDim=twoDim);
+
+    kc1, xc1, ks1, xs1 = params_corr[0:4];
+    kc2, xc2, ks2, xs2 = params_corr[4:8];
+    if twoDim:
+      g, S, yh = params_corr[8:]; # pr for prime
+    else:
+      g, S = params_corr[8:]; # pr for prime (i.e. S')
+
+    if inSpace: # If we want the function in space
+
+      xSamps = np.arange(-spaceRange, spaceRange+1.0/60, 0.5/60); # go in steps of half an arcminute
+
+      dog1 = kc1*np.exp(-np.square((xSamps+0)/xc1)) - ks1*np.exp(-np.square((xSamps+0)/xs1))
+      dog2 = kc2*np.exp(-np.square((xSamps+S)/xc2)) - ks2*np.exp(-np.square((xSamps+S)/xs2))
+      dog3 = kc2*np.exp(-np.square((xSamps-S)/xc2)) - ks2*np.exp(-np.square((xSamps-S)/xs2))
+
+      respSpace = dog1 - g*dog2 - (1-g)*dog3;   
+
+      if twoDim:
+        ySamps = np.linspace(-2*yh, 2*yh, 100);
+        ## TODO -- finish
+
+      if debug:
+        return respSpace, xSamps, dog1, g*dog2, (1-g)*dog3;
+      else:
+        return respSpace, xSamps;
+
+    else: # otherwise, if we want it in the Fourier domain
+      stim_sf = np.geomspace(0.1, 10, 25) if stim_sf is None else stim_sf; # just so we have something, if needed
+
+      dog1 = dog_to_four(kc1, xc1, stim_sf) - dog_to_four(ks1, xs1, stim_sf)
+      dog2 = dog_to_four(kc2, xc2, stim_sf, s=S) - dog_to_four(ks2, xs2, stim_sf, s=+S)
+      dog3 = dog_to_four(kc2, xc2, stim_sf, s=-S) - dog_to_four(ks2, xs2, stim_sf, s=-S)
+       
+      full = dog1 - g*dog2 - (1-g)*dog3;
+
+      return full; #, dog1, dog2, dog3;
+
+def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1, baseline=0, fracSig=1, sach_equiv_p_h=True):
   ''' returns only pred_spikes; 0 is flexGauss.; 1 is DoG sach; 2 is DoG (tony)
       --- baseline is a non-optimized for additive constant that we can optionally use for diff. of gauss fits
       --- i.e. if we use it, we're simply adding the baseline response to the data, so the model fit is on top of that
+
+      --- sach_equiv_p_h==True means that we use the version of the Sach DoG model in which the scalars are equivalent to those in the parker-hawken model
+
   '''
   if DoGmodel == 0:
     pred_spikes = flexible_Gauss_np(params, stim_sf=stim_sf, minThresh=minThresh, fracSig=fracSig);
   elif DoGmodel == 1:
-    pred_spikes, _ = DoGsach(*params, stim_sf=stim_sf, baseline=baseline);
+    pred_spikes, _ = DoGsach(*params, stim_sf=stim_sf, baseline=baseline, parker_hawken_equiv=sach_equiv_p_h);
   elif DoGmodel == 2:
     pred_spikes, _ = DiffOfGauss(*params, stim_sf=stim_sf, baseline=baseline);
+  elif DoGmodel == 3:
+    pred_spikes = parker_hawken(params, stim_sf);
   return pred_spikes;
 
 def get_rvcResp(params, curr_cons, rvcMod):
@@ -2506,7 +2659,10 @@ def get_rvcResp(params, curr_cons, rvcMod):
 ##################################################################
 ##################################################################
 
-def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1):
+def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, localBoots=100, bootThresh=0.25, oldVersion=False):
+
+   ''' - bootThresh (fraction of time for which a boot metric must be defined in order to be included in analysis)
+   '''
 
    np = numpy;
    print('%s/%d' % (expDir, 1+cell_ind));
@@ -2642,19 +2798,48 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    ####
    # first, model-free
    sfVar = np.zeros((nDisps, nCons)) * np.nan; # variance calculation
+   boot_sfVar_md = np.zeros((nDisps, nCons)) * np.nan; # variance calculation
+   boot_sfVar_mn = np.zeros((nDisps, nCons)) * np.nan; # variance calculation
+   boot_sfVar_std = np.zeros((nDisps, nCons)) * np.nan; # variance calculation
    sfCom = np.zeros((nDisps, nCons)) * np.nan; # center of mass
+   boot_sfCom_md = np.zeros((nDisps, nCons)) * np.nan; # center of mass
+   boot_sfCom_mn = np.zeros((nDisps, nCons)) * np.nan; # center of mass
+   boot_sfCom_std = np.zeros((nDisps, nCons)) * np.nan; # center of mass
+   sfComLin = np.zeros((nDisps, nCons)) * np.nan; # center of mass (linear, not log SF)
    sfComCut = np.zeros((nDisps, nCons)) * np.nan; # center of mass, but with a restricted ("cut") set of SF
    f1f0_ratio = np.nan;
    # then, inferred from descriptive fits
    lsfv = np.zeros((nDisps,nCons)) * np.nan; # LSFV as from Xing et al, 2004
    bw_sigma = np.zeros((nDisps, nCons, 2)) * np.nan; # what's the left/right sigma parameter from the flex gauss fit?
+   boot_bw_sigma_mn = np.zeros((nDisps, nCons, 2)) * np.nan;
+   boot_bw_sigma_md = np.zeros((nDisps, nCons, 2)) * np.nan;
+   boot_bw_sigma_std = np.zeros((nDisps, nCons, 2)) * np.nan;
+   boot_bw_sigma_stdLog = np.zeros((nDisps, nCons, 2)) * np.nan;
    bwHalf = np.zeros((nDisps, nCons)) * np.nan;
    bwHalf_split = np.zeros((nDisps, nCons, 2)) * np.nan; # [:,:,[lower,upper]]
+   boot_bwHalf_mn = np.zeros((nDisps, nCons)) * np.nan;
+   boot_bwHalf_md = np.zeros((nDisps, nCons)) * np.nan;
+   boot_bwHalf_std = np.zeros((nDisps, nCons)) * np.nan;
    bw34 = np.zeros((nDisps, nCons)) * np.nan;
    bw34_split = np.zeros((nDisps, nCons, 2)) * np.nan;
+   boot_bw34_mn = np.zeros((nDisps, nCons)) * np.nan;
+   boot_bw34_md = np.zeros((nDisps, nCons)) * np.nan;
+   boot_bw34_std = np.zeros((nDisps, nCons)) * np.nan;
    pSf = np.zeros((nDisps, nCons)) * np.nan;
+   boot_pSf_mn = np.zeros((nDisps, nCons)) * np.nan;
+   boot_pSf_md = np.zeros((nDisps, nCons)) * np.nan;
+   boot_pSf_std = np.zeros((nDisps, nCons)) * np.nan;
+   boot_pSf_stdLog = np.zeros((nDisps, nCons)) * np.nan;
    sf70 = np.zeros((nDisps, nCons)) * np.nan;
+   boot_sf70_mn = np.zeros((nDisps, nCons)) * np.nan;
+   boot_sf70_md = np.zeros((nDisps, nCons)) * np.nan;
+   boot_sf70_std = np.zeros((nDisps, nCons)) * np.nan;
+   boot_sf70_stdLog = np.zeros((nDisps, nCons)) * np.nan;
    dog_sf70 = np.zeros((nDisps, nCons)) * np.nan;
+   boot_dog_sf70_mn = np.zeros((nDisps, nCons)) * np.nan;
+   boot_dog_sf70_md = np.zeros((nDisps, nCons)) * np.nan;
+   boot_dog_sf70_std = np.zeros((nDisps, nCons)) * np.nan;
+   boot_dog_sf70_stdLog = np.zeros((nDisps, nCons)) * np.nan;
    sf75 = np.zeros((nDisps, nCons)) * np.nan;
    dog_sf75 = np.zeros((nDisps, nCons)) * np.nan;
    sfE = np.zeros((nDisps, nCons)) * np.nan;
@@ -2667,6 +2852,10 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    c50_varExpl = np.zeros((nDisps, nSfs)) * np.nan;
    # including from the DoG fits
    dog_pSf = np.zeros((nDisps, nCons)) * np.nan;
+   boot_dog_pSf_mn = np.zeros((nDisps, nCons)) * np.nan;
+   boot_dog_pSf_md = np.zeros((nDisps, nCons)) * np.nan;
+   boot_dog_pSf_std = np.zeros((nDisps, nCons)) * np.nan;
+   boot_dog_pSf_stdLog = np.zeros((nDisps, nCons)) * np.nan;
    dog_bwHalf = np.zeros((nDisps, nCons)) * np.nan;
    dog_bwHalf_split = np.zeros((nDisps, nCons, 2)) * np.nan;
    dog_bw34 = np.zeros((nDisps, nCons)) * np.nan;
@@ -2676,11 +2865,15 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    # including the difference/ratio arrays; where present, extra dim of len=2 is for raw/normalized-to-con-change values
    sfVarDiffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
    sfComRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+   sfComLinRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
    lsfvRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
    bwHalfDiffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
    bwHalfDiffs_split = np.zeros((nDisps, nCons, nCons, 2, 2)) * np.nan; # 2nd to last dim is [lower,upper] half rel. to peak
    bw34Diffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
    bw34Diffs_split = np.zeros((nDisps, nCons, nCons, 2, 2)) * np.nan; # 2nd to last dim is [lower,upper] half rel. to peak
+   boot_bwHalfDiffs_mn = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+   boot_bwHalfDiffs_md = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+   boot_bwHalfDiffs_std = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
    pSfRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
    pSfModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
    dog_bwHalfDiffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
@@ -2691,6 +2884,9 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    dog_pSfModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
 
    sf70Rats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+   boot_sf70_mnRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+   boot_sf70_mdRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
+   boot_sf70_stdRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
    sf70ModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
    dog_sf70Rats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
    dog_sf70ModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
@@ -2704,9 +2900,10 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    dog_sfEModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
 
    c50Rats = np.zeros((nDisps, nSfs, nSfs)) * np.nan;
-   # bwHalf, bw34, pSf, sfVar, sfCom, sf75, dog_sf75, sf70, dog_sf70, sfE, dog_sfE, dog_bwHalfDiffs, dog_bw34Diffs, dog_pSfRats
+   # TODO: Move sfComLin next to sfCom once settled
+   # bwHalf, bw34, pSf, sfVar, sfCom, sf75, dog_sf75, sf70, dog_sf70, sfE, dog_sfE, dog_bwHalfDiffs, dog_bw34Diffs, dog_pSfRats, sfComLin
    # -- evaluated from data at 1:.33 contrast (only for single gratings)
-   diffsAtThirdCon = np.zeros((nDisps, 14, )) * np.nan;
+   diffsAtThirdCon = np.zeros((nDisps, 15, )) * np.nan;
    # nDisps, half/three-fourths, lower/upper
    diffsAtThirdCon_bwSplit = np.zeros((nDisps, 2, 2, )) * np.nan;
    # just a separate one for LSFV, since we don't know if it will be kept
@@ -2785,6 +2982,18 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
       except:
         print('****Cell ind %d****' % cell_ind);
 
+   # the last values to set-up -- done here so that we properly access sfBB
+   try:
+     nBoots = descrFits[cell_ind]['boot_params'].shape[0]; # this is where we find out how many boot iters are present
+     if nBoots == 1:
+       nBoots = descrFits[cell_ind]['boot_params'].shape[1]; # HORRIBLE HACK FOR SF_BB -- fix
+   except:
+     nBoots = 1;
+   boot_sf70_values = np.zeros((nDisps, nCons, nBoots)) * np.nan; # interim values for computing, will not be saved!
+   boot_bwHalf_values = np.zeros((nDisps, nCons, nBoots)) * np.nan; # interim values for computing, will not be saved!
+   boot_bw34_values = np.zeros((nDisps, nCons, nBoots)) * np.nan; # interim values for computing, will not be saved!
+
+
    for d in range(nDisps):
 
      #######
@@ -2803,7 +3012,28 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        curr_resps = sfTuning[d, curr_sfInd, c];
        sf_gt0 = np.where(curr_sfs>0)[0]; # if we include a zero-SF condition, then everything goes to zero!
        sfCom[d, c] = sf_com(curr_resps[sf_gt0], curr_sfs[sf_gt0])
+       # do some bootstrapping here for non-descr. metrics
+       boot_com = np.zeros((localBoots, ));
+       boot_var = np.zeros((localBoots, ));
+       '''
+       for i in range(localBoots):
+         non_nan = nan_rm(curr_resps[sf_gt0]);
+         curr_resps = numpy.random.choice(non_nan, len(non_nan));
+         cr, cs = curr_resps[sf_gt0], curr_sfs[sf_gt0]
+         boot_com[i] = sf_com(cr, cs);
+         boot_var[i] = sf_var(cr, cs, boot_com[i]);
+         
+       boot_sfCom_mn[d, c] = np.nanmean(boot_com);
+       boot_sfCom_md[d, c] = np.nanmedian(boot_com);
+       boot_sfCom_std[d, c] = np.nanstd(boot_com);
+       '''
+       sfComLin[d, c] = sf_com(curr_resps[sf_gt0], curr_sfs[sf_gt0], logSF=False)
+
        sfVar[d, c] = sf_var(curr_resps[sf_gt0], curr_sfs[sf_gt0], sfCom[d, c]);
+
+       #boot_sfVar_mn[d, c] = np.nanmean(boot_var);
+       #boot_sfVar_md[d, c] = np.nanmedian(boot_var);
+       #boot_sfVar_std[d, c] = np.nanstd(boot_var);
        # get the c.o.m. based on the restricted set of SFs, only
        if cut_sf is not None:
          cut_sfs, cut_resps = np.array(stimVals[2])[cut_sf], sfTuning[d, cut_sf, c];
@@ -2849,6 +3079,48 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
              pSf[d, c] = descrFits[cell_ind]['params'][d, c, muLoc]
              curr_params = descrFits[cell_ind]['params'][d, c, :];
              sf70[d, c] = sf_highCut(curr_params, sfMod=0, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp);
+             try:
+               # -- now, get the distribution of bootstrap estimates for sf70, pSf, bw_sigma, and bwHalf/bw34
+               # TEMPORARY HACK!!! fix code in descr_fits_sfBB
+               boot_prms = descrFits[cell_ind]['boot_params']
+               if boot_prms.shape[0] == 1:
+                 boot_prms = np.transpose(boot_prms, axes=(1,0,2,3)); # i.e. flip 1st and 2nd axes
+               # ---- first, sf70
+               boot_sf70_values[d, c] = np.array([sf_highCut(boot_prms[boot_i, d, c, :], sfMod=0, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp) for boot_i in range(boot_prms.shape[0])]);
+               n_nonNan = np.sum(~np.isnan(boot_sf70_values[d,c])); # i.e. how many are not NaN
+               if n_nonNan >= bootThresh*boot_prms.shape[0]:
+                 boot_sf70_md[d, c] = np.nanmedian(boot_sf70_values[d,c]);
+                 boot_sf70_mn[d, c] = np.nanmean(boot_sf70_values[d,c]);
+                 boot_sf70_std[d, c] = np.nanstd(boot_sf70_values[d,c]);
+                 boot_sf70_stdLog[d, c] = np.nanstd(np.log10(boot_sf70_values[d,c]));
+
+                 try:
+                   boot_pSf_mn[d, c] = np.nanmean(descrFits[cell_ind]['boot_prefSf'][:, d, c])
+                   boot_pSf_md[d, c] = np.nanmedian(descrFits[cell_ind]['boot_prefSf'][:, d, c])
+                   boot_pSf_std[d, c] = np.nanstd(descrFits[cell_ind]['boot_prefSf'][:, d, c])
+                   boot_pSf_stdLog[d, c] = np.nanstd(np.log10(descrFits[cell_ind]['boot_prefSf'][:, d, c]))
+                 except:
+                   pass; # LESS IMPORTANT; NONETHELESS, FIX!
+
+               # ---- then, bwHalf/34
+               boot_bwHalf_values[d, c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=0.5, sf_range=sf_range)[1] for boot_i in range(boot_prms.shape[0])]);
+               n_nonNan = np.sum(~np.isnan(boot_bwHalf_values)); # i.e. how many are not NaN
+               if n_nonNan >= bootThresh*boot_prms.shape[0]: # i.e. BW should be defined at least X% of the time!
+                 boot_bwHalf_md[d, c] = np.nanmedian(boot_bwHalf_values[d,c]);
+                 boot_bwHalf_mn[d, c] = np.nanmean(boot_bwHalf_values[d,c]);
+                 boot_bwHalf_std[d, c] = np.nanstd(boot_bwHalf_values[d,c]);
+               boot_bw34_values[d, c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=0.75, sf_range=sf_range)[1] for boot_i in range(boot_prms.shape[0])]);
+               n_nonNan = np.sum(~np.isnan(boot_bw34_values)); # i.e. how many are not NaN
+               if n_nonNan >= bootThresh*boot_prms.shape[0]: # i.e. BW should be defined at least X% of the time!
+                 boot_bw34_md[d, c] = np.nanmedian(boot_bw34_values[d,c]);
+                 boot_bw34_mn[d, c] = np.nanmean(boot_bw34_values[d,c]);
+                 boot_bw34_std[d, c] = np.nanstd(boot_bw34_values[d,c]);
+               for splitInd,splitHalf in enumerate([-1,1]):
+                  boot_bw_sigma_md[d, c, splitInd] = np.nanmedian(descrFits[cell_ind]['boot_params'][:, d, c, 3+splitInd])
+                  boot_bw_sigma_mn[d, c, splitInd] = np.nanmean(descrFits[cell_ind]['boot_params'][:, d, c, 3+splitInd])
+                  boot_bw_sigma_std[d, c, splitInd] = np.nanstd(descrFits[cell_ind]['boot_params'][:, d, c, 3+splitInd])
+             except:
+               pass; # 
              sf75[d, c] = sf_highCut(curr_params, sfMod=0, frac=0.75, sfRange=(0.1, 15), baseline_sub=baseline_resp);
              sfE[d, c] = sf_highCut(curr_params, sfMod=0, frac=eFrac, sfRange=(0.1, 15), baseline_sub=baseline_resp);
              sfVarExpl[d, c] = varExpl;
@@ -2934,6 +3206,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
 
      ## Now, after going through all cons/sfs, compute ratios/differences
      # first, with contrast
+     #if oldVersion: # only do these things if we want the "old" jointList --- currently (21.09) don't use them and they take up extra space in the structure
      for comb in itertools.combinations(range(nCons), 2):
        # first, in raw values [0] and per log2 contrast change [1] (i.e. log2(highCon/lowCon))
        conChange = np.log2(cons[comb[1]]/cons[comb[0]]);
@@ -2973,12 +3246,19 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        sfVarDiffs[d,comb[0],comb[1]] = sfVar[d,comb[1]] - sfVar[d,comb[0]]
        rat = sfCom[d, comb[1]] / sfCom[d, comb[0]];
        sfComRats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
+       rat = sfComLin[d, comb[1]] / sfComLin[d, comb[0]];
+       sfComLinRats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
 
        ## and sf70 and dog_sf70 ratios
        rat = sf70[d, comb[1]] / sf70[d, comb[0]];
        sf70Rats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
        rat = dog_sf70[d, comb[1]] / dog_sf70[d, comb[0]];
        dog_sf70Rats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
+       # -- and boot versions
+       rats = boot_sf70_values[d, comb[1]] / boot_sf70_values[d, comb[0]]; # distribution of ratios
+       boot_sf70_mdRats[d,comb[0],comb[1]] = [np.nanmedian(np.log2(rat)), np.nanmedian(np.log2(rat))/conChange]
+       boot_sf70_mnRats[d,comb[0],comb[1]] = [np.nanmean(np.log2(rat)), np.nanmean(np.log2(rat))/conChange]
+       boot_sf70_stdRats[d,comb[0],comb[1]] = [np.nanstd(np.log2(rat)), np.nanstd(np.log2(rat))/conChange]
 
        ## and sf75 and dog_sf75 ratios
        rat = sf75[d, comb[1]] / sf75[d, comb[0]];
@@ -3025,32 +3305,61 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                                 dog_sfERats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
                                 dog_bwHalfDiffs[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
                                 dog_bw34Diffs[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                dog_pSfRats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd]]);
+                                dog_pSfRats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
+                                sfComLinRats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd]]);
 
        for metrInd,bw_split_curr in enumerate([bwHalfDiffs_split, bw34Diffs_split]):
          diffsAtThirdCon_bwSplit[d,metrInd,:] = bw_split_curr[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd];
        diffsAtThirdCon_lsfv[d] = lsfvRats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd];
 
 
-   print('\tdiffsAtThirdCon pSf||sf70||dogSf70 ...  = (%.2f, %.2f, %.2f)' % (diffsAtThirdCon[0, 2], diffsAtThirdCon[0, 5], diffsAtThirdCon[0, 6]));
-   print('\tmodRat pSf||sf70||dogSf70 ...  = (%.2f, %.2f, %.2f)' % (pSfModRat[0, 1], sf70ModRat[0, 1], dog_sf70ModRat[0, 1]));
+     print('\tdiffsAtThirdCon pSf||sf70||dogSf70 ...  = (%.2f, %.2f, %.2f)' % (diffsAtThirdCon[0, 2], diffsAtThirdCon[0, 5], diffsAtThirdCon[0, 6]));
+     print('\tmodRat pSf||sf70||dogSf70 ...  = (%.2f, %.2f, %.2f)' % (pSfModRat[0, 1], sf70ModRat[0, 1], dog_sf70ModRat[0, 1]));
+     # End of optional (oldVersion) section
 
    dataMetrics = dict([('sfCom', sfCom),
+                      ('sfComLin', sfComLin),
                       ('sfComCut', sfComCut),
+                      ('boot_sfCom_mn', boot_sfCom_mn),
+                      ('boot_sfCom_md', boot_sfCom_md),
+                      ('boot_sfCom_std', boot_sfCom_std),
                       ('sfVar', sfVar),
+                      ('boot_sfVar_mn', boot_sfCom_mn),
+                      ('boot_sfVar_md', boot_sfVar_md),
+                      ('boot_sfVar_std', boot_sfVar_std),
                       ('f1f0_ratio', f1f0_ratio),
                       ('lsfv', lsfv),
                       ('bw_sigma', bw_sigma),
+                      ('boot_bw_sigma_mn', boot_bw_sigma_mn),
+                      ('boot_bw_sigma_md', boot_bw_sigma_md),
+                      ('boot_bw_sigma_std', boot_bw_sigma_std),
                       ('bwHalf', bwHalf),
                       ('dog_bwHalf', dog_bwHalf),
                       ('bwHalf_split', bwHalf_split),
                       ('dog_bwHalf_split', dog_bwHalf_split),
+                      ('boot_bwHalf_values', boot_bwHalf_values),
+                      ('boot_bwHalf_mn', boot_bwHalf_mn),
+                      ('boot_bwHalf_md', boot_bwHalf_md),
+                      ('boot_bwHalf_std', boot_bwHalf_std),
                       ('bw34', bw34),
                       ('dog_bw34', dog_bw34),
                       ('bw34_split', bw34_split),
                       ('dog_bw34_split', dog_bw34_split),
+                      ('boot_bw34_values', boot_bw34_values),
+                      ('boot_bw34_mn', boot_bw34_mn),
+                      ('boot_bw34_md', boot_bw34_md),
+                      ('boot_bw34_std', boot_bw34_std),
                       ('pSf', pSf),
+                      ('boot_pSf_mn', boot_pSf_mn),
+                      ('boot_pSf_md', boot_pSf_md),
+                      ('boot_pSf_std', boot_pSf_std),
+                      ('boot_pSf_stdLog', boot_pSf_stdLog),
                       ('sf70', sf70),
+                      ('boot_sf70_values', boot_sf70_values),
+                      ('boot_sf70_mn', boot_sf70_mn),
+                      ('boot_sf70_md', boot_sf70_md),
+                      ('boot_sf70_std', boot_sf70_std),
+                      ('boot_sf70_stdLog', boot_sf70_stdLog),
                       ('dog_sf70', dog_sf70),
                       ('sf75', sf75),
                       ('dog_sf75', dog_sf75),
@@ -3064,38 +3373,44 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                       ('dog_pSf', dog_pSf),
                       ('dog_charFreq', dog_charFreq),
                       ('dog_varExpl', dog_varExpl),
-                      ('bwHalfDiffs', bwHalfDiffs),
-                      ('bwHalfDiffs_split', bwHalfDiffs_split),
-                      ('bw34Diffs', bw34Diffs),
-                      ('bw34Diffs_split', bw34Diffs_split),
-                      ('lsfvRats', lsfvRats),
-                      ('pSfRats', pSfRats),
-                      ('pSfModRat', pSfModRat),
-                      ('dog_pSfRats', dog_pSfRats),
-                      ('dog_pSfModRat', dog_pSfModRat),
-                      ('sf70Rats', sf70Rats),
-                      ('sf70ModRat', sf70ModRat),
-                      ('dog_sf70Rats', dog_sf70Rats),
-                      ('dog_sf70ModRat', dog_sf70ModRat),
-                      ('sf75Rats', sf75Rats),
-                      ('sf75ModRat', sf75ModRat),
-                      ('dog_sf75Rats', dog_sf75Rats),
-                      ('dog_sf75ModRat', dog_sf75ModRat),
-                      ('sfERats', sfERats),
-                      ('sfEModRat', sfEModRat),
-                      ('dog_sfERats', dog_sfERats),
-                      ('dog_sfEModRat', dog_sfEModRat),
-                      ('sfVarDiffs', sfVarDiffs),
-                      ('sfComRats', sfComRats),
                       ('sfVarExpl', sfVarExpl),
-                      ('c50Rats', c50Rats),
                       ('suppressionIndex', supr_ind),
-                      ('diffsAtThirdCon', diffsAtThirdCon),
-                      ('diffsAtThirdCon_bwSplit', diffsAtThirdCon_bwSplit),
-                      ('diffsAtThirdCon_lsfv', diffsAtThirdCon_lsfv),
                       ('relDescr_inds', relDescr_inds),
                       ('mn_med_max', mn_med_max)
                       ]);
+
+   if oldVersion:
+     dataMetrics['diffsAtThirdCon'] = diffsAtThirdCon;
+     dataMetrics['diffsAtThirdCon_bwSplit'] = diffsAtThirdCon_bwSplit;
+     dataMetrics['diffsAtThirdCon_lsfv'] = diffsAtThirdCon_lsfv;
+     dataMetrics['bwHalfDiffs'] =bwHalfDiffs;
+     dataMetrics['bwHalfDiffs_split'] = bwHalfDiffs_split;
+     dataMetrics['bw34Diffs'] = bw34Diffs;
+     dataMetrics['bw34Diffs_split'] = bw34Diffs_split;
+     dataMetrics['lsfvRats'] = lsfvRats;
+     dataMetrics['pSfRats'] = pSfRats;
+     dataMetrics['pSfModRat'] = pSfModRat;
+     dataMetrics['dog_pSfRats'] = dog_pSfRats;
+     dataMetrics['dog_pSfModRat'] = dog_pSfModRat;
+     dataMetrics['sf70Rats'] = sf70Rats;
+     dataMetrics['sf70ModRat'] = sf70ModRat;
+     dataMetrics['boot_sf70_mnRats'] = boot_sf70_mnRats;
+     dataMetrics['boot_sf70_mdRats'] = boot_sf70_mdRats;
+     dataMetrics['boot_sf70_stdRats'] = boot_sf70_stdRats;
+     dataMetrics['dog_sf70Rats'] = dog_sf70Rats;
+     dataMetrics['dog_sf70ModRat'] = dog_sf70ModRat;
+     dataMetrics['sf75Rats'] = sf75Rats;
+     dataMetrics['sf75ModRat'] = sf75ModRat;
+     dataMetrics['dog_sf75Rats'] = dog_sf75Rats;
+     dataMetrics['dog_sf75ModRat'] = dog_sf75ModRat;
+     dataMetrics['sfERats'] = sfERats;
+     dataMetrics['sfEModRat'] = sfEModRat;
+     dataMetrics['dog_sfERats'] = dog_sfERats;
+     dataMetrics['dog_sfEModRat'] = dog_sfEModRat;
+     dataMetrics['sfVarDiffs'] = sfVarDiffs;
+     dataMetrics['sfComRats'] = sfComRats;
+     dataMetrics['sfComLinRats'] = sfComLinRats;
+     dataMetrics['c50Rats'] = c50Rats;
 
    ###########
    ### model
@@ -3171,7 +3486,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    return cellSummary;
 
 def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods,
-              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1):
+              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, localBoots=100):
   ''' create the "super structure" that we use to analyze data across multiple versions of the experiment
       TODO: update this to get proper spikes/tuning measures based on f1/f0 ratio (REQUIRES descrFits to be like rvcFits, i.e. fit F1 or F0 responses, accordingly)
       inputs:
@@ -3200,7 +3515,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
 
   for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, rvcMod in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods):
 
-    #if 'BB' not in expDir:
+    #if 'ach' not in expDir:
     #   continue;
 
     # get the current directory, load data list
@@ -3226,8 +3541,15 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     isBB = 1 if 'BB' in expDir else 0;
 
     if toPar:
-      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB)
-      
+      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, localBoots=localBoots)
+
+      #if isBB:
+      #  oh = perCell_summary(30);
+      #  pdb.set_trace();
+
+      #oh = perCell_summary(30);
+      #pdb.set_trace();
+
       nCpu = mp.cpu_count();
       with mp.Pool(processes = nCpu) as pool:
          cellSummaries = pool.map(perCell_summary, range(nCells));
@@ -3248,7 +3570,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
   else:
     return jointList;
 
-def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02):
+def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02, valIsFrac=False):
   ''' given a "jointList" structure, get the specified metric (as string) for a given conVal & dispersion
       returns: array of metric value for a given con X disp
       inputs:
@@ -3257,10 +3579,14 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02):
         conVal    - what contrast (e.g. 33% or 99% or ...)
         disp      - which dispersion (0, 1, ...)
         [conTol]  - we consider the contrast to match conVal if within +/- 2% (given experiment, this is satisfactory to match con level across dispersions, versions)
+        valIsFrac - If true, then the conVal is fraction of the maximum contrast value
   '''
+  #pdb.set_trace();
+
   np = numpy;
   nCells = len(jointList);
   output = np.nan * np.zeros((nCells, ));
+  matchCon = np.nan * np.zeros((nCells, ));
 
   # how to handle contrast? for each cell, find the contrast that is valid for that dispersion and matches the con_lvl
   # to within some tolerance (e.g. +/- 0.01, i.e. 1% contrast)
@@ -3283,16 +3609,30 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02):
       # get the specified contrast, package, and return
       #######
       curr_conVals = curr_cons[curr_inds];
-      match_ind = np.where(np.abs(curr_conVals-conVal)<=conTol)[0];
+      max_con = np.max(curr_conVals);
+      if valIsFrac:
+        match_ind = np.where(np.abs(curr_conVals-(conVal*max_con))<=conTol)[0];
+      else:
+        match_ind = np.where(np.abs(curr_conVals-conVal)<=conTol)[0];
+
       if np.array_equal(match_ind, []):
-        continue; # i.e. didn't find the right contrast match
+        # e.g. if we want full contrast, but the program only goes up to 64% -- that's ok! (64% vs. 100% is minimal)
+        if conVal >= 0.6: # i.e. we want large/full contrast
+          if np.max(curr_conVals) > 0.35:
+            match_ind = [np.argmax(curr_conVals)];
+          else:
+            continue; # i.e. didn't find the right contrast match
 
-      full_con_ind = curr_byDisp[disp][match_ind[0]];
-      output[ind] = curr_metr[disp][full_con_ind];
+      try:
+        full_con_ind = curr_byDisp[disp][match_ind[0]];
+        output[ind] = curr_metr[disp][full_con_ind];
+        matchCon[ind] = curr_conVals[match_ind];
+      except:
+        pass; # sometimes, there isn't a match...
 
-  return output;
+  return output, matchCon;
 
-def jl_get_metric_highComp(jointList, metric, whichMod, atLowest, disp=0, extraInds=None):
+def jl_get_metric_highComp(jointList, metric, whichMod, atLowest, disp=0, extraInds=None, returnBothCons=False):
     ''' This should work for most (all?) descriptive metrics in the jointList
         Will return the two metrics (high, comp) and the corresponding comparison contrasts
 
@@ -3321,7 +3661,11 @@ def jl_get_metric_highComp(jointList, metric, whichMod, atLowest, disp=0, extraI
     
     compCons = np.array([jointList[x]['metadata']['stimVals'][1][conInd] for x,conInd in zip(jointList.keys(), compInd)]);
     
-    return highSf, compSf, compCons
+    if returnBothCons:
+      highCons = np.array([jointList[x]['metadata']['stimVals'][1][conInd] for x,conInd in zip(jointList.keys(), highInd)]);
+      return highSf, compSf, highCons, compCons;
+    else:
+      return highSf, compSf, compCons
 
 ##################################################################
 ##################################################################
@@ -3515,7 +3859,7 @@ def get_isolated_responseAdj(data, trials, adjByTrial):
 
 ##
 
-def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False, modsAsRate=False, resample=False):
+def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False, modsAsRate=False, resample=False, cellNum=-1):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
         (ii) all_disps, all_cons, all_sfs - i.e. the stimulus conditions of the experiment
@@ -3654,12 +3998,14 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                     else: # default behavior
                       divFactor = stimDur;
  
-                    curr_modResp = resample_array(resample, modResp[valid_tr]); # will just be the array if resample==0
                     try:
-                      if nTrCurr <1 or len(curr_modResp)==0:
-                        print('uhoh: d/sf/con %d/%d/%d -- %d trial(s) [resp=%.2f] out of %d in the data' % (d, sf, con, nTrCurr, curr_modResp, len(val_tr)));
+                      curr_modResp = resample_array(resample, modResp[valid_tr]); # will just be the array if resample==0
+                      #if nTrCurr <1 or len(curr_modResp)==0:
+                      #####print('uhoh [cell %d]: d/sf/con %d/%d/%d -- %d trial(s) [resp=%.2f] out of %d in the data' % (cellNum, d, sf, con, nTrCurr, curr_modResp, len(val_tr)));
                       modRespOrg[d, sf, con, 0:nTrCurr] = np.divide(curr_modResp, divFactor);
                     except:
+                      #pdb.set_trace();
+                      #print('FAILED: uhoh [cell %d]: d/sf/con %d/%d/%d -- %d trial(s) out of %d/%d in the data/modResp' % (cellNum, d, sf, con, nTrCurr, len(val_tr), len(modResp)));
                       pass
 
             if np.any(~np.isnan(respMean[d, :, con])):
@@ -3714,7 +4060,7 @@ def organize_adj_responses(data, rvcFits, expInd, vecF1=0):
      
   return adjResps;
 
-def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, resample=False):
+def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, resample=False, cellNum=-1):
     ''' organizes the responses by condition given spikes, experiment structure, and expInd
         mask will be None OR list of trials to consider (i.e. trials not in mask/where mask is false are ignored)
         - respsAsRate: are "spikes" already in rates? if yes, pass in "True"; otherwise, we'll divide by stimDur to get rate
@@ -3767,10 +4113,10 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, re
       # TODO: handle non-"none" mask in v1_hf.organize_modResp!
       v1_dir = exper.dir.replace('/', '.');
       v1_hf = il.import_module(v1_dir + 'helper_fcns');
-      _, _, rateSfMix, allSfMix = v1_hf.organize_modResp(spikes, data, mask, resample=resample);
+      _, _, rateSfMix, allSfMix = v1_hf.organize_modResp(spikes, data, mask, resample=resample, cellNum=cellNum);
     else:
       # NOTE: we are getting the modRespOrg output of tabulate_responses, and ensuring the spikes are treated as rates (or raw counts) based on how they are passed in here
-      allSfMix  = tabulate_responses(expStructure, expInd, spikes, mask, modsAsRate = respsAsRate, resample=resample)[4];
+      allSfMix  = tabulate_responses(expStructure, expInd, spikes, mask, modsAsRate = respsAsRate, resample=resample, cellNum=cellNum)[4];
       rateSfMix = numpy.nanmean(allSfMix, -1);
 
     return rateOr, rateCo, rateSfMix, allSfMix;  
@@ -3791,10 +4137,13 @@ def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes 
     elif get_f0 == 0:
       spikes = data['f1']
   else:
+    #pdb.set_trace();
+    #spikes = organize_adj_responses(data, rvcFits, expInd, vecF1);
     if expInd is None:
       warnings.warn('Should pass in expInd; defaulting to 3');
       expInd = 3; # should be specified, but just in case
     try:
+      #pdb.set_trace();
       spikes = organize_adj_responses(data, rvcFits, expInd, vecF1);
     except: # in case this does not work...
       warnings.warn('Tried to access f1 adjusted responses, defaulting to F1/F0 request');
