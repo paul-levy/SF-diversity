@@ -78,6 +78,8 @@ if [ "$EXP_DIR" = "V1/" ]; then
     # -- responses derived from vecF1 corrections, if F1 responses
     python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 0 2 $BOOT_REPS 0 0 # flex gauss
     python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 0 4 $BOOT_REPS 0 0 # flex gauss, sach loss (to account for variability)
+    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 4 $BOOT_REPS 0 0 # d-DoG-S, sach loss (to account for variability)
+    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 2 $BOOT_REPS 0 0 # d-DoG-S, sqrt loss
     python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 2 2 $BOOT_REPS 0 0 # Tony DoG
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 1 2 $BOOT_REPS 0 0 # sach DoG
   fi
@@ -135,8 +137,8 @@ if [ "$EXP_DIR" = "LGN/" ]; then
     # Descr fits (based on Movshon RVCs)
     python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 0 2 $BOOT_REPS 0 1 # flex gauss, not joint
     python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 0 4 $BOOT_REPS 0 1 # flex gauss, not joint; sach loss
-    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 2 $BOOT_REPS 0 1 # Tony DoG, not joint (sqrt)
-    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 # sach DoG, not joint (sqrt)
-    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 # sach DoG, not joint (sach loss)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 2 $BOOT_REPS 0 1 # Tony DoG, not joint (sqrt)
+    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 # sach DoG, not joint (sqrt)
+    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 # sach DoG, not joint (sach loss)
   fi
 fi
