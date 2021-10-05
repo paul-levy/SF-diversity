@@ -99,7 +99,7 @@ def get_num_comps(con):
 
   return num_comps
 
-def organize_modResp(modResp, expStructure, mask=None, resample=False):
+def organize_modResp(modResp, expStructure, mask=None, resample=False, cellNum=-1):
     # 01.18.19 - changed order of SF & CON in arrays to match organize_resp from other experiments
     # the blockIDs are fixed...
     # - resample: bootstrap resampling -- applies only to rateSfMix/allSfMix
@@ -159,7 +159,11 @@ def organize_modResp(modResp, expStructure, mask=None, resample=False):
                     else:
                       resps = modResp[mask][indCond];
                     rateSfMix[iW, iC, conInd] = numpy.nanmean(resps);
-                    allSfMix[iW, iC, conInd, 0:len(resps])] = resps;
+                    try:
+                      nResps = len(resps);
+                      allSfMix[iW, iC, conInd, 0:nResps] = resps;
+                    except:
+                      print('Could not put resps in allSfMix [cell %d]' % cellNum);
                     iC = iC+1;
                  
     return rateOr, rateCo, rateSfMix, allSfMix;

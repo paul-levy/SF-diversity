@@ -245,6 +245,8 @@ def analyze_filt(v1_field, lgn_field, n_samps, bounds):
   xfr_peak, yfr_peak = freqs[xmax], freqs[ymax];
   peak_sf = np.sqrt(np.square(xfr_peak) + np.square(yfr_peak));
   peak_ori = np.mod(np.round(hf.angle_xy([xfr_peak], [yfr_peak])[0], 3), 180);
+  if np.isnan(peak_ori):
+    peak_ori = 0; # if, for ex., xfr and yfr are both 0, then the angle is undefined
 
   #####
   # What is the tuning? i.e. SF and ORI?
