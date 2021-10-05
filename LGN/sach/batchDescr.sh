@@ -12,8 +12,19 @@ source activate lcv-python
 DOG_MOD=${1:=1}
 DOG_LOSS=${2:=3}
 RVC_MOD=${3:=0}
+BOOT_ITER=${4:=0}
 
-for run in {1..34}
+for run in {1..11}
 do
-  python3.6 descr_fit.py $run $RVC_MOD 250 $DOG_LOSS $DOG_MOD 0 & 
+  python3.6 descr_fit.py $run $RVC_MOD 25 $DOG_LOSS $DOG_MOD 0 $BOOT_ITER & 
+done
+wait
+for run in {12..22}
+do
+  python3.6 descr_fit.py $run $RVC_MOD 25 $DOG_LOSS $DOG_MOD 0 $BOOT_ITER & 
+done
+wait
+for run in {23..34}
+do
+  python3.6 descr_fit.py $run $RVC_MOD 25 $DOG_LOSS $DOG_MOD 0 $BOOT_ITER & 
 done

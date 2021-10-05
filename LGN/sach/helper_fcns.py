@@ -4,7 +4,7 @@ import scipy.optimize as opt
 import os
 import random
 from time import sleep
-from scipy.stats import poisson
+from scipy.stats import poisson, sem
 import pdb
 
 # np_smart_load - loading that will account for parallelization issues - keep trying to load
@@ -12,6 +12,7 @@ import pdb
 # bw_log_to_lin
 # load_modParams - load the 4 parameters from the Tony fits...
 # flatten
+# resample_array
 
 # descrMod_name
 # flexible_Gauss - Descriptive function used to describe/fit SF tuning
@@ -28,7 +29,7 @@ import pdb
 # dog_init_params - given the responses, estimate initial parameters for a given DoG model
 # dog_fit - used to fit the Diff of Gauss responses -- either separately for each con, or jointly for all cons within a given dispersion
 
-# fit_rvc
+# rvc_fit
 
 # deriv_gauss - evaluate a derivative of a gaussian, specifying the derivative order and peak
 # compute_SF_BW - returns the log bandwidth for height H given a fit with parameters and height H (e.g. half-height)
@@ -100,6 +101,15 @@ def load_modParams(which_cell, contrast, loadPath='/home/pl1465/SF_diversity/LGN
 def flatten(l):
   flatten = lambda l: [item for sublist in l for item in sublist];
   return flatten(l);
+
+def resample_array(resample, arr):
+  # NOTE: by default, this allows resampling with replacement
+  if resample:
+    non_nan = nan_rm(arr);
+    curr_resps = numpy.random.choice(non_nan, len(non_nan));
+    return curr_resps;
+  else:
+    return arr;                  
 
 #######
 
@@ -458,8 +468,9 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, resps_std=None, join
     
   return NLL;
 
-def dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate, fracSig=1):
+def dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate, fracSig=1, bounds=None):
   ''' return the initial parameters for the DoG model, given the model choice and responses
+      --- if bounds is not None, then we'll ensure that each parameter is within the specified bounds
   '''
   maxResp       = np.max(resps_curr);
   freqAtMaxResp = all_sfs[np.argmax(resps_curr)];
@@ -473,7 +484,7 @@ def dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate, fracSig=1):
         range_baseline = (0, 3);
     else:
         range_baseline = (0.5 * base_rate, 1.5 * base_rate);
-    range_amp = (0.5 * maxResp, 1.25 * maxResp);
+    range_amp = (0.4 * maxResp, 0.8 * maxResp);
 
     max_sf_index = np.argmax(resps_curr); # what sf index gives peak response?
     mu_init = all_sfs[max_sf_index];
@@ -485,17 +496,18 @@ def dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate, fracSig=1):
     else:
         range_mu = (all_sfs[max_sf_index-1], all_sfs[max_sf_index+1]); # go +-1 indices from center
 
-    log_bw_lo = 0.75; # 0.75 octave bandwidth...
-    log_bw_hi = 2; # 2 octave bandwidth...
-    denom_lo = bw_log_to_lin(log_bw_lo, mu_init)[0]; # get linear bandwidth
-    denom_hi = bw_log_to_lin(log_bw_hi, mu_init)[0]; # get lin. bw (cpd)
+    denom_lo = 0.2; # 0.75 octave bandwidth...
+    denom_hi = 0.7; # 2 octave bandwidth...
     range_denom = (denom_lo, denom_hi); # don't want 0 in sigma 
+    if fracSig:
+      range_sigmaHigh = (0.2, 0.75); # allow the fracSig value to go above the bound used for V1, since we adjust if bound is there
+
 
     init_base = random_in_range(range_baseline)[0]; # NOTE addition of [0] to "unwrap" random_in_range value
     init_amp = random_in_range(range_amp)[0];
     init_mu = random_in_range(range_mu)[0];
     init_sig_left = random_in_range(range_denom)[0];
-    init_sig_right = random_in_range((0.2, 2))[0] if fracSig else random_in_range(range_denom)[0];
+    init_sig_right = random_in_range(range_sigmaHigh)[0] if fracSig else random_in_range(range_denom)[0];
     init_params = [init_base, init_amp, init_mu, init_sig_left, init_sig_right];
   ############
   ## SACH
@@ -515,6 +527,15 @@ def dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate, fracSig=1):
     init_gainFracSurr = random_in_range((0.1, 0.95))[0]; # was (0.7, 1)
     init_freqFracSurr = random_in_range((0.1, 0.7))[0]; # was (0.25, 0.35)
     init_params = [init_gainCent, init_freqCent, init_gainFracSurr, init_freqFracSurr];
+
+  # For all -- try 
+  if bounds is not None:
+    try:
+      for (ii,prm),bound in zip(enumerate(init_params), bounds):
+        if prm < bound[0] or prm > bound[1]:
+          init_params[ii] = (bound[0]+bound[1])*random_in_range([0.25, 0.75])[0] # some value in-between the two bounds
+    except: # we end up here if bounds is somehow not equal in # of entries to init_params
+      pass; # not ideal, but the parent function should handle failures of initialization by trying again, anyway
 
   return init_params
 
@@ -632,7 +653,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
       ###########
       ### pick initial params
       ###########
-      init_params = dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate, fracSig=fracSig)
+      init_params = dog_init_params(resps_curr, all_sfs, DoGmodel, base_rate, fracSig=fracSig, bounds=allBounds)
 
       # choose optimization method
       if np.mod(n_try, 2) == 0:
@@ -640,7 +661,10 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
       else:
           methodStr = 'TNC';
           
-      wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
+      try:
+        wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
+      except:
+        continue; # the fit has failed (bound issue, for example); so, go back to top of loop, try again
       
       # compare
       NLL = wax['fun'];
@@ -808,13 +832,13 @@ def rvc_fit(amps, cons, var = None, n_repeats = 1000, mod=0, fix_baseline=True, 
        lam1 = 5; # lambda parameter for regularization
        obj = lambda params: np.sum(np.multiply(loss_weights, np.square(curr_amps - naka_rushton(curr_cons, params)))) + lam1*(params[-1]-1); # params[-1] is "sExp"
 
-     if prevFits is None:
-       best_loss = 1e6; # start with high value
-       best_params = []; conGain = [];
-     else: # load the previous best_loss/params/conGain
+     try: # load the previous best_loss/params/conGain
        best_loss = prevFits['loss'][i];
        best_params = prevFits['params'][i];
        conGain = prevFits['conGain'][i];
+     except:
+       best_loss = 1e6; # start with high value
+       best_params = []; conGain = [];
 
      for rpt in range(n_repeats):
 
@@ -952,7 +976,7 @@ def blankResp(data):
 
   return mu, std;
 
-def tabulateResponses(data):
+def tabulateResponses(data, resample=False):
   ''' Given the dictionary containing all of the data, organize the data into the proper responses
   Specifically, we know that Sach's experiments varied contrast and spatial frequency
   Thus, we will organize responses along these dimensions
@@ -979,14 +1003,21 @@ def tabulateResponses(data):
     for sf in range(len(all_sfs)):
       val_sf = np.where(data['sf'][val_con] == all_sfs[sf]);
 
-      # take mean, since some conditions have repeats - just average them
-      f0mean[con, sf] = np.mean(data['f0'][val_con][val_sf]);
-      f0sem[con, sf] = np.mean(data['f0sem'][val_con][val_sf]);
-      f1mean[con, sf] = np.mean(data['f1'][val_con][val_sf]);
-      f1sem[con, sf] = np.mean(data['f1sem'][val_con][val_sf]);
+      if resample: # we'll do it manually, since we want to keep f0/f1 resamplings aligned
+        non_nan = np.where(~np.isnan(data['f1arr'][val_con][val_sf]))[-1]; # we accidentally create a singleton 1st dim. with this indexing; ignore it
+        new_inds = np.random.choice(non_nan, len(non_nan));
+        f0arr[con][sf] = nan_rm(data['f0arr'][val_con][val_sf][0][new_inds]); # internal [0] is again due to poor indexing
+        f1arr[con][sf] = nan_rm(data['f1arr'][val_con][val_sf][0][new_inds])
+      else:
+        f0arr[con][sf] = nan_rm(data['f0arr'][val_con][val_sf]);
+        f1arr[con][sf] = nan_rm(data['f1arr'][val_con][val_sf]);
 
-      f0arr[con][sf] = data['f0arr'][val_con][val_sf];
-      f1arr[con][sf] = data['f1arr'][val_con][val_sf];
+      # take mean, since some conditions have repeats - just average them
+      f0mean[con, sf] = np.mean(f0arr[con][sf]); #np.mean(data['f0'][val_con][val_sf]);
+      f0sem[con, sf] = sem(f0arr[con][sf]); #np.mean(data['f0sem'][val_con][val_sf]);
+      f1mean[con, sf] = np.mean(f1arr[con][sf]); #np.mean(data['f1'][val_con][val_sf]);
+      f1sem[con, sf] = sem(f1arr[con][sf]); #np.mean(data['f1sem'][val_con][val_sf]);
+
 
   f0['mean'] = f0mean;
   f0['sem'] = f0sem;
