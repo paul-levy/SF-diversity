@@ -46,12 +46,12 @@ for i in range(2):
     rcParams['xtick.major.size'] = 25
     rcParams['xtick.minor.size'] = 12
     rcParams['ytick.major.size'] = 25
-    rcParams['ytick.minor.size'] = 0; # i.e. don't have minor ticks on y...                                                                                                              
+    rcParams['ytick.minor.size'] = 12; # i.e. don't have minor ticks on y...                                                                                                              
 
     rcParams['xtick.major.width'] = 2
     rcParams['xtick.minor.width'] = 2
     rcParams['ytick.major.width'] = 2
-    rcParams['ytick.minor.width'] = 0
+    rcParams['ytick.minor.width'] = 2
 
 majWidth = 4;
 minWidth = 4;
@@ -87,7 +87,7 @@ fracSig = 1;
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_210901';
+descrBase = 'descrFits_211005'; #210929'; #210914
 #descrBase = 'descrFits_210524';
 #descrBase = 'descrFits_210503';
 #descrBase = 'descrFits_210304';
@@ -101,7 +101,7 @@ if descrJnt == 1:
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
 #rvcBase = 'rvcFits_200714'; # direc flag & '.npy' are adde
 #rvcBase = 'rvcFits_210524';
-rvcBase = 'rvcFits_210901';
+rvcBase = 'rvcFits_210914';
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
@@ -259,7 +259,7 @@ for d in range(nDisps):
 
         ## if flexGauss plot peak & frac of peak
         frac_freq = hf.sf_highCut(prms_curr, descrMod, frac=peakFrac, sfRange=(0.1, 15), baseline_sub=baseline_resp);
-        if descrMod == 0:
+        if descrMod == 0 or descrMod == 3:
           #ctr = hf.sf_com(resps, sfVals);
           pSf = hf.descr_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
           for ii in range(2):
@@ -295,7 +295,7 @@ for d in range(nDisps):
           descr_curr = descrResp - to_sub;
           abvThresh = [descr_curr>minResp_toPlot]
           dispAx[d][c_plt_ind, 1].plot(sfs_plot[abvThresh], descr_curr[abvThresh], color=currClr, label='descr. fit', clip_on=False)
-          if descrMod == 0:
+          if descrMod == 0 or descrMod == 3:
             psf = hf.descr_prefSf(prms_curr, dog_model=descrMod);
             #if psf != np.nan:
             #  dispAx[d][c_plt_ind, 1].plot(psf, 1, 'b', color='k', label='peak freq', clip_on=False);
@@ -596,6 +596,12 @@ for d in range(nDisps):
         except:
           curr_varExpl = np.nan;
         rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f [vE=%.2f%%]' % (d+1, all_sfs[sf_ind], curr_varExpl), fontsize='large');
+        if rvcMod == 0:
+          try:
+            cg = rvcFits[d]['conGain'][sf_ind] if rvcAdj else rvcFits['conGain'][d, sf_ind];
+            rvcAx[plt_x][plt_y].text(0.02, 1, 'conGain=%.1f' % cg);
+          except:
+             pass; # not essential...
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         sns.despine(ax = rvcAx[plt_x][plt_y], offset = 10, trim=False);
@@ -1005,3 +1011,74 @@ for f in fDisp:
     plt.close(f)
 pdfSv.close();
 
+
+# #### Plot d-DoG-S model in space, just sfMix contrasts
+
+if descrMod == 3: # i.e. d-DoG-s
+
+  mixCons = hf.get_exp_params(expInd).nCons;
+  minResp = np.min(np.min(np.min(respMean[~np.isnan(respMean)])));
+  maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
+
+  f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(nDisps*9, mixCons*8), sharex=True, sharey=False);
+
+  for d in range(nDisps):
+      v_cons = np.array(val_con_by_disp[d]);
+      n_v_cons = len(v_cons);
+      v_cons = v_cons[np.arange(np.maximum(0, n_v_cons -mixCons), n_v_cons)]; # max(1, .) for when there are fewer contrasts than 4
+      n_v_cons = len(v_cons);
+
+      for c in reversed(range(n_v_cons)):
+          c_plt_ind = n_v_cons - c - 1;
+          sfMixAx[c_plt_ind, d].set_title('con: %s%%' % str(int(100*(np.round(all_cons[v_cons[c]], 2)))));
+          v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);
+
+          sfVals = all_sfs[v_sfs];
+          resps  = respMean[d, v_sfs, v_cons[c]];
+
+          # plot model
+          prms_curr = descrParams[d, v_cons[c]];
+          space, samps, dc, df1, df2 = hf.parker_hawken(prms_curr, inSpace=True, debug=True);
+
+          sfMixAx[c_plt_ind, d].plot(samps, space, 'k-')#, label='full');
+          # and plot the constitutent parts
+          sfMixAx[c_plt_ind, d].plot(samps, dc, 'k--')#, label='center');
+          sfMixAx[c_plt_ind, d].plot(samps, df1, 'r-')#, label='f1');
+          sfMixAx[c_plt_ind, d].plot(samps, df2, 'b-')#, label='f2');
+
+          if d == 0:
+            if c_plt_ind == 0:
+              sfMixAx[c_plt_ind, d].set_ylabel('resp (sps)');
+              #sfMixAx[c_plt_ind, d].legend(fontsize='x-small');
+            if c_plt_ind == mixCons-1:
+              sfMixAx[c_plt_ind, d].set_xlabel('dva');
+
+          # Add parameters! (in ax-transformed coords, (0,0) is bottom left, (1,1) is top right
+          prms_curr_trans = hf.parker_hawken_transform(np.copy(prms_curr), space_in_arcmin=True);
+          kc1,xc1,ks1,xs1 = prms_curr_trans[0:4];
+          kc2,xc2,ks2,xs2 = prms_curr_trans[4:8];
+          g,S = prms_curr_trans[8:];
+          # -- first, dog 1; then dog2; finally gain, S
+          sfMixAx[c_plt_ind, d].text(0, 0.16, r"""ctr: $k_c/k_s/x_c/x_s$=%.0f/%.0f/%.2f'/%.2f'""" % (kc1,ks1,xc1,xs1), transform=sfMixAx[c_plt_ind, d].transAxes, horizontalalignment='left', fontsize='x-small');
+          sfMixAx[c_plt_ind, d].text(0, 0.08, r"""sd: $k_c/k_s/x_c/x_s$=%.0f/%.0f/%.2f'/%.2f'""" % (kc2,ks2,xc2,xs2), transform=sfMixAx[c_plt_ind, d].transAxes, horizontalalignment='left', fontsize='x-small');
+          sfMixAx[c_plt_ind, d].text(0, 0, r"""$g/S$=%.2f/%.2f'""" % (g,S), transform=sfMixAx[c_plt_ind, d].transAxes, horizontalalignment='left', fontsize='x-small');
+
+          #sfMixAx[c_plt_ind, d].set_aspect('equal');
+
+          # Set ticks out, remove top/right axis, put ticks only on bottom/left
+          sns.despine(ax=sfMixAx[c_plt_ind, d], offset=10, trim=False);
+
+  f.legend();
+  f.suptitle('%s #%d (%s; f1f0 %.2f)' % (cellType, cellNum, cellName, f1f0rat));
+  #f.tight_layout(rect=[0, 0, 1, 0.97])
+
+  allFigs = [f]; 
+  saveName = "/cell_%03d.pdf" % (cellNum)
+  full_save = os.path.dirname(str(save_loc + 'sfMixOnly%s_ddogs/' % rvcFlag));
+  if not os.path.exists(full_save):
+    os.makedirs(full_save);
+  pdfSv = pltSave.PdfPages(full_save + saveName);
+  for fig in range(len(allFigs)):
+      pdfSv.savefig(allFigs[fig])
+      plt.close(allFigs[fig])
+  pdfSv.close()
