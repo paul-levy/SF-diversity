@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
 import seaborn as sns
 sns.set(style='ticks')
-import helper_fcns
+import helper_fcns_sach as hf
 from scipy.stats import poisson, nbinom
 
 import pdb
@@ -47,32 +47,16 @@ zSub = 1; # are we loading fits that were fit to responses adjusted s.t. the low
 ## NOTE: SF tuning curves with with zSub; RVCs are not, so we must subtract respAdj from the RVC curve to align with what we fit (i.e. the zSub'd data)
 #######
 
-
-fLname = 'descrFits_s210920';
-#fLname = 'descrFits_s210721';
-if sf_loss_type == 1:
-  loss_str = '_poiss';
-elif sf_loss_type == 2:
-  loss_str = '_sqrt';
-elif sf_loss_type == 3:
-  loss_str = '_sach';
-elif sf_loss_type == 4:
-  loss_str = '_varExpl';
-if sf_DoG_model == 0:
-  mod_str = '_flex';
-if sf_DoG_model == 1:
-  mod_str = '_sach';
-elif sf_DoG_model == 2:
-  mod_str = '_tony';
-fLname_full = fLname + loss_str + mod_str + '.npy';
-
-descrFits = helper_fcns.np_smart_load(dataPath + fLname_full);
+fLname = 'descrFits_s211006';
+mod_str = hf.descrMod_name(sf_DoG_model);
+fLname_full = hf.descrFit_name(sf_loss_type, fLname, mod_str);
+descrFits = hf.np_smart_load(dataPath + fLname_full);
 descrFits = descrFits[which_cell-1]; # just get this cell
 
-rvcSuff = helper_fcns.rvc_mod_suff(rvcMod);
-rvcBase = 'rvcFits_210920';
+rvcSuff = hf.rvc_mod_suff(rvcMod);
+rvcBase = 'rvcFits_211006';
 #rvcBase = 'rvcFits_210721';
-rvcFits = helper_fcns.np_smart_load(dataPath + helper_fcns.rvc_fit_name(rvcBase, rvcMod));
+rvcFits = hf.np_smart_load(dataPath + hf.rvc_fit_name(rvcBase, rvcMod));
 rvcFits = rvcFits[which_cell-1];
 
 ### now, get the FULL save_loc (should have fit name)
@@ -86,7 +70,7 @@ if not os.path.exists(save_loc):
 
 data = cellStruct['data'];
 
-resps, stimVals, _ = helper_fcns.tabulateResponses(data);
+resps, stimVals, _ = hf.tabulateResponses(data);
 # all responses on log ordinate (y axis) should be baseline subtracted
 
 all_cons = stimVals[0];
@@ -129,7 +113,7 @@ for c in reversed(range(nCons)):
     # then descriptive fit
     sfs_plot = np.geomspace(all_sfs[val_sfs[0]], all_sfs[val_sfs[-1]], 100);
     prms_curr = descrFits['params'][c];
-    descrResp = helper_fcns.get_descrResp(prms_curr, sfs_plot, sf_DoG_model);
+    descrResp = hf.get_descrResp(prms_curr, sfs_plot, sf_DoG_model);
     ax[1].plot(sfs_plot, descrResp, '-', clip_on=False, color=col); #, label=str(np.round(all_cons[c], conDig)))
 
 for i in range(2):
@@ -197,21 +181,21 @@ for c in reversed(range(nCons)):
 
       # plot descriptive model fit and inferred characteristic frequency
       if fromFile:
-        curr_mod_params = helper_fcns.load_modParams(which_cell, c);
+        curr_mod_params = hf.load_modParams(which_cell, c);
       else:
         curr_mod_params = descrFits['params'][c]; 
-      mod_resps = helper_fcns.get_descrResp(curr_mod_params, data_sfs, sf_DoG_model);
-      mod_resps_plt = helper_fcns.get_descrResp(curr_mod_params, sfs_plot, sf_DoG_model);
+      mod_resps = hf.get_descrResp(curr_mod_params, data_sfs, sf_DoG_model);
+      mod_resps_plt = hf.get_descrResp(curr_mod_params, sfs_plot, sf_DoG_model);
       sfsAx[c_plt_ind, i].plot(sfs_plot, mod_resps_plt, clip_on=False, color=col)
       # now plot characteristic frequency!
-      f_c = helper_fcns.dog_charFreq(curr_mod_params, sf_DoG_model);
+      f_c = hf.dog_charFreq(curr_mod_params, sf_DoG_model);
       sfsAx[c_plt_ind, i].plot(f_c, 1, 'v', color='k');
 
       sfsAx[c_plt_ind, i].set_xlim((min(sfs_plot), max(sfs_plot)));
 
       sfsAx[c_plt_ind, i].set_xscale('log');
       if fromFile:
-        varExpl = helper_fcns.var_expl_direct(curr_resps[v_sfs], mod_resps);
+        varExpl = hf.var_expl_direct(curr_resps[v_sfs], mod_resps);
       else:
         varExpl = descrFits['varExpl'][c];
       sfsAx[c_plt_ind, i].set_title('SF tuning: contrast: %.3f%%, %.1f%% varExpl' % (all_cons[c], varExpl));
@@ -275,7 +259,7 @@ for sf in range(n_v_sfs):
     # now plot model
     cons_plot = np.geomspace(np.min(all_cons), np.max(all_cons), 100);
     prms_curr = rvcFits['params'][sf];
-    rvcResps = helper_fcns.get_rvcResp(prms_curr, cons_plot, rvcMod);
+    rvcResps = hf.get_rvcResp(prms_curr, cons_plot, rvcMod);
     ax[plt_y].plot(cons_plot, np.maximum(rvcResps - respAdj, 0.1), 'r--', clip_on=False, color=col);
 
     ax[plt_y].set_xscale('log', basex=10); # was previously symlog, linthreshx=0.01
@@ -327,10 +311,10 @@ for sf in reversed(range(n_v_sfs)):
     cons_plot = np.geomspace(np.min(all_cons), np.max(all_cons), 100);
     prms_curr = rvcFits['params'][sf];
     if rvcMod == 0: # i.e. movshon form
-      rvcModel = helper_fcns.get_rvc_model();
+      rvcModel = hf.get_rvc_model();
       rvcResps = rvcModel(*prms_curr, cons_plot);
     elif rvcMod == 1 or rvcMod == 2: # naka-rushton (or modified version)
-      rvcResps = helper_fcns.naka_rushton(cons_plot, prms_curr)
+      rvcResps = hf.naka_rushton(cons_plot, prms_curr)
     ax[1].plot(cons_plot, np.maximum(rvcResps, 0.1), color=col, \
                      clip_on=False);
 

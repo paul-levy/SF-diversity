@@ -1,5 +1,5 @@
 import numpy as np
-import helper_fcns as hf
+import helper_fcns_sach as hf
 import scipy.optimize as opt
 from scipy.stats import norm, mode, lognorm, nbinom, poisson
 from numpy.matlib import repmat
@@ -111,14 +111,14 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
 
     if DoGmodel == 0:
       nParam = 5;
-    else:
+    else: # we should not fit the d-DoG-S model in the LGN!
       nParam = 4;
     
     # load cell information
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits_s210920';
+    fLname = 'descrFits_s211006';
     #fLname = 'descrFits_s210520';
     #fLname = 'descrFits_s210304';
 
@@ -188,6 +188,16 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     ##########
     ### End of boot loop
     ##########
+    # remove any singleton dimensions
+    bestNLL = np.squeeze(bestNLL, axis=0) if bestNLL.shape[0]==1 else bestNLL;
+    currParams = np.squeeze(currParams, axis=0) if currParams.shape[0]==1 else currParams;
+    varExpl = np.squeeze(varExpl, axis=0) if varExpl.shape[0]==1 else varExpl;
+    prefSf = np.squeeze(prefSf, axis=0) if prefSf.shape[0]==1 else prefSf;
+    charFreq = np.squeeze(charFreq, axis=0) if charFreq.shape[0]==1 else charFreq;
+    if joint==True:
+      paramList = np.squeeze(paramList, axis=0) if paramList.shape[0]==1 else paramList;
+      totalNLL = np.squeeze(totalNLL, axis=0) if totalNLL.shape[0]==1 else totalNLL;
+
     # before we update stuff - load again in case some other run has saved/made changes
     if os.path.isfile(fLname):
       print('reloading descrFits...');
@@ -208,7 +218,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
           totalNLL = descrFits[cell_num-1]['totalNLL'];
           paramList = descrFits[cell_num-1]['paramList'];
 
-        # remove any singleton dimensions
+        # remove any singleton dimensions --- TODO this should be redundant if the cell is never saved with singleton dims
         bestNLL = np.squeeze(bestNLL, axis=0) if bestNLL.shape[0]==1 else bestNLL;
         currParams = np.squeeze(currParams, axis=0) if currParams.shape[0]==1 else currParams;
         varExpl = np.squeeze(varExpl, axis=0) if varExpl.shape[0]==1 else varExpl;
@@ -264,7 +274,7 @@ if __name__ == '__main__':
 
     data_loc = '/users/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/LGN/sach/structures/';
     #rvcBase = 'rvcFits_210520'
-    rvcBase = 'rvcFits_210920'
+    rvcBase = 'rvcFits_211006'
 
     fracSig = 0; # should be unconstrained, per Tony (21.05.19) for LGN fits
 

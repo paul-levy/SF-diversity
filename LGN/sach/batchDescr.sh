@@ -5,7 +5,7 @@ source activate lcv-python
 # 1 - cell #
 # 2 - rvcModel (should be 0 [tony] or 1 [naka-rushton])
 # 3 - nRpts (for DoG fit)
-# 4 - loss type (1: poiss; 2: sqrt; 3: sach; 4: varExpl)
+# 4 - loss type (1: lsq; 2: sqrt; 3: poiss; 4: sach)
 # 5 - dogModel (0: flex || 1: sach || 2: tony)
 # 6 - joint fitting (0 - no; 1 - yes) //see hf.dog_fit for details
 
