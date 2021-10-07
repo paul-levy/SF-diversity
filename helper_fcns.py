@@ -1657,16 +1657,17 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, computeNorm=0, parker
   ''' Difference of gaussians as described in Sach's thesis
   [0] gain_c    - gain of the center mechanism
   [1] r_c       - radius of the center
-  [2] gain_s    - gain of surround mechanism
-  [3] r_s       - radius of surround
+  [2] gain_s    - gain of surround mechanism [multiplier to make the term rel. to gain_c, if parker_hawken_equiv=True]
+  [3] r_s       - radius of surround [multiplier to make the term rel. to r_c, if parker_hawken_equiv=True]
   --- Note that if baseline is non-zero, we'll add this to the response but it is NOT optimized, as of 21.05.03
   --- If parker_hawken_equiv, we change the multiplictive terms in front of the exp to be in parallel with Parker-Hawken model
   ------ DEFAULT IS TRUE, MEANING NOT BACKWARD COMPATIBLE (gain term will have multiplicative scalar offset)
+  ------ in that case, we also re-parameterize the surround gain/radii to be relative to the center's
   '''
   np = numpy;
   if computeNorm == 1:
     if parker_hawken_equiv:
-      dog = lambda f: baseline + np.maximum(0, gain_c*np.sqrt(np.pi)*r_c*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*np.exp(-np.square(f*np.pi*r_s)));
+      dog = lambda f: baseline + np.maximum(0, gain_c*(np.sqrt(np.pi)*r_c*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*r_c*np.exp(-np.square(f*np.pi*r_s*r_c))));
     else:
       dog = lambda f: baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(f*np.pi*r_s)));
 
@@ -1676,7 +1677,7 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, computeNorm=0, parker
     return dog(stim_sf), dog_norm(stim_sf);
   else:
     if parker_hawken_equiv:
-      tune = baseline + gain_c*np.sqrt(np.pi)*r_c*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*np.exp(-np.square(stim_sf*np.pi*r_s));
+      tune = baseline + gain_c*(np.sqrt(np.pi)*r_c*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*r_c*np.exp(-np.square(stim_sf*np.pi*r_s*r_c)));
       #tune = baseline + np.maximum(0, gain_c*np.sqrt(np.pi)*r_c*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*np.exp(-np.square(stim_sf*np.pi*r_s)));
     else:
       tune = baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(stim_sf*np.pi*r_s)));
@@ -2017,7 +2018,11 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
       totalLoss = totalLoss + sum(-np.log(poiss)) + maxPen;
     elif loss_type == 4: # sach's loss function
       k = 0.01*np.max(curr_resps);
-      if resps_std is None:
+      if np.ma.isMaskedArray(curr_std): # if it's a masked array
+        nans = np.any(curr_std.mask); # if anything is masked out, then we cannot use sigma
+      else:
+        nans = np.any(np.isnan(curr_std));
+      if resps_std is None or nans: # i.e. if any NaN, then we shouldn't use stderr
         sigma = np.ones_like(curr_resps);
       else:
         sigma = curr_std;
@@ -2102,8 +2107,9 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
       init_gainCent = maxResp/(init_radiusCent*np.sqrt(np.pi)) * random_in_range((0.7, 1.3))[0]; # 
     else: # just keeping for backwards compatability
       init_gainCent = 5e2*random_in_range((1, 300))[0];
-    init_gainSurr = init_gainCent * random_in_range((0.3, 0.8))[0]; # start with a stronger surround
-    init_radiusSurr = init_radiusCent * random_in_range((0.75, 7))[0];
+    # -- surround parameters are relataive to center
+    init_gainSurr = random_in_range((0.1, 0.8))[0]; #init_gainCent * random_in_range((0.5, 0.9))[0]; # start with a stronger surround?
+    init_radiusSurr = random_in_range((1.1, 2))[0]; #init_radiusCent * random_in_range((0.9, 4))[0];
     init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
   ############
   ## TONY
@@ -2202,6 +2208,16 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
   elif DoGmodel == 1: # SACH
     bound_gainCent = (1e-3, None);
     bound_radiusCent= (1e-3, None);
+    bound_gainSurr = (1e-2, 1); # multiplier on gainCent, thus the center must be weaker than the surround
+    bound_radiusSurr = (1, 25); # multiplier on radiusCent, thus the surr. radius must be larger than the center
+    if joint==True: # TODO: Is this ok with reparameterization?
+      bound_gainRatio = (1e-3, 1); # the surround gain will always be less than the center gain
+      bound_radiusRatio= (1, None); # the surround radius will always be greater than the ctr r
+      # we'll add to allBounds later, reflecting joint gain/radius ratios common across all cons
+      allBounds = (bound_gainRatio, bound_radiusRatio);
+    else:
+      allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
+    ''' # Deprecated now that we've re-parameterized the sach DoG
     if joint==True:
       bound_gainRatio = (1e-3, 1); # the surround gain will always be less than the center gain
       bound_radiusRatio= (1, None); # the surround radius will always be greater than the ctr r
@@ -2211,6 +2227,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       bound_gainSurr = (1e-3, None);
       bound_radiusSurr= (1e-3, None);
       allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
+   '''
   elif DoGmodel == 2: # TONY
     bound_gainCent = (1e-3, None);
     bound_freqCent= (1e-1, 2e1); # let's set the charFreq upper bound at 20 cpd (is that ok?)

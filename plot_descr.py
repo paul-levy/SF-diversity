@@ -511,7 +511,8 @@ pdfSv.close()
 #### Response versus contrast (RVC; contrast response function, CRF)
 ##################
 
-cons_plot = np.geomspace(np.min(all_cons), np.max(all_cons), 100);
+cons_plot = np.geomspace(np.minimum(0.01, all_cons), np.max(all_cons), 100); # go down to at least 1% contrast
+#cons_plot = np.geomspace(np.min(all_cons), np.max(all_cons), 100);
 
 # #### Plot contrast response functions with descriptive RVC model predictions
 
@@ -599,7 +600,7 @@ for d in range(nDisps):
         if rvcMod == 0:
           try:
             cg = rvcFits[d]['conGain'][sf_ind] if rvcAdj else rvcFits['conGain'][d, sf_ind];
-            rvcAx[plt_x][plt_y].text(0.02, 1, 'conGain=%.1f' % cg);
+            rvcAx[plt_x][plt_y].text(0, 0.95, 'conGain=%.1f' % cg, transform=rvcAx[plt_x][plt_y].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='top');
           except:
              pass; # not essential...
 
