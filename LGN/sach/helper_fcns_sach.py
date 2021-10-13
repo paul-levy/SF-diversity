@@ -233,7 +233,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
         bestNLL[con] = NLL;
         currParams[con, :] = params;
         curr_mod = get_descrResp(params, all_sfs, DoGmodel);
-        varExpl[con] = var_expl_direct(resps_curr, curr_mod);
+        varExpl[con] = var_expl_direct(resps_curr[all_sfs>0], curr_mod[all_sfs>0]); # do not include 0/cdeg SF conditoin
         prefSf[con] = dog_prefSf(params, dog_model=DoGmodel, all_sfs=all_sfs[all_sfs>0]); # do not include 0 c/deg SF condition
         charFreq[con] = dog_charFreq(params, DoGmodel=DoGmodel);
 

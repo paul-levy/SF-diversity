@@ -121,17 +121,17 @@ if area == 'LGN':
   ####
   #dogNames = ['descrFits_s210304_sach_sach.npy'];
   #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
-  dogMod = 2; # 1 (sach) or 2 (Tony)
-  dogNames = ['descrFits_210914_sqrt_tony.npy', 'descrFits_s210920_sqrt_tony.npy'];
+  dogMod = 1; # 1 (sach) or 2 (Tony)
+  dogNames = ['descrFits_211005_sach_sach.npy', 'descrFits_s211006_sach_sach.npy'];
   #dogNames = ['descrFits_210304_sach_sach.npy', 'descrFits_s210304_sach_sach.npy'];
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
-  descrNames = ['descrFits_210914_sqrt_flex.npy', 'descrFits_s210920_sqrt_flex.npy'];
+  descrNames = ['descrFits_211005_sach_flex.npy', 'descrFits_s211006_sach_flex.npy'];
   #dogNames = ['descrFits_191023_sach_sach.npy'];
   #descrNames = ['descrFits_200507_sqrt_flex.npy'];
 
   #rvcNames = ['rvcFits_191023_pos.npy']; 
   #rvcMods = [0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
-  rvcNames = ['rvcFits_210914_pos.npy', 'rvcFits_210920.npy'];
+  rvcNames = ['rvcFits_210914_pos.npy', 'rvcFits_211006_pos.npy'];
   rvcMods = [0,0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
   #rvcNames = ['rvcFits_210304.npy']; 
   #rvcMods = [0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
@@ -163,7 +163,6 @@ if area == 'LGN':
   jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod)
 
   from datetime import datetime
-  #suffix = '210518'
   suffix = datetime.today().strftime('%y%m%d')
 
   np.save(base_dir + 'jointList_LGN_%s_vT%d_dvT%d' % (suffix, varExplThresh, dog_varExplThresh), jointList)

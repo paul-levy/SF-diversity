@@ -103,7 +103,7 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1, joint=False, fracSig=0, nBoots=0, forceOverwrite=True):
+def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1, joint=False, fracSig=0, nBoots=0, forceOverwrite=False):
 
     # Set up whether we will bootstrap straight away
     resample = False if nBoots <= 0 else True;
@@ -242,6 +242,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
           # must check separately for each contrast
           for con in range(nCons):
             if np.isnan(bestNLL[con]) or nll[con] < bestNLL[con] or forceOverwrite: # then UPDATE!
+              #print('\tcell %02d, con %02d: loss = %.2f' % (cell_num, con, nll[con]));
               bestNLL[con] = nll[con];
               currParams[con, :] = prms[con];
               varExpl[con] = vExp[con];
