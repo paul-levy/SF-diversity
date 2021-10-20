@@ -1897,8 +1897,10 @@ def dog_charFreqMod(descrFit, allCons, val_inds, varThresh=70, DoGmodel=1, lowCo
 
   return fcRatio, fc_model, opt_params, np.power(2, charFreqs), conVals;
 
-def dog_get_param(params, DoGmodel, metric):
+def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True):
   ''' given a code for which tuning metric to get, and the model/parameters used, return that metric
+      codes: 'gc', 'gs', 'rc', 'rs', 'vc', 'vs'
+      -- parker_hawken_equiv=False means original sach formultion
       note: when comparing the two formulations for DoG (i.e. Sach and Tony), we use Sach values as the reference
         to this end, we make the following transformations of the Tony parameters
         - gain:   gain/(pi*r^2)
@@ -1908,6 +1910,9 @@ def dog_get_param(params, DoGmodel, metric):
 
   if DoGmodel == 0 or DoGmodel == 3:
     return np.nan; # we cannot compute from that form of the model!
+  #########
+  ### Gain
+  #########
   if metric == 'gc': # i.e. center gain
     if DoGmodel == 1: # sach
       return params[0];
@@ -1917,11 +1922,14 @@ def dog_get_param(params, DoGmodel, metric):
       return np.divide(params[0], np.pi*np.square(rc));
   if metric == 'gs': # i.e. surround gain
     if DoGmodel == 1: # sach
-      return params[2];
+      return params[0]*params[2] if parker_hawken_equiv else params[2];
     elif DoGmodel == 2: # tony
       fc = params[1];
       rs = np.divide(1, np.pi*fc*params[3]); # params[3] is the multiplier on fc to get fs
       return np.divide(params[0]*params[2], np.pi*np.square(rs));
+  #########
+  ### Radius
+  #########
   if metric == 'rc': # i.e. center radius
     if DoGmodel == 1: # sach
       return params[1];
@@ -1930,11 +1938,18 @@ def dog_get_param(params, DoGmodel, metric):
       return np.divide(1, np.pi*fc);
   if metric == 'rs': # i.e. surround radius
     if DoGmodel == 1: # sach
-      return params[3];
+      return params[1]*params[3] if parker_hawken_equiv else params[3];
     elif DoGmodel == 2: # tony
       fc = params[1];
       rs = np.divide(1, np.pi*fc*params[3]); # params[3] is the multiplier on fc to get fs
       return rs;
+  #########
+  ### Volume (gain * radius^2)
+  #########
+  if metric == 'vc': # i.e. center vol.
+      return dog_get_param(params, DoGmodel, 'gc', parker_hawken_equiv) * np.square(dog_get_param(params, DoGmodel, 'rc', parker_hawken_equiv));
+  if metric == 'vs': # i.e. surr. vol.
+      return dog_get_param(params, DoGmodel, 'gs', parker_hawken_equiv) * np.square(dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv));
 
 ## - for fitting DoG models
 
@@ -2207,7 +2222,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sigFrac);
   elif DoGmodel == 1: # SACH
     bound_gainCent = (1e-3, None);
-    bound_radiusCent= (1e-3, None);
+    bound_radiusCent= (1e-2, 0.5);
     bound_gainSurr = (1e-2, 1); # multiplier on gainCent, thus the center must be weaker than the surround
     bound_radiusSurr = (1, 25); # multiplier on radiusCent, thus the surr. radius must be larger than the center
     if joint==True: # TODO: Is this ok with reparameterization?
@@ -2754,7 +2769,9 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                ('fitListWght', fLW_nm),
                ('fitListFlat', fLF_nm),
                ('descrFits', dF_nm),
+               ('descrMod', descrMod), 
                ('dogFits', dog_nm),
+               ('dogMod', dogMod), 
                ('rvcFits', rv_nm),
                ('expName', expName),
                ('expInd', expInd),
@@ -2811,126 +2828,72 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      cut_sf = None;
 
    ####
-   # set up the arrays we need to store analyses
+   # set up the arrays (as dictionary entries) we need to store analyses
    ####
-   # first, model-free
-   sfVar = np.zeros((nDisps, nCons)) * np.nan; # variance calculation
-   boot_sfVar_md = np.zeros((nDisps, nCons)) * np.nan; # variance calculation
-   boot_sfVar_mn = np.zeros((nDisps, nCons)) * np.nan; # variance calculation
-   boot_sfVar_std = np.zeros((nDisps, nCons)) * np.nan; # variance calculation
-   sfCom = np.zeros((nDisps, nCons)) * np.nan; # center of mass
-   boot_sfCom_md = np.zeros((nDisps, nCons)) * np.nan; # center of mass
-   boot_sfCom_mn = np.zeros((nDisps, nCons)) * np.nan; # center of mass
-   boot_sfCom_std = np.zeros((nDisps, nCons)) * np.nan; # center of mass
-   sfComLin = np.zeros((nDisps, nCons)) * np.nan; # center of mass (linear, not log SF)
-   sfComCut = np.zeros((nDisps, nCons)) * np.nan; # center of mass, but with a restricted ("cut") set of SF
-   f1f0_ratio = np.nan;
-   # then, inferred from descriptive fits
-   lsfv = np.zeros((nDisps,nCons)) * np.nan; # LSFV as from Xing et al, 2004
-   bw_sigma = np.zeros((nDisps, nCons, 2)) * np.nan; # what's the left/right sigma parameter from the flex gauss fit?
-   boot_bw_sigma_mn = np.zeros((nDisps, nCons, 2)) * np.nan;
-   boot_bw_sigma_md = np.zeros((nDisps, nCons, 2)) * np.nan;
-   boot_bw_sigma_std = np.zeros((nDisps, nCons, 2)) * np.nan;
-   boot_bw_sigma_stdLog = np.zeros((nDisps, nCons, 2)) * np.nan;
-   bwHalf = np.zeros((nDisps, nCons)) * np.nan;
-   bwHalf_split = np.zeros((nDisps, nCons, 2)) * np.nan; # [:,:,[lower,upper]]
-   boot_bwHalf_mn = np.zeros((nDisps, nCons)) * np.nan;
-   boot_bwHalf_md = np.zeros((nDisps, nCons)) * np.nan;
-   boot_bwHalf_std = np.zeros((nDisps, nCons)) * np.nan;
-   bw34 = np.zeros((nDisps, nCons)) * np.nan;
-   bw34_split = np.zeros((nDisps, nCons, 2)) * np.nan;
-   boot_bw34_mn = np.zeros((nDisps, nCons)) * np.nan;
-   boot_bw34_md = np.zeros((nDisps, nCons)) * np.nan;
-   boot_bw34_std = np.zeros((nDisps, nCons)) * np.nan;
-   pSf = np.zeros((nDisps, nCons)) * np.nan;
-   boot_pSf_mn = np.zeros((nDisps, nCons)) * np.nan;
-   boot_pSf_md = np.zeros((nDisps, nCons)) * np.nan;
-   boot_pSf_std = np.zeros((nDisps, nCons)) * np.nan;
-   boot_pSf_stdLog = np.zeros((nDisps, nCons)) * np.nan;
-   sf70 = np.zeros((nDisps, nCons)) * np.nan;
-   boot_sf70_mn = np.zeros((nDisps, nCons)) * np.nan;
-   boot_sf70_md = np.zeros((nDisps, nCons)) * np.nan;
-   boot_sf70_std = np.zeros((nDisps, nCons)) * np.nan;
-   boot_sf70_stdLog = np.zeros((nDisps, nCons)) * np.nan;
-   dog_sf70 = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_sf70_mn = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_sf70_md = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_sf70_std = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_sf70_stdLog = np.zeros((nDisps, nCons)) * np.nan;
-   sf75 = np.zeros((nDisps, nCons)) * np.nan;
-   dog_sf75 = np.zeros((nDisps, nCons)) * np.nan;
-   sfE = np.zeros((nDisps, nCons)) * np.nan;
-   dog_sfE = np.zeros((nDisps, nCons)) * np.nan;
-   sfVarExpl = np.zeros((nDisps, nCons)) * np.nan;
-   conGain = np.zeros((nDisps, nSfs)) * np.nan;
-   c50 = np.zeros((nDisps, nSfs)) * np.nan;
-   c50_emp = np.zeros((nDisps, nSfs)) * np.nan;
-   c50_eval = np.zeros((nDisps, nSfs)) * np.nan;
-   c50_varExpl = np.zeros((nDisps, nSfs)) * np.nan;
-   # including from the DoG fits
-   dog_pSf = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_pSf_mn = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_pSf_md = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_pSf_std = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_pSf_stdLog = np.zeros((nDisps, nCons)) * np.nan;
-   dog_bwHalf = np.zeros((nDisps, nCons)) * np.nan;
-   dog_bwHalf_split = np.zeros((nDisps, nCons, 2)) * np.nan;
-   dog_bw34 = np.zeros((nDisps, nCons)) * np.nan;
-   dog_bw34_split = np.zeros((nDisps, nCons, 2)) * np.nan;
-   boot_dog_bwHalf_mn = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_bwHalf_md = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_bwHalf_std = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_bw34_mn = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_bw34_md = np.zeros((nDisps, nCons)) * np.nan;
-   boot_dog_bw34_std = np.zeros((nDisps, nCons)) * np.nan;
-   dog_varExpl = np.zeros((nDisps, nCons)) * np.nan;
-   dog_charFreq = np.zeros((nDisps, nCons)) * np.nan;
-   # including the difference/ratio arrays; where present, extra dim of len=2 is for raw/normalized-to-con-change values
-   sfVarDiffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   sfComRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   sfComLinRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   lsfvRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   bwHalfDiffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   bwHalfDiffs_split = np.zeros((nDisps, nCons, nCons, 2, 2)) * np.nan; # 2nd to last dim is [lower,upper] half rel. to peak
-   bw34Diffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   bw34Diffs_split = np.zeros((nDisps, nCons, nCons, 2, 2)) * np.nan; # 2nd to last dim is [lower,upper] half rel. to peak
-   boot_bwHalfDiffs_mn = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   boot_bwHalfDiffs_md = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   boot_bwHalfDiffs_std = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   pSfRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   pSfModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
-   dog_bwHalfDiffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   dog_bwHalfDiffs_split = np.zeros((nDisps, nCons, nCons, 2, 2)) * np.nan; # 2nd to last dim is [lower,upper] half rel. to peak
-   dog_bw34Diffs = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   dog_bw34Diffs_split = np.zeros((nDisps, nCons, nCons, 2, 2)) * np.nan; # 2nd to last dim is [lower,upper] half rel. to peak
-   dog_pSfRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   dog_pSfModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
+   # --- first, what are the metrics
+   metrs = ['sfVar', 'sfCom', 'sfComCut', # model-free metrics
+            'bw_sigma', 'lsfv', 'bwHalf', 'bw34', # bandwidth
+            'pSf', 'sf70', 'dog_charFreq', 'sfE', # sf
+            'arExpl', # variance explained (see below)
+            'conGain', 'c50', 'c50_emp', 'c50_eval', 'c50_varExpl', # RVC-based
+            'dog_mech',
+            'bwHalf_split', 'bw34_split',
+            # then the difference metrics
+            'bwHalfDiffs', 'bw34Diffs', 'pSfRats', 'pSfModRat', 'sf70Rats', 'dog_charFreqRats', 'sfComRats', 'sfVarDiffs'];
+   # ---then, which models (i.e. prefixes) apply to the above metrics
+   mods_pfx = ['', 'dog_']; # either blank (i.e. just descr. fit, should be flex. Gaus) or DoG model
+   no_pfx = ['']; # don't apply any other suffix (e.g. model-free)
+   # --- corresponding to each metr, which models apply (the default is mods, as above, e.g flex gauss and DoG)
+   metrs_which_mod = [no_pfx, no_pfx, no_pfx,
+                      no_pfx, no_pfx, mods_pfx, mods_pfx,
+                      mods_pfx, mods_pfx, no_pfx, mods_pfx,
+                      ['sfV', 'dog_v'], # note the oddities
+                      no_pfx, no_pfx, no_pfx, no_pfx, no_pfx,
+                      no_pfx,
+                      mods_pfx, mods_pfx,
+                      mods_pfx, mods_pfx, mods_pfx, mods_pfx, mods_pfx, no_pfx, no_pfx, no_pfx];
+   # --- if we do boot metrics for the above, what will they be?
+   boot_metrs = ['_mn', '_md', '_std', '_stdLog'];
+   # --- now, corresponding to each metr, ask whether we compute/save bootstrap metrics
+   metrs_has_boot = [None, boot_metrs, None, 
+                     None, None, boot_metrs, boot_metrs,
+                     boot_metrs, boot_metrs, boot_metrs, None,
+                     None,
+                     None, None, None, None, None,
+                     boot_metrs,
+                     None, None,
+                     None, None, None, None, None, None, None, None];
+   # --- what sizes for the arrays?
+   sz_typical = (nDisps, nCons); # what's the typical size for most metrics?
+   sz_splits = (nDisps, nCons, 2); # e.g. split bandwidth for below/above sfPref
+   sz_mech = (nDisps, nCons, 6); # mech for mechanism, for the DoG parameters (e.g. center radius, volumes)
+   sz_diffs = (nDisps, nCons, nCons, 2); # for diffs/rats b/t vals @2cons; xtra dim len=2 is for raw/norm-to-con-change values
+   sz_rvc = (nDisps, nSfs);
+   metrs_size = [sz_typical, sz_typical, sz_typical,
+                 sz_splits, sz_typical, sz_typical, sz_typical,
+                 sz_typical, sz_typical, sz_typical, sz_typical,
+                 sz_typical,
+                 sz_rvc, sz_rvc, sz_rvc, sz_rvc, sz_rvc,
+                 sz_mech,
+                 sz_splits, sz_splits,
+                 sz_diffs, sz_diffs, sz_diffs, sz_diffs, sz_diffs, sz_diffs, sz_diffs, sz_diffs];
 
-   sf70Rats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   boot_sf70_mnRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   boot_sf70_mdRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   boot_sf70_stdRats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   sf70ModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
-   dog_sf70Rats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   dog_sf70ModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
-   sf75Rats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   sf75ModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
-   dog_sf75Rats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   dog_sf75ModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
-   sfERats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   sfEModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
-   dog_sfERats = np.zeros((nDisps, nCons, nCons, 2)) * np.nan;
-   dog_sfEModRat = np.zeros((nDisps, 2)) * np.nan; # derived measure from descrFits (see descr_prefSf)
+   # --- set up the empty dictionary
+   dataMetrics = dict();
+   
+   # --- then fill for the above in a programmatc fashion
+   for name, mods, size, boots in zip(metrs, metrs_which_mod, metrs_size, metrs_has_boot):
+      for mod in mods:
+         curr_key = '%s%s' % (mod, name);
+         dataMetrics[curr_key] = np.nan * np.zeros(size);
+         if boots is not None:
+            for boot in boots:
+               boot_key = 'boot_%s%s' % (curr_key, boot);
+               dataMetrics[boot_key] = np.nan * np.zeros(size);
 
-   c50Rats = np.zeros((nDisps, nSfs, nSfs)) * np.nan;
-   # TODO: Move sfComLin next to sfCom once settled
-   # bwHalf, bw34, pSf, sfVar, sfCom, sf75, dog_sf75, sf70, dog_sf70, sfE, dog_sfE, dog_bwHalfDiffs, dog_bw34Diffs, dog_pSfRats, sfComLin
+   # bwHalf, bw34, pSf, sfVar, sfCom, sf70, dog_sf70, dog_charFreq,  dog_bwHalfDiffs, dog_bw34Diffs, dog_pSfRats
    # -- evaluated from data at 1:.33 contrast (only for single gratings)
-   diffsAtThirdCon = np.zeros((nDisps, 15, )) * np.nan;
-   # nDisps, half/three-fourths, lower/upper
-   diffsAtThirdCon_bwSplit = np.zeros((nDisps, 2, 2, )) * np.nan;
-   # just a separate one for LSFV, since we don't know if it will be kept
-   diffsAtThirdCon_lsfv = np.zeros((nDisps, )) * np.nan;
+   diffsAtThirdCon = np.zeros((nDisps, 11, )) * np.nan;
 
    # let's also keep a simple array for the index for full, one-third, and lowest valid contrast given descr. sf fit
    # -- why nDisps, 4? full -- one-third -- lowest (with descr.) -- lowest (with DoG)
@@ -2964,6 +2927,8 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      f1f0_ratio = compute_f1f0(tr, cell_ind+1, expInd, data_loc, dF_nm)[0]; # f1f0 ratio is 0th output
      respMeasure = 0; # assume it's DC by default
    force_dc = False; force_f1 = False;
+   # --- store the f1f0_ratio
+   dataMetrics['f1f0_ratio'] = f1f0_ratio;
    if expDir == 'LGN/' or isSach:
      force_f1 = True;
    if expDir == 'V1_orig/' or expDir == 'altExp/':
@@ -2987,10 +2952,14 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      # we'll write a simple function that helps expand the dimensions of each dictionary key to [nDisp, X, Y]
      def expand_sach(currDict):
        for key in currDict: # just expand along first dim
-          try:
-             currDict[key] = np.expand_dims(currDict[key], axis=0);
-          except:
-             pass;
+         try:
+            if 'boot' in key:
+               # then we expand on axis=1, since axis=0 is the boots
+               currDict[key] = np.expand_dims(currDict[key], axis=1);
+            else:
+               currDict[key] = np.expand_dims(currDict[key], axis=0);
+         except:
+            pass;
        return currDict;
 
    if isSach:
@@ -3016,16 +2985,19 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    except:
      nBoots_descr = 1;
      nBoots_dog = 1;
-   # interim values for computing
-   boot_sf70_values = np.zeros((nDisps, nCons, nBoots_descr)) * np.nan; 
-   boot_bwHalf_values = np.zeros((nDisps, nCons, nBoots_descr)) * np.nan;
-   boot_bw34_values = np.zeros((nDisps, nCons, nBoots_descr)) * np.nan;
-   boot_dog_sf70_values = np.zeros((nDisps, nCons, nBoots_dog)) * np.nan;
-   boot_dog_bwHalf_values = np.zeros((nDisps, nCons, nBoots_dog)) * np.nan;
-   boot_dog_bw34_values = np.zeros((nDisps, nCons, nBoots_dog)) * np.nan;
+   # storing bootstrap values for computing, analysis later on [initialize here]
+   boots_size_descr = (nDisps, nCons, nBoots_descr);
+   boots_size_dog = (nDisps, nCons, nBoots_dog);
+   for mod, sz in zip(['', 'dog_'], [boots_size_descr, boots_size_dog]):
+      for key in ['sf70', 'bwHalf', 'bw34', 'pSf']:
+         curr_key = 'boot_%s%s_values' % (mod, key);
+         dataMetrics[curr_key] = np.zeros(sz) * np.nan;
+   # and the "one-off"s, since they are different
+   dataMetrics['boot_dog_charFreq_values'] = np.zeros(boots_size_dog) * np.nan; # gain/radius/volume for center, then surround
+   dataMetrics['boot_dog_mech'] = np.zeros((nDisps, nCons, 6, nBoots_dog)) * np.nan; # gain/radius/volume for center, then surround
+   dataMetrics['c50Rats'] = np.nan * np.zeros((nDisps, nSfs, nSfs));
 
    for d in range(nDisps):
-
      #######
      ## spatial frequency stuff
      #######
@@ -3035,17 +3007,18 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        if isSach:
          curr_sfInd = np.arange(0, len(stimVals[2])); # all SFS are valid for Sach
        elif isBB:
-         curr_sfInd = np.arange(0, len(stimVals[2]));
+         curr_sfInd = np.arange(0, len(stimVals[2])); # all SFS are valid for sfBB
        else:
          curr_sfInd = get_valid_sfs(tr, d, c, expInd=expInd, stimVals=stimVals, validByStimVal=validByStimVal)
        curr_sfs   = stimVals[2][curr_sfInd];
        curr_resps = sfTuning[d, curr_sfInd, c];
        sf_gt0 = np.where(curr_sfs>0)[0]; # if we include a zero-SF condition, then everything goes to zero!
-       sfCom[d, c] = sf_com(curr_resps[sf_gt0], curr_sfs[sf_gt0])
+
+       dataMetrics['sfCom'][d, c] = sf_com(curr_resps[sf_gt0], curr_sfs[sf_gt0])
+       '''
        # do some bootstrapping here for non-descr. metrics
        boot_com = np.zeros((localBoots, ));
        boot_var = np.zeros((localBoots, ));
-       '''
        for i in range(localBoots):
          non_nan = nan_rm(curr_resps[sf_gt0]);
          curr_resps = numpy.random.choice(non_nan, len(non_nan));
@@ -3057,80 +3030,78 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        boot_sfCom_md[d, c] = np.nanmedian(boot_com);
        boot_sfCom_std[d, c] = np.nanstd(boot_com);
        '''
-       sfComLin[d, c] = sf_com(curr_resps[sf_gt0], curr_sfs[sf_gt0], logSF=False)
+       #sfComLin[d, c] = sf_com(curr_resps[sf_gt0], curr_sfs[sf_gt0], logSF=False)
 
-       sfVar[d, c] = sf_var(curr_resps[sf_gt0], curr_sfs[sf_gt0], sfCom[d, c]);
+       dataMetrics['sfVar'][d, c] = sf_var(curr_resps[sf_gt0], curr_sfs[sf_gt0], dataMetrics['sfCom'][d, c]);
 
-       #boot_sfVar_mn[d, c] = np.nanmean(boot_var);
-       #boot_sfVar_md[d, c] = np.nanmedian(boot_var);
-       #boot_sfVar_std[d, c] = np.nanstd(boot_var);
        # get the c.o.m. based on the restricted set of SFs, only
        if cut_sf is not None:
          cut_sfs, cut_resps = np.array(stimVals[2])[cut_sf], sfTuning[d, cut_sf, c];
-         sfComCut[d, c] = sf_com(cut_resps, cut_sfs)
+         dataMetrics['sfComCut'][d, c] = sf_com(cut_resps, cut_sfs)
 
        # first, DoG fit
        if cell_ind in dogFits:
          try:
            varExpl = dogFits[cell_ind]['varExpl'][d, c];
            if varExpl > dog_varExplThresh:
+             dataMetrics['dog_varExpl'][d,c] = varExpl;
              # on data
-             dog_pSf[d, c] = dogFits[cell_ind]['prefSf'][d, c]
-             dog_charFreq[d, c] = dogFits[cell_ind]['charFreq'][d, c]
-             dog_varExpl[d, c] = varExpl;
+             dataMetrics['dog_pSf'][d, c] = dogFits[cell_ind]['prefSf'][d, c]
+             dataMetrics['dog_charFreq'][d, c] = dogFits[cell_ind]['charFreq'][d, c]
              # get the params and do bandwidth, high-freq. cut-off measures
              dog_params_curr = dogFits[cell_ind]['params'][d, c];
-             dog_bwHalf[d, c] = compute_SF_BW(dog_params_curr, 0.5, sf_range=sf_range, sfMod=dogMod, baseline=baseline_resp)[1]
-             dog_bw34[d, c] = compute_SF_BW(dog_params_curr, 0.75, sf_range=sf_range, sfMod=dogMod, baseline=baseline_resp)[1]
-             for splitInd,splitHalf in enumerate([-1,1]):
-                dog_bwHalf_split[d, c, splitInd] = compute_SF_BW(dog_params_curr, height=0.5, sf_range=sf_range, which_half=splitHalf, sfMod=dogMod, baseline=baseline_resp)[1];
-                dog_bw34_split[d, c, splitInd] = compute_SF_BW(dog_params_curr, height=0.75, sf_range=sf_range, which_half=splitHalf, sfMod=dogMod, baseline=baseline_resp)[1]
+             for ky,height in zip(['dog_bwHalf', 'dog_bw34'], [0.5, 0.75]):
+                dataMetrics[ky][d, c] = compute_SF_BW(dog_params_curr, height, sf_range=sf_range, sfMod=dogMod, baseline=baseline_resp)[1];
+             for ky,height in zip(['dog_bwHalf_split', 'dog_bw34_split'], [0.5, 0.75]):
+                for splitInd,splitHalf in enumerate([-1,1]):
+                   dataMetrics[ky][d, c, splitInd] = compute_SF_BW(dog_params_curr, height=height, sf_range=sf_range, which_half=splitHalf, sfMod=dogMod, baseline=baseline_resp)[1];
              # -- note that for sf_highCut with the Diff. of Gauss models, we do NOT need to subtract the baseline
              # -- why? becaue the descr. model is already fit on top of the baseline (i.e. the descr. fit response does not include baseline)
-             dog_sf70[d, c] = sf_highCut(dog_params_curr, sfMod=dogMod, frac=0.7, sfRange=(0.1, 15));
-             dog_sf75[d, c] = sf_highCut(dog_params_curr, sfMod=dogMod, frac=0.75, sfRange=(0.1, 15));
-             dog_sfE[d, c] = sf_highCut(dog_params_curr, sfMod=dogMod, frac=eFrac, sfRange=(0.1, 15));
+             for ky,frac in zip(['dog_sf70', 'dog_sfE'], [0.7, eFrac]):
+                dataMetrics[ky][d, c] = sf_highCut(dog_params_curr, sfMod=dogMod, frac=frac, sfRange=(0.1, 15));
+             # Also get spatial params, i.e. center gain, radius, volume; surround gain, radius, volume
+             if dogMod == 3: # if it's sach, then let's get the "mech" for the center Gaussian
+               dataMetrics['dog_mech'][d, c] = [dog_get_param(dog_params_curr[0:4], 1, x) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]; #dogMod 1, since they're param. like Sach
+             else:
+               dataMetrics['dog_mech'][d, c] = [dog_get_param(dog_params_curr, dogMod, x) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']];
 
              # Now, bootstrap estimates
              try:
                # -- now, get the distribution of bootstrap estimates for sf70, pSf, bw_sigma, and bwHalf/bw34
-               # TEMPORARY HACK!!! fix code in descr_fits_sfBB [TODO]
+               # temp. hack??!! fix code in descr_fits_sfBB [TODO]
                boot_prms = dogFits[cell_ind]['boot_params']
                if boot_prms.shape[0] == 1:
                  boot_prms = np.transpose(boot_prms, axes=(1,0,2,3)); # i.e. flip 1st and 2nd axes
-               # ---- first, sf70
-               boot_dog_sf70_values[d, c] = np.array([sf_highCut(boot_prms[boot_i, d, c, :], sfMod=dogMod, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp) for boot_i in range(boot_prms.shape[0])]);
-               n_nonNan = np.sum(~np.isnan(boot_dog_sf70_values[d,c])); # i.e. how many are not NaN
-               if n_nonNan >= bootThresh*boot_prms.shape[0]:
-                 boot_dog_sf70_md[d, c] = np.nanmedian(boot_dog_sf70_values[d,c]);
-                 boot_dog_sf70_mn[d, c] = np.nanmean(boot_dog_sf70_values[d,c]);
-                 boot_dog_sf70_std[d, c] = np.nanstd(boot_dog_sf70_values[d,c]);
-                 boot_dog_sf70_stdLog[d, c] = np.nanstd(np.log10(boot_dog_sf70_values[d,c]));
-
-                 try:
-                   boot_dog_pSf_mn[d, c] = np.nanmean(dogFits[cell_ind]['boot_prefSf'][:, d, c])
-                   boot_dog_pSf_md[d, c] = np.nanmedian(dogFits[cell_ind]['boot_prefSf'][:, d, c])
-                   boot_dog_pSf_std[d, c] = np.nanstd(dogFits[cell_ind]['boot_prefSf'][:, d, c])
-                   boot_dog_pSf_stdLog[d, c] = np.nanstd(np.log10(dogFits[cell_ind]['boot_prefSf'][:, d, c]))
-                 except:
-                   pass; # LESS IMPORTANT; NONETHELESS, FIX!
-
-               # ---- then, bwHalf/34
-               boot_dog_bwHalf_values[d, c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=0.5, sf_range=sf_range, sfMod=dogMod)[1] for boot_i in range(boot_prms.shape[0])]);
-               n_nonNan = np.sum(~np.isnan(boot_dog_bwHalf_values)); # i.e. how many are not NaN
-               if n_nonNan >= bootThresh*boot_prms.shape[0]: # i.e. BW should be defined at least X% of the time!
-                 boot_dog_bwHalf_md[d, c] = np.nanmedian(boot_dog_bwHalf_values[d,c]);
-                 boot_dog_bwHalf_mn[d, c] = np.nanmean(boot_dog_bwHalf_values[d,c]);
-                 boot_dog_bwHalf_std[d, c] = np.nanstd(boot_dog_bwHalf_values[d,c]);
-               boot_dog_bw34_values[d, c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=0.75, sf_range=sf_range, sfMod=dogMod)[1] for boot_i in range(boot_prms.shape[0])]);
-               n_nonNan = np.sum(~np.isnan(boot_bw34_values)); # i.e. how many are not NaN
-               if n_nonNan >= bootThresh*boot_prms.shape[0]: # i.e. BW should be defined at least X% of the time!
-                 boot_dog_bw34_md[d, c] = np.nanmedian(boot_bw34_values[d,c]);
-                 boot_dog_bw34_mn[d, c] = np.nanmean(boot_bw34_values[d,c]);
-                 boot_dog_bw34_std[d, c] = np.nanstd(boot_bw34_values[d,c]);
+               # ---- zeroth, mechanism
+               dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, :]), dogMod, x) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]);
+               # then, in order: sf70, pSf, charFreq
+               metrs = ['pSf', 'charFreq', 'sf70', 'bwHalf', 'bw34'];
+               compute = ['np.nanmedian(', 'np.nanmean(', 'np.nanstd(', 'np.nanstd(np.log10(']
+               for metr in metrs:
+                  # get the key, values
+                  curr_key = 'boot_dog_%s_values' % metr;
+                  if 'sf70' in metr:
+                     dataMetrics[curr_key][d,c] = [sf_highCut(boot_prms[boot_i, d, c, :], sfMod=dogMod, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp) for boot_i in range(boot_prms.shape[0])];
+                     #dataMetrics[curr_key][d,c] = np.array([sf_highCut(boot_prms[boot_i, d, c, :], sfMod=dogMod, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp) for boot_i in range(boot_prms.shape[0])]);
+                  elif 'pSf' in metr or 'charFreq' in metr:
+                     # --- must manually specify for pSf, since we call it "pSf" but fits have "prefSf"
+                     dataMetrics[curr_key][d,c] = dogFits[cell_ind]['boot_%s' % metr][:, d, c] if 'charFreq' in metr else dogFits[cell_ind]['boot_prefSf'][:, d, c]
+                  elif 'bw' in metr:
+                     height = 0.5 if 'Half' in metr else 0.75; # assumes it's either half or 3/4th height
+                     dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=dogMod)[1] for boot_i in range(boot_prms.shape[0])]);
+                  # now compute the metrics
+                  for boot_metr,comp in zip(boot_metrs, compute):
+                     if 'bw' in metr and 'stdLog' in boot_metr:
+                        continue; # don't compute log for bandwidth stuff
+                     boot_key = 'boot_dog_%s%s' % (metr, boot_metr);
+                     #if n_nonNan >= bootThresh*boot_prms.shape[0]: # i.e. BW should be defined at least X% of the time!
+                     try: # need the if/else to handle the case where two parantheses need closing
+                        dataMetrics[boot_key][d,c] = eval('%sdataMetrics[curr_key][d,c]))' % comp) if 'stdLog' in boot_metr else eval('%sdataMetrics[curr_key][d,c])' % comp);
+                     except:
+                        pass
              except:
-               pass; # No boot values for this go around
-
+               pass
+                  
          except: # then this dispersion does not have that contrast value, but it's ok - we already have nan
            pass 
 
@@ -3139,64 +3110,62 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
          try:
            varExpl = descrFits[cell_ind]['varExpl'][d, c];
            if varExpl > varExplThresh:
+             dataMetrics['sfVarExpl'][d, c] = varExpl;
              # on data
-             lsfv[d, c] = compute_LSFV(descrFits[cell_ind]['params'][d, c, :]);
-             bwHalf[d, c] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.5, sf_range=sf_range, sfMod=descrMod)[1]
-             bw34[d, c] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.75, sf_range=sf_range, sfMod=descrMod)[1]
+             dataMetrics['lsfv'][d, c] = compute_LSFV(descrFits[cell_ind]['params'][d, c, :]);
+             params_curr = descrFits[cell_ind]['params'][d, c, :];
+             for ky,height in zip(['bwHalf', 'bw34'], [0.5, 0.75]):
+                dataMetrics[ky][d, c] = compute_SF_BW(params_curr, height, sf_range=sf_range, sfMod=descrMod, baseline=baseline_resp)[1];
              for splitInd,splitHalf in enumerate([-1,1]):
-                bw_sigma[d, c, splitInd] = descrFits[cell_ind]['params'][d, c, 3+splitInd]
-                bwHalf_split[d, c, splitInd] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.5, sf_range=sf_range, which_half=splitHalf, sfMod=descrMod)[1];
-                bw34_split[d, c, splitInd] = compute_SF_BW(descrFits[cell_ind]['params'][d, c, :], height=0.75, sf_range=sf_range, which_half=splitHalf, sfMod=descrMod)[1]
-             pSf[d, c] = descrFits[cell_ind]['params'][d, c, muLoc]
+                dataMetrics['bw_sigma'][d, c, splitInd] = params_curr[3+splitInd]
+                for ky,height in zip(['bwHalf_split', 'bw34_split'], [0.5, 0.75]):
+                   dataMetrics[ky][d, c, splitInd] = compute_SF_BW(params_curr, height=height, sf_range=sf_range, which_half=splitHalf, sfMod=descrMod)[1];
              curr_params = descrFits[cell_ind]['params'][d, c, :];
-             sf70[d, c] = sf_highCut(curr_params, sfMod=descrMod, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp);
+             dataMetrics['pSf'][d, c] = curr_params[muLoc]
+             for ky,frac in zip(['sf70', 'sfE'], [0.7, eFrac]):
+                dataMetrics[ky][d, c] = sf_highCut(params_curr, sfMod=descrMod, frac=frac, sfRange=(0.1, 15));
+
              try:
                # -- now, get the distribution of bootstrap estimates for sf70, pSf, bw_sigma, and bwHalf/bw34
                # TEMPORARY HACK!!! fix code in descr_fits_sfBB [TODO]
                boot_prms = descrFits[cell_ind]['boot_params']
                if boot_prms.shape[0] == 1:
                  boot_prms = np.transpose(boot_prms, axes=(1,0,2,3)); # i.e. flip 1st and 2nd axes
-               # ---- first, sf70
-               boot_sf70_values[d, c] = np.array([sf_highCut(boot_prms[boot_i, d, c, :], sfMod=descrMod, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp) for boot_i in range(boot_prms.shape[0])]);
-               n_nonNan = np.sum(~np.isnan(boot_sf70_values[d,c])); # i.e. how many are not NaN
-               if n_nonNan >= bootThresh*boot_prms.shape[0]:
-                 boot_sf70_md[d, c] = np.nanmedian(boot_sf70_values[d,c]);
-                 boot_sf70_mn[d, c] = np.nanmean(boot_sf70_values[d,c]);
-                 boot_sf70_std[d, c] = np.nanstd(boot_sf70_values[d,c]);
-                 boot_sf70_stdLog[d, c] = np.nanstd(np.log10(boot_sf70_values[d,c]));
 
-                 try:
-                   boot_pSf_mn[d, c] = np.nanmean(descrFits[cell_ind]['boot_prefSf'][:, d, c])
-                   boot_pSf_md[d, c] = np.nanmedian(descrFits[cell_ind]['boot_prefSf'][:, d, c])
-                   boot_pSf_std[d, c] = np.nanstd(descrFits[cell_ind]['boot_prefSf'][:, d, c])
-                   boot_pSf_stdLog[d, c] = np.nanstd(np.log10(descrFits[cell_ind]['boot_prefSf'][:, d, c]))
-                 except:
-                   pass; # LESS IMPORTANT; NONETHELESS, FIX!
+               # then, in order: sf70, pSf, charFreq
+               metrs = ['sf70', 'pSf', 'bwHalf', 'bw34'];
+               compute = ['np.nanmedian(', 'np.nanmean(', 'np.nanstd(', 'np.nanstd(np.log10(']
+               for metr in metrs:
+                  # get the key, values
+                  curr_key = 'boot_%s_values' % metr;
+                  if 'sf70' in metr:
+                     dataMetrics[curr_key][d,c] = [sf_highCut(boot_prms[boot_i, d, c, :], sfMod=descrMod, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp) for boot_i in range(boot_prms.shape[0])];
+                  elif 'pSf' in metr:
+                     dataMetrics[curr_key][d,c] = descrFits[cell_ind]['boot_prefSf'][:, d, c]
+                     # must manually specify, since the key is ...prefSf in the descrFits, but pSf here
+                  elif 'bw' in metr:
+                     height = 0.5 if 'Half' in metr else 0.75; # assumes it's either half or 3/4th height
+                     dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=descrMod)[1] for boot_i in range(boot_prms.shape[0])]);
+                  # now compute the metrics, IF we have enough valid boot iters
+                  n_nonNan = np.sum(~np.isnan(dataMetrics[curr_key][d,c]));
+                  if n_nonNan < bootThresh*boot_prms.shape[0]:
+                     continue; # i.e. don't do this if we have too few parameters
 
-               # ---- then, bwHalf/34
-               boot_bwHalf_values[d, c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=0.5, sf_range=sf_range, sfMod=descrMod)[1] for boot_i in range(boot_prms.shape[0])]);
-               n_nonNan = np.sum(~np.isnan(boot_bwHalf_values)); # i.e. how many are not NaN
-               if n_nonNan >= bootThresh*boot_prms.shape[0]: # i.e. BW should be defined at least X% of the time!
-                 boot_bwHalf_md[d, c] = np.nanmedian(boot_bwHalf_values[d,c]);
-                 boot_bwHalf_mn[d, c] = np.nanmean(boot_bwHalf_values[d,c]);
-                 boot_bwHalf_std[d, c] = np.nanstd(boot_bwHalf_values[d,c]);
-               boot_bw34_values[d, c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=0.75, sf_range=sf_range, sfMod=descrMod)[1] for boot_i in range(boot_prms.shape[0])]);
-               n_nonNan = np.sum(~np.isnan(boot_bw34_values)); # i.e. how many are not NaN
-               if n_nonNan >= bootThresh*boot_prms.shape[0]: # i.e. BW should be defined at least X% of the time!
-                 boot_bw34_md[d, c] = np.nanmedian(boot_bw34_values[d,c]);
-                 boot_bw34_mn[d, c] = np.nanmean(boot_bw34_values[d,c]);
-                 boot_bw34_std[d, c] = np.nanstd(boot_bw34_values[d,c]);
-               for splitInd,splitHalf in enumerate([-1,1]):
-                  boot_bw_sigma_md[d, c, splitInd] = np.nanmedian(descrFits[cell_ind]['boot_params'][:, d, c, 3+splitInd])
-                  boot_bw_sigma_mn[d, c, splitInd] = np.nanmean(descrFits[cell_ind]['boot_params'][:, d, c, 3+splitInd])
-                  boot_bw_sigma_std[d, c, splitInd] = np.nanstd(descrFits[cell_ind]['boot_params'][:, d, c, 3+splitInd])
+                  for boot_metr,comp in zip(boot_metrs, compute):
+                     if 'bw' in metr and 'stdLog' in boot_metr:
+                        continue; # don't compute log for bandwidth stuff
+                     boot_key = 'boot_%s%s' % (metr, boot_metr);
+                     #if n_nonNan >= bootThresh*boot_prms.shape[0]: # i.e. BW should be defined at least X% of the time!
+                     try: # need the if/else to handle the case where two parantheses need closing
+                        dataMetrics[boot_key][d,c] = eval('%sdataMetrics[curr_key][d,c]))' % comp) if 'stdLog' in boot_metr else eval('%sdataMetrics[curr_key][d,c])' % comp);
+                     except:
+                        pass
              except:
-               pass; # 
-             sf75[d, c] = sf_highCut(curr_params, sfMod=descrMod, frac=0.75, sfRange=(0.1, 15), baseline_sub=baseline_resp);
-             sfE[d, c] = sf_highCut(curr_params, sfMod=descrMod, frac=eFrac, sfRange=(0.1, 15), baseline_sub=baseline_resp);
-             sfVarExpl[d, c] = varExpl;
+               pass
+
+
          except: # then this dispersion does not have that contrast value, but it's ok - we already have nan
-             pass 
+           pass 
 
      # Now, compute the derived pSf Ratio
      try:
@@ -3207,22 +3176,23 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
          logConRat = np.log2(extrema[1]/extrema[0]);
          evalPsf = psf_model(*opt_params, con=extrema);
          evalRatio = evalPsf[1]/evalPsf[0];
-         pSfModRat[d] = [np.log2(evalRatio), np.log2(evalRatio)/logConRat];
+         dataMetrics['pSfModRat'][d] = [np.log2(evalRatio), np.log2(evalRatio)/logConRat];
      except: # then likely, no rvc/descr fits...
        pass 
      # and likewise for DoG
      try:
-       _, psf_model, opt_params = dog_prefSfMod(dogFits[cell_ind], allCons=cons, disp=d, varThresh=varExplThresh, dog_model=descrMod)
+       _, psf_model, opt_params = dog_prefSfMod(dogFits[cell_ind], allCons=cons, disp=d, varThresh=varExplThresh, dog_model=dogMod)
        valInds = np.where(dogFits[cell_ind]['varExpl'][d, :] > dog_varExplThresh)[0];
        if len(valInds) > 1:
          extrema = [cons[valInds[0]], cons[valInds[-1]]];
          logConRat = np.log2(extrema[1]/extrema[0]);
          evalPsf = psf_model(*opt_params, con=extrema);
          evalRatio = evalPsf[1]/evalPsf[0];
-         dog_pSfModRat[d] = [np.log2(evalRatio), np.log2(evalRatio)/logConRat];
+         dataMetrics['dog_pSfModRat'][d] = [np.log2(evalRatio), np.log2(evalRatio)/logConRat];
      except: # then likely, no rvc/descr fits...
        pass 
 
+     ''' Will likely deprecate/cut, as of 21.10.18
      for cutInd, cutVal in enumerate([0.7, 0.75, eFrac]):
         for (fitInd, currFit), whichMod in zip(enumerate([descrFits, dogFits]), [descrMod, dogMod]):
            sfModRatCurr = [np.nan, np.nan]
@@ -3240,19 +3210,20 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
            ### then, organize for the outputs
            if cutInd == 0:
              if fitInd == 0:
-                sf70ModRat[d] = np.copy(sfModRatCurr);
+                dataMetrics['sf70ModRat'][d] = np.copy(sfModRatCurr);
              else:
-                dog_sf70ModRat[d] = np.copy(sfModRatCurr);
+                dataMetrics['dog_sf70ModRat'][d] = np.copy(sfModRatCurr);
            elif cutInd == 1:
              if fitInd == 0:
-                sf75ModRat[d] = np.copy(sfModRatCurr);
+                dataMetrics['sf75ModRat'][d] = np.copy(sfModRatCurr);
              else:
-                dog_sf75ModRat[d] = np.copy(sfModRatCurr);
+                dataMetrics['dog_sf75ModRat'][d] = np.copy(sfModRatCurr);
            elif cutInd == 2:
              if fitInd == 0:
-                sfEModRat[d] = np.copy(sfModRatCurr);
+                dataMetrics['sfEModRat'][d] = np.copy(sfModRatCurr);
              else:
-                dog_sfEModRat[d] = np.copy(sfModRatCurr);
+                dataMetrics['dog_sfEModRat'][d] = np.copy(sfModRatCurr);
+     ''' 
 
      #######
      ## RVC stuff
@@ -3261,17 +3232,17 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        if cell_ind in rvcFits:
          # on data
          try: # if from fit_RVC_F0
-             conGain[d, s] = rvcFits[cell_ind]['conGain'][d,s];
-             c50[d, s] = get_c50(rvcMod, rvcFits[cell_ind]['params'][d, s, :]);
-             c50_emp[d, s], c50_eval[d, s] = c50_empirical(rvcMod, rvcFits[cell_ind]['params'][d, s, :]);
-             c50_varExpl[d, s] = rvcFits[cell_ind]['varExpl'][d,s];
+             dataMetrics['conGain'][d, s] = rvcFits[cell_ind]['conGain'][d,s];
+             dataMetrics['c50'][d, s] = get_c50(rvcMod, rvcFits[cell_ind]['params'][d, s, :]);
+             dataMetrics['c50_emp'][d, s], c50_eval[d, s] = c50_empirical(rvcMod, rvcFits[cell_ind]['params'][d, s, :]);
+             dataMetrics['c50_varExpl'][d, s] = rvcFits[cell_ind]['varExpl'][d,s];
          except: # might just be arranged differently...(not fit_rvc_f0)
              try: # TODO: investigate why c50 param is saving for nan fits in hf.fit_rvc...
                if ~np.isnan(rvcFits[cell_ind][d]['loss'][s]): # only add it if it's a non-NaN loss value...
-                 conGain[d, s] = rvcFits[cell_ind][d]['conGain'][s];
-                 c50[d, s] = get_c50(rvcMod, rvcFits[cell_ind][d]['params'][s]);
-                 c50_emp[d, s], c50_eval[d, s] = c50_empirical(rvcMod, rvcFits[cell_ind][d]['params'][s]);
-                 c50_varExpl[d, s] = rvcFits[cell_ind][d]['varExpl'][s];
+                 dataMetrics['conGain'][d, s] = rvcFits[cell_ind][d]['conGain'][s];
+                 dataMetrics['c50'][d, s] = get_c50(rvcMod, rvcFits[cell_ind][d]['params'][s]);
+                 dataMetrics['c50_emp'][d, s], c50_eval[d, s] = c50_empirical(rvcMod, rvcFits[cell_ind][d]['params'][s]);
+                 dataMetrics['c50_varExpl'][d, s] = rvcFits[cell_ind][d]['varExpl'][s];
              except: # then this dispersion does not have that SF value, but it's ok - we already have nan
                pass;
 
@@ -3282,55 +3253,44 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        # first, in raw values [0] and per log2 contrast change [1] (i.e. log2(highCon/lowCon))
        conChange = np.log2(cons[comb[1]]/cons[comb[0]]);
 
-       diff = bwHalf[d,comb[1]] - bwHalf[d,comb[0]];
-       bwHalfDiffs[d,comb[0],comb[1]] = [diff, diff/conChange];
-       diff_dog = dog_bwHalf[d,comb[1]] - dog_bwHalf[d,comb[0]];
-       dog_bwHalfDiffs[d,comb[0],comb[1]] = [diff_dog, diff_dog/conChange];
+       # NOTE: For pSf, we will log2 the ratio, such that a ratio of 0 
+       # reflects the prefSf remaining constant (i.e. log2(1/1)-->0)
+       outsAll = ['bwHalfDiffs', 'bw34Diffs', 'pSfRats', 'sf70Rats', 'dog_charFreqRats', 'sfVarDiffs', 'sfComRats']
+       modsAll = [mods_pfx, mods_pfx, mods_pfx, mods_pfx, no_pfx, no_pfx, no_pfx];
+       insAll = ['bwHalf', 'bw34', 'pSf', 'sf70', 'dog_charFreq', 'sfVar', 'sfCom'];
+       for outKey, currMods, inKey in zip(outsAll, modsAll, insAll):
+          for currMod in currMods:
+            curr_in = '%s%s' % (currMod, inKey);
+            curr_out = '%s%s' % (currMod, outKey);
+            if 'Rat' in outKey:
+               val = np.log2(dataMetrics[curr_in][d,comb[1]] / dataMetrics[curr_in][d,comb[0]]);
+            elif 'Diff' in outKey:
+               val = dataMetrics[curr_in][d,comb[1]] - dataMetrics[curr_in][d,comb[0]];
+            dataMetrics[curr_out][d,comb[0], comb[1]] = [val, val/conChange];
+
+       # -- and boot versions
+       #rats = boot_sf70_values[d, comb[1]] / boot_sf70_values[d, comb[0]]; # distribution of ratios
+       #boot_sf70_mdRats[d,comb[0],comb[1]] = [np.nanmedian(np.log2(rat)), np.nanmedian(np.log2(rat))/conChange]
+       #boot_sf70_mnRats[d,comb[0],comb[1]] = [np.nanmean(np.log2(rat)), np.nanmean(np.log2(rat))/conChange]
+       #boot_sf70_stdRats[d,comb[0],comb[1]] = [np.nanstd(np.log2(rat)), np.nanstd(np.log2(rat))/conChange]
+
+       # Below are the deprecated computations
+       '''
        # -- BW split, first lower, then upper 
        for sideInd in [0,1]:
          diff = bwHalf_split[d,comb[1],sideInd] - bwHalf_split[d,comb[0],sideInd]
          bwHalfDiffs_split[d,comb[0],comb[1], sideInd, :] = [diff, diff/conChange];
          diff_dog = dog_bwHalf_split[d,comb[1],sideInd] - dog_bwHalf_split[d,comb[0],sideInd]
          bwHalfDiffs_split[d,comb[0],comb[1], sideInd, :] = [diff_dog, diff_dog/conChange];
-       diff = bw34[d,comb[1]] - bw34[d,comb[0]];
-       bw34Diffs[d,comb[0],comb[1]] = [diff, diff/conChange];
-       diff_dog = dog_bw34[d,comb[1]] - dog_bw34[d,comb[0]];
-       dog_bw34Diffs[d,comb[0],comb[1]] = [diff_dog, diff_dog/conChange];
        # -- BW split, first lower, then upper 
        for sideInd in [0,1]:
          diff = bw34_split[d,comb[1],sideInd] - bw34_split[d,comb[0],sideInd]
          bw34Diffs_split[d,comb[0],comb[1], sideInd, :] = [diff, diff/conChange];
          diff_dog = dog_bw34_split[d,comb[1],sideInd] - dog_bw34_split[d,comb[0],sideInd]
          dog_bw34Diffs_split[d,comb[0],comb[1], sideInd, :] = [diff_dog, diff_dog/conChange];
+       '''
 
-       # NOTE: For pSf, we will log2 the ratio, such that a ratio of 0 
-       # reflects the prefSf remaining constant (i.e. log2(1/1)-->0)
-       rat = pSf[d,comb[1]] / pSf[d,comb[0]];
-       pSfRats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange];
-       dog_rat = dog_pSf[d,comb[1]] / dog_pSf[d,comb[0]];
-       dog_pSfRats[d,comb[0],comb[1]] = [np.log2(dog_rat), np.log2(dog_rat)/conChange];
-       # -- and we'll do the same for LSFV
-       rat = lsfv[d,comb[1]] / lsfv[d,comb[0]];
-       lsfvRats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange];
-
-       ## now, model-free metrics
-       sfVarDiffs[d,comb[0],comb[1]] = sfVar[d,comb[1]] - sfVar[d,comb[0]]
-       rat = sfCom[d, comb[1]] / sfCom[d, comb[0]];
-       sfComRats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
-       rat = sfComLin[d, comb[1]] / sfComLin[d, comb[0]];
-       sfComLinRats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
-
-       ## and sf70 and dog_sf70 ratios
-       rat = sf70[d, comb[1]] / sf70[d, comb[0]];
-       sf70Rats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
-       rat = dog_sf70[d, comb[1]] / dog_sf70[d, comb[0]];
-       dog_sf70Rats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
-       # -- and boot versions
-       rats = boot_sf70_values[d, comb[1]] / boot_sf70_values[d, comb[0]]; # distribution of ratios
-       boot_sf70_mdRats[d,comb[0],comb[1]] = [np.nanmedian(np.log2(rat)), np.nanmedian(np.log2(rat))/conChange]
-       boot_sf70_mnRats[d,comb[0],comb[1]] = [np.nanmean(np.log2(rat)), np.nanmean(np.log2(rat))/conChange]
-       boot_sf70_stdRats[d,comb[0],comb[1]] = [np.nanstd(np.log2(rat)), np.nanstd(np.log2(rat))/conChange]
-
+       '''
        ## and sf75 and dog_sf75 ratios
        rat = sf75[d, comb[1]] / sf75[d, comb[0]];
        sf75Rats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
@@ -3342,10 +3302,11 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        sfERats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
        rat = dog_sfE[d, comb[1]] / dog_sfE[d, comb[0]];
        dog_sfERats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
+       '''
 
      # then, as function of SF
      for comb in itertools.permutations(range(nSfs), 2):
-       c50Rats[d,comb[0],comb[1]] = c50[d,comb[1]] / c50[d,comb[0]]
+       dataMetrics['c50Rats'][d,comb[0],comb[1]] = dataMetrics['c50'][d,comb[1]] / dataMetrics['c50'][d,comb[0]]
 
      # finally, just get the straight-from-data ratio/diff evaluated from highest to one-third-of-max contrast
      hiConInd = np.argmax(cons[val_con_by_disp[d]]); # the highest contrast for this dispersion
@@ -3356,138 +3317,34 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      if np.abs(thirdConValue - hiConValue/3) < .1*hiConValue: # should be within 10% of the high contrast value to count...
        relDescr_inds[d, 0] = val_con_by_disp[d][hiConInd]; # highest
        relDescr_inds[d, 1] = val_con_by_disp[d][thirdConInd]; # one-third
-       for indAdd, metr in enumerate([pSf, dog_pSf]):
+       for indAdd, metr in enumerate([dataMetrics['pSf'], dataMetrics['dog_pSf']]):
          try:
            valDescrFits = np.where(~np.isnan(metr[d, :]))[0]; # might be empty (i.e. no fits which passed varExpl_thresh/dog_varExpl_thresh)
            lowInd, hiInd = valDescrFits[0], valDescrFits[-1]; # get the lowest/highest indicies with a still-valid descriptive fit (if cI invalid, then pSf[d,cI] will be nan)
            relDescr_inds[d, 2+indAdd] = lowInd if cons[lowInd] < cons[hiInd] else hiInd;
          except:
            pass
-       diffsAtThirdCon[d, :] = np.array([bwHalfDiffs[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                bw34Diffs[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                pSfRats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                sfVarDiffs[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                sfComRats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                sf70Rats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                dog_sf70Rats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                sf75Rats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                dog_sf75Rats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                sfERats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                dog_sfERats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                dog_bwHalfDiffs[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                dog_bw34Diffs[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                dog_pSfRats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd],
-                                sfComLinRats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd]]);
+       inputs = ['bwHalfDiffs', 'bw34Diffs', 'pSfRats', 'sfVarDiffs', 'sfComRats', 'sf70Rats', 'dog_sf70Rats', 
+                 'dog_charFreqRats', 'dog_bwHalfDiffs', 'dog_bw34Diffs', 'dog_pSfRats'];
+       for ii, ins in enumerate(inputs): 
+          diffsAtThirdCon[d, ii] = dataMetrics[ins][d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd];
 
-       for metrInd,bw_split_curr in enumerate([bwHalfDiffs_split, bw34Diffs_split]):
-         diffsAtThirdCon_bwSplit[d,metrInd,:] = bw_split_curr[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd];
-       diffsAtThirdCon_lsfv[d] = lsfvRats[d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd];
-
-
-     print('\tdiffsAtThirdCon pSf||sf70||dogSf70 ...  = (%.2f, %.2f, %.2f)' % (diffsAtThirdCon[0, 2], diffsAtThirdCon[0, 5], diffsAtThirdCon[0, 6]));
-     print('\tmodRat pSf||sf70||dogSf70 ...  = (%.2f, %.2f, %.2f)' % (pSfModRat[0, 1], sf70ModRat[0, 1], dog_sf70ModRat[0, 1]));
+     #print('\tdiffsAtThirdCon pSf||sf70||dogSf70 ...  = (%.2f, %.2f, %.2f)' % (diffsAtThirdCon[d, 2], diffsAtThirdCon[d, 5], diffsAtThirdCon[d, 6]));
+     #print('\tmodRat pSf||sf70||dogSf70 ...  = (%.2f, %.2f, %.2f)' % (pSfModRat[0, 1], sf70ModRat[0, 1], dog_sf70ModRat[0, 1]));
      # End of optional (oldVersion) section
 
-   dataMetrics = dict([
-                      ### Model-free metrics
-                      ('sfCom', sfCom),
-                      ('sfComLin', sfComLin),
-                      ('sfComCut', sfComCut),
-                      ('boot_sfCom_mn', boot_sfCom_mn),
-                      ('boot_sfCom_md', boot_sfCom_md),
-                      ('boot_sfCom_std', boot_sfCom_std),
-                      ('sfVar', sfVar),
-                      ('boot_sfVar_mn', boot_sfCom_mn),
-                      ('boot_sfVar_md', boot_sfVar_md),
-                      ('boot_sfVar_std', boot_sfVar_std),
-                      ('f1f0_ratio', f1f0_ratio),
-                      ('lsfv', lsfv),
-                      ### Bandwidth (non-DoG and DoG)
-                      # --- bw_sigma [non-DoG only] (sigma, not actual bandwidth)
-                      ('bw_sigma', bw_sigma),
-                      ('boot_bw_sigma_mn', boot_bw_sigma_mn),
-                      ('boot_bw_sigma_md', boot_bw_sigma_md),
-                      ('boot_bw_sigma_std', boot_bw_sigma_std),
-                      # --- bw at half-height
-                      ('bwHalf', bwHalf),
-                      ('dog_bwHalf', dog_bwHalf),
-                      ('bwHalf_split', bwHalf_split),
-                      ('dog_bwHalf_split', dog_bwHalf_split),
-                      ('boot_bwHalf_values', boot_bwHalf_values),
-                      ('boot_bwHalf_mn', boot_bwHalf_mn),
-                      ('boot_bwHalf_md', boot_bwHalf_md),
-                      ('boot_bwHalf_std', boot_bwHalf_std),
-                      ('boot_dog_bwHalf_values', boot_dog_bwHalf_values),
-                      ('boot_dog_bwHalf_mn', boot_dog_bwHalf_mn),
-                      ('boot_dog_bwHalf_md', boot_dog_bwHalf_md),
-                      ('boot_dog_bwHalf_std', boot_dog_bwHalf_std),
-                      # --- bw at 3/4th height
-                      ('bw34', bw34),
-                      ('dog_bw34', dog_bw34),
-                      ('bw34_split', bw34_split),
-                      ('dog_bw34_split', dog_bw34_split),
-                      ('boot_bw34_values', boot_bw34_values),
-                      ('boot_bw34_mn', boot_bw34_mn),
-                      ('boot_bw34_md', boot_bw34_md),
-                      ('boot_bw34_std', boot_bw34_std),
-                      ('boot_dog_bw34_values', boot_dog_bw34_values),
-                      ('boot_dog_bw34_mn', boot_dog_bw34_mn),
-                      ('boot_dog_bw34_md', boot_dog_bw34_md),
-                      ('boot_dog_bw34_std', boot_dog_bw34_std),
-                      ### SF preference/cut-off
-                      ('sfVarExpl', sfVarExpl),
-                      ('dog_varExpl', dog_varExpl),
-                      # --- preferred SF
-                      ('pSf', pSf),
-                      ('dog_pSf', dog_pSf),
-                      ('boot_pSf_mn', boot_pSf_mn),
-                      ('boot_pSf_md', boot_pSf_md),
-                      ('boot_pSf_std', boot_pSf_std),
-                      ('boot_pSf_stdLog', boot_pSf_stdLog),
-                      ('boot_dog_pSf_mn', boot_dog_pSf_mn),
-                      ('boot_dog_pSf_md', boot_dog_pSf_md),
-                      ('boot_dog_pSf_std', boot_dog_pSf_std),
-                      ('boot_dog_pSf_stdLog', boot_dog_pSf_stdLog),
-                      # --- dog charFreq.
-                      ('dog_charFreq', dog_charFreq),
-                      # --- sf70
-                      ('sf70', sf70),
-                      ('dog_sf70', dog_sf70),
-                      ('boot_sf70_values', boot_sf70_values),
-                      ('boot_sf70_mn', boot_sf70_mn),
-                      ('boot_sf70_md', boot_sf70_md),
-                      ('boot_sf70_std', boot_sf70_std),
-                      ('boot_sf70_stdLog', boot_sf70_stdLog),
-                      ('boot_dog_sf70_values', boot_dog_sf70_values),
-                      ('boot_dog_sf70_mn', boot_dog_sf70_mn),
-                      ('boot_dog_sf70_md', boot_dog_sf70_md),
-                      ('boot_dog_sf70_std', boot_dog_sf70_std),
-                      ('boot_dog_sf70_stdLog', boot_dog_sf70_stdLog),
-                      # --- sf75, sfE (i.e. 1/e fall off)
-                      ('sf75', sf75),
-                      ('dog_sf75', dog_sf75),
-                      ('sfE', sfE),
-                      ('dog_sfE', dog_sfE),
-                      ### RVC (conGain, c50)
-                      ('conGain', conGain),
-                      ('c50', c50),
-                      ('c50_emp', c50_emp),
-                      ('c50_eval', c50_eval),
-                      ('c50_varExpl', c50_varExpl),
-                      ### Extraneous
-                      ('suppressionIndex', supr_ind),
-                      ('relDescr_inds', relDescr_inds),
-                      ('mn_med_max', mn_med_max)
-                      ]);
+   # Now, we make sure that everything we need is in dataMetrics
+   # --- as of 21.10.18, mostly everything is added directly above; however, we add the following here
+   dataMetrics['relDescr_inds'] = relDescr_inds;
+   dataMetrics['mn_med_max'] = mn_med_max;
+   dataMetrics['diffsAtThirdCon'] = diffsAtThirdCon;
 
    if oldVersion:
      dataMetrics['diffsAtThirdCon'] = diffsAtThirdCon;
-     dataMetrics['diffsAtThirdCon_bwSplit'] = diffsAtThirdCon_bwSplit;
-     dataMetrics['diffsAtThirdCon_lsfv'] = diffsAtThirdCon_lsfv;
      dataMetrics['bwHalfDiffs'] =bwHalfDiffs;
-     dataMetrics['bwHalfDiffs_split'] = bwHalfDiffs_split;
+     #dataMetrics['bwHalfDiffs_split'] = bwHalfDiffs_split;
      dataMetrics['bw34Diffs'] = bw34Diffs;
-     dataMetrics['bw34Diffs_split'] = bw34Diffs_split;
+     #dataMetrics['bw34Diffs_split'] = bw34Diffs_split;
      dataMetrics['lsfvRats'] = lsfvRats;
      dataMetrics['pSfRats'] = pSfRats;
      dataMetrics['pSfModRat'] = pSfModRat;
@@ -3510,7 +3367,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      dataMetrics['dog_sfEModRat'] = dog_sfEModRat;
      dataMetrics['sfVarDiffs'] = sfVarDiffs;
      dataMetrics['sfComRats'] = sfComRats;
-     dataMetrics['sfComLinRats'] = sfComLinRats;
+     #dataMetrics['sfComLinRats'] = sfComLinRats;
      dataMetrics['c50Rats'] = c50Rats;
 
    ###########
@@ -3648,7 +3505,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       #  oh = perCell_summary(30);
       #  pdb.set_trace();
 
-      #oh = perCell_summary(32);
+      #oh = perCell_summary(9);
       #pdb.set_trace();
 
       nCpu = mp.cpu_count();
@@ -3682,8 +3539,6 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02, valIsFrac=
         [conTol]  - we consider the contrast to match conVal if within +/- 2% (given experiment, this is satisfactory to match con level across dispersions, versions)
         valIsFrac - If true, then the conVal is fraction of the maximum contrast value
   '''
-  #pdb.set_trace();
-
   np = numpy;
   nCells = len(jointList);
   output = np.nan * np.zeros((nCells, ));
@@ -3752,7 +3607,7 @@ def jl_get_metric_highComp(jointList, metric, whichMod, atLowest, disp=0, extraI
     highInd = np.array([jointList[x]['metrics']['relDescr_inds'][disp,0] for x in jointList.keys()]);
     # compInd will first be at one third (when i==0), then at lowest valid contrast...
     compInd = np.array([jointList[x]['metrics']['relDescr_inds'][disp,comp] for x in jointList.keys()]);
-    
+  
     if extraInds is None:
         highSf = np.array([jointList[key]['metrics'][metric][disp, hI] for key,hI in zip(jointList.keys(), highInd)])
         compSf = np.array([jointList[key]['metrics'][metric][disp, cI] for key,cI in zip(jointList.keys(), compInd)])
@@ -4105,7 +3960,6 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                       #####print('uhoh [cell %d]: d/sf/con %d/%d/%d -- %d trial(s) [resp=%.2f] out of %d in the data' % (cellNum, d, sf, con, nTrCurr, curr_modResp, len(val_tr)));
                       modRespOrg[d, sf, con, 0:nTrCurr] = np.divide(curr_modResp, divFactor);
                     except:
-                      #pdb.set_trace();
                       #print('FAILED: uhoh [cell %d]: d/sf/con %d/%d/%d -- %d trial(s) out of %d/%d in the data/modResp' % (cellNum, d, sf, con, nTrCurr, len(val_tr), len(modResp)));
                       pass
 
@@ -4238,13 +4092,10 @@ def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes 
     elif get_f0 == 0:
       spikes = data['f1']
   else:
-    #pdb.set_trace();
-    #spikes = organize_adj_responses(data, rvcFits, expInd, vecF1);
     if expInd is None:
       warnings.warn('Should pass in expInd; defaulting to 3');
       expInd = 3; # should be specified, but just in case
     try:
-      #pdb.set_trace();
       spikes = organize_adj_responses(data, rvcFits, expInd, vecF1);
     except: # in case this does not work...
       warnings.warn('Tried to access f1 adjusted responses, defaulting to F1/F0 request');
