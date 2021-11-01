@@ -15,12 +15,15 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_211005';
-#dogName = 'descrFits_210524';
-#phAdvName = 'phaseAdvanceFits_210524'
-phAdvName = 'phaseAdvanceFits_210914'
-rvcName_f0 = 'rvcFits_210914_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-rvcName_f1 = 'rvcFits_210914';
+dogName = 'descrFits_211028';
+#dogName = 'descrFits_211020_f030';
+#dogName = 'descrFits_211005';
+phAdvName = 'phaseAdvanceFits_211028'
+#phAdvName = 'phaseAdvanceFits_210914'
+rvcName_f0 = 'rvcFits_211028_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+#rvcName_f0 = 'rvcFits_210914_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f1 = 'rvcFits_211028';
+#rvcName_f1 = 'rvcFits_210914';
 #rvcName_f0 = 'rvcFits_210524_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 #rvcName_f1 = 'rvcFits_210524';
 
@@ -252,10 +255,11 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
 
         allPhiMeans = [[x[0] for x in sf] for sf in allPhi]; # mean is in the first element; do that for each [mean, var] pair in each list (split by sf)
         allPhiTrials = [[x[2] for x in sf] for sf in allPhi]; # trial-by-trial is third element 
-
+       
         adjMeans   = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
         adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs);
         # -- adjByTrial is series of nested lists: [nSfs x nConsValid x nComps x nRepeats]
+
       # if we are doing vector math 
       elif vecF1==1:
         adjByTrial = hf.adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3)
@@ -574,7 +578,7 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=False, nBoots=1):
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList;
 
  
-def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0): # n_repeats was 100, before 21.09.01
+def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
@@ -594,6 +598,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
       --- we'll pass in [cell_num, cellName] as cell_num [to avoid loading datalist]
    
       If nBoots=0 (default, we just fit once to the original data, i.e. not resamples)
+      -- As of 21.10.31, if cross_val is not None, then we'll use the bootstrap infrastructure, but make cross-validated holdout fits (and analysis of loss on holdout data)
 
       Update, as of 21.09.13: For each cell, we'll have boot and non-boot versions of each field (e.g. NLL, prefSf) to make analysis (e.g. for hf.jl_perCell() call) easier
       -- To accommodate this, we will always load the descrFit structure for each cell and simply tack on the new information (e.g. boot_prefSf or prefSf [i.e. non-boot])
@@ -704,9 +709,10 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
         print('iteration %d of %d' % (boot_i, nBoots));
 
     _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=resample, cellNum=cell_num);
+    #_, _, rm, ra = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=1, cellNum=cell_num, cross_val=(0.7, 0));
+
     resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
     base_rate = hf.blankResp(cellStruct, expInd, spks_sum, spksAsRate=True)[0] if which_measure==0 else None;
-
 
     ######
     # 3b. Loop for each dispersion, making fit

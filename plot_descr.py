@@ -60,6 +60,8 @@ lblSize = 40;
 peakFrac = 0.75; # plot fall of to peakFrac of peak, rather than peak or charFreq
 inclLegend = 0;
 
+plotMetrCorr = 1; # plot the corr. b/t sf70 and charFreq [1] or rc [2] for each condition?
+
 cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
 descrMod  = int(sys.argv[3]);
@@ -87,21 +89,19 @@ fracSig = 1;
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_211005'; #210929'; #210914
+descrBase = 'descrFits_211028';
+#descrBase = 'descrFits_211020_f030'; #211005'; #210929';
 #descrBase = 'descrFits_210524';
-#descrBase = 'descrFits_210503';
-#descrBase = 'descrFits_210304';
 #descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
 #descrBase = 'descrFits_200507'; # for altExp
-#descrBase = 'descrFits_190503';
 if descrJnt == 1:
   descrBase = '%s_joint' % descrBase;
 ### RVCFITS
 #rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
 #rvcBase = 'rvcFits_200714'; # direc flag & '.npy' are adde
-#rvcBase = 'rvcFits_210524';
-rvcBase = 'rvcFits_210914';
+#rvcBase = 'rvcFits_210914';
+rvcBase = 'rvcFits_211028';
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
@@ -183,7 +183,9 @@ else:
   baseline_resp = int(0);
 
 # now get the measured responses
+#print('HERE!!!');
 _, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
+#pdb.set_trace();
 
 respMean = respOrg;
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
@@ -268,11 +270,14 @@ for d in range(nDisps):
         ## otherwise, let's plot the char freq. and frac of peak
         elif descrMod == 1 or descrMod == 2:
           char_freq = hf.dog_charFreq(prms_curr, descrMod);
+          # if it's a DoG, let's also put the parameters in text (left side only)
+          dispAx[d][c_plt_ind, 0].text(0.05, 0.075, '%d,%.2f' % (*prms_curr[0:2], ), transform=dispAx[d][c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
+          dispAx[d][c_plt_ind, 0].text(0.05, 0.025, '%.2f,%.2f' % (*prms_curr[2:], ), transform=dispAx[d][c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
           for ii in range(2):
             dispAx[d][c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
             #dispAx[d][c_plt_ind, ii].plot(char_freq, 1, linestyle='None', marker='v', label='$f_c$', color=currClr, alpha=1); # plot at y=1
 
-        dispAx[d][c_plt_ind, 0].set_title('D%02d: contrast: %.3f' % (d+1, all_cons[v_cons[c]]));
+        dispAx[d][c_plt_ind, 0].set_title('D%02d: contrast: %d%%' % (d+1, 100*all_cons[v_cons[c]]));
 
         ### right side of plots - BASELINE SUBTRACTED IF COMPLEX CELL
         if d >= 0:
@@ -297,7 +302,7 @@ for d in range(nDisps):
           dispAx[d][c_plt_ind, 1].plot(sfs_plot[abvThresh], descr_curr[abvThresh], color=currClr, label='descr. fit', clip_on=False)
           if descrMod == 0 or descrMod == 3:
             psf = hf.descr_prefSf(prms_curr, dog_model=descrMod);
-            #if psf != np.nan:
+            #if psf != np.nan: 
             #  dispAx[d][c_plt_ind, 1].plot(psf, 1, 'b', color='k', label='peak freq', clip_on=False);
           elif descrMod == 1 or descrMod == 2: # diff-of-gauss
             # now plot characteristic frequency!  
@@ -1012,6 +1017,81 @@ for f in fDisp:
     plt.close(f)
 pdfSv.close();
 
+# #### If we have boots, plot the correlation between sf70 and char. freq [only 0 disp, for now; 21.10.23]
+
+curr_fits = descrFits[cellNum-1];
+check_boot = 'boot_params' in curr_fits;
+
+if plotMetrCorr>0 and check_boot and (descrMod == 3 or descrMod == 1): # i.e. DoG or d-DoG-S
+
+  fDisp = []; dispAx = [];
+
+  for d in range(1): #nDisps): # only do single gratings, as of 21.10.23
+
+      v_cons = val_con_by_disp[d];
+      n_v_cons = len(v_cons);
+
+      n_rows = int(np.ceil(n_v_cons/np.floor(np.sqrt(n_v_cons)))); # make this close to a rectangle/square in arrangement (cycling through cons)
+      n_cols = int(np.ceil(n_v_cons/n_rows));
+
+      fCurr, dispCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*15, n_rows*15), sharex=True, sharey=True);
+      fDisp.append(fCurr)
+      dispAx.append(dispCurr);    
+
+      for c in range(n_v_cons):
+
+          row_ind = int(c/n_cols);
+          col_ind = np.mod(c, n_cols);
+
+          if plotMetrCorr == 1:
+            cfs = curr_fits['boot_charFreq'][:,d,v_cons[c]]
+            nconds = len(cfs);
+          elif plotMetrCorr == 2:
+            rcs = curr_fits['boot_params'][:,d,v_cons[c], 1]; # get all of the characteristic radii
+            nconds = len(rcs);
+          sf70s = np.array([hf.sf_highCut(curr_fits['boot_params'][x,d,v_cons[c]], sfMod=descrMod, frac=0.7) for x in range(nconds)]);
+
+          ratio_rs = curr_fits['boot_params'][:,d,v_cons[c],3] # this is the rs parameter, which is already as a ratio relative to rc
+          ratio_rs_clip = np.clip(ratio_rs, 1, 8); # all sizes >= X are treated the same
+          if plotMetrCorr == 1:
+            no_nan = np.logical_and(~np.isnan(sf70s), ~np.isnan(cfs));
+            rsq = np.corrcoef(np.log10(sf70s[no_nan]), np.log10(cfs[no_nan]))
+            dispAx[d][row_ind, col_ind].scatter(sf70s, cfs, s=15+np.square(ratio_rs_clip)); # add a constant to avoid very small sizes
+            ylabel = '$f_c$';
+          elif plotMetrCorr == 2:
+            no_nan = np.logical_and(~np.isnan(sf70s), ~np.isnan(rcs));
+            rsq = np.corrcoef(sf70s[no_nan], rcs[no_nan])
+            dispAx[d][row_ind, col_ind].scatter(sf70s, rcs, s=15+np.square(ratio_rs_clip)); # add a constant to avoid very small sizes
+            ylabel = '$r_c$';
+
+          if col_ind == 0:
+              if row_ind == n_rows-1: # only on the last row do we make the sf70 label
+                  dispAx[d][row_ind, col_ind].set_xlabel(r'$sf_{70}$')
+              dispAx[d][row_ind, col_ind].set_ylabel(r'%s' % ylabel);
+
+          mdn_gainRat = np.nanmedian(curr_fits['boot_params'][:,d,v_cons[c],2]) # this is the gs param, which is already relative to gc
+          mdn_radRat = np.nanmedian(ratio_rs)
+
+          dispAx[d][row_ind, col_ind].set_title(r'%d%%: $\frac{g_s}{g_c}$=%.2f; $\frac{r_s}{c_c}$=%.2f; r=%.2f; [n=%02d]' % (100*all_cons[v_cons[c]], mdn_gainRat, mdn_radRat, rsq[0,-1], np.sum(no_nan)));
+          # per TM (21.10.26, frequency should ALWAYS be on log scale)
+          dispAx[d][row_ind, col_ind].set_xscale('log');
+          dispAx[d][row_ind, col_ind].set_yscale('log');
+
+          sns.despine(offset=10, ax=dispAx[d][row_ind, col_ind]);
+
+      fDisp[d].suptitle('%s #%d (f1f0: %.2f)' % (cellType, cellNum, f1f0rat));
+
+  print('saving corr.');
+  saveName = "/cell_%03d_rc_sf70.pdf" % (cellNum) if plotMetrCorr == 2 else "/cell_%03d_cFreq_sf70.pdf" % (cellNum)
+  full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
+
+  if not os.path.exists(full_save):
+    os.makedirs(full_save);
+  pdfSv = pltSave.PdfPages(full_save + saveName);
+  for f in fDisp:
+      pdfSv.savefig(f); # only one figure here...
+      plt.close(f);
+  pdfSv.close()
 
 # #### Plot d-DoG-S model in space, just sfMix contrasts
 

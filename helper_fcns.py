@@ -231,12 +231,28 @@ def bw_log_to_lin(log_bw, pref_sf):
     
     return lin_bw, sf_range
 
-def resample_array(resample, arr):
+def resample_array(resample, arr, holdout_frac=1, start_ind=None):
   # NOTE: by default, this allows resampling with replacement
+  # --- if holdout_frac < 1, then we are doing holdout cross-validation
+  # --- we simply
   if resample:
     non_nan = nan_rm(arr);
-    curr_resps = numpy.random.choice(non_nan, len(non_nan));
-    return curr_resps;
+    if holdout_frac == 1:
+      curr_resps = numpy.random.choice(non_nan, len(non_nan));
+      return curr_resps;
+    elif holdout_frac < 1: # then we are, for ex., doing cross-validation 
+      # -- so, do NOT draw with replacement and instead partition into train, test
+      n_train = numpy.floor(len(non_nan)*holdout_frac).astype('int');
+      if start_ind is None: # then we permute, draw randomly
+        permuted = numpy.random.permutation(numpy.arange(len(non_nan)));
+        curr_inds = permuted[0:n_train];
+      else: # otherwise, do it sequentially as below
+        curr_inds = numpy.mod(start_ind+numpy.arange(n_train), len(non_nan));
+      test_inds = numpy.setxor1d(numpy.arange(len(non_nan)), curr_inds);
+      curr_resps = non_nan[curr_inds];
+      test_resps = non_nan[test_inds];
+      # as of 21.10.31, still only return the current resps (will work out the test resps separately)
+      return curr_resps#, test_resps;
   else:
     return arr;                  
 
@@ -1099,6 +1115,10 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
       proj = np.array([np.multiply(amp[i][j], np.cos(np.deg2rad(phi_resp[i][j])-np.deg2rad(phi_true[j]))) for j in range(len(amp[i]))]);
       #proj = np.multiply(amp[i], np.cos(np.deg2rad(phi_resp[i])-np.deg2rad(phi_true)))
       all_proj.append(proj);
+      
+      #if i == len(amp)-1:
+      #   pdb.set_trace();
+
     elif disp > 0: # then we'll need to use the allCompSf to get the right phase advance fit for each component
       if amp[i] == []: # 
         all_proj.append([]);
@@ -1422,10 +1442,13 @@ def phase_advance(amps, phis, cons, tfs, n_repeats=100):
      max_resp_ind = np.argmax(curr_ampMean);
      diff_sin = np.arcsin(np.sin(np.deg2rad(curr_phiMean[max_resp_ind]) - np.deg2rad(curr_phiMean[min_resp_ind])));
      init_slope = (np.rad2deg(diff_sin))/(curr_ampMean[max_resp_ind]-curr_ampMean[min_resp_ind]);
+     init_slope = np.maximum(0,init_slope); # test, as of 21.10.28, on restricting phAdv slope
      init_params = [random_in_range([0.8, 1.2])[0]*curr_phiMean[min_resp_ind], random_in_range([0.5, 1.5])[0]*init_slope];
      best_loss = np.nan; best_params = [];
      for rpt in range(n_repeats):
-        to_opt = opt.minimize(obj, init_params);
+        # 21.10.26 -- restrict slope to be positive?
+        to_opt = opt.minimize(obj, init_params, bounds=((None,None), (0,None)));
+        #to_opt = opt.minimize(obj, init_params);
         if np.isnan(best_loss) or to_opt['fun'] < best_loss:
            best_loss = to_opt['fun'];
            best_params = to_opt['x'];
@@ -1461,7 +1484,6 @@ def tf_to_ind(tfs, stimDur):
     return [numpy.round(numpy.multiply(tf, stimDur)).astype(numpy.int16) for tf in tfs];
   except: # otherwise, just the simple way
     return numpy.round(numpy.multiply(tfs, stimDur)).astype(numpy.int16);
-
 
 ##################################################################
 ##################################################################
@@ -1667,7 +1689,8 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, computeNorm=0, parker
   np = numpy;
   if computeNorm == 1:
     if parker_hawken_equiv:
-      dog = lambda f: baseline + np.maximum(0, gain_c*(np.sqrt(np.pi)*r_c*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*r_c*np.exp(-np.square(f*np.pi*r_s*r_c))));
+      dog = lambda f: baseline + np.maximum(0, gain_c*(np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.exp(-np.square(f*np.pi*r_s*r_c))));
+      #dog = lambda f: baseline + np.maximum(0, gain_c*(np.sqrt(np.pi)*r_c*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*r_c*np.exp(-np.square(f*np.pi*r_s*r_c))));
     else:
       dog = lambda f: baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(f*np.pi*r_s)));
 
@@ -1677,7 +1700,8 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, computeNorm=0, parker
     return dog(stim_sf), dog_norm(stim_sf);
   else:
     if parker_hawken_equiv:
-      tune = baseline + gain_c*(np.sqrt(np.pi)*r_c*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*r_c*np.exp(-np.square(stim_sf*np.pi*r_s*r_c)));
+      tune = baseline + gain_c*(np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.exp(-np.square(stim_sf*np.pi*r_s*r_c)));
+      #tune = baseline + gain_c*(np.sqrt(np.pi)*r_c*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*r_c*np.exp(-np.square(stim_sf*np.pi*r_s*r_c)));
       #tune = baseline + np.maximum(0, gain_c*np.sqrt(np.pi)*r_c*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*np.exp(-np.square(stim_sf*np.pi*r_s)));
     else:
       tune = baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(stim_sf*np.pi*r_s)));
@@ -2119,7 +2143,8 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
   elif DoGmodel == 1:
     init_radiusCent = random_in_range((0.02, 0.5))[0];
     if sach_equiv_p_h: # then, to get maxResp, gainCent should be maxResp/{np.sqrt(pi)*radiusCent}
-      init_gainCent = maxResp/(init_radiusCent*np.sqrt(np.pi)) * random_in_range((0.7, 1.3))[0]; # 
+      init_gainCent = maxResp * random_in_range((0.85, 1.2))[0]; # 
+      #init_gainCent = maxResp/(init_radiusCent*np.sqrt(np.pi)) * random_in_range((0.7, 1.3))[0]; # 
     else: # just keeping for backwards compatability
       init_gainCent = 5e2*random_in_range((1, 300))[0];
     # -- surround parameters are relataive to center
@@ -2221,13 +2246,14 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       bound_sigFrac = (1e-4, None); # arbitrarily small, to None // TRYING
     allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sigFrac);
   elif DoGmodel == 1: # SACH
-    bound_gainCent = (1e-3, None);
+    bound_gainCent = (1, 1.5*max_resp); # don't allow the max. resp to go over 50% of the maximum response
+    #bound_gainCent = (1e-3, None);
     bound_radiusCent= (1e-2, 0.5);
     bound_gainSurr = (1e-2, 1); # multiplier on gainCent, thus the center must be weaker than the surround
-    bound_radiusSurr = (1, 25); # multiplier on radiusCent, thus the surr. radius must be larger than the center
+    bound_radiusSurr = (3, 3); # multiplier on radiusCent, thus the surr. radius must be larger than the center
     if joint==True: # TODO: Is this ok with reparameterization?
       bound_gainRatio = (1e-3, 1); # the surround gain will always be less than the center gain
-      bound_radiusRatio= (1, None); # the surround radius will always be greater than the ctr r
+      bound_radiusRatio= (1, 10); # the surround radius will always be greater than the ctr r
       # we'll add to allBounds later, reflecting joint gain/radius ratios common across all cons
       allBounds = (bound_gainRatio, bound_radiusRatio);
     else:
@@ -3473,8 +3499,8 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
 
   for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, rvcMod in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods):
 
-    #if 'ach' not in expDir:
-    #   continue;
+    if 'ach' in expDir:
+       continue;
 
     # get the current directory, load data list
     data_loc = base_dir + expDir + 'structures/';    
@@ -3815,7 +3841,7 @@ def get_isolated_responseAdj(data, trials, adjByTrial):
 
 ##
 
-def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False, modsAsRate=False, resample=False, cellNum=-1):
+def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False, modsAsRate=False, resample=False, cellNum=-1, cross_val=None):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
         (ii) all_disps, all_cons, all_sfs - i.e. the stimulus conditions of the experiment
@@ -3829,6 +3855,10 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                          otherwise, pass in response by trial (i.e. not organized by condition; MUST be one value per trial, not per component)
                            e.g. F1, or adjusted F1 responses
         respsAsRates/modsAsRate: optional argument - if False (or if overwriteSpikes is None), then divide response by stimDur
+        if resample; then for cross_val:
+        -- if not None, then cross_val should be tuple with (fracInTest, startInd); i.e. what fraction of overall data is test, which index to start with?
+
+
     '''
     np = numpy;
     conDig = 3; # round contrast to the thousandth
@@ -3919,7 +3949,10 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                 if np.all(np.unique(valid_tr) == False):
                     continue;
                     
-                curr_resps = resample_array(resample, respToUse[valid_tr]); # will just be respToUse[valid_tr] if resample==0
+                if cross_val is None:
+                  curr_resps = resample_array(resample, respToUse[valid_tr]); # will just be respToUse[valid_tr] if resample==0
+                else:
+                  curr_resps = resample_array(resample, respToUse[valid_tr], holdout_frac=cross_val[0], start_ind=cross_val[1]);
 
                 respMean[d, sf, con] = np.mean(curr_resps/respDiv);
                 respStd[d, sf, con] = np.std(curr_resps/respDiv);
@@ -3954,10 +3987,15 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                     else: # default behavior
                       divFactor = stimDur;
  
+                    #if d == 0 and sf == 8 and con==11:
+                    #  pdb.set_trace();
+
                     try:
-                      curr_modResp = resample_array(resample, modResp[valid_tr]); # will just be the array if resample==0
-                      #if nTrCurr <1 or len(curr_modResp)==0:
-                      #####print('uhoh [cell %d]: d/sf/con %d/%d/%d -- %d trial(s) [resp=%.2f] out of %d in the data' % (cellNum, d, sf, con, nTrCurr, curr_modResp, len(val_tr)));
+                      if cross_val is None:
+                        curr_modResp = resample_array(resample, modResp[valid_tr]); # will just be the array if resample==0
+                      else:
+                        curr_modResp = resample_array(resample, modResp[valid_tr], holdout_frac=cross_val[0], start_ind=cross_val[1]);
+                        nTrCurr = len(curr_modResp); # rewrite the nTrCurr, since it will be different if holdout_frac < 1
                       modRespOrg[d, sf, con, 0:nTrCurr] = np.divide(curr_modResp, divFactor);
                     except:
                       #print('FAILED: uhoh [cell %d]: d/sf/con %d/%d/%d -- %d trial(s) out of %d/%d in the data/modResp' % (cellNum, d, sf, con, nTrCurr, len(val_tr), len(modResp)));
@@ -4015,12 +4053,13 @@ def organize_adj_responses(data, rvcFits, expInd, vecF1=0):
      
   return adjResps;
 
-def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, resample=False, cellNum=-1):
+def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, resample=False, cellNum=-1, cross_val=None):
     ''' organizes the responses by condition given spikes, experiment structure, and expInd
         mask will be None OR list of trials to consider (i.e. trials not in mask/where mask is false are ignored)
         - respsAsRate: are "spikes" already in rates? if yes, pass in "True"; otherwise, we'll divide by stimDur to get rate
         - resample: if True, we'll resample the data to create a bootstrapped set of data
         -- NOTE: resample applies only to rateSfMix and allSfMix 
+        -- if not None, then cross_val should be tuple with (fracInTest, startInd); i.e. what fraction of overall data is test, which index to start with?
     '''
     # the blockIDs are fixed...
     exper = get_exp_params(expInd);
@@ -4071,7 +4110,7 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, re
       _, _, rateSfMix, allSfMix = v1_hf.organize_modResp(spikes, data, mask, resample=resample, cellNum=cellNum);
     else:
       # NOTE: we are getting the modRespOrg output of tabulate_responses, and ensuring the spikes are treated as rates (or raw counts) based on how they are passed in here
-      allSfMix  = tabulate_responses(expStructure, expInd, spikes, mask, modsAsRate = respsAsRate, resample=resample, cellNum=cellNum)[4];
+      allSfMix  = tabulate_responses(expStructure, expInd, spikes, mask, modsAsRate = respsAsRate, resample=resample, cellNum=cellNum, cross_val=cross_val)[4];
       rateSfMix = numpy.nanmean(allSfMix, -1);
 
     return rateOr, rateCo, rateSfMix, allSfMix;  

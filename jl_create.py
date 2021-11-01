@@ -122,8 +122,9 @@ if area == 'LGN':
   #dogNames = ['descrFits_s210304_sach_sach.npy'];
   #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
   dogMod = 1; # 1 (sach) or 2 (Tony)
-  #dogNames = ['descrFits_211005_sqrt_sach.npy', 'descrFits_s211006_sqrt_sach.npy'];
-  dogNames = ['descrFits_211005_sach_sach.npy', 'descrFits_s211006_sach_sach.npy'];
+  #dogNames = ['descrFits_211005_sach_sach.npy', 'descrFits_s211006_sach_sach.npy'];
+  dogNames = ['descrFits_211020_020_sach_sach.npy', 'descrFits_s211020_sach_sach.npy'];
+  #dogNames = ['descrFits_211020_sach_sach.npy', 'descrFits_s211020_sach_sach.npy'];
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
   descrNames = ['descrFits_211005_sach_flex.npy', 'descrFits_s211006_sach_flex.npy'];
   #dogNames = ['descrFits_191023_sach_sach.npy'];
@@ -165,4 +166,4 @@ if area == 'LGN':
   from datetime import datetime
   suffix = datetime.today().strftime('%y%m%d')
 
-  np.save(base_dir + 'jointList_LGN_%s_vT%02d_dvT%02d' % (suffix, varExplThresh, dog_varExplThresh), jointList)
+  np.save(base_dir + 'jointList_LGN_gt2_%s_vT%02d_dvT%02d' % (suffix, varExplThresh, dog_varExplThresh), jointList)

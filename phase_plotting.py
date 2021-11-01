@@ -57,8 +57,12 @@ save_loc = loc_base + expDir + saveDir;
 expName = hf.get_datalist(expDir);
 descrFit_f0 = None;
 #descrFit_f0 = 'descrFits_191023_sach_flex.npy';
-phAdvName = 'phaseAdvanceFits_191023';
-rvcName = 'rvcFits_191023_f1';
+#phAdvName = 'phaseAdvanceFits_191023';
+#rvcName = 'rvcFits_191023_f1';
+#phAdvName = 'phaseAdvanceFits_210914';
+#rvcName = 'rvcFits_210914';
+phAdvName = 'phaseAdvanceFits_211028';
+rvcName = 'rvcFits_211028';
 
 ######
 ## contents
@@ -67,7 +71,7 @@ rvcName = 'rvcFits_191023_f1';
 ## plot_phase_advance - summary plot w/ RVC, RVC on polar to show phase advance, & phase advance fit/model
 ## batch_phase_by_cond - wrapper for plot_phase_advance
 
-def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=-1, cycle_fold=2, n_bins_fold=8, dp=dataPath, expName=expName):
+def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=-1, cycle_fold=2, n_bins_fold=8, dp=dataPath, expName=expName, date_suffix=''):
   ''' Given a cell and the disp/con/sf indices, plot the spike raster for each trial, a folded PSTH,
       and finally the response phase - first relative to trial onset, and finally relative to the stimulus phase 
       
@@ -76,7 +80,7 @@ def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=
       n_bins_fold = how many bins per stimulus period when folding?
   '''
   dataList = hf.np_smart_load(str(dp + expName));
-  save_base = sv_loc + 'phasePlots/';
+  save_base = sv_loc + 'phasePlots_%s/' % date_suffix;
 
   val_trials, allDisps, allCons, allSfs = hf.get_valid_trials(data, disp, con, sf, expInd);
  
@@ -251,7 +255,7 @@ def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=
   plt.close(f);
   pdfSv.close();
 
-def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, expName=expName, phAdvStr=phAdvName, rvcStr=rvcName):
+def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, expName=expName, phAdvStr=phAdvName, rvcStr=rvcName, date_suffix=''):
   ''' RVC, resp-X-phase, phase advance model split by SF within each cell/dispersion condition
       1. response-versus-contrast; shows original and adjusted response
       2. polar plot of response amplitude and phase with phase advance model fit
@@ -272,7 +276,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
   phAdvFits = phAdvFits[which_cell-1];
   phAdv_model = hf.get_phAdv_model();
 
-  save_base = sv_loc + 'phasePlots/';
+  save_base = sv_loc + 'phasePlots_%s/' % date_suffix;
 
   # gather/compute everything we need
   data = cellStruct['sfm']['exp']['trial'];
@@ -328,7 +332,6 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
 
     n_conds = len(r);
     colors = cm.viridis(np.linspace(0, 0.95, n_conds));
-
 
     #####
     ## 1. now for plotting: first, response amplitude (with linear contrast)
@@ -417,7 +420,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     plt.close(f)
   pdfSv.close();
 
-def batch_phase_by_cond(cell_num, disp, cons=[], sfs=[], dir=-1, dp=dataPath, expName=expName):
+def batch_phase_by_cond(cell_num, disp, cons=[], sfs=[], dir=-1, dp=dataPath, expName=expName, date_suffix=''):
   ''' must specify dispersion (one value)
       if cons = [], then get/plot all valid contrasts for the given dispersion
       if sfs = [], then get/plot all valid contrasts for the given dispersion
@@ -442,7 +445,7 @@ def batch_phase_by_cond(cell_num, disp, cons=[], sfs=[], dir=-1, dp=dataPath, ex
   for c in cons:
     for s in sfs:
       print('analyzing cell %d, dispersion %d, contrast %d, sf %d\n' % (cell_num, disp, c, s));
-      phase_by_cond(cell_num, data, expInd, disp, c, s, dir=dir);  
+      phase_by_cond(cell_num, data, expInd, disp, c, s, dir=dir, date_suffix=date_suffix);  
 
 if __name__ == '__main__':
 
@@ -462,13 +465,15 @@ if __name__ == '__main__':
       dir = None;
     print('Running cell %d, dispersion %d' % (cell_num, disp));
 
+    date_suffix = phAdvName.split('_')[-1];
+
     if ph_by_cond:
       if dir:
-        batch_phase_by_cond(cell_num, disp, dir=dir);
+        batch_phase_by_cond(cell_num, disp, dir=dir, date_suffix=date_suffix);
       else:
-        batch_phase_by_cond(cell_num, disp);
+        batch_phase_by_cond(cell_num, disp, date_suffix=date_suffix);
     if ph_adv_summary:
       if dir:
-        plot_phase_advance(cell_num, disp, dir=dir);
+        plot_phase_advance(cell_num, disp, dir=dir, date_suffix=date_suffix);
       else:
-        plot_phase_advance(cell_num, disp);
+        plot_phase_advance(cell_num, disp, date_suffix=date_suffix);
