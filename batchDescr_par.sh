@@ -135,10 +135,10 @@ if [ "$EXP_DIR" = "LGN/" ]; then
   wait
   if [[ $DESCR_FIT -eq 1 ]]; then
     # Descr fits (based on Movshon RVCs)
-    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 0 2 $BOOT_REPS 0 1 # flex gauss, not joint
-    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 0 4 $BOOT_REPS 0 1 # flex gauss, not joint; sach loss
-    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 2 $BOOT_REPS 0 1 # Tony DoG, not joint (sqrt)
-    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 # sach DoG, not joint (sqrt)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 0 4 $BOOT_REPS 0 1 # flex gauss, not joint; sach loss
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 0 2 $BOOT_REPS 0 1 # flex gauss, not joint
     python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 # sach DoG, not joint (sach loss)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 # sach DoG, not joint (sqrt)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 2 $BOOT_REPS 0 1 # Tony DoG, not joint (sqrt)
   fi
 fi

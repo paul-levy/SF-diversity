@@ -118,9 +118,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits_s211006';
+    fLname = 'descrFits_s211020';
+    #fLname = 'descrFits_s211006';
     #fLname = 'descrFits_s210520';
-    #fLname = 'descrFits_s210304';
 
     if joint==True:
       try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
