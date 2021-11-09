@@ -22,7 +22,7 @@ RVC_MOD=${3:=0}
 
 for run in {1..34}
 do
-  python plotting.py $run $DOG_LOSS $DOG_MOD $RVC_MOD 0 & 
+  python3.6 plotting.py $run $DOG_LOSS $DOG_MOD $RVC_MOD 0 & 
 done
 
  

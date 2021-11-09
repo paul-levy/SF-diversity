@@ -118,9 +118,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits_s211020';
+    fLname = 'descrFits_s211028';
+    #fLname = 'descrFits_s211020';
     #fLname = 'descrFits_s211006';
-    #fLname = 'descrFits_s210520';
 
     if joint==True:
       try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
@@ -207,47 +207,47 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
         descrFits = np.load(fLname, allow_pickle=True).item();
     if cell_num-1 not in descrFits:
       descrFits[cell_num-1] = dict(); # and previously created NaN for everything
-    else: # overwrite the default NaN for everything
-      if not resample: # otherwise, we do not want to update...
-        bestNLL = descrFits[cell_num-1]['NLL'];
-        currParams = descrFits[cell_num-1]['params'];
-        varExpl = descrFits[cell_num-1]['varExpl'];
-        prefSf = descrFits[cell_num-1]['prefSf'];
-        charFreq = descrFits[cell_num-1]['charFreq'];
-        if joint==True:
-          totalNLL = descrFits[cell_num-1]['totalNLL'];
-          paramList = descrFits[cell_num-1]['paramList'];
+    else:
+      bestNLL = descrFits[cell_num-1]['NLL'];
+      currParams = descrFits[cell_num-1]['params'];
+      varExpl = descrFits[cell_num-1]['varExpl'];
+      prefSf = descrFits[cell_num-1]['prefSf'];
+      charFreq = descrFits[cell_num-1]['charFreq'];
+      if joint==True:
+        totalNLL = descrFits[cell_num-1]['totalNLL'];
+        paramList = descrFits[cell_num-1]['paramList'];
 
-        # remove any singleton dimensions --- TODO this should be redundant if the cell is never saved with singleton dims
-        bestNLL = np.squeeze(bestNLL, axis=0) if bestNLL.shape[0]==1 else bestNLL;
-        currParams = np.squeeze(currParams, axis=0) if currParams.shape[0]==1 else currParams;
-        varExpl = np.squeeze(varExpl, axis=0) if varExpl.shape[0]==1 else varExpl;
-        prefSf = np.squeeze(prefSf, axis=0) if prefSf.shape[0]==1 else prefSf;
-        charFreq = np.squeeze(charFreq, axis=0) if charFreq.shape[0]==1 else charFreq;
-        if joint==True:
-          paramList = np.squeeze(paramList, axis=0) if paramList.shape[0]==1 else paramList;
-          totalNLL = np.squeeze(totalNLL, axis=0) if totalNLL.shape[0]==1 else totalNLL;
+    if not resample: # otherwise, we do not want to update...
+      # remove any singleton dimensions --- TODO this should be redundant if the cell is never saved with singleton dims
+      bestNLL = np.squeeze(bestNLL, axis=0) if bestNLL.shape[0]==1 else bestNLL;
+      currParams = np.squeeze(currParams, axis=0) if currParams.shape[0]==1 else currParams;
+      varExpl = np.squeeze(varExpl, axis=0) if varExpl.shape[0]==1 else varExpl;
+      prefSf = np.squeeze(prefSf, axis=0) if prefSf.shape[0]==1 else prefSf;
+      charFreq = np.squeeze(charFreq, axis=0) if charFreq.shape[0]==1 else charFreq;
+      if joint==True:
+        paramList = np.squeeze(paramList, axis=0) if paramList.shape[0]==1 else paramList;
+        totalNLL = np.squeeze(totalNLL, axis=0) if totalNLL.shape[0]==1 else totalNLL;
 
-        # now, what we do, depends on if joint or not [AGAIN -- all of this is only for not resample]
-        if joint==True:
-          if np.isnan(totalNLL) or totNLL < totalNLL: # then UPDATE!
-            totalNLL = totNLL;
-            paramList = totPrm;
-            bestNLL = nll;
-            currParams = prms;
-            varExpl = vExp;
-            prefSf = pSf;
-            charFreq = cFreq;
-        else:
-          # must check separately for each contrast
-          for con in range(nCons):
-            if np.isnan(bestNLL[con]) or nll[con] < bestNLL[con] or forceOverwrite: # then UPDATE!
-              #print('\tcell %02d, con %02d: loss = %.2f' % (cell_num, con, nll[con]));
-              bestNLL[con] = nll[con];
-              currParams[con, :] = prms[con];
-              varExpl[con] = vExp[con];
-              prefSf[con] = pSf[con];
-              charFreq[con] = cFreq[con];
+      # now, what we do, depends on if joint or not [AGAIN -- all of this is only for not resample]
+      if joint==True:
+        if np.isnan(totalNLL) or totNLL < totalNLL: # then UPDATE!
+          totalNLL = totNLL;
+          paramList = totPrm;
+          bestNLL = nll;
+          currParams = prms;
+          varExpl = vExp;
+          prefSf = pSf;
+          charFreq = cFreq;
+      else:
+        # must check separately for each contrast
+        for con in range(nCons):
+          if np.isnan(bestNLL[con]) or nll[con] < bestNLL[con] or forceOverwrite: # then UPDATE!
+            #print('\tcell %02d, con %02d: loss = %.2f' % (cell_num, con, nll[con]));
+            bestNLL[con] = nll[con];
+            currParams[con, :] = prms[con];
+            varExpl[con] = vExp[con];
+            prefSf[con] = pSf[con];
+            charFreq[con] = cFreq[con];
 
     if resample:
       descrFits[cell_num-1]['boot_NLL'] = bestNLL;

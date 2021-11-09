@@ -38,7 +38,8 @@ save_loc = loc_base + 'figures/';
 
 conDig = 2; # round contrast to the 3rd digit
 
-allData = np.load(dataPath + 'sachData.npy', encoding='latin1').item();
+allData = hf.np_smart_load(dataPath + 'sachData.npy');
+#allData = np.load(dataPath + 'sachData.npy', encoding='latin1').item();
 cellStruct = allData[which_cell-1];
 
 # #### Load descriptive model fits, RVC Naka-Rushton fits, [comp. model fits]
@@ -47,7 +48,7 @@ zSub = 1; # are we loading fits that were fit to responses adjusted s.t. the low
 ## NOTE: SF tuning curves with with zSub; RVCs are not, so we must subtract respAdj from the RVC curve to align with what we fit (i.e. the zSub'd data)
 #######
 
-fLname = 'descrFits_s211020'; #211006';
+fLname = 'descrFits_s211028'; #211006';
 mod_str = hf.descrMod_name(sf_DoG_model);
 fLname_full = hf.descrFit_name(sf_loss_type, fLname, mod_str);
 descrFits = hf.np_smart_load(dataPath + fLname_full);
@@ -187,6 +188,12 @@ for c in reversed(range(nCons)):
       mod_resps = hf.get_descrResp(curr_mod_params, data_sfs, sf_DoG_model);
       mod_resps_plt = hf.get_descrResp(curr_mod_params, sfs_plot, sf_DoG_model);
       sfsAx[c_plt_ind, i].plot(sfs_plot, mod_resps_plt, clip_on=False, color=col)
+      # -- also put text of DoG parameters, if applicable
+      if sf_DoG_model == 1 or sf_DoG_model == 2:
+        # if it's a DoG, let's also put the parameters in text (left side only)
+        sfsAx[c_plt_ind, 0].text(0.05, 0.075, '%d,%.2f' % (*curr_mod_params[0:2], ), transform=sfsAx[c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
+        sfsAx[c_plt_ind, 0].text(0.05, 0.025, '%.2f,%.2f' % (*curr_mod_params[2:], ), transform=sfsAx[c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
+
       # now plot characteristic frequency!
       f_c = hf.dog_charFreq(curr_mod_params, sf_DoG_model);
       sfsAx[c_plt_ind, i].plot(f_c, 1, 'v', color='k');

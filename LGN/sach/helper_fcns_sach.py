@@ -150,10 +150,10 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=Fals
     bound_gainCent = (1e-3, None);
     bound_radiusCent= (1e-3, None);
     bound_gainSurr = (1e-2, 1); # multiplier on gainCent, thus the center must be weaker than the surround
-    bound_radiusSurr = (1, 25); # multiplier on radiusCent, thus the surr. radius must be larger than the center
+    bound_radiusSurr = (1, 10); # (1,10) # multiplier on radiusCent, thus the surr. radius must be larger than the center
     if joint==True: # TODO: Is this ok with reparameterization?
       bound_gainRatio = (1e-3, 1); # the surround gain will always be less than the center gain
-      bound_radiusRatio= (1, None); # the surround radius will always be greater than the ctr r
+      bound_radiusRatio= (1, 10); # the surround radius will always be greater than the ctr r
       # we'll add to allBounds later, reflecting joint gain/radius ratios common across all cons
       allBounds = (bound_gainRatio, bound_radiusRatio);
     else:
