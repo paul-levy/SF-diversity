@@ -137,8 +137,48 @@ if [ "$EXP_DIR" = "LGN/" ]; then
     # Descr fits (based on Movshon RVCs)
     #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 0 4 $BOOT_REPS 0 1 # flex gauss, not joint; sach loss
     #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 0 2 $BOOT_REPS 0 1 # flex gauss, not joint
-    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 # sach DoG, not joint (sach loss)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 # sach DoG, not joint (sach loss)
     #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 # sach DoG, not joint (sqrt)
     #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 2 $BOOT_REPS 0 1 # Tony DoG, not joint (sqrt)
+      
+    if [[ $BOOT_REPS -eq 0 ]]; then
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 # sach DoG, not joint (sach loss)
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 # sach DoG, not joint (sqrt)
+    else
+      # cross-val - 
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 1 0 # sach DoG, not joint (sach loss)
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 1 0 # sach DoG, not joint (sqrt)
+      # cross-val - 
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 1 0.01 # sach DoG, not joint (sach loss)
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 1 0.01 # sach DoG, not joint (sqrt)
+      # cross-val - 
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 1 0.02 # sach DoG, not joint (sach loss)
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 1 0.02 # sach DoG, not joint (sqrt)
+      # cross-val - 
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 1 0.04 # sach DoG, not joint (sach loss)
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 1 0.04 # sach DoG, not joint (sqrt)
+      # cross-val - 
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 1 0.05 # sach DoG, not joint (sach loss)
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 1 0.05 # sach DoG, not joint (sqrt)
+      # cross-val
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 1 0.1 # sach DoG, not joint (sach loss)
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 1 0.1 # sach DoG, not joint (sqrt)
+      # cross-val
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 1 0.4 # sach DoG, not joint (sach loss)
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 1 0.4 # sach DoG, not joint (sqrt)
+      # cross-val
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 1 0.2 # sach DoG, not joint (sach loss)
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 1 0.2 # sach DoG, not joint (sqrt)
+      # cross-val
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 1 0.5 # sach DoG, not joint (sach loss)
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 1 0.5 # sach DoG, not joint (sqrt)
+      # cross-val
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 1 0.15 # sach DoG, not joint (sach loss)
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 1 0.15 # sach DoG, not joint (sqrt)
+      # cross-val
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 1 0.30 # sach DoG, not joint (sach loss)
+      python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 1 0.30 # sach DoG, not joint (sqrt)
+    fi
+    wait
   fi
 fi

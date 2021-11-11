@@ -93,6 +93,7 @@ import warnings
 # dog_charFreq - given a model/parameter set, return the characteristic frequency of the tuning curve
 # dog_charFreqMod - smooth characteristic frequency vs. contrast with a functional form/fit
 # dog_get_param - get the radius/gain given the parameters and specified DoG model
+# dog_total_volume - compute the total volume of all DoG in a given model
 
 # dog_loss - compute the DoG loss, given responses and model parameters
 # dog_init_params - given the responses, estimate initial parameters for a given DoG model
@@ -1975,9 +1976,18 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True):
   if metric == 'vs': # i.e. surr. vol.
       return dog_get_param(params, DoGmodel, 'gs', parker_hawken_equiv) * np.square(dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv));
 
+def dog_total_volume(params, DoGmodel):
+   # Given a set of parameters, compute the volume (will be if not a DoG-based model)
+   if DoGmodel == 0:
+      return 0;
+   else: # TODO: Fix for d-DoG-S model
+      vc = dog_get_param(params, DoGmodel, 'vc');
+      vs = dog_get_param(params, DoGmodel, 'vs');
+      return vc+vs;
+
 ## - for fitting DoG models
 
-def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, gain_reg = 0, minThresh=0.1, joint=False, baseline=0, fracSig=1, enforceMaxPenalty=1, sach_equiv_p_h=True):
+def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, gain_reg=0, vol_lam=0, minThresh=0.1, joint=False, baseline=0, fracSig=1, enforceMaxPenalty=1, sach_equiv_p_h=True):
   '''Given the model params (i.e. sach or tony formulation)), the responses, sf values
   return the loss
   loss_type: 1 - lsq
@@ -2067,6 +2077,20 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
         sigma = curr_std;
       sq_err = np.square(curr_resps-pred_spikes);
       totalLoss = totalLoss + np.sum((sq_err/(k+np.square(sigma)))) + gain_reg*(params[0] + params[2]) + maxPen; # regularize - want gains as low as possible
+
+  if vol_lam > 0: # i.e. we apply a penalty proportional to the sum of volumes of the DoG; only when model is DoG
+    ### For reference, the distributions of tot_vol is 2^[-2,5] with a mean of 2^2 ~= 4
+    # --- for details, see analysis_ch1_suppl.ipynb; but we'll work with log2 of volume
+    # The below values are for sach, sqrt loss functions ONLY
+    # -- for sach, sqrt loss functions, the np.log2(loss) ranges are [2,5], [1,5] respectively with means of 3.36, 2.14
+    # -- vol_scalar is chosen to make the lambdas "make sense" given the typical tot_vol, and totalLoss values
+    tot_vol = dog_total_volume(curr_params, DoGmodel);
+    if loss_type == 2 or loss_type == 4: # this only works for these loss functions, as of 21.11.09
+      vol_scalar = 1.5 if loss_type == 2 else 1; # why? well, if vol~2, loss~3.5, then vol_scalar~1.5 means vol,loss are comparable with lambda=1
+      vol_penalty = vol_lam * vol_scalar * np.log2(tot_vol);
+      totalLoss = np.log2(totalLoss) + vol_penalty;
+    else:
+      totalLoss = totalLoss + vol_penalty;
 
   return totalLoss;
 
@@ -2172,7 +2196,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
 
   return init_params
 
-def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=False, gain_reg=0, ref_varExpl=None, veThresh=70, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0):
+def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=False, gain_reg=0, ref_varExpl=None, veThresh=70, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint=True, (and DoGmodel is 1 or 2, i.e. not flexGauss), then we fit assuming
       a fixed ratio for the center-surround gains and [freq/radius]
@@ -2250,7 +2274,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     #bound_gainCent = (1e-3, None);
     bound_radiusCent= (1e-2, 0.5);
     bound_gainSurr = (1e-2, 1); # multiplier on gainCent, thus the center must be weaker than the surround
-    bound_radiusSurr = (3, 3); # multiplier on radiusCent, thus the surr. radius must be larger than the center
+    bound_radiusSurr = (1, 10); # multiplier on radiusCent, thus the surr. radius must be larger than the center
     if joint==True: # TODO: Is this ok with reparameterization?
       bound_gainRatio = (1e-3, 1); # the surround gain will always be less than the center gain
       bound_radiusRatio= (1, 10); # the surround radius will always be greater than the ctr r
@@ -2348,7 +2372,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
  
       #pdb.set_trace();
 
-      obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1);
+      obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1, vol_lam=vol_lam);
       try:
         wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
       except:
@@ -2396,7 +2420,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       else:
           methodStr = 'TNC';
 
-      obj = lambda params: DoG_loss(params, allResps, valSfVals, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint);
+      obj = lambda params: DoG_loss(params, allResps, valSfVals, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, vol_lam=vol_lam);
       try:
         wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds);
       except:
@@ -2427,7 +2451,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       #respConInd = valConByDisp[disp][con]; 
       
       # now, compute!
-      bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=False); # not joint, now!
+      bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=False, vol_lam=vol_lam); # not joint, now!
       currParams[respConInd, :] = curr_params;
       varExpl[respConInd] = var_explained(resps_curr, curr_params, valSfVals, DoGmodel);
       prefSf[respConInd] = descr_prefSf(curr_params, dog_model=DoGmodel, all_sfs=valSfVals);
@@ -5092,7 +5116,7 @@ def tfTune(tfVals, tfResps, tfResps_std=None, baselineSub=False, nOpts = 10, fra
   best_params = []; best_loss = np.nan; 
   mod = lambda params, tfVals: DoGsach(*params, tfVals);
   #modObj = lambda params: numpy.sum(numpy.square(mod(params, tfVals) - tfResps));
-  modObj = lambda params: DoG_loss(params, tfResps, tfVals, loss_type=2, DoGmodel=1); # for sachx
+  modObj = lambda params: DoG_loss(params, tfResps, tfVals, loss_type=2, DoGmodel=1); # for sach
   for i in np.arange(nOpts):
     init_params = dog_init_params(tfResps, np.min(tfResps), tfVals, tfVals, DoGmodel=1, bounds=allBounds); # sach is dogModel 1
     if np.mod(i, 2) == 0:

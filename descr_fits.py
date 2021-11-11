@@ -15,14 +15,14 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_211028';
+dogName = 'descrFits_211111';
 #dogName = 'descrFits_211020_f030';
 #dogName = 'descrFits_211005';
-phAdvName = 'phaseAdvanceFits_211028'
+phAdvName = 'phaseAdvanceFits_211108'
 #phAdvName = 'phaseAdvanceFits_210914'
-rvcName_f0 = 'rvcFits_211028_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 #rvcName_f0 = 'rvcFits_210914_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-rvcName_f1 = 'rvcFits_211028';
+rvcName_f1 = 'rvcFits_211108';
 #rvcName_f1 = 'rvcFits_210914';
 #rvcName_f0 = 'rvcFits_210524_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 #rvcName_f1 = 'rvcFits_210524';
@@ -578,7 +578,7 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=False, nBoots=1):
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList;
 
  
-def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None): # n_repeats was 100, before 21.09.01
+def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=0.7, vol_lam=0): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
@@ -695,6 +695,11 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
 
   # IF we are re-sampling for bootstrapping, that will happen in hf.organize_resp (such that the resampling occurs within each condition separately)
   # First, set the default values (NaN for everything)
+  # --- we'll adjust nBoots if cross_val is not None (should be fraction, i.e. 0.6 or 0.7)
+  if cross_val is not None and resample:
+    _, _, _, r_all_noresamp = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=False, cellNum=cell_num);
+    n_nonNan = np.nanmax(np.sum(~np.isnan(r_all_noresamp), axis=-1));
+    nBoots = n_nonNan;
   bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramlist = fit_descr_empties(nDisps, nCons, nParam, joint, nBoots);
 
   #import cProfile
@@ -702,14 +707,33 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
   ######
   # 3a. Start the loop (will go once unless bootstrapping), organize the responses (resampling, if applicable)
   ######
-  for boot_i in range(nBoots):
+  if cross_val is not None and resample:
+    # also create infra. to save nll, vExp
+    test_nll = np.copy(bestNLL);
+    test_vExp = np.copy(varExpl);
 
+  for boot_i in range(nBoots):
     if nBoots > 1:
       if np.mod(boot_i, int(np.floor(nBoots/5))) == 0:
         print('iteration %d of %d' % (boot_i, nBoots));
 
-    _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=resample, cellNum=cell_num);
-    #_, _, rm, ra = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=1, cellNum=cell_num, cross_val=(0.7, 0));
+    cross_val_curr = None if cross_val is None else (cross_val, boot_i);
+    _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=resample, cellNum=cell_num, cross_val=cross_val_curr);
+
+    if cross_val is not None and resample:
+      ########
+      ### cross-val stuff
+      # --- find out which data were held out by:
+      # --- turning all NaN into a set value (e.g. -1e3), find where the training/all arrays differ, get those values
+      #########
+      nan_val = -1e3;
+      training = np.copy(resps_all);
+      training[np.isnan(training)] = nan_val;
+      all_data = np.copy(r_all_noresamp);
+      all_data[np.isnan(all_data)] = nan_val;
+      heldout = np.abs(all_data - training) > 1e-6; # if the difference is g.t. this, it means they are different value
+      test_data = np.nan * np.zeros_like(resps_all);
+      test_data[heldout] = all_data[heldout]; # then put the heldout values here
 
     resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
     base_rate = hf.blankResp(cellStruct, expInd, spks_sum, spksAsRate=True)[0] if which_measure==0 else None;
@@ -721,9 +745,29 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
     for d in range(nDisps): # works for all disps
       # a separate fitting call for each dispersion
       if debug:
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1)
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1, vol_lam=vol_lam)
       else:
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig)
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, vol_lam=vol_lam)
+        
+      if cross_val is not None and resample:
+        # compute the loss, varExpl on the heldout (i.e. test) data
+        test_mn = np.nanmean(test_data, axis=-1);
+        test_sem = sem(test_data, axis=-1, nan_policy='omit');
+        # assumes not joint??
+        test_nlls = np.nan*np.zeros_like(nll);
+        test_vExps = np.nan*np.zeros_like(vExp);
+        for ii, prms_curr in enumerate(prms):
+          # we'll iterate over the parameters, which are fit for each contrast (the final dimension of test_mn)
+          if np.any(np.isnan(prms_curr)):
+            continue;
+          non_nans = np.where(~np.isnan(test_mn[d,:,ii]))[0];
+          curr_sfs = stimVals[2][non_nans];
+          resps_curr = test_mn[d, non_nans, ii]
+
+          test_nlls[ii] = hf.DoG_loss(prms_curr, resps_curr, curr_sfs, resps_std=test_sem[d, non_nans, ii], loss_type=loss_type, DoGmodel=DoGmodel, gain_reg=gain_reg, joint=joint, enforceMaxPenalty=0) # why not enforce max? b/c fewer resps means more varied range of max, don't want to wrongfully penalize
+          test_vExps[ii] = hf.var_explained(resps_curr, prms_curr, curr_sfs, DoGmodel);
+        test_nll[boot_i, d] = test_nlls;
+        test_vExp[boot_i, d] = test_vExps;
 
       # Update the fits! Now, what we do depends on:
       # -- joint?
@@ -782,14 +826,43 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
 
   # Pack the dict to save (prevFits_toSave, since it has both boot and non-boot results)
   if resample: # i.e. boot
-    prevFits_toSave['boot_NLL'] = bestNLL;
-    prevFits_toSave['boot_params'] = currParams;
-    prevFits_toSave['boot_varExpl'] = varExpl;
-    prevFits_toSave['boot_prefSf'] = prefSf;
-    prevFits_toSave['boot_charFreq'] = charFreq;
-    if joint==True:
-      prevFits_toSave['boot_totalNLL'] = totalNLL;
-      prevFits_toSave['boot_paramList'] = paramList;
+    # we save the cross-validated stuff separately
+    if cross_val is not None:
+      # first, pre-define empty lists for all of the needed results, if they are not yet defined
+      if 'boot_NLL_cv_test' not in prevFits_toSave:
+        prevFits_toSave['boot_cv_lambdas'] = [];
+        prevFits_toSave['boot_NLL_cv_test'] = [];
+        prevFits_toSave['boot_vExp_cv_test'] = [];
+        prevFits_toSave['boot_NLL_cv_train'] = [];
+        prevFits_toSave['boot_vExp_cv_train'] = [];
+        # --- these are all implicitly based on training data
+        prevFits_toSave['boot_cv_params'] = [];
+        prevFits_toSave['boot_cv_prefSf'] = [];
+        prevFits_toSave['boot_cv_charFreq'] = [];
+
+      # we'll keep track of which lambda values we use so that we can compare the CV vExpl, NLL across regularization terms (for both train and test)
+      prevFits_toSave['boot_cv_lambdas'].append(vol_lam);
+      prevFits_toSave['boot_NLL_cv_test'].append(test_nll);
+      prevFits_toSave['boot_vExp_cv_test'].append(test_vExp);
+      prevFits_toSave['boot_NLL_cv_train'].append(bestNLL);
+      prevFits_toSave['boot_vExp_cv_train'].append(varExpl);
+      prevFits_toSave['boot_cv_params'].append(currParams);
+      prevFits_toSave['boot_cv_prefSf'].append(prefSf);
+      prevFits_toSave['boot_cv_charFreq'].append(charFreq);
+      # vvv TO BE DETERMINED LATER vvv
+      #if joint==True:
+      #  prevFits_toSave['boot_totalNLL'] = totalNLL;
+      #  prevFits_toSave['boot_paramList'] = paramList;
+    else:
+      prevFits_toSave['boot_NLL'] = bestNLL;
+      prevFits_toSave['boot_params'] = currParams;
+      prevFits_toSave['boot_varExpl'] = varExpl;
+      prevFits_toSave['boot_prefSf'] = prefSf;
+      prevFits_toSave['boot_charFreq'] = charFreq;
+      if joint==True:
+        prevFits_toSave['boot_totalNLL'] = totalNLL;
+        prevFits_toSave['boot_paramList'] = paramList;
+
   else:
     prevFits_toSave['NLL'] = bestNLL;
     prevFits_toSave['params'] = currParams;
@@ -844,14 +917,22 @@ if __name__ == '__main__':
     descr_fits = int(sys.argv[8]);
     dog_model  = int(sys.argv[9]);
     loss_type  = int(sys.argv[10]);
-    nBoots    = int(sys.argv[11]);
+    nBoots     = int(sys.argv[11]);
     is_joint   = int(sys.argv[12]);
     if len(sys.argv) > 13:
       dir = float(sys.argv[13]);
     else:
       dir = 1; # default
     if len(sys.argv) > 14:
-      gainReg = float(sys.argv[14]);
+      cross_val  = int(sys.argv[14]);
+    else:
+      cross_val = None;
+    if len(sys.argv) > 15:
+      vol_lam    = float(sys.argv[15]);
+    else:
+      vol_lam = 0;
+    if len(sys.argv) > 16:
+      gainReg = float(sys.argv[16]);
     else:
       gainReg = 0;
     print('Running cell %d in %s' % (cell_num, expName));
@@ -934,7 +1015,7 @@ if __name__ == '__main__':
         
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
-          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=5, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots); # n_repeats was 100, before 21.09.01
+          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=5, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam); # n_repeats was 100, before 21.09.01
           dogFits = pool.map(descr_perCell, zip(range(start_cell, end_cell+1), dL['unitName']));
 
           print('debug');
@@ -972,7 +1053,7 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, nBoots=nBoots);
       if descr_fits == 1:
-        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots);
+        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam);
 
       if rvcF0_fits == 1:
         fit_RVC_f0(cell_num, data_loc=dataPath, rvcMod=rvc_model, nBoots=nBoots);

@@ -89,7 +89,8 @@ fracSig = 1;
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_211028';
+descrBase = 'descrFits_211005';
+#descrBase = 'descrFits_211028';
 #descrBase = 'descrFits_211020_f030'; #211005'; #210929';
 #descrBase = 'descrFits_210524';
 #descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
@@ -1081,7 +1082,7 @@ if plotMetrCorr>0 and check_boot and (descrMod == 3 or descrMod == 1): # i.e. Do
 
       fDisp[d].suptitle('%s #%d (f1f0: %.2f)' % (cellType, cellNum, f1f0rat));
 
-  print('saving corr.');
+  #print('saving corr.');
   saveName = "/cell_%03d_rc_sf70.pdf" % (cellNum) if plotMetrCorr == 2 else "/cell_%03d_cFreq_sf70.pdf" % (cellNum)
   full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
 
