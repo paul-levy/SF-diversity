@@ -60,7 +60,7 @@ lblSize = 40;
 peakFrac = 0.75; # plot fall of to peakFrac of peak, rather than peak or charFreq
 inclLegend = 0;
 
-plotMetrCorr = 1; # plot the corr. b/t sf70 and charFreq [1] or rc [2] for each condition?
+plotMetrCorr = 0; # plot the corr. b/t sf70 and charFreq [1] or rc [2] for each condition?
 
 cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
@@ -89,7 +89,7 @@ fracSig = 1;
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_211005';
+descrBase = 'descrFits_211122';
 #descrBase = 'descrFits_211028';
 #descrBase = 'descrFits_211020_f030'; #211005'; #210929';
 #descrBase = 'descrFits_210524';
@@ -101,8 +101,8 @@ if descrJnt == 1:
 #rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
 #rvcBase = 'rvcFits_200714'; # direc flag & '.npy' are adde
-#rvcBase = 'rvcFits_210914';
-rvcBase = 'rvcFits_211028';
+rvcBase = 'rvcFits_211108';
+#rvcBase = 'rvcFits_211028';
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
@@ -269,7 +269,7 @@ for d in range(nDisps):
             dispAx[d][c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
             #dispAx[d][c_plt_ind, ii].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=currClr, alpha=1); # plot at y=1
         ## otherwise, let's plot the char freq. and frac of peak
-        elif descrMod == 1 or descrMod == 2:
+        elif descrMod == 1 or descrMod == 2 or descrMod == 4:
           char_freq = hf.dog_charFreq(prms_curr, descrMod);
           # if it's a DoG, let's also put the parameters in text (left side only)
           dispAx[d][c_plt_ind, 0].text(0.05, 0.075, '%d,%.2f' % (*prms_curr[0:2], ), transform=dispAx[d][c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
@@ -305,7 +305,7 @@ for d in range(nDisps):
             psf = hf.descr_prefSf(prms_curr, dog_model=descrMod);
             #if psf != np.nan: 
             #  dispAx[d][c_plt_ind, 1].plot(psf, 1, 'b', color='k', label='peak freq', clip_on=False);
-          elif descrMod == 1 or descrMod == 2: # diff-of-gauss
+          elif descrMod == 1 or descrMod == 2 or descrMod == 4: # diff-of-gauss
             # now plot characteristic frequency!  
             char_freq = hf.dog_charFreq(prms_curr, descrMod);
             #if char_freq != np.nan:

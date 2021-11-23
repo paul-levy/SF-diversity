@@ -629,6 +629,8 @@ def descrMod_name(DoGmodel):
     modStr = 'tony';
   elif DoGmodel == 3:
     modStr = 'ddogs';
+  elif DoGmodel == 4:
+    modStr = 'sachVol';
   return modStr;
 
 def descrLoss_name(lossType):
@@ -646,7 +648,7 @@ def descrLoss_name(lossType):
     floss_str = '';
   return floss_str
 
-def descrFit_name(lossType, descrBase=None, modelName = None):
+def descrFit_name(lossType, descrBase=None, modelName = None, modRecov=False):
   ''' if modelName is none, then we assume we're fitting descriptive tuning curves to the data
       otherwise, pass in the fitlist name in that argument, and we fit descriptive curves to the model
       this simply returns the name
@@ -662,6 +664,9 @@ def descrFit_name(lossType, descrBase=None, modelName = None):
   else:
     descrName = '%s_%s.npy' % (descrFitBase, modelName);
     
+  if modRecov:
+    descrName = descrName.replace('.npy', '_modRecov.npy');
+
   return descrName;
 
 def rvc_mod_suff(modNum):
@@ -1391,7 +1396,7 @@ def get_phAdv_model():
   return phAdv_model;
 
 def get_recovInfo(cellStruct, normType):
-  ''' Given a cell structure and normalization type, return the (simulated) spikes and model recovery set parameters
+  ''' [For computational model; outdated as of 2021] Given a cell structure and normalization type, return the (simulated) spikes and model recovery set parameters
   '''
   spks, prms = [], [];
   try:
@@ -1410,6 +1415,19 @@ def get_recovInfo(cellStruct, normType):
   except:
     warnings.warn('You likely do not have a recovery set up for this cell/file');
   return prms, spks;
+
+def get_descr_recovResponses(params, descrMod, sfVals, nTr):
+  # NOTE: Temporarily made the sigma just 1% of the true std. --- why? To test the reliability of the model
+  # Given a set of descriptive SF tuning parameters, return simulated spikes
+  # NOTE: Noise model is Gaussian with variance equal to mean
+  resps = numpy.nan * numpy.zeros((len(sfVals), nTr));
+
+  for i,val in enumerate(sfVals):
+    meanResp = get_descrResp(params, val, DoGmodel=descrMod);
+    # meanResp shouldn't be negative, but in case it is, we take abs. value before sqrt
+    resps[i] = numpy.random.normal(loc=meanResp, scale=numpy.abs(numpy.sqrt(numpy.abs(meanResp))), size=nTr);
+
+  return resps;
 
 def phase_advance(amps, phis, cons, tfs, n_repeats=100):
    ''' Given the mean amplitude/phase of responses over a range of contrasts, compute the linear model
@@ -1673,7 +1691,8 @@ def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf, baseline=0, computeNorm=0):
     dog_norm = lambda f: dog(f) / norm;
     return dog(stim_sf), dog_norm(stim_sf);
   else:
-    tune = baseline + np.maximum(0, gain*(np.exp(-np.square(stim_sf/f_c)) - gain_s * np.exp(-np.square(stim_sf/(f_c*j_s))))); 
+    tune = baseline + gain*(np.exp(-np.square(stim_sf/f_c)) - gain_s * np.exp(-np.square(stim_sf/(f_c*j_s))));
+    #tune = baseline + np.maximum(0, gain*(np.exp(-np.square(stim_sf/f_c)) - gain_s * np.exp(-np.square(stim_sf/(f_c*j_s))))); 
     return tune, [];
 
 def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, computeNorm=0, parker_hawken_equiv=True):
@@ -1707,6 +1726,14 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, computeNorm=0, parker
     else:
       tune = baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(stim_sf*np.pi*r_s)));
     return tune, [];
+
+def DoGsachVol(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0):
+  ''' As in DoGsachVol, but parameterized such the mechanisms are normalized (and given in Ch 3, eq. 1 in Sokol thesis [2009])
+      -- This is an attempt to reparameterize to better disentangle the influence of r_s, gain_s from one another (per Eero, 21.11.11)
+  '''
+  np = numpy;
+  tune = baseline + gain_c*np.pi*(np.square(r_c)*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.square(r_c*r_s)*np.exp(-np.square(stim_sf*np.pi*r_s*r_c)));
+  return tune, [];
  
 def var_explained(data_resps, modParams, sfVals, dog_model = 2, baseline=0):
   ''' given a set of responses and model parameters, compute the variance explained by the model 
@@ -1867,7 +1894,7 @@ def dog_charFreq(prms, DoGmodel=1):
   '''
   if DoGmodel == 0 or DoGmodel == 3:
       f_c = numpy.nan; # Cannot compute charFreq without DoG model fit (see sandbox_careful.ipynb)
-  elif DoGmodel == 1: # sach
+  elif DoGmodel == 1 or DoGmodel == 4: # sach, sachVol
       r_c = prms[1];
       f_c = 1/(numpy.pi*r_c) # TODO: might need a 2* in the denom???
   elif DoGmodel == 2: # tony
@@ -1945,6 +1972,9 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True):
       fc = params[1];
       rc = np.divide(1, np.pi*fc);
       return np.divide(params[0], np.pi*np.square(rc));
+    elif DoGmodel == 4: # sachVol
+      # then it becomes gain*pi*radius^2
+      return params[0]*np.pi*np.square(params[1]);
   if metric == 'gs': # i.e. surround gain
     if DoGmodel == 1: # sach
       return params[0]*params[2] if parker_hawken_equiv else params[2];
@@ -1952,17 +1982,22 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True):
       fc = params[1];
       rs = np.divide(1, np.pi*fc*params[3]); # params[3] is the multiplier on fc to get fs
       return np.divide(params[0]*params[2], np.pi*np.square(rs));
+    elif DoGmodel == 4: # sachVol
+      # then it becomes gain*pi*radius^2
+      gc, rs = dog_get_param(params, DoGmodel, 'gc', parker_hawken_equiv), dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv);
+      gs = gc*params[2]; # params[2] is the relative surround gain
+      return gs*np.pi*np.square(rs);
   #########
   ### Radius
   #########
   if metric == 'rc': # i.e. center radius
-    if DoGmodel == 1: # sach
+    if DoGmodel == 1 or DoGmodel == 4: # sach, sachVol
       return params[1];
     elif DoGmodel == 2: # tony
       fc = params[1];
       return np.divide(1, np.pi*fc);
   if metric == 'rs': # i.e. surround radius
-    if DoGmodel == 1: # sach
+    if DoGmodel == 1 or DoGmodel == 4: # sach, sachVol
       return params[1]*params[3] if parker_hawken_equiv else params[3];
     elif DoGmodel == 2: # tony
       fc = params[1];
@@ -1996,9 +2031,10 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
              4 - Sach sum{[(exp-obs)^2]/[k+sigma^2]} where
                  k := 0.01*max(obs); sigma := measured variance of the response
   DoGmodel: 0 - flexGauss (not DoG...)
-            1 - sach
+            1 - sach (reparameterized to match dDoGs)
             2 - tony
             3 - ddogs (d-DoG-S, from Parker and Hawken, 1988)
+            4 - sachVol (original, as in 2009 Sokol thesis)
 
     - sach_equiv_p_h==True means that we use the version of the Sach DoG model in which the scalars are equivalent to those in the parker-hawken model
 
@@ -2162,15 +2198,19 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
                    init_gPr, init_sPr];
 
   ############
-  ## SACH
+  ## SACH [and sachVol]
   ############
-  elif DoGmodel == 1:
+  elif DoGmodel == 1 or DoGmodel == 4:
     init_radiusCent = random_in_range((0.02, 0.5))[0];
-    if sach_equiv_p_h: # then, to get maxResp, gainCent should be maxResp/{np.sqrt(pi)*radiusCent}
-      init_gainCent = maxResp * random_in_range((0.85, 1.2))[0]; # 
-      #init_gainCent = maxResp/(init_radiusCent*np.sqrt(np.pi)) * random_in_range((0.7, 1.3))[0]; # 
-    else: # just keeping for backwards compatability
-      init_gainCent = 5e2*random_in_range((1, 300))[0];
+    if DoGmodel == 1:
+      if sach_equiv_p_h: # then, to get maxResp, gainCent should be maxResp/{np.sqrt(pi)*radiusCent}
+        init_gainCent = maxResp * random_in_range((0.85, 1.2))[0]; # 
+        #init_gainCent = maxResp/(init_radiusCent*np.sqrt(np.pi)) * random_in_range((0.7, 1.3))[0]; # 
+      else: # just keeping for backwards compatability
+        init_gainCent = 5e2*random_in_range((1, 300))[0];
+    elif DoGmodel == 4:
+      # the term in front is gain*pi*r^2, so we divide out pi*r^2 to get the initial gain estimate
+      init_gainCent = maxResp*random_in_range((0.7, 1.3))[0]/(np.pi*np.square(init_radiusCent));
     # -- surround parameters are relataive to center
     init_gainSurr = random_in_range((0.1, 0.8))[0]; #init_gainCent * random_in_range((0.5, 0.9))[0]; # start with a stronger surround?
     init_radiusSurr = random_in_range((1.1, 2))[0]; #init_radiusCent * random_in_range((0.9, 4))[0];
@@ -2196,7 +2236,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
 
   return init_params
 
-def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=False, gain_reg=0, ref_varExpl=None, veThresh=70, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0):
+def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=False, gain_reg=0, ref_varExpl=None, veThresh=70, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0, modRecov=False):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint=True, (and DoGmodel is 1 or 2, i.e. not flexGauss), then we fit assuming
       a fixed ratio for the center-surround gains and [freq/radius]
@@ -2204,6 +2244,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         jointly across all contrasts!
       - note that ref_varExpl (optional) will be of the same form that the output for varExpl will be
       --- fracSig: if on, then the right-half (high SF) of the flex. gauss tuning curve is expressed as a fraction of the lower half
+      --- modRecov: if True AND if prevFits is not None, we'll sample the fit params and fit to those resps, i.e. model recovery analysis
 
       inputs: self-explanatory, except for resps, which should be [resps_mean, resps_all, resps_sem, base_rate]
       outputs: bestNLL, currParams, varExpl, prefSf, charFreq, [overallNLL, paramList; if joint=True]
@@ -2213,7 +2254,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
   if DoGmodel == 0:
     joint=False; # we cannot fit the flex gauss model jointly!
     nParam = 5;
-  elif DoGmodel == 1 or DoGmodel == 2: # and joint can stay as specified
+  elif DoGmodel == 1 or DoGmodel == 2 or DoGmodel == 4: # and joint can stay as specified
     nParam = 4;
   elif DoGmodel == 3: # d-DoG-S (Parker, Hawken)
     nParam = 10; # for now, since we do not enforce kc1-ks2 = kc2-ks2 (see Parker, Hawken, 1987, bottom of p.255)
@@ -2253,6 +2294,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     else:
       bestNLL, currParams, varExpl, prefSf, charFreq = prevFits['NLL'][disp,:], prevFits['params'][disp,:], prevFits['varExpl'][disp,:], prevFits['prefSf'][disp,:], prevFits['charFreq'][disp,:];
 
+    if modRecov:
+      # ALSO, if it's model recovery, then we are overwriting the existing fits, so let's make the loss NaN
+      # --- yes, this is hacky, but we want to easily pass in the fit parameters while also saving these fits
+      bestNLL = np.nan * np.zeros_like(bestNLL);
+
     if joint==True:
       overallNLL = prevFits['totalNLL'];
       params = prevFits['paramList'];
@@ -2269,8 +2315,9 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     else:
       bound_sigFrac = (1e-4, None); # arbitrarily small, to None // TRYING
     allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sigFrac);
-  elif DoGmodel == 1: # SACH
-    bound_gainCent = (1, 1.5*max_resp); # don't allow the max. resp to go over 50% of the maximum response
+  elif DoGmodel == 1 or DoGmodel == 4: # SACH, sachVol
+    bound_gainCent = (1, 1.5*max_resp) if DoGmodel == 1 else (1, None); 
+    # if DoGm=1, don't allow the max. resp to go over 50% of the maximum response
     #bound_gainCent = (1e-3, None);
     bound_radiusCent= (1e-2, 0.5);
     bound_gainSurr = (1e-2, 1); # multiplier on gainCent, thus the center must be weaker than the surround
@@ -2327,8 +2374,17 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     valSfVals = valSfVals[valSfVals>0];
 
     respConInd = np.where(np.asarray(valConByDisp[disp]) == con)[0];
-    resps_curr = resps_mean[disp, valSfInds, con];
-    sem_curr   = resps_sem[disp, valSfInds, con];
+    if modRecov and prevFits is not None:
+      # find out how many trials; get the parameters
+      nResps = np.max(np.sum(~np.isnan(resps_all[disp,valSfInds, con]), axis=1))
+      params = currParams[con];
+      # then sample from that fit, and get the mean/sem
+      resps_recov = get_descr_recovResponses(params, descrMod=DoGmodel, sfVals=valSfVals, nTr=nResps);
+      resps_curr = np.mean(resps_recov, axis=1);
+      sem_curr   = sem(resps_recov, axis=1);
+    else:
+      resps_curr = resps_mean[disp, valSfInds, con];
+      sem_curr   = resps_sem[disp, valSfInds, con];
 
     ### prepare for the joint fitting, if that's what we've specified!
     if joint==True:
@@ -2536,14 +2592,12 @@ def compute_SF_BW(fit, height, sf_range, which_half=0, sfMod=0, baseline=None, f
       right_full_bw = 2 * (sigRight * sqrt(2*log(1/height)));
       right_cpd = fit[2] * exp((sigRight * sqrt(2*log(1/height))));
 
-    elif sfMod==1 or sfMod==2: # we'll do this numerically rather than in closed form
+    else: # we'll do this numerically rather than in closed form
       prefSf = descr_prefSf(fit, dog_model=sfMod, all_sfs=sf_range)
       peakResp = get_descrResp(fit, prefSf, sfMod);
       targetResp = peakResp*height;
-      if sfMod == 1:
-         obj = lambda sf: np.square(targetResp - DoGsach(*fit, stim_sf=sf)[0]);
-      elif sfMod == 2:
-         obj = lambda sf: np.square(targetResp - DiffOfGauss(*fit, stim_sf=sf)[0]);
+      # todo: verify this is OK? 21.11.11
+      obj = lambda sf: np.square(targetResp - get_descrResp(fit, stim_sf=sf, DoGmodel=sfMod));
       # lower half, first
       sf_samps = np.geomspace(sf_range[0], prefSf, 500);
       sf_evals = np.argmin([obj(x) for x in sf_samps]);
@@ -2722,6 +2776,8 @@ def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1, baseline=0, fracSig=
     pred_spikes, _ = DiffOfGauss(*params, stim_sf=stim_sf, baseline=baseline);
   elif DoGmodel == 3:
     pred_spikes = parker_hawken(params, stim_sf);
+  elif DoGmodel == 4:
+    pred_spikes, _ = DoGsachVol(*params, stim_sf=stim_sf, baseline=baseline);
   return pred_spikes;
 
 def get_rvcResp(params, curr_cons, rvcMod):

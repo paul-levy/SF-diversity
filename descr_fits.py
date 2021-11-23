@@ -2,6 +2,7 @@ import numpy as np
 import sys
 import helper_fcns as hf
 import scipy.optimize as opt
+import copy
 import os
 from time import sleep
 from scipy.stats import sem, poisson
@@ -15,7 +16,7 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_211111';
+dogName = 'descrFits_211121';
 #dogName = 'descrFits_211020_f030';
 #dogName = 'descrFits_211005';
 phAdvName = 'phaseAdvanceFits_211108'
@@ -27,14 +28,16 @@ rvcName_f1 = 'rvcFits_211108';
 #rvcName_f0 = 'rvcFits_210524_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 #rvcName_f1 = 'rvcFits_210524';
 
-## model recovery???
-modelRecov = 0;
+'''
+modelRecov = 0; # 
+## model recovery??? OUTDATED, as of 21.11, and only applicable in RVC fits, anyway
 if modelRecov == 1:
   normType = 1; # use if modelRecov == 1 :: 1 - flat; 2 - wght; ...
   dogName =  'mr%s_descrFits_190503' % hf.fitType_suffix(normType);
   rvcName = 'mr%s_rvcFits_f0.npy' % hf.fitType_suffix(normType);
 else:
   normType = 0;
+'''
 
 ##########
 ### TODO:
@@ -416,10 +419,9 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
 
 ### 1.1 RVC fits without adjusted responses (organized like SF tuning)
 
-def fit_RVC_f0(cell_num, data_loc, n_repeats=25, fLname = rvcName_f0, dLname=expName, modelRecov=modelRecov, normType=normType, rvcMod=0, to_save=1, returnDict=0, nBoots=0): # n_repeats was 100, before 21.09.01
+def fit_RVC_f0(cell_num, data_loc, n_repeats=25, fLname = rvcName_f0, dLname=expName, rvcMod=0, to_save=1, returnDict=0, nBoots=0): # n_repeats was 100, before 21.09.01
   # TODO: Should replace spikes with baseline subtracted spikes?
-  # NOTE: n_repeats not used (19.05.06)
-  # normType used iff modelRecv == 1
+  # NOTE: n_repeats not used (19.05.06); modelRecov, normType now deprecated (21.11.15)
 
   # Set up whether we will bootstrap straight away
   resample = False if nBoots <= 0 else True;
@@ -458,11 +460,15 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=25, fLname = rvcName_f0, dLname=exp
   else:
     rvcFits = dict();
 
-  # now, get the spikes (recovery, if specified) and organize for fitting
+  # DEPRECATED //now, get the spikes (recovery, if specified) and organize for fitting
+  recovSpikes = None;
+  '''
   if modelRecov == 1:
     recovSpikes = hf.get_recovInfo(cellStruct, normType)[1];
   else:
     recovSpikes = None;
+  '''
+
   ### Note: should replace with get_adjusted_spikerate? can do if passing in None for descrFits (TODO?)
   spks = hf.get_spikes(data, get_f0=1, rvcFits=None, expInd=expInd, overwriteSpikes=recovSpikes); # we say None for rvc (F1) fits
   
@@ -578,7 +584,7 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=False, nBoots=1):
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList;
 
  
-def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modelRecov=modelRecov, normType=normType, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=0.7, vol_lam=0): # n_repeats was 100, before 21.09.01
+def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
@@ -598,7 +604,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
       --- we'll pass in [cell_num, cellName] as cell_num [to avoid loading datalist]
    
       If nBoots=0 (default, we just fit once to the original data, i.e. not resamples)
-      -- As of 21.10.31, if cross_val is not None, then we'll use the bootstrap infrastructure, but make cross-validated holdout fits (and analysis of loss on holdout data)
+      -- As of 21.10.31, if cross_val is not None [e.g. 0.7], then we'll use the bootstrap infrastructure, but make cross-validated holdout fits (and analysis of loss on holdout data)
 
       Update, as of 21.09.13: For each cell, we'll have boot and non-boot versions of each field (e.g. NLL, prefSf) to make analysis (e.g. for hf.jl_perCell() call) easier
       -- To accommodate this, we will always load the descrFit structure for each cell and simply tack on the new information (e.g. boot_prefSf or prefSf [i.e. non-boot])
@@ -613,7 +619,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
 
   if DoGmodel == 0:
     nParam = 5;
-  elif DoGmodel == 1 or DoGmodel == 2:
+  elif DoGmodel == 1 or DoGmodel == 2 or DoGmodel == 4:
     nParam = 4;
   elif DoGmodel == 3:
     nParam = 10;
@@ -662,8 +668,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
       prevFits_toSave = descrFits[cell_num-1]; # why are we saving this regardless? we'll include the boot and non-boot versions
     except:
       prevFits_toSave = dict();
-    if cell_num-1 in descrFits and not resample: # again, if we are resampling, we do NOT want previous fits
-      prevFits = descrFits[cell_num-1];
+    if cell_num-1 in descrFits:
+      if modRecov or not resample: # again, if we are resampling and NOT doing model recovery, we do NOT want previous fits
+        prevFits = copy.deepcopy(descrFits[cell_num-1]); # why deep copy? Well, we meddle with descrFits, but don't want to overwrite...
   else:
     descrFits = dict();
   
@@ -677,13 +684,6 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
 
   nDisps = len(all_disps);
   nCons = len(all_cons);
-
-  # TODO: Add recovery spikes...
-  if modelRecov == 1:
-    recovSpikes = hf.get_recovInfo(cellStruct, normType)[1];
-  else:
-    recovSpikes = None;
-  # force DC spikes if is_f0 == 1
 
   # -- we'll ask which response measure is returned (DC or F1) so that we can pass in None for base_rate if it's F1 (will become 0)
   # ---- NOTE: We pass in rvcMod=-1 so that we know we're passing in the already loaded rvcFit for that cell
@@ -745,9 +745,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
     for d in range(nDisps): # works for all disps
       # a separate fitting call for each dispersion
       if debug:
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1, vol_lam=vol_lam)
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1, vol_lam=vol_lam, modRecov=modRecov)
       else:
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, vol_lam=vol_lam)
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, vol_lam=vol_lam, modRecov=modRecov)
         
       if cross_val is not None and resample:
         # compute the loss, varExpl on the heldout (i.e. test) data
@@ -883,6 +883,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
       descrFits = dict();
 
     # then save
+    # --- first, if model recovery, change the name here; why? Keeping the same name for earlier on allows the 
+    if modRecov:
+      fLname = fLname.replace('.npy', '_modRecov.npy');
     descrFits[cell_num-1] = prevFits_toSave;
     np.save(data_loc + fLname, descrFits);
     print('saving for cell ' + str(cell_num));
@@ -923,16 +926,21 @@ if __name__ == '__main__':
       dir = float(sys.argv[13]);
     else:
       dir = 1; # default
+    # --- first, 
     if len(sys.argv) > 14:
-      cross_val  = int(sys.argv[14]);
+      modRecov  = int(sys.argv[14]);
+    else:
+      modRecov = False;
+    if len(sys.argv) > 15:
+      cross_val  = int(sys.argv[15]);
     else:
       cross_val = None;
-    if len(sys.argv) > 15:
-      vol_lam    = float(sys.argv[15]);
+    if len(sys.argv) > 16:
+      vol_lam    = float(sys.argv[16]);
     else:
       vol_lam = 0;
-    if len(sys.argv) > 16:
-      gainReg = float(sys.argv[16]);
+    if len(sys.argv) > 17: # DEPRECATED as of 21.11
+      gainReg = float(sys.argv[17]);
     else:
       gainReg = 0;
     print('Running cell %d in %s' % (cell_num, expName));
@@ -1015,12 +1023,12 @@ if __name__ == '__main__':
         
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
-          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=5, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam); # n_repeats was 100, before 21.09.01
+          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=5, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov);
           dogFits = pool.map(descr_perCell, zip(range(start_cell, end_cell+1), dL['unitName']));
 
           print('debug');
           ### do the saving HERE!
-          dogNameFinal = hf.descrFit_name(loss_type, descrBase=dogName, modelName=hf.descrMod_name(dog_model));
+          dogNameFinal = hf.descrFit_name(loss_type, descrBase=dogName, modelName=hf.descrMod_name(dog_model), modRecov=modRecov);
           if os.path.isfile(dataPath + dogNameFinal):
             dogFitNPY = hf.np_smart_load(dataPath + dogNameFinal);
           else:
@@ -1053,7 +1061,7 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, nBoots=nBoots);
       if descr_fits == 1:
-        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam);
+        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov);
 
       if rvcF0_fits == 1:
         fit_RVC_f0(cell_num, data_loc=dataPath, rvcMod=rvc_model, nBoots=nBoots);
