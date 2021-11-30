@@ -1685,7 +1685,7 @@ def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=False, 
 
    return rvc_model, all_opts, all_conGain, all_loss;
 
-def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf, baseline=0, computeNorm=0):
+def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf, baseline=0):
   ''' Difference of gaussians - as formulated in Levitt et al, 2001
   gain      - overall gain term
   f_c       - characteristic frequency of the center, i.e. freq at which response is 1/e of maximum
@@ -1694,19 +1694,11 @@ def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf, baseline=0, computeNorm=0):
   --- Note that if baseline is non-zero, we'll add this to the response but it is NOT optimized, as of 21.05.03
   '''
   np = numpy;
-  if computeNorm == 1:
-    dog = lambda f: baseline + np.maximum(0, gain*(np.exp(-np.square(f/f_c)) - gain_s * np.exp(-np.square(f/(f_c*j_s))))); 
+  tune = baseline + gain*(np.exp(-np.square(stim_sf/f_c)) - gain_s * np.exp(-np.square(stim_sf/(f_c*j_s))));
+  #tune = baseline + np.maximum(0, gain*(np.exp(-np.square(stim_sf/f_c)) - gain_s * np.exp(-np.square(stim_sf/(f_c*j_s))))); 
+  return tune, [];
 
-    norm = np.max(dog(stim_sf));
-
-    dog_norm = lambda f: dog(f) / norm;
-    return dog(stim_sf), dog_norm(stim_sf);
-  else:
-    tune = baseline + gain*(np.exp(-np.square(stim_sf/f_c)) - gain_s * np.exp(-np.square(stim_sf/(f_c*j_s))));
-    #tune = baseline + np.maximum(0, gain*(np.exp(-np.square(stim_sf/f_c)) - gain_s * np.exp(-np.square(stim_sf/(f_c*j_s))))); 
-    return tune, [];
-
-def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, computeNorm=0, parker_hawken_equiv=True):
+def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, parker_hawken_equiv=True):
   ''' Difference of gaussians as described in Sach's thesis
   [0] gain_c    - gain of the center mechanism
   [1] r_c       - radius of the center
@@ -1718,25 +1710,12 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, computeNorm=0, parker
   ------ in that case, we also re-parameterize the surround gain/radii to be relative to the center's
   '''
   np = numpy;
-  if computeNorm == 1:
-    if parker_hawken_equiv:
-      dog = lambda f: baseline + np.maximum(0, gain_c*(np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.exp(-np.square(f*np.pi*r_s*r_c))));
-      #dog = lambda f: baseline + np.maximum(0, gain_c*(np.sqrt(np.pi)*r_c*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*r_c*np.exp(-np.square(f*np.pi*r_s*r_c))));
-    else:
-      dog = lambda f: baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(f*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(f*np.pi*r_s)));
 
-    norm = np.max(dog(stim_sf));
-    dog_norm = lambda f: dog(f) / norm;
-
-    return dog(stim_sf), dog_norm(stim_sf);
+  if parker_hawken_equiv:
+    tune = baseline + gain_c*(np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.exp(-np.square(stim_sf*np.pi*r_s*r_c)));
   else:
-    if parker_hawken_equiv:
-      tune = baseline + gain_c*(np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.exp(-np.square(stim_sf*np.pi*r_s*r_c)));
-      #tune = baseline + gain_c*(np.sqrt(np.pi)*r_c*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*r_c*np.exp(-np.square(stim_sf*np.pi*r_s*r_c)));
-      #tune = baseline + np.maximum(0, gain_c*np.sqrt(np.pi)*r_c*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.sqrt(np.pi)*r_s*np.exp(-np.square(stim_sf*np.pi*r_s)));
-    else:
-      tune = baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(stim_sf*np.pi*r_s)));
-    return tune, [];
+    tune = baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(stim_sf*np.pi*r_s)));
+  return tune, [];
 
 def DoGsachVol(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0):
   ''' As in DoGsachVol, but parameterized such the mechanisms are normalized (and given in Ch 3, eq. 1 in Sokol thesis [2009])
@@ -2033,7 +2012,7 @@ def dog_total_volume(params, DoGmodel):
 
 ## - for fitting DoG models
 
-def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, gain_reg=0, vol_lam=0, minThresh=0.1, joint=0, baseline=0, fracSig=1, enforceMaxPenalty=1, sach_equiv_p_h=True):
+def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, gain_reg=0, vol_lam=0, minThresh=0.1, joint=0, baseline=0, fracSig=1, enforceMaxPenalty=0, sach_equiv_p_h=True, n_fits=1):
   '''Given the model params (i.e. sach or tony formulation)), the responses, sf values
   return the loss
   loss_type: 1 - lsq
@@ -2050,26 +2029,13 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
     - sach_equiv_p_h==True means that we use the version of the Sach DoG model in which the scalars are equivalent to those in the parker-hawken model
 
     - if joint>0, then resps, resps_std will be arrays in which to index
+    --- then, we also must pass in n_fits
     - if enforceMaxPenalty, then we add a penalty if the maximum model response is more than 50% larger than the maximum data response
     - params will be 2*N+2, where N is the number of contrasts;
     --- "2" is for a shared (across all contrasts) ratio of gain/[radius/freq]
     --- then, there are two parameters fit uniquely to each contrast - center gain & [radius/freq]
   '''
   np = numpy;
-
-  # we'll use the "joint" flag to determine how many DoGs we are fitting
-  if joint>0:
-    n_fits = len(resps);
-    if joint == 1:
-       surr_gain = params[0]; # the ratio of surround::center gain is shared across all fits
-       surr_shape = params[1]; # the ratio of surr::ctr freq (or radius) is shared across all fits
-    elif joint == 2:
-       surr_shape = params[0]; # the ratio of surr::ctr freq (or radius) is shared across all fits
-    elif joint == 3:
-       ctr_shape = params[0];
-       surr_shape = params[1]; # the ratio of surr::ctr freq (or radius) is shared across all fits
-  else:
-    n_fits = 1;
 
   totalLoss = 0;
 
@@ -2086,17 +2052,11 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
       curr_resps = resps[i];
       curr_std = resps_std[i];
       if joint==1:
-        ctr_gain = params[2+i*2]; 
-        ctr_shape = params[3+i*2]; # shape, as in radius/freq, depending on DoGmodel
+        curr_params = [params[2+i*2], params[3+i*2], params[0], params[1]];
       elif joint==2:
-        ctr_gain = params[1+i*3]; 
-        ctr_shape = params[2+i*3]; # shape, as in radius/freq, depending on DoGmodel
-        surr_gain = params[3+i*3]; 
+        curr_params = [params[1+i*3], params[2+i*3], params[3+i*3], params[0]];
       elif joint==3:
-        ctr_gain = params[2+i*2]; 
-        surr_gain = params[3+i*2];
-      # then, package all the parameters together
-      curr_params = [ctr_gain, ctr_shape, surr_gain, surr_shape];
+        curr_params = [params[2+i*2], params[0], params[3+i*2], params[1]];
 
       if enforceMaxPenalty:
         max_data = np.max(curr_resps);
@@ -2258,7 +2218,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
 
   return init_params
 
-def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=0, gain_reg=0, ref_varExpl=None, veThresh=60, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0, modRecov=False):
+def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=0, gain_reg=0, ref_varExpl=None, veThresh=60, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0, modRecov=False, ftol=2.220446049250313e-09):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint>0, (and DoGmodel is not flexGauss), then we fit assuming
       --- joint==1: a fixed ratio for the center-surround gains and [freq/radius]
@@ -2267,6 +2227,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       --- joint==2: a fixed center & surround radius for all contrasts, free gains
       --- joint==3: a surround radius for all contrasts; all other parameters (both gains, center radius) free at al contrasts
       - note that ref_varExpl (optional) will be of the same form that the output for varExpl will be
+      --- NOTE: We only use ftol if joint; if boot, we will artificially restrict ftol to avoid too many iteration steps (which yield minimal improvement)
       --- fracSig: if on, then the right-half (high SF) of the flex. gauss tuning curve is expressed as a fraction of the lower half
       --- modRecov: if True AND if prevFits is not None, we'll sample the fit params and fit to those resps, i.e. model recovery analysis
 
@@ -2471,7 +2432,6 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
       except:
         continue; # the fit has failed (bound issue, for example); so, go back to top of loop, try again
-      pdb.set_trace();
 
       # compare
       NLL = wax['fun'];
@@ -2502,46 +2462,33 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     ### TODO: NOTE that we only get to this joint area if DoGmodel = 1 or 2, for now
     for n_try in range(n_repeats):
       # first, estimate the joint parameters; then we'll add the per-contrast parameters after
-      if DoGmodel == 1:
-        if joint == 1: # gain ratio (i.e. surround gain) [0] and shape ratio (i.e. surround radius) [1] are joint
-          allInitParams = [random_in_range((0.2, 0.8))[0], random_in_range((2, 3.5))[0]];
-        elif joint == 2: #  surround radius [0] (as ratio) is joint
-          allInitParams = [random_in_range((1.5, 4))[0]];
-        elif joint == 3: # center radius [0] and surround radius [1] ratio are joint
-          allInitParams = [random_in_range((0.02, 0.5))[0], random_in_range((1.5, 4))[0]];
-      elif DoGmodel == 2:
-        if joint == 1:
-          # -- but first, we estimate the gain ratio (surround gain) [0] and the cfreq ratio [1] (i.e. surround freq. ratio)
-          allInitParams = [random_in_range((0.2, 0.8))[0], random_in_range((0.2, 0.4))[0]];
-        elif joint == 2: #  surround freq. (as ratio) [0] is joint
-          allInitParams = [random_in_range((0.25, 0.35))[0]];
-        elif joint == 3: # center radius [0] and surround radius [1] ratio are joint
-          allInitParams = [random_in_range((0.75, 5))[0], random_in_range((0.25, 0.35))[0]];
+      # --- we'll estimate the joint parameters based on the high contrast response
+      ref_resps = allResps[-1];
+      ref_init = dog_init_params(ref_resps, base_rate, all_sfs, valSfVals, DoGmodel);
+      if joint == 1: # gain ratio (i.e. surround gain) [0] and shape ratio (i.e. surround radius) [1] are joint
+        allInitParams = [ref_init[2], ref_init[3]];
+      elif joint == 2: #  surround radius [0] (as ratio) is joint
+        allInitParams = [ref_init[3]];
+      elif joint == 3: # center radius [0] and surround radius [1] ratio are joint
+        allInitParams = [ref_init[1], ref_init[3]];
 
       # now, we cycle through all responses and add the per-contrast parameters
       for resps_curr in allResps:
+        curr_init = dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel);
         if joint == 1:
-          curr_init = dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel)[0:2];
           allInitParams = [*allInitParams, curr_init[0], curr_init[1]];
         elif joint == 2: # then we add center gain, center radius, surround gain (i.e. params 0:3
-          curr_init = dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel)[0:3];
           allInitParams = [*allInitParams, curr_init[0], curr_init[1], curr_init[2]];
         elif joint == 3: # then we add center gain and surround gain (i.e. params 0, 2)
-          curr_init = dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel)[0:3];
           allInitParams = [*allInitParams, curr_init[0], curr_init[2]];
 
-      # choose optimization method
-      if np.mod(n_try, 2) == 0:
-          methodStr = 'L-BFGS-B';
-      else:
-          methodStr = 'TNC';
-
-      obj = lambda params: DoG_loss(params, allResps, valSfVals, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, vol_lam=vol_lam);
+      # previously, we choose optimization method (L-BFGS-B for even, TNC for odd) --- we now just choose the former
+      methodStr = 'L-BFGS-B';
+      obj = lambda params: DoG_loss(params, allResps, valSfVals, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, vol_lam=vol_lam, n_fits=len(allResps));
       try:
-        wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds);
+        wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds, options={'ftol': ftol});
       except:
         continue; # if that particular fit fails, go back and try again
-      pdb.set_trace();
 
       # compare
       NLL = wax['fun'];

@@ -584,7 +584,7 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1):
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList;
 
  
-def fit_descr_DoG(cell_num, data_loc, n_repeats=5, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0): # n_repeats was 100, before 21.09.01
+def fit_descr_DoG(cell_num, data_loc, n_repeats=3, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
@@ -713,8 +713,11 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=5, loss_type=3, DoGmodel=1, forc
 
   for boot_i in range(nBoots):
     if nBoots > 1:
+      ftol = 1e-5; # artificially lower value that has minimal impact on parameter values; will avoid too many fit iterations
       if np.mod(boot_i, int(np.floor(nBoots/5))) == 0:
         print('iteration %d of %d' % (boot_i, nBoots));
+    else:
+      ftol = 2.220446049250313e-09; # the default value, per scipy guide (scipy.optimize, for L-BFGS-B)
 
     cross_val_curr = None if cross_val is None else (cross_val, boot_i);
     _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=resample, cellNum=cell_num, cross_val=cross_val_curr);
@@ -1061,9 +1064,9 @@ if __name__ == '__main__':
         rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, nBoots=nBoots);
       if descr_fits == 1:
 
-        import cProfile, re
-        cProfile.run('fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov)');
-        #fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov);
+        #import cProfile, re
+        #cProfile.run('fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov)');
+        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov);
 
       if rvcF0_fits == 1:
         fit_RVC_f0(cell_num, data_loc=dataPath, rvcMod=rvc_model, nBoots=nBoots);
