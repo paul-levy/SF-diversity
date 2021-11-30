@@ -60,7 +60,8 @@ EXP_DIR=$1
 RVC_FIT=$2
 DESCR_FIT=$3
 BOOT_REPS=$4
-MOD_RECOV=${5:-0}
+JOINT=${5:-0}
+MOD_RECOV=${6:-0}
 
 if [ "$EXP_DIR" = "V1/" ]; then
   # V1/ -- vec F1 adjustment with full dataset
@@ -140,13 +141,12 @@ if [ "$EXP_DIR" = "LGN/" ]; then
   if [[ $DESCR_FIT -eq 1 ]]; then
     # Descr fits (based on Movshon RVCs)   
     ### with model recovery
-    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS 0 1 $MOD_RECOV # sach DoG, not joint (sach loss)
-    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS 0 1 $MOD_RECOV # sach DoG, not joint (sqrt)
-    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 4 4 $BOOT_REPS 0 1 $MOD_RECOV # sachVol DoG, not joint (sach loss)
-    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 4 2 $BOOT_REPS 0 1 $MOD_RECOV # sachVol DoG, not joint (sqrt)
-    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 4 $BOOT_REPS 0 1 $MOD_RECOV # tony DoG, not joint (sach loss)
-    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 2 $BOOT_REPS 0 1 $MOD_RECOV # tony DoG, not joint (sqrt)
-
+    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS $JOINT 1 $MOD_RECOV # sach DoG, not joint (sach loss)
+    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS $JOINT 1 $MOD_RECOV # sach DoG, not joint (sqrt)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 4 4 $BOOT_REPS $JOINT 1 $MOD_RECOV # sachVol DoG, not joint (sach loss)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 4 2 $BOOT_REPS $JOINT 1 $MOD_RECOV # sachVol DoG, not joint (sqrt)
+    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 4 $BOOT_REPS $JOINT 1 $MOD_RECOV # tony DoG, not joint (sach loss)
+    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 2 $BOOT_REPS $JOINT 1 $MOD_RECOV # tony DoG, not joint (sqrt)
 
   fi
   wait

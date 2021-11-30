@@ -16,7 +16,7 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_211121';
+dogName = 'descrFits_211129';
 #dogName = 'descrFits_211020_f030';
 #dogName = 'descrFits_211005';
 phAdvName = 'phaseAdvanceFits_211108'
@@ -561,7 +561,7 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def fit_descr_empties(nDisps, nCons, nParam, joint=False, nBoots=1):
+def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1):
   ''' Just create the empty numpy arrays that we'll fill up 
       -- TODO: Do I need this control statement or can it be cleaned up?
   '''
@@ -574,7 +574,7 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=False, nBoots=1):
   varExpl = np.ones((nBoots, nDisps, nCons)) * np.nan;
   prefSf = np.ones((nBoots, nDisps, nCons)) * np.nan;
   charFreq = np.ones((nBoots, nDisps, nCons)) * np.nan;
-  if joint==True:
+  if joint>0:
     totalNLL = np.ones((nBoots, nDisps, )) * np.nan;
     paramList = np.ones((nBoots, nDisps, ), dtype='O') * np.nan;
   else:
@@ -584,7 +584,7 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=False, nBoots=1):
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList;
 
  
-def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0): # n_repeats was 100, before 21.09.01
+def fit_descr_DoG(cell_num, data_loc, n_repeats=5, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
@@ -592,6 +592,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
       ### OUTLINE
       ###############
       ### 1. Set up if joint and/or bootstrap; load data, metadata
+      ### --- if joint = 1, then we fix both radiil; if joint = 2, then the center radius is free at each contrast, but the surround is fixed
       ### 2. Compute f1/f0, organize the data (i.e. which experiment conditions, which spiking responses)
       ### 3a. Set up to make the RVC fits, including establishing the loop in which we bootstrap sample or just run once through
       ### 3b-i.  Simple cell - do the fits
@@ -624,15 +625,13 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
   elif DoGmodel == 3:
     nParam = 10;
 
-  if joint==True:
+  if joint>0:
     try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
       modStr  = hf.descrMod_name(DoGmodel);
-      ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr));
+      ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0));
       ref_varExpl = ref_fits[cell_num-1]['varExpl'][0];
     except:
       ref_varExpl = None;
-    # now set the name for the joint list
-    fLname = '%s_joint' % fLname
   else:
     ref_varExpl = None; # set to None as default      
 
@@ -659,7 +658,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
     rvcFits = None;
 
   modStr  = hf.descrMod_name(DoGmodel);
-  fLname  = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr);
+  fLname  = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=joint); # why add modRecov at the end? we want to load the non-modRecov fits first
   prevFits = None; # default to none, but we'll try to load previous fits...
   prevFits_toSave = dict();
   if os.path.isfile(data_loc + fLname):
@@ -700,7 +699,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
     _, _, _, r_all_noresamp = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=False, cellNum=cell_num);
     n_nonNan = np.nanmax(np.sum(~np.isnan(r_all_noresamp), axis=-1));
     nBoots = n_nonNan;
-  bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramlist = fit_descr_empties(nDisps, nCons, nParam, joint, nBoots);
+  bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList = fit_descr_empties(nDisps, nCons, nParam, joint, nBoots);
 
   #import cProfile
 
@@ -773,8 +772,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
       # -- joint?
       # -- bootstrap? (i.e. if resample, we ALWAYS replace)
       # ---- why do we need to update? When we pass in prevFits, we take into account the previous fits
-      if joint==True:
-        if resample or np.isnan(totalNLL[d]) or totNLL < totalNLL[d]: # then UPDATE!
+      if joint>0:
+        if resample or np.isnan(totalNLL[boot_i, d]) or totNLL < totalNLL[boot_i, d]: # then UPDATE!
           totalNLL[boot_i, d] = totNLL;
           paramList[boot_i, d] = totPrm;
           bestNLL[boot_i, d, :] = nll;
@@ -804,7 +803,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
         prevFits['varExpl'] = np.squeeze(varExpl, axis=0);
         prevFits['prefSf'] = np.squeeze(prefSf, axis=0);
         prevFits['charFreq'] = np.squeeze(charFreq, axis=0);
-        if joint==True:
+        if joint>0:
           prevFits['totalNLL'] = np.squeeze(totalNLL, axis=0);
           prevFits['paramList'] = np.squeeze((paramList, axis=0);
       '''
@@ -850,9 +849,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=15, loss_type=3, DoGmodel=1, for
       prevFits_toSave['boot_cv_prefSf'].append(prefSf);
       prevFits_toSave['boot_cv_charFreq'].append(charFreq);
       # vvv TO BE DETERMINED LATER vvv
-      #if joint==True:
-      #  prevFits_toSave['boot_totalNLL'] = totalNLL;
-      #  prevFits_toSave['boot_paramList'] = paramList;
+      if joint==True:
+        prevFits_toSave['boot_totalNLL'] = totalNLL;
+        prevFits_toSave['boot_paramList'] = paramList;
     else:
       prevFits_toSave['boot_NLL'] = bestNLL;
       prevFits_toSave['boot_params'] = currParams;
@@ -921,7 +920,7 @@ if __name__ == '__main__':
     dog_model  = int(sys.argv[9]);
     loss_type  = int(sys.argv[10]);
     nBoots     = int(sys.argv[11]);
-    is_joint   = int(sys.argv[12]);
+    joint   = int(sys.argv[12]);
     if len(sys.argv) > 13:
       dir = float(sys.argv[13]);
     else:
@@ -1020,15 +1019,15 @@ if __name__ == '__main__':
 
       ### Descriptive fits
       if descr_fits == 1:
-        
+
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
-          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=5, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov);
+          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=5, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov);
           dogFits = pool.map(descr_perCell, zip(range(start_cell, end_cell+1), dL['unitName']));
 
           print('debug');
           ### do the saving HERE!
-          dogNameFinal = hf.descrFit_name(loss_type, descrBase=dogName, modelName=hf.descrMod_name(dog_model), modRecov=modRecov);
+          dogNameFinal = hf.descrFit_name(loss_type, descrBase=dogName, modelName=hf.descrMod_name(dog_model), modRecov=modRecov, joint=joint);
           if os.path.isfile(dataPath + dogNameFinal):
             dogFitNPY = hf.np_smart_load(dataPath + dogNameFinal);
           else:
@@ -1061,7 +1060,10 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, nBoots=nBoots);
       if descr_fits == 1:
-        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=is_joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov);
+
+        import cProfile, re
+        cProfile.run('fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov)');
+        #fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov);
 
       if rvcF0_fits == 1:
         fit_RVC_f0(cell_num, data_loc=dataPath, rvcMod=rvc_model, nBoots=nBoots);
