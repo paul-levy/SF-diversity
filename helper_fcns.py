@@ -43,6 +43,7 @@ import warnings
 # phase_fit_name  
 # descrMod_name   - returns string for descriptive model fit
 # descrLoss_name  - returns string for descriptive model loss type
+# descrJoint_name - returns string for joint model type [DoG]
 # descrFit_name   - name for descriptive fits
 # rvc_mod_suff    - what is the suffix for the given rvcModel (e.g. 'NR', 'peirce')
 # rvc_fit_name    - name for rvcFits
@@ -648,6 +649,19 @@ def descrLoss_name(lossType):
     floss_str = '';
   return floss_str
 
+def descrJoint_name(joint=0):
+  # add the joint name part
+  if joint==0:
+    jStr = '';
+  elif joint==1:
+    jStr = '_JTsurr' # the surround is the same relative to the center for all contrasts
+  elif joint==2:
+    jStr = '_JTsurrShape' # the surround shape is fixed for all contrasts
+  elif joint==3:
+    jStr = '_JTshape' # the center/surround shape (i.e. radius OR freq) is fixed for all contrasts
+
+  return jStr;
+
 def descrFit_name(lossType, descrBase=None, modelName = None, modRecov=False, joint=0):
   ''' if modelName is none, then we assume we're fitting descriptive tuning curves to the data
       otherwise, pass in the fitlist name in that argument, and we fit descriptive curves to the model
@@ -664,15 +678,7 @@ def descrFit_name(lossType, descrBase=None, modelName = None, modRecov=False, jo
   else:
     descrName = '%s_%s.npy' % (descrFitBase, modelName);
     
-  # add the joint name part
-  if joint==0:
-    jStr = '';
-  elif joint==1:
-    jStr = '_JTsurr' # the surround is the same relative to the center for all contrasts
-  elif joint==2:
-    jStr = '_JTsurrShape' # the surround shape is fixed for all contrasts
-  elif joint==3:
-    jStr = '_JTshape' # the center/surround shape (i.e. radius OR freq) is fixed for all contrasts
+  jStr = descrJoint_name(joint);
   descrName = descrName.replace('.npy', jStr + '.npy'); # there will only be one '.' in the string...
 
   if modRecov:
@@ -2818,7 +2824,7 @@ def get_rvcResp(params, curr_cons, rvcMod):
 ##################################################################
 ##################################################################
 
-def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, localBoots=100, bootThresh=0.25, oldVersion=False):
+def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, localBoots=100, bootThresh=0.25, oldVersion=False, jointType=0):
 
    ''' - bootThresh (fraction of time for which a boot metric must be defined in order to be included in analysis)
    '''
@@ -2899,6 +2905,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                ('descrMod', descrMod), 
                ('dogFits', dog_nm),
                ('dogMod', dogMod), 
+               ('jointType', jointType), 
                ('rvcFits', rv_nm),
                ('expName', expName),
                ('expInd', expInd),
@@ -3571,7 +3578,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    return cellSummary;
 
 def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods,
-              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, localBoots=100):
+              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, localBoots=100, jointType=0):
   ''' create the "super structure" that we use to analyze data across multiple versions of the experiment
       TODO: update this to get proper spikes/tuning measures based on f1/f0 ratio (REQUIRES descrFits to be like rvcFits, i.e. fit F1 or F0 responses, accordingly)
       inputs:
@@ -3626,7 +3633,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     isBB = 1 if 'BB' in expDir else 0;
 
     if toPar:
-      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, localBoots=localBoots)
+      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, localBoots=localBoots, jointType=jointType)
 
       #if isBB:
       #  oh = perCell_summary(30);

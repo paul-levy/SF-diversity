@@ -582,7 +582,6 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1):
     paramList = None;
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList;
-
  
 def fit_descr_DoG(cell_num, data_loc, n_repeats=3, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
@@ -1025,7 +1024,7 @@ if __name__ == '__main__':
 
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
-          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=5, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov);
+          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=1, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov);
           dogFits = pool.map(descr_perCell, zip(range(start_cell, end_cell+1), dL['unitName']));
 
           print('debug');

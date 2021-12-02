@@ -122,8 +122,9 @@ if area == 'LGN':
   #dogNames = ['descrFits_s210304_sach_sach.npy'];
   #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
   dogMod = 1; # 1 (sach) or 2 (Tony)
+  jointType = 2; # [1/2/3 --> fix gs, rs/fix rs/fix rc, rs]
   #dogNames = ['descrFits_211005_sach_sach.npy', 'descrFits_s211006_sach_sach.npy'];
-  dogNames = ['descrFits_211020_020_sach_sach.npy', 'descrFits_s211020_sach_sach.npy'];
+  dogNames = ['descrFits_211129_sqrt_sach.npy', 'descrFits_s211129_sqrt_sach.npy'];
   #dogNames = ['descrFits_211020_sach_sach.npy', 'descrFits_s211020_sach_sach.npy'];
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
   descrNames = ['descrFits_211005_sach_flex.npy', 'descrFits_s211006_sach_flex.npy'];
@@ -161,9 +162,9 @@ if area == 'LGN':
 
   # NOTE: the real code for creating the jointList has been moved to helper_fcns!
   # WARNING: This takes ~10 minutes (as of 09.06.19)
-  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod)
+  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType)
 
   from datetime import datetime
   suffix = datetime.today().strftime('%y%m%d')
 
-  np.save(base_dir + 'jointList_LGN_gt2_%s_vT%02d_dvT%02d' % (suffix, varExplThresh, dog_varExplThresh), jointList)
+  np.save(base_dir + 'jointList_LGN_%s_vT%02d_dvT%02d' % (suffix, varExplThresh, dog_varExplThresh), jointList)

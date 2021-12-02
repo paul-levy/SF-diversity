@@ -143,10 +143,10 @@ if [ "$EXP_DIR" = "LGN/" ]; then
     ### with model recovery
     python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS $JOINT 1 $MOD_RECOV # sach DoG, not joint (sach loss)
     python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS $JOINT 1 $MOD_RECOV # sach DoG, not joint (sqrt)
-    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 4 4 $BOOT_REPS $JOINT 1 $MOD_RECOV # sachVol DoG, not joint (sach loss)
-    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 4 2 $BOOT_REPS $JOINT 1 $MOD_RECOV # sachVol DoG, not joint (sqrt)
     python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 4 $BOOT_REPS $JOINT 1 $MOD_RECOV # tony DoG, not joint (sach loss)
     python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 2 $BOOT_REPS $JOINT 1 $MOD_RECOV # tony DoG, not joint (sqrt)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 4 4 $BOOT_REPS $JOINT 1 $MOD_RECOV # sachVol DoG, not joint (sach loss)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 4 2 $BOOT_REPS $JOINT 1 $MOD_RECOV # sachVol DoG, not joint (sqrt)
 
   fi
   wait

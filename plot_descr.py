@@ -66,7 +66,7 @@ cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
 descrMod  = int(sys.argv[3]);
 descrLoss = int(sys.argv[4]);
-descrJnt  = int(sys.argv[5]);
+joint     = int(sys.argv[5]);
 rvcAdj    = int(sys.argv[6]); # if 1, then let's load rvcFits to adjust F1, as needed
 rvcMod    = int(sys.argv[7]);
 if len(sys.argv) > 8:
@@ -89,14 +89,12 @@ fracSig = 1;
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_211122';
+descrBase = 'descrFits_211129';
 #descrBase = 'descrFits_211028';
 #descrBase = 'descrFits_211020_f030'; #211005'; #210929';
 #descrBase = 'descrFits_210524';
 #descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
 #descrBase = 'descrFits_200507'; # for altExp
-if descrJnt == 1:
-  descrBase = '%s_joint' % descrBase;
 ### RVCFITS
 #rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
@@ -112,7 +110,7 @@ rvcAdj = np.abs(rvcAdj);
 ##################
 
 modStr  = hf.descrMod_name(descrMod)
-fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr);
+fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint);
 descrFits = hf.np_smart_load(data_loc + fLname);
 pause_tm = 2.5*np.random.rand();
 time.sleep(pause_tm);

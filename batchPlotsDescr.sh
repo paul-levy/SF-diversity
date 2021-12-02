@@ -37,7 +37,8 @@ source activate lcv-python
 
 EXP_DIR=$1
 DOG_MOD=$2
-LOSS_TYPE=${3:=2}
+LOSS_TYPE=${3:-2}
+JOINT=${4:-0}
 
 # note: dog_mod=0 means flex; 1 means sach (DoG)
 
@@ -60,17 +61,17 @@ fi
 if [ "$EXP_DIR" = "LGN/" ]; then
   for run in {1..25}
   do 
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE 0 1 0 1 0 &
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 0 1 0 &
   done
   wait
   for run in {26..50}
   do 
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE 0 1 0 1 0 &
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 0 1 0 &
   done
   wait
   for run in {50..81}
   do 
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE 0 1 0 1 0 &
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 0 1 0 &
   done
 fi
 if [ "$EXP_DIR" = "V1_orig/" ]; then
