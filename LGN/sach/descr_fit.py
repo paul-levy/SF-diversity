@@ -103,7 +103,29 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1, joint=False, fracSig=0, nBoots=0, forceOverwrite=False):
+def fit_descr_empties(nCons, nParam, joint=0, nBoots=1):
+  ''' Just create the empty numpy arrays that we'll fill up 
+      -- TODO: Do I need this control statement or can it be cleaned up?
+  '''
+  nBoots = 1 if nBoots <= 0 else nBoots;
+
+  ## Yes, I'm pre-pending the nBoots dimensions, but if it's one, we'll use np.squeeze at the end to remove that
+  # Set the default values (NaN for everything)
+  bestNLL = np.ones((nBoots, nCons)) * np.nan;
+  currParams = np.ones((nBoots, nCons, nParam)) * np.nan;
+  varExpl = np.ones((nBoots, nCons)) * np.nan;
+  prefSf = np.ones((nBoots, nCons)) * np.nan;
+  charFreq = np.ones((nBoots, nCons)) * np.nan;
+  if joint>0:
+    totalNLL = np.ones((nBoots, )) * np.nan;
+    paramList = np.ones((nBoots, ), dtype='O') * np.nan;
+  else:
+    totalNLL = None;
+    paramList = None;
+
+  return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList;
+
+def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 1, joint=0, fracSig=0, nBoots=0, forceOverwrite=False):
 
     # Set up whether we will bootstrap straight away
     resample = False if nBoots <= 0 else True;
@@ -118,14 +140,14 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits_s211028';
+    fLname = 'descrFits_s211129';
     #fLname = 'descrFits_s211020';
     #fLname = 'descrFits_s211006';
 
-    if joint==True:
+    if joint>0:
       try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
         modStr  = hf.descrMod_name(DoGmodel);
-        fitName = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr)
+        fitName = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0)
         try:
           ref_fits = hf.np_smart_load(data_loc + fitName);
         except:
@@ -133,12 +155,11 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
         ref_varExpl = ref_fits[cell_num-1]['varExpl'];
       except:
         ref_varExpl = None;
-      fLname = '%s_joint' % fLname
     else:
       ref_varExpl = None; # set to None as default
 
     mod_str = hf.descrMod_name(DoGmodel);
-    fLname = str(data_loc + hf.descrFit_name(loss_type, fLname, mod_str));
+    fLname = str(data_loc + hf.descrFit_name(loss_type, fLname, mod_str, joint=joint));
 
     if os.path.isfile(fLname):
       try:
@@ -154,16 +175,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     to_unpack = hf.tabulateResponses(data); # a quick call to figure out how many cons
     [all_cons, all_sfs] = to_unpack[1];
     nCons = len(all_cons);
-
-    bestNLL = np.ones((nBoots, nCons)) * np.nan;
-    currParams = np.ones((nBoots, nCons, nParam)) * np.nan;
-    varExpl = np.ones((nBoots, nCons)) * np.nan;
-    prefSf = np.ones((nBoots, nCons)) * np.nan;
-    charFreq = np.ones((nBoots, nCons)) * np.nan;
-    if joint==True:
-      totalNLL = np.ones((nBoots, )) * np.nan;
-      paramList = np.ones((nBoots, )) * np.nan;
-
+    # pre-fill the values
+    bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList = fit_descr_empties(nCons, nParam, joint, nBoots);
+    
     print('Doing the work, now');
 
     for boot_i in range(nBoots):
@@ -173,7 +187,10 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
       [_, f1arr] = to_unpack[2];
 
       # now, we fit!
-      nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit(f1, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=joint, ref_varExpl=ref_varExpl, fracSig=fracSig);
+      try:
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit(f1, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=joint, ref_varExpl=ref_varExpl, fracSig=fracSig);
+      except: # why? Some of sach's data have NO conditions which meet the ref_varExpl threshold, so we won't be able to fit the joint model
+        continue; # just continue, since the values will be pre-filled, anyway...
 
       if resample:
         bestNLL[boot_i] = nll;
@@ -181,9 +198,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
         varExpl[boot_i] = vExp;
         prefSf[boot_i] = pSf;
         charFreq[boot_i] = cFreq;
-        if joint==True:
+        if joint>0:
           totalNLL[boot_i] = totNLL;
-          paramList[boot_i] = paramList;
+          paramList[boot_i] = totPrm;
 
     ##########
     ### End of boot loop
@@ -194,7 +211,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     varExpl = np.squeeze(varExpl, axis=0) if varExpl.shape[0]==1 else varExpl;
     prefSf = np.squeeze(prefSf, axis=0) if prefSf.shape[0]==1 else prefSf;
     charFreq = np.squeeze(charFreq, axis=0) if charFreq.shape[0]==1 else charFreq;
-    if joint==True:
+    if joint>0:
       paramList = np.squeeze(paramList, axis=0) if paramList.shape[0]==1 else paramList;
       totalNLL = np.squeeze(totalNLL, axis=0) if totalNLL.shape[0]==1 else totalNLL;
 
@@ -208,28 +225,31 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
     if cell_num-1 not in descrFits:
       descrFits[cell_num-1] = dict(); # and previously created NaN for everything
     else:
-      bestNLL = descrFits[cell_num-1]['NLL'];
-      currParams = descrFits[cell_num-1]['params'];
-      varExpl = descrFits[cell_num-1]['varExpl'];
-      prefSf = descrFits[cell_num-1]['prefSf'];
-      charFreq = descrFits[cell_num-1]['charFreq'];
-      if joint==True:
-        totalNLL = descrFits[cell_num-1]['totalNLL'];
-        paramList = descrFits[cell_num-1]['paramList'];
-
+      if not resample: # do not reload these values if it is resample...
+        bestNLL = descrFits[cell_num-1]['NLL'];
+        currParams = descrFits[cell_num-1]['params'];
+        varExpl = descrFits[cell_num-1]['varExpl'];
+        prefSf = descrFits[cell_num-1]['prefSf'];
+        charFreq = descrFits[cell_num-1]['charFreq'];
+        if joint>0:
+          totalNLL = descrFits[cell_num-1]['totalNLL'];
+          paramList = descrFits[cell_num-1]['paramList'];
+      
     if not resample: # otherwise, we do not want to update...
+      ''' TODO: just remove/deprecate the code in quotes [21.12.01]
       # remove any singleton dimensions --- TODO this should be redundant if the cell is never saved with singleton dims
       bestNLL = np.squeeze(bestNLL, axis=0) if bestNLL.shape[0]==1 else bestNLL;
       currParams = np.squeeze(currParams, axis=0) if currParams.shape[0]==1 else currParams;
       varExpl = np.squeeze(varExpl, axis=0) if varExpl.shape[0]==1 else varExpl;
       prefSf = np.squeeze(prefSf, axis=0) if prefSf.shape[0]==1 else prefSf;
       charFreq = np.squeeze(charFreq, axis=0) if charFreq.shape[0]==1 else charFreq;
-      if joint==True:
+      if joint>0:
         paramList = np.squeeze(paramList, axis=0) if paramList.shape[0]==1 else paramList;
         totalNLL = np.squeeze(totalNLL, axis=0) if totalNLL.shape[0]==1 else totalNLL;
+      '''
 
       # now, what we do, depends on if joint or not [AGAIN -- all of this is only for not resample]
-      if joint==True:
+      if joint>0:
         if np.isnan(totalNLL) or totNLL < totalNLL: # then UPDATE!
           totalNLL = totNLL;
           paramList = totPrm;
@@ -255,7 +275,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
       descrFits[cell_num-1]['boot_varExpl'] = varExpl;
       descrFits[cell_num-1]['boot_prefSf'] = prefSf;
       descrFits[cell_num-1]['boot_charFreq'] = charFreq;
-      if joint==True:
+      if joint>0:
         descrFits[cell_num-1]['boot_totalNLL'] = totalNLL;
         descrFits[cell_num-1]['boot_paramList'] = paramList;
     else:
@@ -264,7 +284,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 4, loss_type = 3, DoGmodel = 1
       descrFits[cell_num-1]['varExpl'] = varExpl;
       descrFits[cell_num-1]['prefSf'] = prefSf;
       descrFits[cell_num-1]['charFreq'] = charFreq;
-      if joint==True:
+      if joint>0:
         descrFits[cell_num-1]['totalNLL'] = totalNLL;
         descrFits[cell_num-1]['paramList'] = paramList;
 
@@ -286,11 +306,13 @@ if __name__ == '__main__':
     n_repeats = int(sys.argv[3])
     loss_type = int(sys.argv[4])
     DoGmodel  = int(sys.argv[5])
-    is_joint  = int(sys.argv[6]);
+    joint     = int(sys.argv[6]);
     nBoots    = int(sys.argv[7]);
 
     if rvcModel >= 0:
       rvc_fit(cellNum, data_loc, rvcBase, rvcModel, nBoots=nBoots); 
     if DoGmodel >= 0:
-      fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel, is_joint, fracSig=fracSig, nBoots=nBoots);
+      if joint > 0 and nBoots > 1:
+        n_repeats = 8; # force it to be a lower if boot-strapped and joint
+      fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel, joint, fracSig=fracSig, nBoots=nBoots);
 
