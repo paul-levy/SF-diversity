@@ -16,7 +16,7 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_211129';
+dogName = 'descrFits_211205';
 #dogName = 'descrFits_211020_f030';
 #dogName = 'descrFits_211005';
 phAdvName = 'phaseAdvanceFits_211108'
@@ -624,16 +624,6 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=3, loss_type=3, DoGmodel=1, forc
   elif DoGmodel == 3:
     nParam = 10;
 
-  if joint>0:
-    try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
-      modStr  = hf.descrMod_name(DoGmodel);
-      ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0));
-      ref_varExpl = ref_fits[cell_num-1]['varExpl'][0];
-    except:
-      ref_varExpl = None;
-  else:
-    ref_varExpl = None; # set to None as default      
-
   ### load data/metadata
   if not isinstance(cell_num, int):
     cell_num, cellName = cell_num;
@@ -650,6 +640,16 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=3, loss_type=3, DoGmodel=1, forc
     overwriteExpName = None
   expInd, expName = hf.get_exp_ind(data_loc, cellName, overwriteExpName);
   print('Making descriptive SF fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
+
+  if joint>0:
+    try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
+      modStr  = hf.descrMod_name(DoGmodel);
+      ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0));
+      ref_varExpl = ref_fits[cell_num-1]['varExpl'][0];
+    except:
+      ref_varExpl = None;
+  else:
+    ref_varExpl = None; # set to None as default      
 
   if force_dc is False and get_rvc == 1: # NOTE: as of 19.09.16 (well, earlier, actually), rvcFits are on F0 or F1, depending on simple/complex designation - in either case, they are both already as rates!
     rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num, rvcName=rvcName, rvcMod=rvcMod, direc=dir, vecF1=vecF1); # see default arguments in helper_fcns.py

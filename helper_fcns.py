@@ -1945,7 +1945,7 @@ def dog_charFreqMod(descrFit, allCons, val_inds, varThresh=70, DoGmodel=1, lowCo
 
   return fcRatio, fc_model, opt_params, np.power(2, charFreqs), conVals;
 
-def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True):
+def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=None):
   ''' given a code for which tuning metric to get, and the model/parameters used, return that metric
       codes: 'gc', 'gs', 'rc', 'rs', 'vc', 'vs'
       -- parker_hawken_equiv=False means original sach formultion
@@ -1953,6 +1953,7 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True):
         to this end, we make the following transformations of the Tony parameters
         - gain:   gain/(pi*r^2)
         - radius: 1/(pi*fc)
+      -- NOTE: if con_val is not None, then we normalize the gain (and therefore the volume, too) by the contrast
   '''
   np = numpy;
 
@@ -1963,26 +1964,35 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True):
   #########
   if metric == 'gc': # i.e. center gain
     if DoGmodel == 1: # sach
-      return params[0];
+      gc= params[0];
     elif DoGmodel == 2: # tony
       fc = params[1];
       rc = np.divide(1, np.pi*fc);
-      return np.divide(params[0], np.pi*np.square(rc));
+      gc= np.divide(params[0], np.pi*np.square(rc));
     elif DoGmodel == 4: # sachVol
       # then it becomes gain*pi*radius^2
-      return params[0]*np.pi*np.square(params[1]);
+      gc = params[0]*np.pi*np.square(params[1]);
+    if con_val is None:
+      return gc;
+    else:
+      return gc / con_val;
   if metric == 'gs': # i.e. surround gain
     if DoGmodel == 1: # sach
-      return params[0]*params[2] if parker_hawken_equiv else params[2];
+      gs = params[0]*params[2] if parker_hawken_equiv else params[2];
     elif DoGmodel == 2: # tony
       fc = params[1];
       rs = np.divide(1, np.pi*fc*params[3]); # params[3] is the multiplier on fc to get fs
-      return np.divide(params[0]*params[2], np.pi*np.square(rs));
+      gs = np.divide(params[0]*params[2], np.pi*np.square(rs));
     elif DoGmodel == 4: # sachVol
       # then it becomes gain*pi*radius^2
+      # --- note that here, we do NOT pass in the con val, since we'll normalize that out below, if needed 
       gc, rs = dog_get_param(params, DoGmodel, 'gc', parker_hawken_equiv), dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv);
       gs = gc*params[2]; # params[2] is the relative surround gain
-      return gs*np.pi*np.square(rs);
+      gs = gs*np.pi*np.square(rs);
+    if con_val is None:
+      return gs;
+    else:
+      return gs / con_val;
   #########
   ### Radius
   #########
@@ -2003,9 +2013,9 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True):
   ### Volume (gain * radius^2)
   #########
   if metric == 'vc': # i.e. center vol.
-      return dog_get_param(params, DoGmodel, 'gc', parker_hawken_equiv) * np.square(dog_get_param(params, DoGmodel, 'rc', parker_hawken_equiv));
+      return dog_get_param(params, DoGmodel, 'gc', parker_hawken_equiv, con_val) * np.square(dog_get_param(params, DoGmodel, 'rc', parker_hawken_equiv));
   if metric == 'vs': # i.e. surr. vol.
-      return dog_get_param(params, DoGmodel, 'gs', parker_hawken_equiv) * np.square(dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv));
+      return dog_get_param(params, DoGmodel, 'gs', parker_hawken_equiv, con_val) * np.square(dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv));
 
 def dog_total_volume(params, DoGmodel):
    # Given a set of parameters, compute the volume (will be if not a DoG-based model)
@@ -2224,7 +2234,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
 
   return init_params
 
-def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=0, gain_reg=0, ref_varExpl=None, veThresh=60, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0, modRecov=False, ftol=2.220446049250313e-09):
+def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=0, gain_reg=0, ref_varExpl=None, veThresh=60, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0, modRecov=False, ftol=2.220446049250313e-09, jointMinCons=2):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint>0, (and DoGmodel is not flexGauss), then we fit assuming
       --- joint==1: a fixed ratio for the center-surround gains and [freq/radius]
@@ -2233,6 +2243,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       --- joint==2: a fixed center & surround radius for all contrasts, free gains
       --- joint==3: a surround radius for all contrasts; all other parameters (both gains, center radius) free at al contrasts
       - note that ref_varExpl (optional) will be of the same form that the output for varExpl will be
+      - note that jointMinCons is the minimum # of contrasts that must be included for a joint fit to be run
       --- NOTE: We only use ftol if joint; if boot, we will artificially restrict ftol to avoid too many iteration steps (which yield minimal improvement)
       --- fracSig: if on, then the right-half (high SF) of the flex. gauss tuning curve is expressed as a fraction of the lower half
       --- modRecov: if True AND if prevFits is not None, we'll sample the fit params and fit to those resps, i.e. model recovery analysis
@@ -2284,12 +2295,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       bestNLL, currParams, varExpl, prefSf, charFreq = prevFits['NLL'], prevFits['params'], prevFits['varExpl'], prevFits['prefSf'], prevFits['charFreq'];
     else:
       bestNLL, currParams, varExpl, prefSf, charFreq = prevFits['NLL'][disp,:], prevFits['params'][disp,:], prevFits['varExpl'][disp,:], prevFits['prefSf'][disp,:], prevFits['charFreq'][disp,:];
-
+   
     if modRecov:
       # ALSO, if it's model recovery, then we are overwriting the existing fits, so let's make the loss NaN
       # --- yes, this is hacky, but we want to easily pass in the fit parameters while also saving these fits
       bestNLL = np.nan * np.zeros_like(bestNLL);
-
     if joint>0:
       try:
         overallNLL = prevFits['totalNLL'];
@@ -2412,8 +2422,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
     ### otherwise, we're really going to fit here! [i.e. if joint==0]
     # --- NOTE: We never reach here if it's a joint fitting!
-    if debug:
-      save_all = [];
+    save_all = []; # only used if debug=0
     import timeit
 
     for n_try in range(n_repeats):
@@ -2453,7 +2462,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         prefSf[con] = descr_prefSf(params, dog_model=DoGmodel, all_sfs=valSfVals, baseline=baseline);
         charFreq[con] = dog_charFreq(params, DoGmodel=DoGmodel);
 
-  if joint==0: # then we're DONE
+  if joint==0:
     if debug:
       return bestNLL, currParams, varExpl, prefSf, charFreq, None, None, save_all; # placeholding None for overallNLL, params [full list]
     else:
@@ -2463,7 +2472,13 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
   ### NOW, we do the fitting if joint>0
   ### - note: outside of contrast loop, since we instead gathered info to be fit here
   ########### 
-  if joint>0:
+  if joint>0: 
+    if len(allResps)<jointMinCons: # need at least jointMinCons contrasts!
+       # so, then we just return HERE
+       if debug:
+          return bestNLL, currParams, varExpl, prefSf, charFreq, overallNLL, params, None;
+       else:
+          return bestNLL, currParams, varExpl, prefSf, charFreq, overallNLL, params;
     ### now, we fit!
     ### TODO: NOTE that we only get to this joint area if DoGmodel = 1 or 2, for now
     for n_try in range(n_repeats):
@@ -3177,7 +3192,11 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        if cell_ind in dogFits:
          try:
            varExpl = dogFits[cell_ind]['varExpl'][d, c];
-           if varExpl > dog_varExplThresh:
+           # NOTE: We don't have real threshold for inclusion IF the fits are joint
+           # --- why? As of 21.12.04, the joint fits use Sach's approach, which is to only include in the joint fits
+           # ----- the contrasts starting with the lowest which has a varExpl greater than the threshold (typically 60%)
+           thresh_to_use = -np.inf if jointType > 0 else dog_varExplThresh;
+           if varExpl > thresh_to_use:
              dataMetrics['dog_varExpl'][d,c] = varExpl;
              # on data
              dataMetrics['dog_pSf'][d, c] = dogFits[cell_ind]['prefSf'][d, c]
@@ -3195,9 +3214,9 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                 dataMetrics[ky][d, c] = sf_highCut(dog_params_curr, sfMod=dogMod, frac=frac, sfRange=(0.1, 15));
              # Also get spatial params, i.e. center gain, radius, volume; surround gain, radius, volume
              if dogMod == 3: # if it's sach, then let's get the "mech" for the center Gaussian
-               dataMetrics['dog_mech'][d, c] = [dog_get_param(dog_params_curr[0:4], 1, x) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]; #dogMod 1, since they're param. like Sach
+               dataMetrics['dog_mech'][d, c] = [dog_get_param(dog_params_curr[0:4], 1, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]; #dogMod 1, since they're param. like Sach
              else:
-               dataMetrics['dog_mech'][d, c] = [dog_get_param(dog_params_curr, dogMod, x) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']];
+               dataMetrics['dog_mech'][d, c] = [dog_get_param(dog_params_curr, dogMod, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']];
 
              # Now, bootstrap estimates
              try:
@@ -3207,7 +3226,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                if boot_prms.shape[0] == 1:
                  boot_prms = np.transpose(boot_prms, axes=(1,0,2,3)); # i.e. flip 1st and 2nd axes
                # ---- zeroth, mechanism
-               dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, :]), dogMod, x) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]);
+               dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, :]), dogMod, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]);
                # then, in order: sf70, pSf, charFreq
                metrs = ['pSf', 'charFreq', 'sf70', 'bwHalf', 'bw34'];
                compute = ['np.nanmedian(', 'np.nanmean(', 'np.nanstd(', 'np.nanstd(np.log10(']
@@ -3316,7 +3335,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      # and likewise for DoG
      try:
        _, psf_model, opt_params = dog_prefSfMod(dogFits[cell_ind], allCons=cons, disp=d, varThresh=varExplThresh, dog_model=dogMod)
-       valInds = np.where(dogFits[cell_ind]['varExpl'][d, :] > dog_varExplThresh)[0];
+       valInds = np.where(dogFits[cell_ind]['varExpl'][d, :] > thresh_to_use)[0];
        if len(valInds) > 1:
          extrema = [cons[valInds[0]], cons[valInds[-1]]];
          logConRat = np.log2(extrema[1]/extrema[0]);
@@ -3607,8 +3626,8 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
 
   for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, rvcMod in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods):
 
-    if 'ach' in expDir:
-       continue;
+    #if 'ach' in expDir:
+    #   continue;
 
     # get the current directory, load data list
     data_loc = base_dir + expDir + 'structures/';    
@@ -3639,7 +3658,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       #  oh = perCell_summary(30);
       #  pdb.set_trace();
 
-      #oh = perCell_summary(9);
+      #oh = perCell_summary(78);
       #pdb.set_trace();
 
       nCpu = mp.cpu_count();

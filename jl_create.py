@@ -124,7 +124,7 @@ if area == 'LGN':
   dogMod = 1; # 1 (sach) or 2 (Tony)
   jointType = 2; # [1/2/3 --> fix gs, rs/fix rs/fix rc, rs]
   #dogNames = ['descrFits_211005_sach_sach.npy', 'descrFits_s211006_sach_sach.npy'];
-  dogNames = ['descrFits_211129_sqrt_sach.npy', 'descrFits_s211129_sqrt_sach.npy'];
+  dogNames = ['descrFits_211205_sqrt_sach_JTsurrShape.npy', 'descrFits_s211129_sqrt_sach_JTsurrShape.npy'];
   #dogNames = ['descrFits_211020_sach_sach.npy', 'descrFits_s211020_sach_sach.npy'];
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
   descrNames = ['descrFits_211005_sach_flex.npy', 'descrFits_s211006_sach_flex.npy'];
