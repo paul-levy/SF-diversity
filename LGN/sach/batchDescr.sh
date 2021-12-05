@@ -17,15 +17,15 @@ JOINT=${5:-0}
 
 for run in {1..11}
 do
-  python3.6 descr_fit.py $run $RVC_MOD 25 $DOG_LOSS $DOG_MOD $JOINT $BOOT_ITER & 
+  python3.6 descr_fit.py $run $RVC_MOD 35 $DOG_LOSS $DOG_MOD $JOINT $BOOT_ITER & 
 done
 wait
 for run in {12..22}
 do
-  python3.6 descr_fit.py $run $RVC_MOD 25 $DOG_LOSS $DOG_MOD $JOINT $BOOT_ITER & 
+  python3.6 descr_fit.py $run $RVC_MOD 35 $DOG_LOSS $DOG_MOD $JOINT $BOOT_ITER & 
 done
 wait
 for run in {23..34}
 do
-  python3.6 descr_fit.py $run $RVC_MOD 25 $DOG_LOSS $DOG_MOD $JOINT $BOOT_ITER & 
+  python3.6 descr_fit.py $run $RVC_MOD 35 $DOG_LOSS $DOG_MOD $JOINT $BOOT_ITER & 
 done

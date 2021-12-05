@@ -29,7 +29,8 @@ which_cell   = int(sys.argv[1]);
 sf_loss_type = int(sys.argv[2]);
 sf_DoG_model = int(sys.argv[3]);
 rvcMod       = int(sys.argv[4]);
-fromFile     = int(sys.argv[5]); 
+joint        = int(sys.argv[5]);
+fromFile     = int(sys.argv[6]); 
 
 loc_base = os.getcwd() + '/';
 
@@ -48,9 +49,9 @@ zSub = 1; # are we loading fits that were fit to responses adjusted s.t. the low
 ## NOTE: SF tuning curves with with zSub; RVCs are not, so we must subtract respAdj from the RVC curve to align with what we fit (i.e. the zSub'd data)
 #######
 
-fLname = 'descrFits_s211028'; #211006';
+fLname = 'descrFits_s211129'; #211006';
 mod_str = hf.descrMod_name(sf_DoG_model);
-fLname_full = hf.descrFit_name(sf_loss_type, fLname, mod_str);
+fLname_full = hf.descrFit_name(sf_loss_type, fLname, mod_str, joint=joint);
 descrFits = hf.np_smart_load(dataPath + fLname_full);
 descrFits = descrFits[which_cell-1]; # just get this cell
 
@@ -190,9 +191,12 @@ for c in reversed(range(nCons)):
       sfsAx[c_plt_ind, i].plot(sfs_plot, mod_resps_plt, clip_on=False, color=col)
       # -- also put text of DoG parameters, if applicable
       if sf_DoG_model == 1 or sf_DoG_model == 2:
-        # if it's a DoG, let's also put the parameters in text (left side only)
-        sfsAx[c_plt_ind, 0].text(0.05, 0.075, '%d,%.2f' % (*curr_mod_params[0:2], ), transform=sfsAx[c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
-        sfsAx[c_plt_ind, 0].text(0.05, 0.025, '%.2f,%.2f' % (*curr_mod_params[2:], ), transform=sfsAx[c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
+        try:
+          # if it's a DoG, let's also put the parameters in text (left side only)
+          sfsAx[c_plt_ind, 0].text(0.05, 0.075, '%d,%.2f' % (*curr_mod_params[0:2], ), transform=sfsAx[c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
+          sfsAx[c_plt_ind, 0].text(0.05, 0.025, '%.2f,%.2f' % (*curr_mod_params[2:], ), transform=sfsAx[c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
+        except:
+          pass
 
       # now plot characteristic frequency!
       f_c = hf.dog_charFreq(curr_mod_params, sf_DoG_model);
