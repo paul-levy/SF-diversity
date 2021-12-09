@@ -89,7 +89,8 @@ fracSig = 1;
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_211129';
+descrBase = 'descrFits_211208';
+#descrBase = 'descrFits_211129';
 #descrBase = 'descrFits_211028';
 #descrBase = 'descrFits_211020_f030'; #211005'; #210929';
 #descrBase = 'descrFits_210524';
@@ -99,8 +100,10 @@ descrBase = 'descrFits_211129';
 #rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
 #rvcBase = 'rvcFits_200714'; # direc flag & '.npy' are adde
-rvcBase = 'rvcFits_211108';
-#rvcBase = 'rvcFits_211028';
+if expDir == 'LGN/':
+  rvcBase = 'rvcFits_211108';
+else:
+  rvcBase = 'rvcFits_210914'; # if V1?
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);

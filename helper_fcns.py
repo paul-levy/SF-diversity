@@ -2128,9 +2128,10 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
 
   return totalLoss;
 
-def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=None, fracSig=1, sach_equiv_p_h=True):
+def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=None, fracSig=1, sach_equiv_p_h=True, no_surr=False):
   ''' return the initial parameters for the DoG model, given the model choice and responses
       --- if bounds is not None, then we'll ensure that each parameter is within the specified bounds
+      --- no_surr applies for d-DoG-S only (as of 21.12.06)
   '''
   np = numpy;
 
@@ -2190,8 +2191,10 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
     init_C = random_in_range((2, 3.5))[0]; # how large is xs2 relative to xc2 (non-sigmoid)
     init_gPr = random_in_range((-1.09, 1.09))[0]; # input to sigmoid (alone); 
     init_sPr = random_in_range((-3, -1.09))[0]; # input to sigmoid, fraction of limit (2*(xc1+xc2));
-    
-    init_params = [init_kc1, init_xc1, init_kS_rel1, init_A, 
+    if no_surr:
+       init_params = [init_kc1, init_xc1, init_kc2, init_B, init_gPr, init_sPr];
+    else:
+       init_params = [init_kc1, init_xc1, init_kS_rel1, init_A, 
                    init_kc2, init_B, init_kS_rel2, init_C,
                    init_gPr, init_sPr];
 
@@ -2227,14 +2230,17 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
   if bounds is not None:
     try:
       for (ii,prm),bound in zip(enumerate(init_params), bounds):
-        if prm < bound[0] or prm > bound[1]:
-          init_params[ii] = (bound[0]+bound[1])*random_in_range([0.25, 0.75])[0] # some value in-between the two bounds
+         try:
+            if prm < bound[0] or prm > bound[1]:
+               init_params[ii] = bound[0] + (bound[1]-bound[0])*random_in_range([0.25, 0.75])[0] # some value in-between the two bounds
+         except:
+            pass; # perhaps that bound cannot be evaluated in the above way (e.g. None)
     except: # we end up here if bounds is somehow not equal in # of entries to init_params
       pass; # not ideal, but the parent function should handle failures of initialization by trying again, anyway
 
   return init_params
 
-def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=0, gain_reg=0, ref_varExpl=None, veThresh=60, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0, modRecov=False, ftol=2.220446049250313e-09, jointMinCons=2):
+def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=0, gain_reg=0, ref_varExpl=None, veThresh=60, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0, modRecov=False, ftol=2.220446049250313e-09, jointMinCons=3, no_surr=False):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint>0, (and DoGmodel is not flexGauss), then we fit assuming
       --- joint==1: a fixed ratio for the center-surround gains and [freq/radius]
@@ -2243,10 +2249,12 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       --- joint==2: a fixed center & surround radius for all contrasts, free gains
       --- joint==3: a surround radius for all contrasts; all other parameters (both gains, center radius) free at al contrasts
       - note that ref_varExpl (optional) will be of the same form that the output for varExpl will be
-      - note that jointMinCons is the minimum # of contrasts that must be included for a joint fit to be run
+      - note that jointMinCons is the minimum # of contrasts that must be included for a joint fit to be run (e.g. 2)
+      - As of 21.12.06, no_surr only applies with d-DoG-S model
       --- NOTE: We only use ftol if joint; if boot, we will artificially restrict ftol to avoid too many iteration steps (which yield minimal improvement)
       --- fracSig: if on, then the right-half (high SF) of the flex. gauss tuning curve is expressed as a fraction of the lower half
       --- modRecov: if True AND if prevFits is not None, we'll sample the fit params and fit to those resps, i.e. model recovery analysis
+ 
 
       inputs: self-explanatory, except for resps, which should be [resps_mean, resps_all, resps_sem, base_rate]
       outputs: bestNLL, currParams, varExpl, prefSf, charFreq, [overallNLL, paramList; if joint>0]
@@ -2358,8 +2366,15 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
   elif DoGmodel == 3: # d-DoG-S
     kc_bound = (0, None); sigmoid_bound = (None, None); # params that are input to sigmoids are unbounded
     xc_bound = (1e-2, None); gtMult_bound = (1, 7); # (1, None) multiplier limit when we want param >= mult*orig_param [greaterThan-->gt]
-    allBounds = (kc_bound, xc_bound, sigmoid_bound, gtMult_bound, 
-                 kc_bound, gtMult_bound, sigmoid_bound, gtMult_bound, sigmoid_bound, sigmoid_bound);
+    surr_gain_bound = sigmoid_bound;
+    surr_rad_bound =  gtMult_bound;
+    # parameters are: center gain, center radius, surround gain, surround radius x2 [and, surrounds relative to center]
+    #                 g (relative gain to left/right of central DoG) and S (spacing between two DoGs)
+    if no_surr: # then no surrounds!
+       allBounds = (kc_bound, xc_bound, kc_bound, gtMult_bound, sigmoid_bound, sigmoid_bound);
+    else:
+       allBounds = (kc_bound, xc_bound, surr_gain_bound, surr_rad_bound,
+                 kc_bound, gtMult_bound, surr_gain_bound, surr_rad_bound, sigmoid_bound, sigmoid_bound);
 
   ### organize responses -- and fit, if joint=0
   allResps = []; allRespsSem = []; start_incl = 0; incl_inds = [];
@@ -2429,7 +2444,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       ###########
       ### pick initial params
       ###########
-      init_params = dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, allBounds)
+      init_params = dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, allBounds, no_surr=no_surr)
+
+      #if con==nCons-1 and disp==0:
+      #   pdb.set_trace();
 
       # choose optimization method
       if np.mod(n_try, 2) == 0:
@@ -2440,9 +2458,14 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       #stmt = '''DoG_loss(init_params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=0)'''
       #isitok = timeit.timeit(stmt, globals={'DoG_loss': DoG_loss, 'init_params': init_params, 'resps_curr': resps_curr, 'valSfVals': valSfVals, 'sem_curr': sem_curr, 'loss_type': loss_type, 'DoGmodel': DoGmodel, 'dir': dir, 'gain_reg': gain_reg, 'joint': joint, 'baseline': baseline}, number=1000);
  
-      #pdb.set_trace();
-
-      obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1, vol_lam=vol_lam);
+      if no_surr:
+         # perhaps hacky (while we test it out), but important for passing in params
+         obj = lambda params: DoG_loss([*params[0:2], -np.inf, 1,
+                                        *params[2:4], -np.inf, 1, 
+                                        *params[4:]], 
+                                       resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1, vol_lam=vol_lam);
+      else:
+         obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1, vol_lam=vol_lam);
       try:
         wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
       except:
@@ -2451,6 +2474,16 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       # compare
       NLL = wax['fun'];
       params = wax['x'];
+
+      if no_surr:
+         # then fill in the real params...
+         params_full = np.zeros_like(currParams[con,:]);
+         params_full[0:2] = params[0:2];
+         params_full[2:4] = [-np.inf, 1]; # the surrounds
+         params_full[4:6] = params[2:4];
+         params_full[6:8] = [-np.inf, 1]; # the surrounds
+         params_full[8:] = params[4:]
+         params = params_full;
 
       if debug:
         save_all.append([wax, init_params]);
@@ -2758,6 +2791,7 @@ def parker_hawken(params, stim_sf=None, twoDim=False, inSpace=False, spaceRange=
         - S = C*2*(xc_1 + xc_2), where C will be used ...
         - g will be input to sigmoid
         - ks_i = D*kc_i where D will be used ...
+        If noSurround, then the surround for each DoG has 0 amplitude
     '''
 
     np = numpy;
