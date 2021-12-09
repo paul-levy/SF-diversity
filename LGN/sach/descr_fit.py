@@ -140,7 +140,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
     dataList = hf.np_smart_load(data_loc + 'sachData.npy');
     assert dataList!=[], "data file not found!"
 
-    fLname = 'descrFits_s211129';
+    fLname = 'descrFits_s211206';
     #fLname = 'descrFits_s211020';
     #fLname = 'descrFits_s211006';
 
@@ -226,14 +226,17 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
       descrFits[cell_num-1] = dict(); # and previously created NaN for everything
     else:
       if not resample: # do not reload these values if it is resample...
-        bestNLL = descrFits[cell_num-1]['NLL'];
-        currParams = descrFits[cell_num-1]['params'];
-        varExpl = descrFits[cell_num-1]['varExpl'];
-        prefSf = descrFits[cell_num-1]['prefSf'];
-        charFreq = descrFits[cell_num-1]['charFreq'];
-        if joint>0:
-          totalNLL = descrFits[cell_num-1]['totalNLL'];
-          paramList = descrFits[cell_num-1]['paramList'];
+        try: # If we made a mistake and saved boot_* first, we might not be able to do this; hence the try/except
+          bestNLL = descrFits[cell_num-1]['NLL'];
+          currParams = descrFits[cell_num-1]['params'];
+          varExpl = descrFits[cell_num-1]['varExpl'];
+          prefSf = descrFits[cell_num-1]['prefSf'];
+          charFreq = descrFits[cell_num-1]['charFreq'];
+          if joint>0:
+            totalNLL = descrFits[cell_num-1]['totalNLL'];
+            paramList = descrFits[cell_num-1]['paramList'];
+        except:
+          pass
       
     if not resample: # otherwise, we do not want to update...
       ''' TODO: just remove/deprecate the code in quotes [21.12.01]

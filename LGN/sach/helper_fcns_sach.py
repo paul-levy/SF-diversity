@@ -95,13 +95,14 @@ def var_explained(data, modParams, whichInd, DoGmodel=1, rvcModel=None):
 
 ## - for fitting DoG models
 
-def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, ref_varExpl=None, veThresh=65, fracSig=1, ftol=2.220446049250313e-09):
+def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, ref_varExpl=None, veThresh=65, fracSig=1, ftol=2.220446049250313e-09, jointMinCons=3):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint=True, (and DoGmodel is 1 or 2, i.e. not flexGauss), then we fit assuming
       a fixed ratio for the center-surround gains and [freq/radius]
       - i.e. of the 4 DoG parameters, 2 are fit separately for each contrast, and 2 are fit 
         jointly across all contrasts!
       - note that ref_varExpl (optional) will be of the same form that the output for varExpl will be
+      - note that jointMinCons is the minimum # of contrasts that must be included for a joint fit to be run (e.g. 2)
 
       inputs: self-explanatory, except for resps, which should be "f1" from tabulateResponses 
       outputs: bestNLL, currParams, varExpl, prefSf, charFreq, [overallNLL, paramList; if joint=True]
@@ -264,6 +265,8 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
 
   ### NOW, we do the fitting if joint=True
   if joint>0:
+    if len(allResps)<jointMinCons: # need at least jointMinCons contrasts!
+      return bestNLL, currParams, varExpl, prefSf, charFreq, overallNLL, params;
     ### now, we fit!
     for n_try in range(n_repeats):
       # first, estimate the joint parameters; then we'll add the per-contrast parameters after
