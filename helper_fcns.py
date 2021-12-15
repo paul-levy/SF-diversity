@@ -2717,10 +2717,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
        resps_curr = allResps[con];
        sem_curr   = allRespsSem[con];
        respConInd = incl_inds[con];
+       sfs_curr   = allSfs[con];
        #respConInd = valConByDisp[disp][con]; 
       
        # now, compute loss, explained variance, etc
-       bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=0, vol_lam=vol_lam); # not joint, now!
+       bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, sfs_curr, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=0, vol_lam=vol_lam); # not joint, now!
        currParams[respConInd, :] = curr_params;
        varExpl[respConInd] = var_explained(resps_curr, curr_params, valSfVals, DoGmodel);
        prefSf[respConInd] = descr_prefSf(curr_params, dog_model=DoGmodel, all_sfs=valSfVals);
