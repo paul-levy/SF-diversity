@@ -16,7 +16,7 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_211208';
+dogName = 'descrFits_211214';
 #dogName = 'descrFits_211020_f030';
 #dogName = 'descrFits_211005';
 phAdvName = 'phaseAdvanceFits_211108'
@@ -617,12 +617,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=10, loss_type=3, DoGmodel=1, for
   resample = False if nBoots <= 0 else True;
   nBoots = 1 if nBoots <= 0 else nBoots;
 
-  if DoGmodel == 0:
-    nParam = 5;
-  elif DoGmodel == 1 or DoGmodel == 2 or DoGmodel == 4:
-    nParam = 4;
-  elif DoGmodel == 3:
-    nParam = 10;
+  nParam = hf.nParams_descrMod(DoGmodel);
 
   ### load data/metadata
   if not isinstance(cell_num, int):

@@ -68,55 +68,56 @@ if [ "$EXP_DIR" = "V1/" ]; then
   if [[ $RVC_FIT -eq 1 ]]; then
     ## RVCs ONLY with NO phase adjustment (instead, vector correction for F1)
     # -- Naka-Rushton
-    python3.6 descr_fits.py -181 0 V1/ -1 1 0 1 0 0 2 $BOOT_REPS 0 0 
-    python3.6 descr_fits.py -181 1 V1/ -1 1 0 1 0 0 2 $BOOT_REPS 0 0
-    python3.6 descr_fits.py -181 2 V1/ -1 1 0 1 0 0 2 $BOOT_REPS 0 0
-    python3.6 descr_fits.py -181 3 V1/ -1 1 0 1 0 0 2 $BOOT_REPS 0 0
+    python3.6 descr_fits.py -181 0 V1/ -1 1 0 1 0 0 2 $BOOT_REPS $JOINT 0 
+    python3.6 descr_fits.py -181 1 V1/ -1 1 0 1 0 0 2 $BOOT_REPS $JOINT 0
+    python3.6 descr_fits.py -181 2 V1/ -1 1 0 1 0 0 2 $BOOT_REPS $JOINT 0
+    python3.6 descr_fits.py -181 3 V1/ -1 1 0 1 0 0 2 $BOOT_REPS $JOINT 0
     # -- Movshon RVC
-    python3.6 descr_fits.py -181 0 V1/ -1 1 0 0 0 0 2 $BOOT_REPS 0 0
-    python3.6 descr_fits.py -181 1 V1/ -1 1 0 0 0 0 2 $BOOT_REPS 0 0
-    python3.6 descr_fits.py -181 2 V1/ -1 1 0 0 0 0 2 $BOOT_REPS 0 0
-    python3.6 descr_fits.py -181 3 V1/ -1 1 0 0 0 0 2 $BOOT_REPS 0 0
+    python3.6 descr_fits.py -181 0 V1/ -1 1 0 0 0 0 2 $BOOT_REPS $JOINT 0
+    python3.6 descr_fits.py -181 1 V1/ -1 1 0 0 0 0 2 $BOOT_REPS $JOINT 0
+    python3.6 descr_fits.py -181 2 V1/ -1 1 0 0 0 0 2 $BOOT_REPS $JOINT 0
+    python3.6 descr_fits.py -181 3 V1/ -1 1 0 0 0 0 2 $BOOT_REPS $JOINT 0
   fi
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
     # -- responses derived from vecF1 corrections, if F1 responses
-    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 0 2 $BOOT_REPS 0 0 # flex gauss
-    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 0 4 $BOOT_REPS 0 0 # flex gauss, sach loss (to account for variability)
-    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 4 $BOOT_REPS 0 0 # d-DoG-S, sach loss (to account for variability)
-    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 2 $BOOT_REPS 0 0 # d-DoG-S, sqrt loss
-    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 2 2 $BOOT_REPS 0 0 # Tony DoG
-    #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 1 2 $BOOT_REPS 0 0 # sach DoG
+    #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 0 2 $BOOT_REPS $JOINT 0 # flex gauss
+    #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 0 4 $BOOT_REPS $JOINT 0 # flex gauss, sach loss (to account for variability)
+    #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 4 $BOOT_REPS $JOINT 0 # d-DoG-S, sach loss (to account for variability)
+    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 2 $BOOT_REPS $JOINT 0 # d-DoG-S, sqrt loss
+    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 5 2 $BOOT_REPS $JOINT 0 # d-DoG-S, sqrt loss
+    #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 2 2 $BOOT_REPS $JOINT 0 # Tony DoG
+    #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 1 2 $BOOT_REPS $JOINT 0 # sach DoG
   fi
 fi
 
 if [ "$EXP_DIR" = "V1_orig/" ]; then
   if [[ $RVC_FIT -eq 1 ]]; then
     # V1_orig/ -- rvc_f0 and descr only
-    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 1 1 0 0 2 $BOOT_REPS 0
+    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 1 1 0 0 2 $BOOT_REPS $JOINT
   fi
   wait
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
-    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 0 2 $BOOT_REPS 0 # flex. gauss
-    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 0 4 $BOOT_REPS 0  # flex. gauss, sach loss
-    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 2 2 $BOOT_REPS 0 # Tony DoG
-    #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 1 2 $BOOT_REPS 0 # sach DoG
+    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 0 2 $BOOT_REPS $JOINT # flex. gauss
+    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 0 4 $BOOT_REPS $JOINT  # flex. gauss, sach loss
+    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 2 2 $BOOT_REPS $JOINT # Tony DoG
+    #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 1 2 $BOOT_REPS $JOINT # sach DoG
   fi
 fi
 
 if [ "$EXP_DIR" = "altExp/" ]; then
   if [[ $RVC_FIT -eq 1 ]]; then
     # altExp/ -- rvc_f0 and descr only
-    python3.6 descr_fits.py -108 0 altExp/ -1 0 1 1 0 0 2 $BOOT_REPS 0
+    python3.6 descr_fits.py -108 0 altExp/ -1 0 1 1 0 0 2 $BOOT_REPS $JOINT
   fi
   wait
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
-    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 0 2 $BOOT_REPS 0 # flex. gauss
-    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 0 4 $BOOT_REPS 0 # flex. gauss, sach loss
-    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 2 2 $BOOT_REPS 0 # Tony DoG
-    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 1 2 $BOOT_REPS 0 # sach DoG
+    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 0 2 $BOOT_REPS $JOINT # flex. gauss
+    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 0 4 $BOOT_REPS $JOINT # flex. gauss, sach loss
+    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 2 2 $BOOT_REPS $JOINT # Tony DoG
+    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 1 2 $BOOT_REPS $JOINT # sach DoG
 
   fi
 fi
@@ -125,17 +126,17 @@ if [ "$EXP_DIR" = "LGN/" ]; then
   ## LGN - phase adjustment (will be done iff LGN/ 1; not if LGN/ 0 ) and F1 rvc
   if [[ $RVC_FIT -eq 1 ]]; then
     # phase adj
-    python3.6 descr_fits.py -181 0 LGN/ 1 0 0 0 0 0 3 $BOOT_REPS 0
+    python3.6 descr_fits.py -181 0 LGN/ 1 0 0 0 0 0 3 $BOOT_REPS $JOINT
     # RVC (movshon)
-    python3.6 descr_fits.py -181 0 LGN/ 0 1 0 0 0 0 3 $BOOT_REPS 0
-    python3.6 descr_fits.py -181 1 LGN/ 0 1 0 0 0 0 3 $BOOT_REPS 0
-    python3.6 descr_fits.py -181 2 LGN/ 0 1 0 0 0 0 3 $BOOT_REPS 0
-    python3.6 descr_fits.py -181 3 LGN/ 0 1 0 0 0 0 3 $BOOT_REPS 0
+    python3.6 descr_fits.py -181 0 LGN/ 0 1 0 0 0 0 3 $BOOT_REPS $JOINT
+    python3.6 descr_fits.py -181 1 LGN/ 0 1 0 0 0 0 3 $BOOT_REPS $JOINT
+    python3.6 descr_fits.py -181 2 LGN/ 0 1 0 0 0 0 3 $BOOT_REPS $JOINT
+    python3.6 descr_fits.py -181 3 LGN/ 0 1 0 0 0 0 3 $BOOT_REPS $JOINT
     # RVC (Naka-Rushton)
-    python3.6 descr_fits.py -181 0 LGN/ 0 1 0 1 0 0 3 $BOOT_REPS 0
-    python3.6 descr_fits.py -181 1 LGN/ 0 1 0 1 0 0 3 $BOOT_REPS 0
-    python3.6 descr_fits.py -181 2 LGN/ 0 1 0 1 0 0 3 $BOOT_REPS 0
-    python3.6 descr_fits.py -181 3 LGN/ 0 1 0 1 0 0 3 $BOOT_REPS 0
+    python3.6 descr_fits.py -181 0 LGN/ 0 1 0 1 0 0 3 $BOOT_REPS $JOINT
+    python3.6 descr_fits.py -181 1 LGN/ 0 1 0 1 0 0 3 $BOOT_REPS $JOINT
+    python3.6 descr_fits.py -181 2 LGN/ 0 1 0 1 0 0 3 $BOOT_REPS $JOINT
+    python3.6 descr_fits.py -181 3 LGN/ 0 1 0 1 0 0 3 $BOOT_REPS $JOINT
   fi
   wait
   if [[ $DESCR_FIT -eq 1 ]]; then

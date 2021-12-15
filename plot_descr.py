@@ -89,7 +89,8 @@ fracSig = 1;
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_211208';
+#descrBase = 'descrFits_211005';
+descrBase = 'descrFits_211213';
 #descrBase = 'descrFits_211129';
 #descrBase = 'descrFits_211028';
 #descrBase = 'descrFits_211020_f030'; #211005'; #210929';
@@ -263,14 +264,14 @@ for d in range(nDisps):
 
         ## if flexGauss plot peak & frac of peak
         frac_freq = hf.sf_highCut(prms_curr, descrMod, frac=peakFrac, sfRange=(0.1, 15), baseline_sub=baseline_resp);
-        if descrMod == 0 or descrMod == 3:
+        if not hf.is_mod_DoG(descrMod): # i.e. non DoG models
           #ctr = hf.sf_com(resps, sfVals);
           pSf = hf.descr_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
           for ii in range(2):
             dispAx[d][c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
             #dispAx[d][c_plt_ind, ii].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=currClr, alpha=1); # plot at y=1
         ## otherwise, let's plot the char freq. and frac of peak
-        elif descrMod == 1 or descrMod == 2 or descrMod == 4:
+        elif hf.is_mod_DoG(descrMod): # (single) DoG models
           char_freq = hf.dog_charFreq(prms_curr, descrMod);
           # if it's a DoG, let's also put the parameters in text (left side only)
           dispAx[d][c_plt_ind, 0].text(0.05, 0.075, '%d,%.2f' % (*prms_curr[0:2], ), transform=dispAx[d][c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
@@ -302,11 +303,11 @@ for d in range(nDisps):
           descr_curr = descrResp - to_sub;
           abvThresh = [descr_curr>minResp_toPlot]
           dispAx[d][c_plt_ind, 1].plot(sfs_plot[abvThresh], descr_curr[abvThresh], color=currClr, label='descr. fit', clip_on=False)
-          if descrMod == 0 or descrMod == 3:
+          if not hf.is_mod_DoG(descrMod):
             psf = hf.descr_prefSf(prms_curr, dog_model=descrMod);
             #if psf != np.nan: 
             #  dispAx[d][c_plt_ind, 1].plot(psf, 1, 'b', color='k', label='peak freq', clip_on=False);
-          elif descrMod == 1 or descrMod == 2 or descrMod == 4: # diff-of-gauss
+          elif hf.is_mod_DoG(descrMod): # diff-of-gauss
             # now plot characteristic frequency!  
             char_freq = hf.dog_charFreq(prms_curr, descrMod);
             #if char_freq != np.nan:
@@ -1097,7 +1098,9 @@ if plotMetrCorr>0 and check_boot and (descrMod == 3 or descrMod == 1): # i.e. Do
 
 # #### Plot d-DoG-S model in space, just sfMix contrasts
 
-if descrMod == 3: # i.e. d-DoG-s
+if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
+
+  isMult = True if descrMod == 3 else False; # which parameterization of the d-DoG-S is it?
 
   mixCons = hf.get_exp_params(expInd).nCons;
   minResp = np.min(np.min(np.min(respMean[~np.isnan(respMean)])));
@@ -1121,13 +1124,13 @@ if descrMod == 3: # i.e. d-DoG-s
 
           # plot model
           prms_curr = descrParams[d, v_cons[c]];
-          space, samps, dc, df1, df2 = hf.parker_hawken(prms_curr, inSpace=True, debug=True);
+          space, samps, dc, df1, df2 = hf.parker_hawken(prms_curr, inSpace=True, debug=True, isMult=isMult);
 
           sfMixAx[c_plt_ind, d].plot(samps, space, 'k-')#, label='full');
           # and plot the constitutent parts
           sfMixAx[c_plt_ind, d].plot(samps, dc, 'k--')#, label='center');
-          sfMixAx[c_plt_ind, d].plot(samps, df1, 'r-')#, label='f1');
-          sfMixAx[c_plt_ind, d].plot(samps, df2, 'b-')#, label='f2');
+          sfMixAx[c_plt_ind, d].plot(samps, df1, 'r--')#, label='f1');
+          sfMixAx[c_plt_ind, d].plot(samps, df2, 'b--')#, label='f2');
 
           if d == 0:
             if c_plt_ind == 0:
@@ -1137,7 +1140,7 @@ if descrMod == 3: # i.e. d-DoG-s
               sfMixAx[c_plt_ind, d].set_xlabel('dva');
 
           # Add parameters! (in ax-transformed coords, (0,0) is bottom left, (1,1) is top right
-          prms_curr_trans = hf.parker_hawken_transform(np.copy(prms_curr), space_in_arcmin=True);
+          prms_curr_trans = hf.parker_hawken_transform(np.copy(prms_curr), space_in_arcmin=True, isMult=isMult);
           kc1,xc1,ks1,xs1 = prms_curr_trans[0:4];
           kc2,xc2,ks2,xs2 = prms_curr_trans[4:8];
           g,S = prms_curr_trans[8:];
