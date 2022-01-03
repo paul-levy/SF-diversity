@@ -1986,8 +1986,10 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=No
   '''
   np = numpy;
 
-  if DoGmodel == 0 or DoGmodel == 3:
+  if DoGmodel == 0:
     return np.nan; # we cannot compute from that form of the model!
+  #elif DoGmodel == 3 or DoGmodel == 5:
+  #  return dog_get_param(
   #########
   ### Gain
   #########
@@ -2499,7 +2501,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     ### prepare for the joint fitting, if that's what we've specified!
     if joint>0:
       if ref_varExpl is None:
-        start_incl = 1; # hacky...
+        start_incl = 1; # this means if we don't have a reference varExpl, we just fit all conditions
       if start_incl == 0:
         if ref_varExpl[con] < veThresh:
           continue; # i.e. we're not adding this; yes we could move this up, but keep it here for now
@@ -2658,9 +2660,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       # previously, we choose optimization method (L-BFGS-B for even, TNC for odd) --- we now just choose the former
       methodStr = 'L-BFGS-B';
       obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, vol_lam=vol_lam, n_fits=len(allResps));
-      obj(allInitParams);
       try:
-        wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds, options={'ftol': ftol});
+        #maxfun = 75000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model needs more time to finish
+        maxfun = 15000; #if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model needs more time to finish
+        wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds, options={'ftol': ftol, 'maxfun': maxfun});
       except:
         continue; # if that particular fit fails, go back and try again
 
@@ -3384,6 +3387,10 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
              # on data
              dataMetrics['dog_pSf'][d, c] = dogFits[cell_ind]['prefSf'][d, c]
              dataMetrics['dog_charFreq'][d, c] = dogFits[cell_ind]['charFreq'][d, c]
+             #if is_mod_DoG(dogMod):
+             #   dataMetrics['dog_charFreq'][d, c] = dogFits[cell_ind]['charFreq'][d, c]
+             #else: # get center radius of central DoG
+             #   dataMetrics['dog_charFreq'][d, c] =                 
              # get the params and do bandwidth, high-freq. cut-off measures
              dog_params_curr = dogFits[cell_ind]['params'][d, c];
              for ky,height in zip(['dog_bwHalf', 'dog_bw34'], [0.5, 0.75]):

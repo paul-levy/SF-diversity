@@ -13,10 +13,11 @@ data_suff = 'V1_BB/structures/';
 
 expName = hf.get_datalist('V1_BB/');
 
-sfName = 'descrFits_210916';
+sfName = 'descrFits_211214';
+#sfName = 'descrFits_210916';
 rvcName = 'rvcFits_210916';
 
-def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, jointSf=False, toSave=1, fracSig=1, nBoots=0, n_repeats=25):
+def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, toSave=1, fracSig=1, nBoots=0, n_repeats=25, jointSf=0):
   ''' Separate fits for DC, F1 
       -- for DC: [maskOnly, mask+base]
       -- for F1: [maskOnly, mask+base {@mask TF}] 
@@ -55,7 +56,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
 
   if fit_sf == 1 or fit_sf is not None:
     modStr = hf.descrMod_name(sfMod);
-    sfNameFinal = hf.descrFit_name(loss_type, descrBase=sfName, modelName=modStr); # descrLoss order is lsq/sqrt/poiss/sach
+    sfNameFinal = hf.descrFit_name(loss_type, descrBase=sfName, modelName=modStr, joint=jointSf); # descrLoss order is lsq/sqrt/poiss/sach
     if fit_sf == 1:
       if os.path.isfile(data_path + sfNameFinal):
         sfFits = hf.np_smart_load(data_path + sfNameFinal);
@@ -218,7 +219,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
             sfFit_curr = None
 
           # -- by default, loss_type=2 (meaning sqrt loss); why expand dims and transpose? dog fits assumes the data is in [disp,sf,con] and we just have [con,sf]
-          nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), None, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig, n_repeats=n_repeats) # noDisp=1 means that we don't index dispersion when accessins prevFits
+          nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), None, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig, n_repeats=n_repeats, joint=jointSf) # noDisp=1 means that we don't index dispersion when accessins prevFits
 
           if resample:
             if boot_i == 0: # i.e. first time around
@@ -228,7 +229,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
               sfFits_curr_toSave[resp_str][wK]['boot_prefSf'] = np.empty((nBoots,) + pSf.shape);
               sfFits_curr_toSave[resp_str][wK]['boot_conGain'] = np.empty((nBoots,) + vExp.shape);
               sfFits_curr_toSave[resp_str][wK]['boot_varExpl'] = np.empty((nBoots,) + cFreq.shape);
-              if jointSf==True:
+              if jointSf>=1:
                 sfFits_curr_toSave[resp_str][wK]['boot_totalNLL'] = np.empty((nBoots,) + totNLL.shape);
                 sfFits_curr_toSave[resp_str][wK]['boot_paramList'] = np.empty((nBoots,) + paramList.shape);
             # then -- put in place
@@ -237,7 +238,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
             sfFits_curr_toSave[resp_str][wK]['boot_prefSf'][boot_i] = pSf;
             sfFits_curr_toSave[resp_str][wK]['boot_conGain'][boot_i] = vExp
             sfFits_curr_toSave[resp_str][wK]['boot_varExpl'][boot_i] = cFreq
-            if jointSf==True:
+            if jointSf>=1:
               sfFits_curr_toSave[resp_str][wK]['boot_loss'] = np.empty((nBoots,) + totNLL.shape);
               sfFits_curr_toSave[resp_str][wK]['boot_loss'] = np.empty((nBoots,) + paramList.shape);
           else: # otherwise, we'll only be here once
@@ -246,7 +247,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
             sfFits_curr_toSave[resp_str][wK]['varExpl'] = vExp;
             sfFits_curr_toSave[resp_str][wK]['prefSf'] = pSf;
             sfFits_curr_toSave[resp_str][wK]['charFreq'] = cFreq;
-            if jointSf==True:
+            if jointSf>=1:
               sfFits_curr_toSave[resp_str][wK]['totalNLL'] = totNLL;
               sfFits_curr_toSave[resp_str][wK]['paramList'] = totPrm;
         ######## 
@@ -318,6 +319,7 @@ if __name__ == '__main__':
   sf_mod     = int(sys.argv[5]);
   loss_type  = int(sys.argv[6]); # default will be 2 (i.e. sqrt)
   nBoots     = int(sys.argv[7]);
+  jointSf      = int(sys.argv[8]);
 
   fracSig = 1; # why fracSig =1? For V1 fits, we want to contrasin the upper-half sigma of the two-half gaussian as a fraction of the lower half
 
@@ -338,10 +340,12 @@ if __name__ == '__main__':
 
     #make_descr_fits((10, dataList['unitName'][10]), fit_rvc=pass_rvc, fit_sf=pass_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig)
 
+    n_repeats = 25 if joint==0 else 5; # don't need so many repeats if it's the joint fitting
+
     with mp.Pool(processes = nCpu) as pool:
       # if we're doing as parallel, do NOT save
 
-      fit_perCell = partial(make_descr_fits, fit_rvc=pass_rvc, fit_sf=pass_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig, loss_type=loss_type, nBoots=nBoots); 
+      fit_perCell = partial(make_descr_fits, fit_rvc=pass_rvc, fit_sf=pass_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig, loss_type=loss_type, nBoots=nBoots, jointSf=jointSf, n_repeats=n_repeats); 
       fits = zip(*pool.map(fit_perCell, zip(range(start_cell, end_cell+1), dataList['unitName'])));
       rvc_fits, sf_fits = fits; # unpack
 
@@ -372,5 +376,5 @@ if __name__ == '__main__':
         np.save(dataPath + sfNameFinal, sfFits);
 
   else:
-    make_descr_fits(cell_num, fit_rvc=fit_rvc, fit_sf=fit_sf, rvcMod=rvc_mod, sfMod=sf_mod, loss_type=loss_type, nBoots=nBoots);
+    make_descr_fits(cell_num, fit_rvc=fit_rvc, fit_sf=fit_sf, rvcMod=rvc_mod, sfMod=sf_mod, loss_type=loss_type, nBoots=nBoots, jointSf=jointSf);
 

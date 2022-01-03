@@ -90,7 +90,7 @@ fracSig = 1;
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 #descrBase = 'descrFits_211005';
-descrBase = 'descrFits_211213';
+descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_211129';
 #descrBase = 'descrFits_211028';
 #descrBase = 'descrFits_211020_f030'; #211005'; #210929';
