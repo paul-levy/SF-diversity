@@ -16,7 +16,9 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_211214';
+dogName = 'descrFits_220105ap';
+#dogName = 'descrFits_220103';
+#dogName = 'descrFits_211214';
 #dogName = 'descrFits_211020_f030';
 #dogName = 'descrFits_211005';
 phAdvName = 'phaseAdvanceFits_211108'
@@ -1019,7 +1021,7 @@ if __name__ == '__main__':
       ### Descriptive fits
       if descr_fits == 1:
 
-        n_repeats = 2 if joint>0 else 15; # should be 3, 15
+        n_repeats = 7 if joint>0 else 15; # was previously be 3, 15
 
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits

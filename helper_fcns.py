@@ -2179,7 +2179,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
   ''' return the initial parameters for the DoG model, given the model choice and responses
       --- if bounds is not None, then we'll ensure that each parameter is within the specified bounds
       --- no_surr applies for d-DoG-S only (as of 21.12.06)
-  TODO: CHeck why all_sfs AND valSfVals are passed in???
+  TODO: Check why all_sfs AND valSfVals are passed in???
   '''
   np = numpy;
 
@@ -2239,9 +2239,12 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
 
     # then, those values that are specific to model type
     init_A = random_in_range((1.5, 3))[0] if DoGmodel==3 else random_in_range((0.6, 2))[0]; 
+    #init_A = random_in_range((0.6, 2))[0]; 
     init_B = random_in_range((1.05, 3))[0] if DoGmodel==3 else random_in_range((0.05, 0.4))[0];
     init_C = random_in_range((2, 3.5))[0] if DoGmodel==3 else random_in_range((0.3, 2))[0];
+    #init_C = random_in_range((0.3, 2))[0];
     init_sPr = random_in_range((-3, -1.09))[0] if DoGmodel==3 else random_in_range((0.05, 0.2))[0];
+    #init_sPr = random_in_range((0.05, 0.2))[0];
     if no_surr:
        init_params = [init_kc1, init_xc1, init_kc2, init_B, init_gPr, init_sPr];
     else:
@@ -2420,13 +2423,12 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     max_max_resp = np.nanmax(np.nanmax(resps_mean, axis=1)); # average across con to get max per d X con
 
     # -- first, some general bounds that we can apply as needed for different parameters
-    gtMult_bound = (1, 7); # (1, None) multiplier limit when we want param >= mult*orig_param [greaterThan-->gt]
+    gtMult_bound = (1, 5); # (1, None) multiplier limit when we want param >= mult*orig_param [greaterThan-->gt] ||| was previously (1, 7)
     sigmoid_bound = (None, None); # params that are input to sigmoids are unbounded - since sigmoid is bounded [0,1]
-    noSurr_radBound = (0.01, 0.010001);
+    noSurr_radBound = (0.01, 0.010001); # gain will be 0 if we are turning off surround; this will be just a small range of radius values to stop the optimization from exploring this parameter space
     noSurr_gainBound = (-9999.00001, -9999); # sigmoid of this value will be basically 0
     # -- then, the central gaussian
     kc1_bound = (min_max_resp-4*np.sqrt(min_max_resp), max_max_resp+4*np.sqrt(max_max_resp)); # constraint from Hawk
-    #kc1_bound = (max_resp-4*np.sqrt(max_resp), max_resp+4*np.sqrt(max_resp)); # constraint from Hawk
     # --- the following if statements are also from Hawk, to ensure that the bounds are not too low
     if kc1_bound[1] < 0: # hawk's bounds were (5,6) at minimum, but since we go to lower contrast, we'll do this...
        kc1_bound = (kc1_bound[0], 1);
@@ -2435,14 +2437,17 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     xc1_bound = (0.01, 0.15); # values from Hawk; he also uses upper bound of 0.15 (211210 fits are with [0.01, 0.3])
     surr1_gain_bound = (-1.73, 1.1); # through sigmoid translates to (0.15, 0.75), bounds per Hawk;previously was sigmoid_bound
     surr1_rad_bound =  gtMult_bound if DoGmodel==3 else (xc1_bound[1]+0.2, 4); # per Hawk; #gtMult_bound if multiplicative surround
-    # -- next, the second (i.e. flanking) gaussian
+    #surr1_rad_bound =  (xc1_bound[1]+0.2, 4); # per Hawk; #gtMult_bound if multiplicative surround    # -- next, the second (i.e. flanking) gaussian
     kc2_bound = (0, kc1_bound[1]); # same, regardless of model; upper bound=kc upper, but can go down to zero, per Hawk
     xc2_bound = gtMult_bound if DoGmodel==3 else (0.015, 2*xc1_bound[1]); # same regardless of isMult
-    surr2_gain_bound = sigmoid_bound if DoGmodel==3 else surr1_gain_bound; # note that surr_gain_bound is LESS restrictive than Hawk
+    surr2_gain_bound = surr1_gain_bound; # note that surr_gain_bound is LESS restrictive than Hawk
+    #surr2_gain_bound = sigmoid_bound if DoGmodel==3 else surr1_gain_bound; # note that surr_gain_bound is LESS restrictive than Hawk
     surr2_rad_bound = gtMult_bound if DoGmodel==3 else (xc2_bound[1]+0.2, surr1_rad_bound[1]); # per Hawk
     # -- finally, the g & S parameters
-    g_bound = sigmoid_bound; # same for either model
-    S_bound = sigmoid_bound if DoGmodel==3 else (0.1/6, 1.5*xc1_bound[1]); # note that Hawk has [0.1/{4,8}, 2*maxOfXC1] depending on low, high SF
+    g_bound = (-9999.00001, -9999); # sigmoid of this value will be basically 0
+    #g_bound = sigmoid_bound; # same for either model
+    #S_bound = sigmoid_bound if DoGmodel==3 else (0.1/6, 1.5*xc1_bound[1]); # note that Hawk has [0.1/{4,8}, 2*maxOfXC1] depending on low, high SF
+    S_bound = (0.1/6, 1.5*xc1_bound[1]);
 
     if joint>0: # for d-DoG-S model, the joint values mean the following
       if joint == 1: # g and S are constant across contrast, everything else is per-contrast condition
@@ -2671,7 +2676,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       NLL = wax['fun'];
       params_curr = wax['x'];
 
-      if np.isnan(overallNLL) or NLL < overallNLL:
+      if np.isnan(overallNLL) or NLL < overallNLL or len(params_curr) != len(params): # the final check is if the # of parameters here is different from the exising # params --> then update, because our separate fits have updated and we have different # of conditions to fit
         overallNLL = NLL;
         params = params_curr;
 
@@ -2708,11 +2713,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
              curr_params = [center_gain, center_shape, surr_gain, surr_shape];
        else: ### unpack the d-DoG-S parameters [for joint fits]
           if joint == 1: # we've already grabbed g, S
-             nParam_perCond = nParam-2; # the usual 10 parameters, minus two for those held joint
+             nParam_perCond = nParam-2; # the usual 10 parameters, minus 2 for those held joint
              start_ind = 2+con*nParam_perCond;
              curr_params = [*params[start_ind:(start_ind+nParam-2)], g, S]
           elif joint == 2: # we've added surround radius #1&2, g, S
-             nParam_perCond = nParam-4; # the usual 10 parameters, minus two for those held joint
+             nParam_perCond = nParam-4; # the usual 10 parameters, minus 4 for those held joint
              start_ind = 4+con*nParam_perCond;
              curr_params = [*params[start_ind:start_ind+3], surr1_rad,
                             *params[start_ind+3:start_ind+6], surr2_rad, g, S];
@@ -2725,7 +2730,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       
        # now, compute loss, explained variance, etc
        bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, sfs_curr, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=0, vol_lam=vol_lam); # not joint, now!
-       currParams[respConInd, :] = curr_params;
+       currParams[respConInd, :] = curr_params;    
        varExpl[respConInd] = var_explained(resps_curr, curr_params, valSfVals, DoGmodel);
        prefSf[respConInd] = descr_prefSf(curr_params, dog_model=DoGmodel, all_sfs=valSfVals);
        charFreq[respConInd] = dog_charFreq(curr_params, DoGmodel=DoGmodel);    
@@ -2895,15 +2900,20 @@ def parker_hawken_transform(params, twoDim=False, space_in_arcmin=False, isMult=
     # --- 
     # - xc1 is first priority to specify (directly parameterized)
     # - then, we get xs1 relative to xc1 (xs1 >= xc1 and xs1 <= Z*xc1, e.g. Z=4) 
+    #xs1 = 0.2 + A*xc1 if isMult else A;
     xs1 = A*xc1 if isMult else A;
     # - in parallel, xc2 relative to xc1 (xc2>=xc1)
+    #xc2 = B
     xc2 = B*xc1 if isMult else B;
     # finally, xs2 relative to xc2 (xs2>=xc2)
+    #xs2 = 0.2 + C*xc2 if isMult else C;
     xs2 = C*xc2 if isMult else C;
     if isMult: # S is a bit longer, so specify as follows
       #S   = xc1 + sigmoid(Spr)*2*(0.5*xc1+xc2); # now, we enforce that S is at minimum equal to xc1; with limit S<2(xc1+xc2), we say {S+xc1} < 2(0.5*xc1 + xc2)
       # temporarily (for joint fits, where xc2 is meaningless, we can just say that we care what multiple it is of S
       S   = xc1 + sigmoid(Spr)*xc1; # now, we enforce that S is at minimum equal to xc1; with limit S<2(xc1+xc2), we say {S+xc1} < 2(0.5*xc1 + xc2)
+      #S   = sigmoid(Spr)*2*(xc1+xc2); # now, we enforce that S is at minimum equal to xc1; with limit S<2(xc1+xc2), we say {S+xc1} < 2(0.5*xc1 + xc2)
+      S = Spr;
     else:
       S = Spr;
     ks1 = sigmoid(kS_rel1)*kc1;
