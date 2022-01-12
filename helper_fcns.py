@@ -2583,9 +2583,6 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       NLL = wax['fun'];
       params = wax['x'];
 
-      #if con==nCons-1 and disp==0:
-        #pdb.set_trace();
-
       if no_surr:
          # then fill in the real params...
          params_full = np.zeros_like(currParams[con,:]);
@@ -2628,7 +2625,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       # first, estimate the joint parameters; then we'll add the per-contrast parameters after
       # --- we'll estimate the joint parameters based on the high contrast response
       ref_resps = allResps[-1]; ref_sfs = allSfs[-1];
-      ref_init = dog_init_params(ref_resps, base_rate, all_sfs, ref_sfs, DoGmodel, bounds=refBounds);
+      if isolParams[-1] == [] or n_try>0: # give one shot with the isolParams initialization, then move on 
+         ref_init = dog_init_params(ref_resps, base_rate, all_sfs, ref_sfs, DoGmodel, bounds=refBounds);
+      else:
+         ref_init = isolParams[-1]; # initialize the joint parameters on the basis of the above
       if is_mod_DoG(DoGmodel):
          if joint == 1: # gain ratio (i.e. surround gain) [0] and shape ratio (i.e. surround radius) [1] are joint
             allInitParams = [ref_init[2], ref_init[3]];
@@ -2664,7 +2664,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, vol_lam=vol_lam, n_fits=len(allResps));
       obj(allInitParams);
       try:
-        maxfun = 45000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model needs more time to finish
+        maxfun = 75000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model needs more time to finish
         wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds, options={'ftol': ftol, 'maxfun': maxfun});
       except:
         continue; # if that particular fit fails, go back and try again

@@ -585,7 +585,7 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1):
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList;
  
-def fit_descr_DoG(cell_num, data_loc, n_repeats=5, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3): # n_repeats was 100, before 21.09.01
+def fit_descr_DoG(cell_num, data_loc, n_repeats=3, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
@@ -645,6 +645,13 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=5, loss_type=3, DoGmodel=1, forc
       ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0));
       ref_varExpl = ref_fits[cell_num-1]['varExpl'][0]; # reference varExpl for single gratings
       isolFits = ref_fits[cell_num-1];
+      try: 
+        # try to get joint==1 fits, it joint==2; otherwise, and in all other cases, single grats
+        # why? seems that going from jt=0 --> jt=1, we get fits to converge
+        ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=1));
+        isolFits = ref_fits[cell_num-1];
+      except:
+        pass; # we've already specified isolFits, if that doesn't work
     except:
       ref_varExpl = None;
       isolFits = None;
