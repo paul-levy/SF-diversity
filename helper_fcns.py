@@ -2131,6 +2131,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
       applyPen = 1 if (max_mod-1.40*max_data)>0 else 0;
       # TODO: Make this penalty smooth/continuous rather than discrete...
       maxPen = applyPen*1*(max_mod-1.4*max_data); # scale factor of 1 chosen to be within the typical loss values (O(10),O(100), at least for loss_type=2) so this regularization does not overwhelm
+      #maxPen = 0;
     else:
       maxPen = 0;
 
@@ -2227,7 +2228,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
   ## Parker-Hawken (difference of DoG with separation, i.e. d-DoG-S; see Parker & Hawken 1987, 1988)
   #############
   elif DoGmodel == 3 or DoGmodel == 5:
-    # for reference: sigmoid([-/+]1.09)~= 0.25/0.75, sigmoid(0) = 0.5, sigmoid([-/+]2.94)~=0.05/0.95   
+    ### for reference: sigmoid([-/+]1.09)~= 0.25/0.75, sigmoid(0) = 0.5, sigmoid([-/+]2.94)~=0.05/0.95   
 
     # first, the values in common for both models
     sqrtMax = np.sqrt(maxResp); # sqrtMax is a useful way of sampling for a maximum response gain (per Hawk...)
@@ -2238,13 +2239,11 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
     init_gPr = random_in_range((-1.09, 1.09))[0]; # input to sigmoid (alone); 
 
     # then, those values that are specific to model type
-    init_A = random_in_range((1.5, 3))[0] if DoGmodel==3 else random_in_range((0.6, 2))[0]; 
-    #init_A = random_in_range((0.6, 2))[0]; 
-    init_B = random_in_range((1.05, 3))[0] if DoGmodel==3 else random_in_range((0.05, 0.4))[0];
-    init_C = random_in_range((2, 3.5))[0] if DoGmodel==3 else random_in_range((0.3, 2))[0];
-    #init_C = random_in_range((0.3, 2))[0];
-    init_sPr = random_in_range((-3, -1.09))[0] if DoGmodel==3 else random_in_range((0.05, 0.2))[0];
-    #init_sPr = random_in_range((0.05, 0.2))[0];
+    init_A = random_in_range((1.5, 3))[0] if DoGmodel==3 else random_in_range((0.6, 2))[0]; # xs1
+    init_B = random_in_range((1.05, 3))[0] if DoGmodel==3 else random_in_range((0.05, 0.4))[0]; # xc2
+    init_C = random_in_range((2, 3.5))[0] if DoGmodel==3 else random_in_range((0.3, 2))[0]; # xs2
+    #init_sPr = random_in_range((-3, -1.09))[0] if DoGmodel==3 else random_in_range((0.05, 0.2))[0];
+    init_sPr = random_in_range((0.05, 0.2))[0];
     if no_surr:
        init_params = [init_kc1, init_xc1, init_kc2, init_B, init_gPr, init_sPr];
     else:
@@ -2294,7 +2293,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
 
   return init_params
 
-def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=0, gain_reg=0, ref_varExpl=None, veThresh=60, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0, modRecov=False, ftol=2.220446049250313e-09, jointMinCons=3, no_surr=False):
+def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=0, gain_reg=0, ref_varExpl=None, veThresh=60, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0, modRecov=False, ftol=2.220446049250313e-09, jointMinCons=3, no_surr=False, isolFits=None):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint>0, (and DoGmodel is not flexGauss), then we fit assuming
       --- joint==1: a fixed ratio for the center-surround gains and [freq/radius]
@@ -2309,7 +2308,6 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       --- fracSig: if on, then the right-half (high SF) of the flex. gauss tuning curve is expressed as a fraction of the lower half
       --- modRecov: if True AND if prevFits is not None, we'll sample the fit params and fit to those resps, i.e. model recovery analysis
  
-
       inputs: self-explanatory, except for resps, which should be [resps_mean, resps_all, resps_sem, base_rate]
       outputs: bestNLL, currParams, varExpl, prefSf, charFreq, [overallNLL, paramList; if joint>0]
   '''
@@ -2435,17 +2433,15 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     if kc1_bound[0] < 0:
        kc1_bound = (0, kc1_bound[1]);
     xc1_bound = (0.01, 0.15); # values from Hawk; he also uses upper bound of 0.15 (211210 fits are with [0.01, 0.3])
-    surr1_gain_bound = (-1.73, 1.1); # through sigmoid translates to (0.15, 0.75), bounds per Hawk;previously was sigmoid_bound
+    surr1_gain_bound = (-1.73, 1.1); # through sigmoid translates to (0.15, 0.75), bounds per Hawk; previously was sigmoid_bound
     surr1_rad_bound =  gtMult_bound if DoGmodel==3 else (xc1_bound[1]+0.2, 4); # per Hawk; #gtMult_bound if multiplicative surround
-    #surr1_rad_bound =  (xc1_bound[1]+0.2, 4); # per Hawk; #gtMult_bound if multiplicative surround    # -- next, the second (i.e. flanking) gaussian
+    # -- next, the second (i.e. flanking) gaussian
     kc2_bound = (0, kc1_bound[1]); # same, regardless of model; upper bound=kc upper, but can go down to zero, per Hawk
     xc2_bound = gtMult_bound if DoGmodel==3 else (0.015, 2*xc1_bound[1]); # same regardless of isMult
     surr2_gain_bound = surr1_gain_bound; # note that surr_gain_bound is LESS restrictive than Hawk
-    #surr2_gain_bound = sigmoid_bound if DoGmodel==3 else surr1_gain_bound; # note that surr_gain_bound is LESS restrictive than Hawk
     surr2_rad_bound = gtMult_bound if DoGmodel==3 else (xc2_bound[1]+0.2, surr1_rad_bound[1]); # per Hawk
     # -- finally, the g & S parameters
-    g_bound = (-9999.00001, -9999); # sigmoid of this value will be basically 0
-    #g_bound = sigmoid_bound; # same for either model
+    g_bound = (-9999.00001, -9999); # sigmoid of this value will be basically 0; was prevously sigmoid_bound (i.e. b/t 0--1)
     #S_bound = sigmoid_bound if DoGmodel==3 else (0.1/6, 1.5*xc1_bound[1]); # note that Hawk has [0.1/{4,8}, 2*maxOfXC1] depending on low, high SF
     S_bound = (0.1/6, 1.5*xc1_bound[1]);
 
@@ -2477,6 +2473,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
   ### organize responses -- and fit, if joint=0
   allResps = []; allRespsSem = []; allSfs = []; start_incl = 0; incl_inds = [];
+  isolParams = []; # keep track of the previously saved parameters by contrast?
 
   for con in range(nCons):
     if con not in valConByDisp[disp]:
@@ -2513,6 +2510,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         else:
           start_incl = 1; # now we're ready to start adding to our responses that we'll fit!
 
+      try:
+         params_prev = isolFits['params'][disp,con];
+         isolParams.append(params_prev);
+      except:
+         isolParams.append([]);
       incl_inds.append(con); # keep note of which contrast indices are included
       allResps.append(resps_curr);
       allRespsSem.append(sem_curr);
@@ -2562,14 +2564,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       init_params = dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, allBounds, no_surr=no_surr)
 
       # choose optimization method
-      if np.mod(n_try, 2) == 0:
-          methodStr = 'L-BFGS-B';
-      else:
-          methodStr = 'TNC';
+      methodStr = 'L-BFGS-B'; # previously, alternated between L-BFGS-B and TNC (even/odd)
 
-      #stmt = '''DoG_loss(init_params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=0)'''
-      #isitok = timeit.timeit(stmt, globals={'DoG_loss': DoG_loss, 'init_params': init_params, 'resps_curr': resps_curr, 'valSfVals': valSfVals, 'sem_curr': sem_curr, 'loss_type': loss_type, 'DoGmodel': DoGmodel, 'dir': dir, 'gain_reg': gain_reg, 'joint': joint, 'baseline': baseline}, number=1000);
- 
       if no_surr:
          # perhaps hacky (while we test it out), but important for passing in params
          obj = lambda params: DoG_loss([*params[0:2], -np.inf, 1,
@@ -2588,7 +2584,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       params = wax['x'];
 
       #if con==nCons-1 and disp==0:
-      #  pdb.set_trace();
+        #pdb.set_trace();
 
       if no_surr:
          # then fill in the real params...
@@ -2647,8 +2643,9 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
             allInitParams = [ref_init[3], ref_init[7], *ref_init[-2:]] # g,S (i.e. the final two parameters
 
       # now, we cycle through all responses and add the per-contrast parameters
-      for resps_curr, sfs_curr in zip(allResps, allSfs):
-        curr_init = dog_init_params(resps_curr, base_rate, all_sfs, sfs_curr, DoGmodel, bounds=refBounds);
+      for resps_curr, sfs_curr, curr_init in zip(allResps, allSfs, isolParams):
+        if curr_init == []:
+          curr_init = dog_init_params(resps_curr, base_rate, all_sfs, sfs_curr, DoGmodel, bounds=refBounds);
         if is_mod_DoG(DoGmodel):
            if joint == 1:
               allInitParams = [*allInitParams, curr_init[0], curr_init[1]];
@@ -2665,16 +2662,19 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       # previously, we choose optimization method (L-BFGS-B for even, TNC for odd) --- we now just choose the former
       methodStr = 'L-BFGS-B';
       obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, vol_lam=vol_lam, n_fits=len(allResps));
+      obj(allInitParams);
       try:
-        #maxfun = 75000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model needs more time to finish
-        maxfun = 15000; #if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model needs more time to finish
+        maxfun = 45000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model needs more time to finish
         wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds, options={'ftol': ftol, 'maxfun': maxfun});
       except:
         continue; # if that particular fit fails, go back and try again
 
+      #print('%d: %s --> %s [loss: %.2e]' % (n_try, wax['success'], wax['message'], wax['fun']));
       # compare
       NLL = wax['fun'];
       params_curr = wax['x'];
+      #if n_try==0:
+      #   pdb.set_trace();
 
       if np.isnan(overallNLL) or NLL < overallNLL or len(params_curr) != len(params): # the final check is if the # of parameters here is different from the exising # params --> then update, because our separate fits have updated and we have different # of conditions to fit
         overallNLL = NLL;
@@ -2911,14 +2911,14 @@ def parker_hawken_transform(params, twoDim=False, space_in_arcmin=False, isMult=
     if isMult: # S is a bit longer, so specify as follows
       #S   = xc1 + sigmoid(Spr)*2*(0.5*xc1+xc2); # now, we enforce that S is at minimum equal to xc1; with limit S<2(xc1+xc2), we say {S+xc1} < 2(0.5*xc1 + xc2)
       # temporarily (for joint fits, where xc2 is meaningless, we can just say that we care what multiple it is of S
-      S   = xc1 + sigmoid(Spr)*xc1; # now, we enforce that S is at minimum equal to xc1; with limit S<2(xc1+xc2), we say {S+xc1} < 2(0.5*xc1 + xc2)
-      #S   = sigmoid(Spr)*2*(xc1+xc2); # now, we enforce that S is at minimum equal to xc1; with limit S<2(xc1+xc2), we say {S+xc1} < 2(0.5*xc1 + xc2)
+      #S   = xc1 + sigmoid(Spr)*xc1; # now, we enforce that S is at minimum equal to xc1; with limit S<2(xc1+xc2), we say {S+xc1} < 2(0.5*xc1 + xc2)
+      #S   = sigmoid(Spr)*(xc1+xc2); # now, we enforce allow 0 < S < xc1+xc2; previously was < 2*(xc1+xc2)
       S = Spr;
     else:
       S = Spr;
     ks1 = sigmoid(kS_rel1)*kc1;
     ks2 = sigmoid(kS_rel2)*kc2;
-    
+
     params[2] = ks1;
     params[3] = xs1;
     params[5] = xc2;
