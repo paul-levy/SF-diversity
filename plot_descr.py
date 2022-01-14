@@ -89,8 +89,9 @@ fracSig = 1;
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-#descrBase = 'descrFits_211005';
-descrBase = 'descrFits_211214';
+descrBase = 'descrFits_220112a';
+#descrBase = 'descrFits_220103';
+#descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_211129';
 #descrBase = 'descrFits_211028';
 #descrBase = 'descrFits_211020_f030'; #211005'; #210929';
@@ -116,7 +117,7 @@ rvcAdj = np.abs(rvcAdj);
 modStr  = hf.descrMod_name(descrMod)
 fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint);
 descrFits = hf.np_smart_load(data_loc + fLname);
-pause_tm = 2.5*np.random.rand();
+pause_tm = 2.0*np.random.rand();
 time.sleep(pause_tm);
 # set the save directory to save_loc, then create the save directory if needed
 subDir = fLname.replace('Fits', '').replace('.npy', '');
@@ -1167,4 +1168,74 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
   for fig in range(len(allFigs)):
       pdfSv.savefig(allFigs[fig])
       plt.close(allFigs[fig])
-  pdfSv.close()
+  pdfSv.close();
+
+# #### Plot d-DoG-S model in space, all SF tuning curves
+
+if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
+
+  fDisp = []; dispAx = [];
+
+  sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
+
+  for d in range(1): #nDisps): # let's only do single gratings as of 22.01.13
+
+      v_cons = val_con_by_disp[d];
+      n_v_cons = len(v_cons);
+
+      n_rows = int(np.ceil(n_v_cons/np.floor(np.sqrt(n_v_cons)))); # make this close to a rectangle/square in arrangement (cycling through cons)
+      n_cols = int(np.ceil(n_v_cons/n_rows));
+
+      fCurr, dispCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*10, n_rows*12), sharey=False);
+      fDisp.append(fCurr)
+      dispAx.append(dispCurr);    
+
+      minResp = np.min(np.min(respMean[d, ~np.isnan(respMean[d, :, :])]));
+      maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
+
+      for c in reversed(range(n_v_cons)):
+          row_ind = int((n_v_cons-c-1)/n_cols);
+          col_ind = np.mod((n_v_cons-c-1), n_cols);
+
+          c_plt_ind = len(v_cons) - c - 1;
+          currClr = [(n_v_cons-c-1)/float(n_v_cons), (n_v_cons-c-1)/float(n_v_cons), (n_v_cons-c-1)/float(n_v_cons)];
+
+          dispAx[d][row_ind, col_ind].set_title('con: %s%%' % str(int(100*(np.round(all_cons[v_cons[c]], 2)))));
+
+          # plot model
+          prms_curr = descrParams[d, v_cons[c]];
+          space, samps, dc, df1, df2 = hf.parker_hawken(prms_curr, inSpace=True, debug=True, isMult=isMult);
+
+          dispAx[d][row_ind, col_ind].plot(samps, space, 'k-')#, label='full');
+          # and plot the constitutent parts
+          dispAx[d][row_ind, col_ind].plot(samps, dc, 'k--')#, label='center');
+          dispAx[d][row_ind, col_ind].plot(samps, df1, 'r--')#, label='f1');
+          dispAx[d][row_ind, col_ind].plot(samps, df2, 'b--')#, label='f2');
+
+          if c_plt_ind == 0:
+            dispAx[d][row_ind, col_ind].set_ylabel('resp (sps)');
+            #dispAx[d][row_ind, col_ind].legend(fontsize='x-small');
+          if c_plt_ind == mixCons-1:
+            dispAx[d][row_ind, col_ind].set_xlabel('dva');
+
+          # Add parameters! (in ax-transformed coords, (0,0) is bottom left, (1,1) is top right
+          prms_curr_trans = hf.parker_hawken_transform(np.copy(prms_curr), space_in_arcmin=True, isMult=isMult);
+          kc1,xc1,ks1,xs1 = prms_curr_trans[0:4];
+          kc2,xc2,ks2,xs2 = prms_curr_trans[4:8];
+          g,S = prms_curr_trans[8:];
+          # -- first, dog 1; then dog2; finally gain, S
+          dispAx[d][row_ind, col_ind].text(0, 0.16, r"""ctr: $k_c/k_s/x_c/x_s$=%.0f/%.0f/%.2f'/%.2f'""" % (kc1,ks1,xc1,xs1), transform=dispAx[d][row_ind, col_ind].transAxes, horizontalalignment='left', fontsize='x-small');
+          dispAx[d][row_ind, col_ind].text(0, 0.08, r"""sd: $k_c/k_s/x_c/x_s$=%.0f/%.0f/%.2f'/%.2f'""" % (kc2,ks2,xc2,xs2), transform=dispAx[d][row_ind, col_ind].transAxes, horizontalalignment='left', fontsize='x-small');
+          dispAx[d][row_ind, col_ind].text(0, 0, r"""$g/S$=%.2f/%.2f'""" % (g,S), transform=dispAx[d][row_ind, col_ind].transAxes, horizontalalignment='left', fontsize='x-small');
+
+      fCurr.suptitle('%s #%d (f1f0: %.2f)' % (cellType, cellNum, f1f0rat));
+
+  saveName = "/cell_%03d.pdf" % (cellNum)
+  full_save = os.path.dirname(str(save_loc + 'byDisp%s_ddogs/' % rvcFlag));
+  if not os.path.exists(full_save):
+    os.makedirs(full_save);
+  pdfSv = pltSave.PdfPages(full_save + saveName);
+  for f in fDisp:
+      pdfSv.savefig(f)
+      plt.close(f)
+  pdfSv.close();

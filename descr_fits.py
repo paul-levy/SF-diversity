@@ -16,7 +16,7 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_220112a';
+dogName = 'descrFits_220113';
 #dogName = 'descrFits_220103';
 #dogName = 'descrFits_211214';
 #dogName = 'descrFits_211020_f030';
@@ -648,7 +648,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=3, loss_type=3, DoGmodel=1, forc
       try: 
         # try to get joint==1 fits, it joint==2; otherwise, and in all other cases, single grats
         # why? seems that going from jt=0 --> jt=1, we get fits to converge
-        ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=1));
+        ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=joint-1));
         isolFits = ref_fits[cell_num-1];
       except:
         pass; # we've already specified isolFits, if that doesn't work

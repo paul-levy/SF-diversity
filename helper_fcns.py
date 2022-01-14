@@ -687,7 +687,10 @@ def descrJoint_name(joint=0, modelName=None):
      else: # then this is a d-DoG-S fit, so the surround names/constraints are different
         jStr = '_JTflankSurrShape'; # g, S AND the surround shape
   elif joint==3:
-     jStr = '_JTshape' # the center/surround shape (i.e. radius OR freq) is fixed for all contrasts
+     if modelName is None or 'ddogs' not in modelName:
+        jStr = '_JTsurrShape' # the surround shape is fixed for all contrasts
+     else: # then this is a d-DoG-S fit, so the surround names/constraints are different
+        jStr = '_JTsurr' # the surround gain, radius apply to both central and flanking DoG, and joint across all cons
 
   return jStr;
 
@@ -2121,6 +2124,11 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
            start_ind=4+i*nParam;
            curr_params = [*params[start_ind:start_ind+3], params[0],
                              *params[start_ind+3:start_ind+6], params[1], params[2], params[3]];
+        elif joint==3: # surr_gain/rad [same for both central and flank] AND g, S are constant
+           nParam = nParams_descrMod(DoGmodel)-6; # we sub. off 6 for the 6 joint parameters (the surr gain/radius apply twice)
+           start_ind=4+i*nParam; # but we're still only starting at +4
+           curr_params = [*params[start_ind:start_ind+2], params[0], params[1],
+                             *params[start_ind+2:start_ind+4], params[0], params[1], params[2], params[3]];
 
       if enforceMaxPenalty:
         max_data = np.max(curr_resps);
@@ -2442,8 +2450,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     surr2_rad_bound = gtMult_bound if DoGmodel==3 else (xc2_bound[1]+0.2, surr1_rad_bound[1]); # per Hawk
     # -- finally, the g & S parameters
     g_bound = (-9999.00001, -9999); # sigmoid of this value will be basically 0; was prevously sigmoid_bound (i.e. b/t 0--1)
-    #S_bound = sigmoid_bound if DoGmodel==3 else (0.1/6, 1.5*xc1_bound[1]); # note that Hawk has [0.1/{4,8}, 2*maxOfXC1] depending on low, high SF
-    S_bound = (0.1/6, 1.5*xc1_bound[1]);
+    S_bound = (0.1/8, 1.5*xc1_bound[1]); # was previously 0.1/6 (as compromise between {4,8} for {low,high} SF, per Hawk
 
     if joint>0: # for d-DoG-S model, the joint values mean the following
       if joint == 1: # g and S are constant across contrast, everything else is per-contrast condition
@@ -2453,6 +2460,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
             allBounds = ((0.1, 0.1), (0.1, 0.1), g_bound, S_bound);
          else:
             allBounds = (surr1_rad_bound, surr2_rad_bound, g_bound, S_bound);
+      elif joint == 3: # g, S constant; surround gain and radius are same for both DoG [no support for no_surr, as of 22.01.12]
+         allBounds = (surr1_gain_bound, surr1_rad_bound, g_bound, S_bound);
       # continue to add more joint conditions
       # But, let's also get some reference bounds so that we are not out of the range
       if no_surr:
@@ -2461,7 +2470,6 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       else:
          refBounds = (kc1_bound, xc1_bound, surr1_gain_bound, surr1_rad_bound,
                  kc2_bound, xc2_bound, surr2_gain_bound, surr2_rad_bound, g_bound, S_bound);
-
     else: # i.e. not joint
        # parameters are: center gain, center radius, surround gain, surround radius x2 [and, surrounds relative to center]
        #                 g (relative gain to left/right of central DoG) and S (spacing between two DoGs)
@@ -2549,6 +2557,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
            else:
               allBounds = (*allBounds, kc1_bound, xc1_bound, surr1_gain_bound, 
                  kc2_bound, xc2_bound, surr2_gain_bound);
+        elif joint == 3: # add the center gain and radius for each contrast
+           allBounds = (*allBounds, kc1_bound, xc1_bound, kc2_bound, xc2_bound);
 
       continue;
 
@@ -2641,6 +2651,9 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
             allInitParams = [*ref_init[-2:]] # g,S (i.e. the final two parameters
          elif joint==2: # already handled no_surr case in the above "if"
             allInitParams = [ref_init[3], ref_init[7], *ref_init[-2:]] # g,S (i.e. the final two parameters
+         elif joint==3: # need to initialize surround gain and surround radius (we'll take from the central DoG
+             allInitParams = [ref_init[2], ref_init[3], *ref_init[-2:]] # g,S (i.e. the final two parameters)
+             #allInitParams = [ref_init[6], ref_init[7], *ref_init[-2:]] # g,S (i.e. the final two parameters
 
       # now, we cycle through all responses and add the per-contrast parameters
       for resps_curr, sfs_curr, curr_init in zip(allResps, allSfs, isolParams):
@@ -2658,13 +2671,18 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
               allInitParams = [*allInitParams, *curr_init[0:-2]];
            elif joint==2: # already handled no_surr case in the above "if"
               allInitParams = [*allInitParams, *curr_init[0:3], *curr_init[4:-3]]
+           elif joint==3:
+              allInitParams = [*allInitParams, *curr_init[0:2], *curr_init[4:6]] # add in central center gain, radius; flanking center gain, radius
 
       # previously, we choose optimization method (L-BFGS-B for even, TNC for odd) --- we now just choose the former
       methodStr = 'L-BFGS-B';
       obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, vol_lam=vol_lam, n_fits=len(allResps));
-      obj(allInitParams);
+      # --- debugging ---
+      #pdb.set_trace();
+      #obj(allInitParams);
+      # --- debugging ---
       try:
-        maxfun = 75000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model needs more time to finish
+        maxfun = 95000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model often needs more iters to finish
         wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds, options={'ftol': ftol, 'maxfun': maxfun});
       except:
         continue; # if that particular fit fails, go back and try again
@@ -2695,6 +2713,9 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
      elif joint == 2:
         surr1_rad, surr2_rad = params[0], params[1];
         g, S = params[2:4];
+     elif joint == 3:
+        surr_gain, surr_rad = params[0], params[1];
+        g, S = params[2:4];
     for con in range(len(allResps)):
        # --- then, go through each contrast and get the "local", i.e. per-contrast, parameters
        if is_mod_DoG(DoGmodel):
@@ -2721,6 +2742,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
              start_ind = 4+con*nParam_perCond;
              curr_params = [*params[start_ind:start_ind+3], surr1_rad,
                             *params[start_ind+3:start_ind+6], surr2_rad, g, S];
+          elif joint == 3:
+             nParam_perCond = nParam-6; # the usual 10 parameters, minus 6 for those held joint
+             start_ind = 4+con*nParam_perCond; # but we still start at +4 because the surround params are used twice
+             curr_params = [*params[start_ind:start_ind+2], surr_gain, surr_rad,
+                            *params[start_ind+2:start_ind+4], surr_gain, surr_rad, g, S];
        # -- then the responses, and overall contrast index
        resps_curr = allResps[con];
        sem_curr   = allRespsSem[con];
