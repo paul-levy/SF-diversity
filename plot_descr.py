@@ -61,6 +61,7 @@ peakFrac = 0.75; # plot fall of to peakFrac of peak, rather than peak or charFre
 inclLegend = 0;
 
 plotMetrCorr = 0; # plot the corr. b/t sf70 and charFreq [1] or rc [2] for each condition?
+plt_sf_as_rvc = 1;
 
 cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
@@ -89,7 +90,7 @@ fracSig = 1;
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_220112a';
+descrBase = 'descrFits_220118b';
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_211129';
@@ -636,7 +637,9 @@ crfAx = []; fCRF = [];
 
 for d in range(nDisps):
     
-    fCurr, crfCurr = plt.subplots(1, 2, figsize=(35, 20), sharex=False, sharey='row');
+    nrow, ncol = 1, 2+plt_sf_as_rvc;
+
+    fCurr, crfCurr = plt.subplots(nrow, ncol, figsize=(ncol*17.5, nrow*20), sharex=False, sharey='row');
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
 
@@ -668,6 +671,7 @@ for d in range(nDisps):
         line_curr, = crfAx[d][0].plot(all_cons[v_cons][plot_resp>minResp_plot], plot_resp[plot_resp>minResp_plot], '-o', color=col, \
                                       clip_on=False, markersize=9, label=con_str);
         lines_log.append(line_curr);
+        crfAx[d][0].set_title('D%d: RVC data' % (d+1));
 
         # now RVC model [1]
         if rvcAdj == 1:
@@ -682,6 +686,19 @@ for d in range(nDisps):
         rvcRespsAdj = rvcResps-to_sub;
         crfAx[d][1].plot(cons_plot[rvcRespsAdj>minResp_plot], rvcRespsAdj[rvcRespsAdj>minResp_plot], color=col, \
                          clip_on=False, label = con_str);
+        crfAx[d][1].set_title('D%d: RVC fits' % (d+1));
+
+        # OPTIONAL, plot RVCs as inferred from SF tuning fits - from 22.01.19 onwards
+        if plt_sf_as_rvc:
+            cons = all_cons[v_cons];
+            try:
+                resps_curr = np.array([hf.get_descrResp(descrParams[0, vc], all_sfs[sf_ind], descrMod, baseline=baseline_resp, fracSig=fracSig) for vc in np.where(v_cons)[0]]) - to_sub;
+                crfAx[d][2].plot(all_cons[v_cons], resps_curr, color=col, \
+                         clip_on=False, linestyle='--', marker='o');
+                crfAx[d][2].set_title('D%d: RVC from SF fit' % (d+1));
+            except:
+                pass # this is not essential...
+            
 
     for i in range(len(crfCurr)):
 
@@ -704,7 +721,6 @@ for d in range(nDisps):
       sns.despine(ax = crfAx[d][i], offset=10, trim=False);
 
       crfAx[d][i].set_ylabel('resp above baseline (sps)');
-      crfAx[d][i].set_title('D%d: sf:all - log resp' % (d+1));
       crfAx[d][i].legend();
 
 saveName = "/allSfs_%scell_%03d.pdf" % (logSuffix, cellNum)

@@ -2217,11 +2217,6 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
     denom_lo = 0.2; # better to start narrow...
     denom_hi = 0.7; # ... in order to avoid broad tuning curve which optimizes to flat
     range_denom = (denom_lo, denom_hi); # don't want 0 in sigma 
-    #log_bw_lo = 0.2; # previously, was 0.75 octave bandwidth...
-    #log_bw_hi = 0.7; # previously, was 2 octave bandwidth...
-    #denom_lo = bw_log_to_lin(log_bw_lo, mu_init)[0]; # get linear bandwidth
-    #denom_hi = bw_log_to_lin(log_bw_hi, mu_init)[0]; # get lin. bw (cpd)
-    #range_denom = (denom_lo, denom_hi); # don't want 0 in sigma 
     if fracSig:
       range_sigmaHigh = (0.2, 0.75); # allow the fracSig value to go above the bound used for V1, since we adjust if bound is there
 
@@ -2240,18 +2235,18 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
 
     # first, the values in common for both models
     sqrtMax = np.sqrt(maxResp); # sqrtMax is a useful way of sampling for a maximum response gain (per Hawk...)
-    init_kc1 = maxResp + random_in_range((0.5, 3))[0] * sqrtMax;
+    init_kc1 = maxResp + random_in_range((-1, 3))[0] * sqrtMax;
     init_xc1 = random_in_range((0.02, 0.2))[0];
-    init_kc2 = random_in_range((0.3, 0.7))[0] * init_kc1; # start out with kc2 is smaller than kc1
+    init_kc2 = random_in_range((0.2, 0.55))[0] * init_kc1; # start out with kc2 is smaller than kc1
     init_kS_rel1, init_kS_rel2 = random_in_range((-1.4, 0.8), size=2); # will be used as input to sigmoid
     init_gPr = random_in_range((-1.09, 1.09))[0]; # input to sigmoid (alone); 
 
     # then, those values that are specific to model type
     init_A = random_in_range((1.5, 3))[0] if DoGmodel==3 else random_in_range((0.6, 2))[0]; # xs1
-    init_B = random_in_range((1.05, 3))[0] if DoGmodel==3 else random_in_range((0.05, 0.4))[0]; # xc2
+    init_B = random_in_range((0.5, 2))[0] if DoGmodel==3 else random_in_range((0.05, 0.4))[0]; # xc2
+    #init_B = random_in_range((1.05, 3))[0] if DoGmodel==3 else random_in_range((0.05, 0.4))[0]; # xc2
     init_C = random_in_range((2, 3.5))[0] if DoGmodel==3 else random_in_range((0.3, 2))[0]; # xs2
-    #init_sPr = random_in_range((-3, -1.09))[0] if DoGmodel==3 else random_in_range((0.05, 0.2))[0];
-    init_sPr = random_in_range((0.05, 0.2))[0];
+    init_sPr = random_in_range((0.1, 0.3))[0];
     if no_surr:
        init_params = [init_kc1, init_xc1, init_kc2, init_B, init_gPr, init_sPr];
     else:
@@ -2429,7 +2424,9 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     max_max_resp = np.nanmax(np.nanmax(resps_mean, axis=1)); # average across con to get max per d X con
 
     # -- first, some general bounds that we can apply as needed for different parameters
-    gtMult_bound = (1, 5); # (1, None) multiplier limit when we want param >= mult*orig_param [greaterThan-->gt] ||| was previously (1, 7)
+    gtMult_bound = (1, 15); # (1, None) multiplier limit when we want param >= mult*orig_param [greaterThan-->gt] ||| was previously (1, 7) --> then (1,5)
+    mult_bound_xc = (0.2, 5); # 
+    #mult_bound_xc = (0.5, 2); # force to be close to xc1
     sigmoid_bound = (None, None); # params that are input to sigmoids are unbounded - since sigmoid is bounded [0,1]
     noSurr_radBound = (0.01, 0.010001); # gain will be 0 if we are turning off surround; this will be just a small range of radius values to stop the optimization from exploring this parameter space
     noSurr_gainBound = (-9999.00001, -9999); # sigmoid of this value will be basically 0
@@ -2445,7 +2442,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     surr1_rad_bound =  gtMult_bound if DoGmodel==3 else (xc1_bound[1]+0.2, 4); # per Hawk; #gtMult_bound if multiplicative surround
     # -- next, the second (i.e. flanking) gaussian
     kc2_bound = (0, kc1_bound[1]); # same, regardless of model; upper bound=kc upper, but can go down to zero, per Hawk
-    xc2_bound = gtMult_bound if DoGmodel==3 else (0.015, 2*xc1_bound[1]); # same regardless of isMult
+    xc2_bound = mult_bound_xc if DoGmodel==3 else xc1_bound; # was previously gtMult_bound if ... else (0.015, 2*xc1_bound[1])
+    # ---- temporarily turn off the second gaussian surround
+    #surr2_gain_bound = noSurr_gainBound if DoGmodel==3 else (0,1e-5); # note that surr_gain_bound is LESS restrictive than Hawk
+    #surr2_rad_bound = (1,1.00001) if DoGmodel==3 else (xc2_bound[1]+0.2, xc2_bound[1]+0.200001); # per Hawk
+    # ---- temporarily 
     surr2_gain_bound = surr1_gain_bound; # note that surr_gain_bound is LESS restrictive than Hawk
     surr2_rad_bound = gtMult_bound if DoGmodel==3 else (xc2_bound[1]+0.2, surr1_rad_bound[1]); # per Hawk
     # -- finally, the g & S parameters
@@ -2585,7 +2586,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       else:
          obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1, vol_lam=vol_lam);
       try:
-        wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds);
+        maxfun = 45000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model often needs more iters to finish
+        wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds, options={'maxfun': maxfun});
       except:
         continue; # the fit has failed (bound issue, for example); so, go back to top of loop, try again
 
@@ -2679,15 +2681,16 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, vol_lam=vol_lam, n_fits=len(allResps));
       # --- debugging ---
       #pdb.set_trace();
-      #obj(allInitParams);
       # --- debugging ---
-      try:
+      #if n_try>0:
+      #   allInitParams = params_curr;
+      try: # 95000; 35000
         maxfun = 95000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model often needs more iters to finish
         wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds, options={'ftol': ftol, 'maxfun': maxfun});
       except:
         continue; # if that particular fit fails, go back and try again
 
-      #print('%d: %s --> %s [loss: %.2e]' % (n_try, wax['success'], wax['message'], wax['fun']));
+      print('%d: %s --> %s [loss: %.2e]' % (n_try, wax['success'], wax['message'], wax['fun']));
       # compare
       NLL = wax['fun'];
       params_curr = wax['x'];
@@ -2905,10 +2908,11 @@ def flexible_Gauss_np(params, stim_sf, minThresh=0.1, fracSig=1):
                 
     return numpy.maximum(minThresh, respFloor + respRelFloor*shape);
 
-def dog_to_four(k, x, f, s=0):
+def dog_to_four(k, x, f):
+   # simple relationship going from spatial domain to fourier domain for DoG
+   # - as of 22.01.14, we do NOT include the spatial offset (handled within parker_hawken() call)
 
-    return k * numpy.exp(-numpy.square(numpy.pi*f*(x+s)));
-    #return k * numpy.sqrt(numpy.pi) * (x+s) * numpy.exp(-numpy.square(numpy.pi*f*(x+s)));
+   return k * numpy.exp(-numpy.square(numpy.pi*f*x));
 
 def parker_hawken_transform(params, twoDim=False, space_in_arcmin=False, isMult=False):
     # Given the parameterization used for optimization, convert to "real", i.e. interpretable, parameters
@@ -2934,14 +2938,8 @@ def parker_hawken_transform(params, twoDim=False, space_in_arcmin=False, isMult=
     # finally, xs2 relative to xc2 (xs2>=xc2)
     #xs2 = 0.2 + C*xc2 if isMult else C;
     xs2 = C*xc2 if isMult else C;
-    if isMult: # S is a bit longer, so specify as follows
-      #S   = xc1 + sigmoid(Spr)*2*(0.5*xc1+xc2); # now, we enforce that S is at minimum equal to xc1; with limit S<2(xc1+xc2), we say {S+xc1} < 2(0.5*xc1 + xc2)
-      # temporarily (for joint fits, where xc2 is meaningless, we can just say that we care what multiple it is of S
-      #S   = xc1 + sigmoid(Spr)*xc1; # now, we enforce that S is at minimum equal to xc1; with limit S<2(xc1+xc2), we say {S+xc1} < 2(0.5*xc1 + xc2)
-      #S   = sigmoid(Spr)*(xc1+xc2); # now, we enforce allow 0 < S < xc1+xc2; previously was < 2*(xc1+xc2)
-      S = Spr;
-    else:
-      S = Spr;
+    # S is always indepedent and uniquely specified (i.e. never in proportion/yoked to any other space constants)
+    S = Spr;
     ks1 = sigmoid(kS_rel1)*kc1;
     ks2 = sigmoid(kS_rel2)*kc2;
 
@@ -2960,7 +2958,7 @@ def parker_hawken_transform(params, twoDim=False, space_in_arcmin=False, isMult=
   
     return params;
 
-def parker_hawken(params, stim_sf=None, twoDim=False, inSpace=False, spaceRange=0.5, debug=False, isMult=True):
+def parker_hawken(params, stim_sf=None, twoDim=False, inSpace=False, spaceRange=0.5, debug=False, isMult=True, transform=True):
     ''' space value (xc_i, xs_i) are specified in degrees of visual angle, i.e. 60 arcminuntes = 1 (deg)
         --- smart parameterization to enforce limits
         Limits (when isMult==True):
@@ -2982,8 +2980,11 @@ def parker_hawken(params, stim_sf=None, twoDim=False, inSpace=False, spaceRange=
 
     np = numpy;
 
-    # we don't want to modify the original params, so we pass in a copy
-    params_corr = parker_hawken_transform(np.copy(params), twoDim=twoDim, isMult=isMult);
+    if transform:
+      # we don't want to modify the original params, so we pass in a copy
+      params_corr = parker_hawken_transform(np.copy(params), twoDim=twoDim, isMult=isMult);
+    else: # just used for debugging (e.g. comparing to published parameters in Parker/Hawken '87/'88
+      params_corr = params; 
 
     kc1, xc1, ks1, xs1 = params_corr[0:4];
     kc2, xc2, ks2, xs2 = params_corr[4:8];
@@ -2995,10 +2996,11 @@ def parker_hawken(params, stim_sf=None, twoDim=False, inSpace=False, spaceRange=
     if inSpace: # If we want the function in space
 
       xSamps = np.arange(-spaceRange, spaceRange+1.0/60, 0.5/60); # go in steps of half an arcminute
-
-      dog1 = kc1*np.exp(-np.square((xSamps+0)/xc1)) - ks1*np.exp(-np.square((xSamps+0)/xs1))
-      dog2 = kc2*np.exp(-np.square((xSamps+S)/xc2)) - ks2*np.exp(-np.square((xSamps+S)/xs2))
-      dog3 = kc2*np.exp(-np.square((xSamps-S)/xc2)) - ks2*np.exp(-np.square((xSamps-S)/xs2))
+      # As described in the appendix of Hawken & Parker, 1987, it is necessary to divide out sqrt(pi)*radius from all gains in the spatial domain
+      # -- this is necessary when we simply use a constant (independent of pi, radius, or any other factors) when fitting the frequency response
+      dog1 = kc1*np.power(np.sqrt(np.pi)*xc1, -1)*np.exp(-np.square((xSamps+0)/xc1)) - ks1*np.power(np.sqrt(np.pi)*xs1, -1)*np.exp(-np.square((xSamps+0)/xs1))
+      dog2 = kc2*np.power(np.sqrt(np.pi)*xc2, -1)*np.exp(-np.square((xSamps+S)/xc2)) - ks2*np.power(np.sqrt(np.pi)*xs2, -1)*np.exp(-np.square((xSamps+S)/xs2))
+      dog3 = kc2*np.power(np.sqrt(np.pi)*xc2, -1)*np.exp(-np.square((xSamps-S)/xc2)) - ks2*np.power(np.sqrt(np.pi)*xs2, -1)*np.exp(-np.square((xSamps-S)/xs2))
 
       respSpace = dog1 - g*dog2 - (1-g)*dog3;   
 
@@ -3015,12 +3017,12 @@ def parker_hawken(params, stim_sf=None, twoDim=False, inSpace=False, spaceRange=
       stim_sf = np.geomspace(0.1, 10, 25) if stim_sf is None else stim_sf; # just so we have something, if needed
 
       dog1 = dog_to_four(kc1, xc1, stim_sf) - dog_to_four(ks1, xs1, stim_sf)
-      dog2 = dog_to_four(kc2, xc2, stim_sf, s=S) - dog_to_four(ks2, xs2, stim_sf, s=+S)
-      dog3 = dog_to_four(kc2, xc2, stim_sf, s=-S) - dog_to_four(ks2, xs2, stim_sf, s=-S)
+      dog2 = (dog_to_four(kc2, xc2, stim_sf) - dog_to_four(ks2, xs2, stim_sf)) * np.cos(2*np.pi*stim_sf*S); # even
+      dog3 = (1-2*g) * (dog_to_four(kc2, xc2, stim_sf) - dog_to_four(ks2, xs2, stim_sf)) * np.sin(2*np.pi*stim_sf*S); # odd
        
-      full = dog1 - g*dog2 - (1-g)*dog3;
+      full = np.sqrt(np.square(dog1-dog2) + np.square(dog3));
 
-      return full; #, dog1, dog2, dog3;
+      return full;
 
 def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1, baseline=0, fracSig=1, sach_equiv_p_h=True):
   ''' returns only pred_spikes; 0 is flexGauss.; 1 is DoG sach; 2 is DoG (tony)
@@ -5297,7 +5299,7 @@ def oriCV(oriVals, oriResps, baselineSub = False):
   return 1 - np.divide(numer, denom);
 
 def get_ori_mod(extrema = None):
-  ''' Double Von Mises function as in Wang and Movshon, 2014
+  ''' Double Von Mises function as in Wang and Movshon, 2016
       - with one modification: normalize by resp at pref ori to make "a" parameterization more clear
       IF norm_factor is not None, then we assume we've already computed the function and simply want to evaluate at a particular theta
       The von Mises function:

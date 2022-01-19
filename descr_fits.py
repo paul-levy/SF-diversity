@@ -16,7 +16,7 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_220113';
+dogName = 'descrFits_220118b';
 #dogName = 'descrFits_220103';
 #dogName = 'descrFits_211214';
 #dogName = 'descrFits_211020_f030';
@@ -585,7 +585,7 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1):
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList;
  
-def fit_descr_DoG(cell_num, data_loc, n_repeats=3, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3): # n_repeats was 100, before 21.09.01
+def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
@@ -643,7 +643,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=3, loss_type=3, DoGmodel=1, forc
     try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
       modStr  = hf.descrMod_name(DoGmodel);
       ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0));
-      ref_varExpl = ref_fits[cell_num-1]['varExpl'][0]; # reference varExpl for single gratings
+      ref_varExpl = None; # as of 22.01.14, no longer restricting which conditions are fit jointly
+      #ref_varExpl = ref_fits[cell_num-1]['varExpl'][0]; # reference varExpl for single gratings
       isolFits = ref_fits[cell_num-1];
       try: 
         # try to get joint==1 fits, it joint==2; otherwise, and in all other cases, single grats
@@ -1031,7 +1032,7 @@ if __name__ == '__main__':
       ### Descriptive fits
       if descr_fits == 1:
 
-        n_repeats = 7 if joint>0 else 15; # was previously be 3, 15
+        n_repeats = 2 if joint>0 else 15; # was previously be 3, 15
 
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
@@ -1073,10 +1074,11 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, nBoots=nBoots);
       if descr_fits == 1:
+        n_repeats = 2 if joint>0 else 12; # was previously be 3, 15, then 7, 15
 
         #import cProfile, re
         #cProfile.run('fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov)');
-        fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons);
+        fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons);
 
       if rvcF0_fits == 1:
         fit_RVC_f0(cell_num, data_loc=dataPath, rvcMod=rvc_model, nBoots=nBoots);
