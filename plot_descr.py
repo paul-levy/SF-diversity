@@ -90,7 +90,7 @@ fracSig = 1;
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_220118b';
+descrBase = 'descrFits_220120g';
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_211129';
@@ -341,6 +341,7 @@ for d in range(nDisps):
         dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
 
     fCurr.suptitle('%s #%d (f1f0: %.2f)' % (cellType, cellNum, f1f0rat));
+    fCurr.subplots_adjust(wspace=0.1, top=0.95);
 
 saveName = "/cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
