@@ -16,7 +16,7 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_220120g';
+dogName = 'descrFits_220122e';
 #dogName = 'descrFits_220103';
 #dogName = 'descrFits_211214';
 #dogName = 'descrFits_211020_f030';
@@ -579,11 +579,13 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1):
   if joint>0:
     totalNLL = np.ones((nBoots, nDisps, )) * np.nan;
     paramList = np.ones((nBoots, nDisps, ), dtype='O') * np.nan;
+    success = np.ones((nBoots, nDisps, )) * np.nan;
   else:
     totalNLL = None;
     paramList = None;
+    success = np.ones((nBoots, nDisps, nCons)) * np.nan;
 
-  return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList;
+  return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success;
  
 def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
@@ -707,7 +709,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     _, _, _, r_all_noresamp = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=False, cellNum=cell_num);
     n_nonNan = np.nanmax(np.sum(~np.isnan(r_all_noresamp), axis=-1));
     nBoots = n_nonNan;
-  bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList = fit_descr_empties(nDisps, nCons, nParam, joint, nBoots);
+  bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success = fit_descr_empties(nDisps, nCons, nParam, joint, nBoots);
 
   #import cProfile
 
@@ -752,12 +754,12 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     # 3b. Loop for each dispersion, making fit
     ######
     ### here is where we do the real fitting!
-    for d in range(nDisps): # works for all disps
+    for d in range(1): #nDisps): # works for all disps
       # a separate fitting call for each dispersion
       if debug:
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits)
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits)
       else:
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits)
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits)
         
       if cross_val is not None and resample:
         # compute the loss, varExpl on the heldout (i.e. test) data
@@ -787,6 +789,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
         if resample or np.isnan(totalNLL[boot_i, d]) or totNLL < totalNLL[boot_i, d]: # then UPDATE!
           totalNLL[boot_i, d] = totNLL;
           paramList[boot_i, d] = totPrm;
+          success[boot_i, d] = succ;
           bestNLL[boot_i, d, :] = nll;
           currParams[boot_i, d, :, :] = prms;
           varExpl[boot_i, d, :] = vExp;
@@ -803,6 +806,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
             varExpl[boot_i, d, con] = vExp[con];
             prefSf[boot_i, d, con] = pSf[con];
             charFreq[boot_i, d, con] = cFreq[con];
+            success[boot_i, d, con] = succ[con];
 
       # DO NOT update prevFits, since each one is handled per dispersion...
       '''
@@ -830,6 +834,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     varExpl = np.squeeze(varExpl, axis=0);
     prefSf = np.squeeze(prefSf, axis=0);
     charFreq = np.squeeze(charFreq, axis=0);
+    success = np.squeeze(success, axis=0);
     if joint>0:
       paramList = np.squeeze(paramList, axis=0);
       totalNLL = np.squeeze(totalNLL, axis=0);
@@ -868,6 +873,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       prevFits_toSave['boot_varExpl'] = varExpl;
       prevFits_toSave['boot_prefSf'] = prefSf;
       prevFits_toSave['boot_charFreq'] = charFreq;
+      prevFits_toSave['boot_success'] = success;
       if joint>0:
         prevFits_toSave['boot_totalNLL'] = totalNLL;
         prevFits_toSave['boot_paramList'] = paramList;
@@ -878,6 +884,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     prevFits_toSave['varExpl'] = varExpl;
     prevFits_toSave['prefSf'] = prefSf;
     prevFits_toSave['charFreq'] = charFreq;
+    prevFits_toSave['success'] = success;
     if joint>0:
       prevFits_toSave['totalNLL'] = totalNLL;
       prevFits_toSave['paramList'] = paramList;
@@ -1032,7 +1039,7 @@ if __name__ == '__main__':
       ### Descriptive fits
       if descr_fits == 1:
 
-        n_repeats = 2 if joint>0 else 15; # was previously be 3, 15
+        n_repeats = 3 if joint>0 else 15; # was previously be 3, 15
 
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
@@ -1074,7 +1081,7 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, nBoots=nBoots);
       if descr_fits == 1:
-        n_repeats = 2 if joint>0 else 5; # was previously be 3, 15, then 7, 15
+        n_repeats = 3 if joint>0 else 10; # was previously be 3, 15, then 7, 15
 
         #import cProfile, re
         #cProfile.run('fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov)');
