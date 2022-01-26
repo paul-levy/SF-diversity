@@ -2708,7 +2708,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       #if n_try>0:
       #   allInitParams = params_curr;
       try: # 95000; 35000; 975000
-        maxfun = 975000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model often needs more iters to finish
+        maxfun = 1975000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model often needs more iters to finish
         wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds, options={'ftol': ftol, 'maxfun': maxfun});
       except:
         continue; # if that particular fit fails, go back and try again

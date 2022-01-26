@@ -17,8 +17,10 @@ if area == 'V1':
 
   # expDirs (and expNames must always be of the right length, i.e. specify for each expt dir 
   ## V1 version
-  expDirs = ['V1_orig/', 'altExp/', 'V1/', 'V1_BB/']
-  expNames = ['dataList.npy', 'dataList.npy', 'dataList_210721.npy', 'dataList_210721.npy']
+  expDirs = ['V1/']
+  expNames = ['dataList_210721.npy']
+  #expDirs = ['V1_orig/', 'altExp/', 'V1/', 'V1_BB/']
+  #expNames = ['dataList.npy', 'dataList.npy', 'dataList_210721.npy', 'dataList_210721.npy']
 
   nExpts = len(expDirs);
 
@@ -37,17 +39,22 @@ if area == 'V1':
   ####
   # descrFits - loss type determined by comparison (choose best; see modCompare.ipynb::Descriptive Fits)
   ####
-  dogMod = 2; # 1 (sach) or 2 (Tony)
-  dogNames = ['descrFits_210914_sqrt_tony.npy', 'descrFits_210914_sqrt_tony.npy', 'descrFits_210914_sqrt_tony.npy', 'descrFits_210721_sqrt_tony.npy'];
+  dogMod = 3; # 1 (sach), 2 (Tony), 3 (d-DoG-S), 4 (N/A), 5 (d-DoG-S Hawk)
+  jointType = 2; # 0/1/2 --> none/[g,S]/[*, surr1_rad, surr2_rad]
+  dogNames = ['descrFits_211214_sqrt_ddogs_JTflankSurrShape.npy'];
+  #dogNames = ['descrFits_210914_sqrt_tony.npy', 'descrFits_210914_sqrt_tony.npy', 'descrFits_210914_sqrt_tony.npy', 'descrFits_210721_sqrt_tony.npy'];
   #dogNames = ['descrFits_210503_sqrt_tony.npy', 'descrFits_210503_sqrt_tony.npy', 'descrFits_210503_sqrt_tony.npy'];
   #dogNames = ['descrFits_210304_sqrt_sach.npy', 'descrFits_210304_sqrt_sach.npy', 'descrFits_210304_sqrt_sach.npy'];
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
-  descrNames = ['descrFits_210914_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210916_sqrt_flex.npy'];
+  descrNames = ['descrFits_210914_sqrt_flex.npy'];
+  #descrNames = ['descrFits_210914_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210916_sqrt_flex.npy'];
   #descrNames = ['descrFits_190503_sqrt_flex.npy', 'descrFits_190503_sqrt_flex.npy', 'descrFits_191023_sqrt_flex.npy'];
 
-  rvcNames = ['rvcFits_210914_f0_NR.npy', 'rvcFits_210914_f0_NR.npy', 'rvcFits_210914_vecF1_NR.npy', 'rvcFits_210916_vecF1_NR.npy'];
+  rvcNames = ['rvcFits_210914_vecF1_NR.npy'];
+  rvcMods = [1];
+  #rvcNames = ['rvcFits_210914_f0_NR.npy', 'rvcFits_210914_f0_NR.npy', 'rvcFits_210914_vecF1_NR.npy', 'rvcFits_210916_vecF1_NR.npy'];
   #rvcNames = ['rvcFits_191023_f0_NR.npy', 'rvcFits_191023_f0_NR.npy', 'rvcFits_191023_NR_pos.npy'];
-  rvcMods = [1,1,1,1]; # 0-mov; 1-Nakarushton; 2-Peirce
+  #rvcMods = [1,1,1,1]; # 0-mov; 1-Nakarushton; 2-Peirce
   # rvcNames   = ['rvcFits_f0.npy'];
   # pack to easily tile
   expt = [expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods];
@@ -67,8 +74,8 @@ if area == 'V1':
   #### these are now defaults in hf.jl_create - but here, nonetheless, for reference!
 
   # any parameters we need for analysis below?
-  varExplThresh = 70; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  dog_varExplThresh = 70; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  varExplThresh = 60; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  dog_varExplThresh = 60; # i.e. only include if the fit explains >X (e.g. 75)% variance
 
   sf_range = [0.1, 10]; # allowed values of 'mu' for fits - see descr_fit.py for details
 
@@ -81,7 +88,7 @@ if area == 'V1':
   # WARNING: This takes [~/<]10 minutes (as of 20.04.14)
   # jointList_V1full = hf.jl_create(base_dir, [expDirs[-1]], [expNames[-1]], [fitNamesWght[-1]], [fitNamesFlat[-1]], [descrNames[-1]], [dogNames[-1]], [rvcNames[-1]], [rvcMods[-1]])
 
-  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod)
+  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType)
 
   from datetime import datetime
   suffix = datetime.today().strftime('%y%m%d')

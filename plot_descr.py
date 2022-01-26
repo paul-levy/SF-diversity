@@ -62,6 +62,7 @@ inclLegend = 0;
 
 plotMetrCorr = 0; # plot the corr. b/t sf70 and charFreq [1] or rc [2] for each condition?
 plt_sf_as_rvc = 1;
+comm_S_calc = 0;
 
 cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
@@ -90,7 +91,7 @@ fracSig = 1;
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_220120g';
+descrBase = 'descrFits_220122e';
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_211129';
@@ -1124,7 +1125,7 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
   minResp = np.min(np.min(np.min(respMean[~np.isnan(respMean)])));
   maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
 
-  f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(nDisps*9, mixCons*8), sharex=True, sharey=False);
+  f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(nDisps*9, mixCons*8), sharex=True, sharey=True);
 
   for d in range(nDisps):
       v_cons = np.array(val_con_by_disp[d]);
@@ -1132,9 +1133,15 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
       v_cons = v_cons[np.arange(np.maximum(0, n_v_cons -mixCons), n_v_cons)]; # max(1, .) for when there are fewer contrasts than 4
       n_v_cons = len(v_cons);
 
+      if comm_S_calc and joint>0: # this only applies when doing joint-across-con fits
+          ref_params = descrParams[d, v_cons[-1]];
+      else:
+          ref_params = None;
+
       for c in reversed(range(n_v_cons)):
           c_plt_ind = n_v_cons - c - 1;
-          sfMixAx[c_plt_ind, d].set_title('con: %s%%' % str(int(100*(np.round(all_cons[v_cons[c]], 2)))));
+          conStr = str(int(100*(np.round(all_cons[v_cons[c]], 2))));
+          sfMixAx[c_plt_ind, d].set_title('con: %s%%' % conStr);
           v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);
 
           sfVals = all_sfs[v_sfs];
@@ -1142,7 +1149,7 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
 
           # plot model
           prms_curr = descrParams[d, v_cons[c]];
-          space, samps, dc, df1, df2 = hf.parker_hawken(prms_curr, inSpace=True, debug=True, isMult=isMult);
+          space, samps, dc, df1, df2 = hf.parker_hawken(np.copy(prms_curr), inSpace=True, debug=True, isMult=isMult, ref_params=ref_params);
 
           sfMixAx[c_plt_ind, d].plot(samps, space, 'k-')#, label='full');
           # and plot the constitutent parts
@@ -1152,13 +1159,13 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
 
           if d == 0:
             if c_plt_ind == 0:
-              sfMixAx[c_plt_ind, d].set_ylabel('resp (sps)');
+              sfMixAx[c_plt_ind, d].set_ylabel('sensitivity');
               #sfMixAx[c_plt_ind, d].legend(fontsize='x-small');
             if c_plt_ind == mixCons-1:
               sfMixAx[c_plt_ind, d].set_xlabel('dva');
 
           # Add parameters! (in ax-transformed coords, (0,0) is bottom left, (1,1) is top right
-          prms_curr_trans = hf.parker_hawken_transform(np.copy(prms_curr), space_in_arcmin=True, isMult=isMult);
+          prms_curr_trans = hf.parker_hawken_transform(np.copy(prms_curr), space_in_arcmin=True, isMult=isMult, ref_params=ref_params);
           kc1,xc1,ks1,xs1 = prms_curr_trans[0:4];
           kc2,xc2,ks2,xs2 = prms_curr_trans[4:8];
           g,S = prms_curr_trans[8:];
@@ -1203,12 +1210,17 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
       n_rows = int(np.ceil(n_v_cons/np.floor(np.sqrt(n_v_cons)))); # make this close to a rectangle/square in arrangement (cycling through cons)
       n_cols = int(np.ceil(n_v_cons/n_rows));
 
-      fCurr, dispCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*10, n_rows*12), sharey=False);
+      fCurr, dispCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*10, n_rows*12), sharey=True);
       fDisp.append(fCurr)
       dispAx.append(dispCurr);    
 
       minResp = np.min(np.min(respMean[d, ~np.isnan(respMean[d, :, :])]));
       maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
+
+      if comm_S_calc and joint>0: # this only applies when doing joint-across-con fits
+          ref_params = descrParams[d, v_cons[-1]];
+      else:
+          ref_params = None;
 
       for c in reversed(range(n_v_cons)):
           row_ind = int((n_v_cons-c-1)/n_cols);
@@ -1221,7 +1233,7 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
 
           # plot model
           prms_curr = descrParams[d, v_cons[c]];
-          space, samps, dc, df1, df2 = hf.parker_hawken(prms_curr, inSpace=True, debug=True, isMult=isMult);
+          space, samps, dc, df1, df2 = hf.parker_hawken(np.copy(prms_curr), inSpace=True, debug=True, isMult=isMult, ref_params=ref_params);
 
           dispAx[d][row_ind, col_ind].plot(samps, space, 'k-')#, label='full');
           # and plot the constitutent parts
@@ -1230,13 +1242,13 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
           dispAx[d][row_ind, col_ind].plot(samps, df2, 'b--')#, label='f2');
 
           if c_plt_ind == 0:
-            dispAx[d][row_ind, col_ind].set_ylabel('resp (sps)');
+            dispAx[d][row_ind, col_ind].set_ylabel('sensitivity');
             #dispAx[d][row_ind, col_ind].legend(fontsize='x-small');
           if c_plt_ind == mixCons-1:
             dispAx[d][row_ind, col_ind].set_xlabel('dva');
 
           # Add parameters! (in ax-transformed coords, (0,0) is bottom left, (1,1) is top right
-          prms_curr_trans = hf.parker_hawken_transform(np.copy(prms_curr), space_in_arcmin=True, isMult=isMult);
+          prms_curr_trans = hf.parker_hawken_transform(np.copy(prms_curr), space_in_arcmin=True, isMult=isMult, ref_params=ref_params);
           kc1,xc1,ks1,xs1 = prms_curr_trans[0:4];
           kc2,xc2,ks2,xs2 = prms_curr_trans[4:8];
           g,S = prms_curr_trans[8:];
