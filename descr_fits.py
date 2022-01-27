@@ -12,11 +12,16 @@ import pdb
 basePath = os.getcwd() + '/';
 data_suff = 'structures/';
 
+if 'pl1465' in basePath:
+  hpcSuff = 'HPC';
+else:
+  hpcSuff = '';
+
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 #expName = 'dataList_glx_mr.npy'
-df_f0 = 'descrFits_200507_sqrt_flex.npy';
+df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits_220122e';
+dogName = 'descrFits%s_220122e' % hpcSuff;
 #dogName = 'descrFits_220103';
 #dogName = 'descrFits_211214';
 #dogName = 'descrFits_211020_f030';
@@ -626,7 +631,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
 
   ### load data/metadata
   if not isinstance(cell_num, int):
-    cell_num, cellName = cell_num;
+    cell_num, cellName, overwriteExpName = cell_num;
   else:
     dataList = hf.np_smart_load(data_loc + dLname);
     assert dataList!=[], "data file not found!"
@@ -637,7 +642,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
   try:
     overwriteExpName = dataList['expType'][cell_num-1]
   except:
-    overwriteExpName = None
+    overwriteExpName = None if not overwriteExpName else overwriteExpName; # we would've already established it above
   expInd, expName = hf.get_exp_ind(data_loc, cellName, overwriteExpName);
   print('Making descriptive SF fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
 
@@ -1044,7 +1049,7 @@ if __name__ == '__main__':
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
           descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons);
-          dogFits = pool.map(descr_perCell, zip(range(start_cell, end_cell+1), dL['unitName']));
+          dogFits = pool.map(descr_perCell, zip(range(start_cell, end_cell+1), dL['unitName'], dL['expType']));
 
           print('debug');
           ### do the saving HERE!

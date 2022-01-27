@@ -76,7 +76,11 @@ if len(sys.argv) > 8:
 else:
   respVar = 1;
 if len(sys.argv) > 9:
-  forceLog = int(sys.argv[9]); # used for byDisp/allCons_... (sf plots)
+  isHPC = int(sys.argv[8]);
+else:
+  isHPC = 0;
+if len(sys.argv) > 10:
+  forceLog = int(sys.argv[10]); # used for byDisp/allCons_... (sf plots)
 else:
   forceLog = 0;
 
@@ -91,7 +95,8 @@ fracSig = 1;
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
-descrBase = 'descrFits_220122e';
+hpc_str = 'HPC' if isHPC else '';
+descrBase = 'descrFits%s_220122e' % hpc_str;
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_211129';
@@ -105,9 +110,9 @@ descrBase = 'descrFits_220122e';
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
 #rvcBase = 'rvcFits_200714'; # direc flag & '.npy' are adde
 if expDir == 'LGN/':
-  rvcBase = 'rvcFits_211108';
+  rvcBase = 'rvcFits%s_211108' % hpc_str;
 else:
-  rvcBase = 'rvcFits_210914'; # if V1?
+  rvcBase = 'rvcFits%s_210914' % hpc_str; # if V1?
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
