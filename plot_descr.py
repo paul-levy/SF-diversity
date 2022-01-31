@@ -96,7 +96,7 @@ fracSig = 1;
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
-descrBase = 'descrFits%s_220127sf' % hpc_str;
+descrBase = 'descrFits%s_220131' % hpc_str;
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_211129';
@@ -427,7 +427,8 @@ for d in range(nDisps):
       #dispAx[d][i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
       sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
 
-      dispAx[d][i].set_ylabel('resp above baseline (sps)');
+      lbl_str = '' if i==0 else 'above baseline ';
+      dispAx[d][i].set_ylabel('resp %s(sps)' % lbl_str);
       dispAx[d][i].set_title('D%02d - sf tuning' % (d+1));
       dispAx[d][i].legend(fontsize='large'); 
 

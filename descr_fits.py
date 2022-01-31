@@ -21,7 +21,7 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits%s_220127sf' % hpcSuff;
+dogName = 'descrFits%s_220131' % hpcSuff;
 #dogName = 'descrFits_220103';
 #dogName = 'descrFits_211214';
 #dogName = 'descrFits_211020_f030';
@@ -1044,7 +1044,7 @@ if __name__ == '__main__':
       ### Descriptive fits
       if descr_fits == 1:
 
-        n_repeats = 3 if joint>0 else 15; # was previously be 3, 15
+        n_repeats = 5 if joint>0 else 15; # was previously be 3, 15
 
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
@@ -1086,7 +1086,7 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, nBoots=nBoots);
       if descr_fits == 1:
-        n_repeats = 3 if joint>0 else 10; # was previously be 3, 15, then 7, 15
+        n_repeats = 5 if joint>0 else 12; # was previously be 3, 15, then 7, 15
 
         #import cProfile, re
         #cProfile.run('fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov)');

@@ -2463,7 +2463,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     #surr1_rad_bound = (1,1.00001) if DoGmodel==3 else (xc2_bound[1]+0.2, xc2_bound[1]+0.200001); # per Hawk
     # -- next, the second (i.e. flanking) gaussian
     kc2_bound = (0, kc1_bound[1]); # same, regardless of model; upper bound=kc upper, but can go down to zero, per Hawk
-    xc2_bound = mult_bound_xc; #xc1_bound;
+    xc2_bound = (1,1.00001); #mult_bound_xc; #xc1_bound;
     #xc2_bound = mult_bound_xc if DoGmodel==3 else xc1_bound; # was previously gtMult_bound if ... else (0.015, 2*xc1_bound[1])
     # ---- temporarily turn off the second gaussian surround
     #surr2_gain_bound = noSurr_gainBound if DoGmodel==3 else (0,1e-5); # note that surr_gain_bound is LESS restrictive than Hawk
@@ -2685,7 +2685,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
       # now, we cycle through all responses and add the per-contrast parameters
       for resps_curr, sfs_curr, curr_init in zip(allResps, allSfs, isolParams):
-        if curr_init == []:
+        if curr_init == [] or n_try>0:
           curr_init = dog_init_params(resps_curr, base_rate, all_sfs, sfs_curr, DoGmodel, bounds=refBounds);
         if is_mod_DoG(DoGmodel):
            if joint == 1:
