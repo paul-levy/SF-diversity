@@ -112,6 +112,7 @@ import warnings
 # dog_to_four - For the parker-hawken model, convert the spatial DoG into the Fourier domain
 # parker_hawken_transform - Transform the parameters into their more interpretable DoG-friendly form
 # parker_hawken - Run the d-DoG-S model from Parker & Hawken 1987 and 1988
+# parker_hawken_space_from_stim - given the stimulus specification, compute the response using spatial rep. of the d-DoG-S model
 # get_descrResp - get the SF descriptive response
 
 #######
@@ -1765,7 +1766,7 @@ def DoGsachVol(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0):
   tune = baseline + gain_c*np.pi*(np.square(r_c)*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.square(r_c*r_s)*np.exp(-np.square(stim_sf*np.pi*r_s*r_c)));
   return tune, [];
  
-def var_explained(data_resps, modParams, sfVals, dog_model = 2, baseline=0):
+def var_explained(data_resps, modParams, sfVals, dog_model = 2, baseline=0, ref_params=None):
   ''' given a set of responses and model parameters, compute the variance explained by the model 
       UPDATE: If sfVals is None, then modParams is actually modResps, so we can just skip to the end...
   '''
@@ -1779,7 +1780,7 @@ def var_explained(data_resps, modParams, sfVals, dog_model = 2, baseline=0):
   if sfVals is None:
     mod_resps = modParams;
   else:
-    mod_resps = get_descrResp(modParams, stim_sf=sfVals, DoGmodel=dog_model, baseline=baseline);
+    mod_resps = get_descrResp(modParams, stim_sf=sfVals, DoGmodel=dog_model, baseline=baseline, ref_params=ref_params);
   try:
     return var_expl(mod_resps, data_resps, data_mean);
   except:
@@ -1857,7 +1858,7 @@ def c50_empirical(rvcMod, params):
 
   return c50_lsq, c50_eval;
 
-def descr_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11), baseline=0, nSamps=500):
+def descr_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11), baseline=0, nSamps=500, ref_params=None):
   ''' Compute the preferred SF given a set of DoG [or in the case of dog_model==0, not DoG...) parameters
   '''
   np = numpy;
@@ -1866,7 +1867,7 @@ def descr_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11), base
     return modParams[2]; # direct read out in this model!
   # if the solution is not analytical, then we compute
   sf_samps = np.geomspace(all_sfs[0], all_sfs[-1], nSamps);
-  tuning = get_descrResp(modParams, sf_samps, dog_model);
+  tuning = get_descrResp(modParams, sf_samps, dog_model, ref_params=ref_params);
   sf_evals = np.argmax(tuning);
   sf_peak = sf_samps[sf_evals];
 
@@ -2063,7 +2064,7 @@ def dog_total_volume(params, DoGmodel):
 
 ## - for fitting DoG models
 
-def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, gain_reg=0, vol_lam=0, minThresh=0.1, joint=0, baseline=0, fracSig=1, enforceMaxPenalty=0, sach_equiv_p_h=True, n_fits=1):
+def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, gain_reg=0, vol_lam=0, minThresh=0.1, joint=0, baseline=0, fracSig=1, enforceMaxPenalty=0, sach_equiv_p_h=True, n_fits=1, ref_params=None):
   '''Given the model params (i.e. sach or tony formulation)), the responses, sf values
   return the loss
   loss_type: 1 - lsq
@@ -2092,7 +2093,6 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
   totalLoss = 0;
 
   for i in range(n_fits):
-    ref_params = None; # temporary? Used to compute S if joint and d-DoG-S, otherwise ignored
     if n_fits == 1: # i.e. joint is False!
       curr_params = params;
       curr_resps = resps;
@@ -2123,7 +2123,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
            curr_params = [*params[start_ind:start_ind+nParam], params[0], params[1]];
            # also compute the high contrast parameters --> why? This will serve as reference for computing S at all contrasts
            ref_ind=2+(n_fits-1)*nParam;
-           ref_params = [*params[start_ind:start_ind+nParam], params[0], params[1]];
+           ref_params = [*params[ref_ind:ref_ind+nParam], params[0], params[1]];
         elif joint==2: # surr[1&2]_rad AND g, S are constant
            nParam = nParams_descrMod(DoGmodel)-4; # we sub. off 4 for the four joint parameters
            start_ind=4+i*nParam;
@@ -2131,7 +2131,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
                              *params[start_ind+3:start_ind+6], params[1], params[2], params[3]];
            # also compute the high contrast parameters --> why? This will serve as reference for computing S at all contrasts
            ref_ind=2+(n_fits-1)*nParam;
-           ref_params = [*params[start_ind:start_ind+nParam], params[0], params[1]];
+           ref_params = [*params[ref_ind:ref_ind+nParam], params[0], params[1]];
         elif joint==3: # surr_gain/rad [same for both central and flank] AND g, S are constant
            nParam = nParams_descrMod(DoGmodel)-6; # we sub. off 6 for the 6 joint parameters (the surr gain/radius apply twice)
            start_ind=4+i*nParam; # but we're still only starting at +4
@@ -2139,14 +2139,14 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
                              *params[start_ind+2:start_ind+4], params[0], params[1], params[2], params[3]];
            # also compute the high contrast parameters --> why? This will serve as reference for computing S at all contrasts
            ref_ind=2+(n_fits-1)*nParam;
-           ref_params = [*params[start_ind:start_ind+nParam], params[0], params[1]];
+           ref_params = [*params[ref_ind:ref_ind+nParam], params[0], params[1]];
 
       if enforceMaxPenalty:
         max_data = np.max(curr_resps);
 
     pred_spikes = get_descrResp(curr_params, curr_sfs, DoGmodel, minThresh, baseline, fracSig, sach_equiv_p_h=sach_equiv_p_h, ref_params=ref_params);
     if enforceMaxPenalty: # check if this gives separate max for each condition
-      max_mod = get_descrResp(curr_params, np.array([descr_prefSf(curr_params, DoGmodel)]), DoGmodel, minThresh, baseline, fracSig)[0];
+      max_mod = get_descrResp(curr_params, np.array([descr_prefSf(curr_params, DoGmodel)]), DoGmodel, minThresh, baseline, fracSig, ref_params=ref_params)[0];
       applyPen = 1 if (max_mod-1.40*max_data)>0 else 0;
       # TODO: Make this penalty smooth/continuous rather than discrete...
       maxPen = applyPen*1*(max_mod-1.4*max_data); # scale factor of 1 chosen to be within the typical loss values (O(10),O(100), at least for loss_type=2) so this regularization does not overwhelm
@@ -2259,9 +2259,9 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
     #init_B = random_in_range((0.5, 2))[0] if DoGmodel==3 else random_in_range((0.05, 0.4))[0]; # xc2
     init_B = random_in_range((1.05, 3))[0] if DoGmodel==3 else random_in_range((0.05, 0.4))[0]; # xc2 --> 220120c
     init_C = random_in_range((2, 3.5))[0] if DoGmodel==3 else random_in_range((0.3, 2))[0]; # xs2
-    #init_sPr = random_in_range((-3, -1.09))[0] if DoGmodel == 3 else random_in_range((0.1, 0.3))[0]; # 220120f
+    init_sPr = random_in_range((-3, -1.09))[0] if DoGmodel == 3 else random_in_range((0.1, 0.3))[0]; # 220120f; 220127nsS
     #init_sPr = random_in_range((-1.09, 1.09))[0] if DoGmodel == 3 else random_in_range((0.1, 0.3))[0]; 
-    init_sPr = random_in_range((0.05, 0.2))[0]; # 220121d
+    #init_sPr = random_in_range((0.05, 0.2))[0]; # 220121d-->220122f
     if no_surr:
        init_params = [init_kc1, init_xc1, init_kc2, init_B, init_gPr, init_sPr];
     else:
@@ -2458,6 +2458,9 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     xc1_bound = (0.01, 0.5); # values from Hawk; he also uses upper bound of 0.15 (211210 fits are with [0.01, 0.3])
     surr1_gain_bound = sigmoid_bound; #(-1.73, 1.1); # through sigmoid translates to (0.15, 0.75), bounds per Hawk; previously was sigmoid_bound
     surr1_rad_bound =  gtMult_bound if DoGmodel==3 else (xc1_bound[1]+0.2, 4); # per Hawk; #gtMult_bound if multiplicative surround
+    # ---- temporarily turn off the first gaussian surround
+    #surr1_gain_bound = noSurr_gainBound if DoGmodel==3 else (0,1e-5); # note that surr_gain_bound is LESS restrictive than Hawk
+    #surr1_rad_bound = (1,1.00001) if DoGmodel==3 else (xc2_bound[1]+0.2, xc2_bound[1]+0.200001); # per Hawk
     # -- next, the second (i.e. flanking) gaussian
     kc2_bound = (0, kc1_bound[1]); # same, regardless of model; upper bound=kc upper, but can go down to zero, per Hawk
     xc2_bound = mult_bound_xc; #xc1_bound;
@@ -2471,8 +2474,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     # -- finally, the g & S parameters
     #g_bound = (0, 1e-6); #sigmoid_bound; #(-9999.00001, -9999); # sigmoid of this value will be basically 0; was prevously sigmoid_bound (i.e. b/t 0--1)
     g_bound = sigmoid_bound; #(-9999.00001, -9999); # sigmoid of this value will be basically 0; was prevously sigmoid_bound (i.e. b/t 0--1)
-    S_bound = (0.1/8, 0.9*xc1_bound[1]);
-    #S_bound = sigmoid_bound if DoGmodel==3 else (0.1/8, 1.5*xc1_bound[1]); # was previously 0.1/6 (as compromise between {4,8} for {low,high} SF, per Hawk
+    #S_bound = (0.1/8, 0.9*xc1_bound[1]);
+    S_bound = sigmoid_bound if DoGmodel==3 else (0.1/8, 1.5*xc1_bound[1]); # was previously 0.1/6 (as compromise between {4,8} for {low,high} SF, per Hawk
 
     if joint>0: # for d-DoG-S model, the joint values mean the following
       if joint == 1: # g and S are constant across contrast, everything else is per-contrast condition
@@ -2743,7 +2746,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
      elif joint == 3:
         surr_gain, surr_rad = params[0], params[1];
         g, S = params[2:4];
-    for con in range(len(allResps)):
+    for con in reversed(range(len(allResps))):
        # --- then, go through each contrast and get the "local", i.e. per-contrast, parameters
        if is_mod_DoG(DoGmodel):
           if joint == 1: # center gain, center shape
@@ -2780,13 +2783,16 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
        respConInd = incl_inds[con];
        sfs_curr   = allSfs[con];
        #respConInd = valConByDisp[disp][con]; 
-      
+       
+       if con==len(allResps)-1:
+          ref_params = curr_params;
+
        # now, compute loss, explained variance, etc
-       bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, sfs_curr, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=0, baseline=baseline, vol_lam=vol_lam); # not joint, now!
+       bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, sfs_curr, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=0, baseline=baseline, vol_lam=vol_lam, ref_params=ref_params); # not joint, now!
        currParams[respConInd, :] = curr_params;
-       varExpl[respConInd] = var_explained(resps_curr, curr_params, valSfVals, DoGmodel, baseline=baseline);
-       prefSf[respConInd] = descr_prefSf(curr_params, dog_model=DoGmodel, all_sfs=valSfVals, baseline=baseline);
-       charFreq[respConInd] = dog_charFreq(curr_params, DoGmodel=DoGmodel);    
+       varExpl[respConInd] = var_explained(resps_curr, curr_params, valSfVals, DoGmodel, baseline=baseline, ref_params=ref_params);
+       prefSf[respConInd] = descr_prefSf(curr_params, dog_model=DoGmodel, all_sfs=valSfVals, baseline=baseline, ref_params=ref_params);
+       charFreq[respConInd] = dog_charFreq(curr_params, DoGmodel=DoGmodel);
         
 
     # and NOW, we can return! (unpacked all values per contrast)
@@ -2964,18 +2970,18 @@ def parker_hawken_transform(params, twoDim=False, space_in_arcmin=False, isMult=
     #xs2 = 0.2 + C*xc2 if isMult else C;
     xs2 = C*xc2 if isMult else C;
     if isMult:
-       S = Spr;
-       '''
+       #S = Spr;
+       #'''
        if ref_params is None:
           #S = sigmoid(Spr) * (xc1 + xc2); # 220120a-e, g
           S = numpy.minimum(xc1, xc2) + sigmoid(Spr) * numpy.maximum(xc1, xc2); # 220120 ;i.e. must be between [min(xc1, xc2), xc1+xc2]
        else:
-          ref_xc1, ref_xc2 = ref_params[1], ref_params[5];
+          ref_xc1, ref_xc2 = ref_params[1], ref_params[1]*ref_params[5];
           S = numpy.minimum(ref_xc1, ref_xc2) + sigmoid(Spr) * numpy.maximum(ref_xc1, ref_xc2); # 220121a
           # ^^ i.e. must be between [min(xc1, xc2), xc1+xc2]
           #S = sigmoid(Spr) * (ref_xc1 + ref_xc2); # 220120a-e, g
        #S = numpy.minimum(xc1, xc2) + sigmoid(Spr) * numpy.maximum(xc1, xc2); # 220120 ;i.e. must be between [min(xc1, xc2), xc1+xc2]
-       '''
+       #'''
     else:
        S = Spr;
     ks1 = sigmoid(kS_rel1)*kc1;
@@ -2996,7 +3002,7 @@ def parker_hawken_transform(params, twoDim=False, space_in_arcmin=False, isMult=
   
     return params;
 
-def parker_hawken(params, stim_sf=None, twoDim=False, inSpace=False, spaceRange=0.5, debug=False, isMult=True, transform=True, ref_params=None, baseline=0):
+def parker_hawken(params, stim_sf=None, twoDim=False, inSpace=False, spaceRange=0.5, nSteps=60, debug=False, isMult=True, transform=True, ref_params=None, baseline=0):
     ''' space value (xc_i, xs_i) are specified in degrees of visual angle, i.e. 60 arcminuntes = 1 (deg)
         --- smart parameterization to enforce limits
         Limits (when isMult==True):
@@ -3033,7 +3039,7 @@ def parker_hawken(params, stim_sf=None, twoDim=False, inSpace=False, spaceRange=
 
     if inSpace: # If we want the function in space
 
-      xSamps = np.arange(-spaceRange, spaceRange+1.0/60, 0.5/60); # go in steps of half an arcminute
+      xSamps = np.arange(-spaceRange, spaceRange+1.0/nSteps, 0.5/nSteps); # go in steps of half an arcminute
       # As described in the appendix of Hawken & Parker, 1987, it is necessary to divide out sqrt(pi)*radius from all gains in the spatial domain
       # -- this is necessary when we simply use a constant (independent of pi, radius, or any other factors) when fitting the frequency response
       dog1 = kc1*np.power(np.sqrt(np.pi)*xc1, -1)*np.exp(-np.square((xSamps+0)/xc1)) - ks1*np.power(np.sqrt(np.pi)*xs1, -1)*np.exp(-np.square((xSamps+0)/xs1))
@@ -3061,6 +3067,39 @@ def parker_hawken(params, stim_sf=None, twoDim=False, inSpace=False, spaceRange=
       full = np.sqrt(np.square(dog1-dog2) + np.square(dog3)) + baseline;
 
       return full;
+
+def parker_hawken_space_from_stim(stim_sfs, stim_cons, stim_tfs, stim_phi, stim_dur, curr_params, ref_params=None, spaceRange=0.5, nSteps=100, tSamp=400, debug=False):
+   ''' Given a stimulus description and set of d-DoG-S fits:
+       - compute the (1D) spatial profile of the receptive field
+       - compute the (1D) stimulus at each time step and convolve with the RF
+       - Threshold at 0, take the mean
+       return: a scalar as response to the stimulus, [and the full time course, if debug==True]
+   
+       spaceRange -- full range is 2x (we go +&- of 0)
+       nSteps     -- how many steps to make in sampling space
+       tSamp      -- how many samples per second in time
+   '''
+   np = numpy;
+   space_rf, xSamps = parker_hawken(curr_params, inSpace=True, spaceRange=spaceRange, nSteps=nSteps, ref_params=ref_params);
+
+   ntSamps = stim_dur*tSamp;
+   resp_time = np.zeros((ntSamps, ));
+   for ts in range(ntSamps):
+      wave_curr = 0;
+      for (i,sf_curr), con, tf, phi in zip(enumerate(stim_sfs), stim_cons, stim_tfs, stim_phi):
+         # --- now, progress the stimulus
+         phi_step = 2*np.pi*tf*ts/tSamp;
+         wave_curr += con*np.sin(2*np.pi*sf_curr*xSamps + phi + phi_step);
+      scalar = 2*spaceRange/nSteps; # scalar that accounts for the n samples in space
+      # ^ why 2*spaceRange? That's the full range; then divide by nSteps
+      # -- this gives the step size in space between adjacent samples
+      resp_time[ts] = np.multiply(scalar, np.dot(wave_curr, space_rf));
+
+   resp_thresh = np.maximum(resp_time, 0);
+   if debug:
+      return np.mean(resp_thresh), resp_time;
+   else:
+      return np.mean(resp_thresh);
 
 def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1, baseline=0, fracSig=1, sach_equiv_p_h=True, ref_params=None):
   ''' returns only pred_spikes; 0 is flexGauss.; 1 is DoG sach; 2 is DoG (tony)

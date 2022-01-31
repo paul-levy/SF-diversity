@@ -62,7 +62,7 @@ inclLegend = 0;
 
 plotMetrCorr = 0; # plot the corr. b/t sf70 and charFreq [1] or rc [2] for each condition?
 plt_sf_as_rvc = 1;
-comm_S_calc = 0;
+comm_S_calc = 1;
 
 cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
@@ -76,7 +76,7 @@ if len(sys.argv) > 8:
 else:
   respVar = 1;
 if len(sys.argv) > 9:
-  isHPC = int(sys.argv[8]);
+  isHPC = int(sys.argv[9]);
 else:
   isHPC = 0;
 if len(sys.argv) > 10:
@@ -96,7 +96,7 @@ fracSig = 1;
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
-descrBase = 'descrFits%s_220122e' % hpc_str;
+descrBase = 'descrFits%s_220127sf' % hpc_str;
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_211129';
@@ -248,6 +248,8 @@ for d in range(nDisps):
     minResp = np.min(np.min(respMean[d, ~np.isnan(respMean[d, :, :])]));
     maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
     
+    ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+
     for c in reversed(range(n_v_cons)):
         c_plt_ind = len(v_cons) - c - 1;
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);        
@@ -267,7 +269,7 @@ for d in range(nDisps):
 
         ## plot descr fit
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig);
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
         dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=currClr, label='descr. fit');
 
         ## if flexGauss plot peak & frac of peak
@@ -307,7 +309,7 @@ for d in range(nDisps):
 
           # plot descriptive model fit -- and inferred characteristic frequency (or peak...)
           prms_curr = descrParams[d, v_cons[c]];
-          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig);
+          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
           descr_curr = descrResp - to_sub;
           abvThresh = [descr_curr>minResp_toPlot]
           dispAx[d][c_plt_ind, 1].plot(sfs_plot[abvThresh], descr_curr[abvThresh], color=currClr, label='descr. fit', clip_on=False)
@@ -379,8 +381,8 @@ for d in range(nDisps):
     fCurr.suptitle('%s #%d (f1f0 %.2f)' % (cellType, cellNum, f1f0rat));
 
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));  
-
     minToPlot = 5e-1;
+    ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
 
     lines = [];
     for c in reversed(range(n_v_cons)):
@@ -402,7 +404,7 @@ for d in range(nDisps):
  
         # plot descr fit [1]
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig);
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
         dispAx[d][1].plot(sfs_plot, descrResp-to_sub, color=col);
 
     for i in range(len(dispCurr)):
@@ -455,6 +457,8 @@ for d in range(nDisps):
     v_cons = v_cons[np.arange(np.maximum(0, n_v_cons -mixCons), n_v_cons)]; # max(1, .) for when there are fewer contrasts than 4
     n_v_cons = len(v_cons);
     
+    ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+
     for c in reversed(range(n_v_cons)):
         c_plt_ind = n_v_cons - c - 1;
         sfMixAx[c_plt_ind, d].set_title('con: %s%%' % str(int(100*(np.round(all_cons[v_cons[c]], 2)))));
@@ -477,7 +481,7 @@ for d in range(nDisps):
 
         # plot descrFit
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig);
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
         if c_plt_ind == 0 and d==0: # only make the legend here
           sfMixAx[c_plt_ind, d].plot(sfs_plot, descrResp, label=modTxt, color=modClr);
         else:
@@ -657,6 +661,7 @@ for d in range(nDisps):
 
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
     minResp_plot = 1e-0;
+    ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
 
     lines_log = [];
     for sf in range(n_v_sfs):
@@ -699,7 +704,7 @@ for d in range(nDisps):
         if plt_sf_as_rvc:
             cons = all_cons[v_cons];
             try:
-                resps_curr = np.array([hf.get_descrResp(descrParams[0, vc], all_sfs[sf_ind], descrMod, baseline=baseline_resp, fracSig=fracSig) for vc in np.where(v_cons)[0]]) - to_sub;
+                resps_curr = np.array([hf.get_descrResp(descrParams[d, vc], all_sfs[sf_ind], descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params) for vc in np.where(v_cons)[0]]) - to_sub;
                 crfAx[d][2].plot(all_cons[v_cons], resps_curr, color=col, \
                          clip_on=False, linestyle='--', marker='o');
                 crfAx[d][2].set_title('D%d: RVC from SF fit' % (d+1));
@@ -999,10 +1004,12 @@ for d in range(1): #nDisps
   sf_steps = 100;
   plt_sfs = np.geomspace(all_sfs[0], all_sfs[-1], sf_steps);
   descrResps = np.zeros((len(val_cons), sf_steps));
+  ref_params = descrParams[d, val_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+
   for c_itr, c in enumerate(val_cons):
     curr_params = descrCurr[c];
     curr_sfs = plt_sfs;
-    descrResps[c_itr, range(len(curr_sfs))] = hf.get_descrResp(curr_params, curr_sfs, descrMod, baseline=baseline_resp, fracSig=fracSig);
+    descrResps[c_itr, range(len(curr_sfs))] = hf.get_descrResp(curr_params, curr_sfs, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
 
   ovr_min = np.minimum(np.min(curr_resps), np.minimum(np.min(rvcResps), np.min(descrResps)))
   ovr_max = np.maximum(np.max(curr_resps), np.maximum(np.max(rvcResps), np.max(descrResps)))
