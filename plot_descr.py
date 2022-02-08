@@ -79,8 +79,12 @@ if len(sys.argv) > 9:
   isHPC = int(sys.argv[9]);
 else:
   isHPC = 0;
-if len(sys.argv) > 10:
-  forceLog = int(sys.argv[10]); # used for byDisp/allCons_... (sf plots)
+if len(sys.argv) > 10: # plot prediction to all stimuli from spatial rep. of d-DoG-S model???
+  ddogs_pred = int(sys.argv[10]);
+else:
+  ddogs_pred = 1;
+if len(sys.argv) > 11:
+  forceLog = int(sys.argv[11]); # used for byDisp/allCons_... (sf plots)
 else:
   forceLog = 0;
 
@@ -96,7 +100,7 @@ fracSig = 1;
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
-descrBase = 'descrFits%s_220131' % hpc_str;
+descrBase = 'descrFits%s_220204g' % hpc_str;
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_211129';
@@ -109,10 +113,13 @@ descrBase = 'descrFits%s_220131' % hpc_str;
 #rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
 #rvcBase = 'rvcFits_200714'; # direc flag & '.npy' are adde
+##############
+# NOTE: Temporarily ignoring HPC for rvcFits
+##############
 if expDir == 'LGN/':
-  rvcBase = 'rvcFits%s_211108' % hpc_str;
+  rvcBase = 'rvcFits%s_211108' % ''#hpc_str;
 else:
-  rvcBase = 'rvcFits%s_210914' % hpc_str; # if V1?
+  rvcBase = 'rvcFits%s_210914' % ''#hpc_str; # if V1?
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
@@ -194,9 +201,7 @@ else:
   baseline_resp = int(0);
 
 # now get the measured responses
-#print('HERE!!!');
 _, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
-#pdb.set_trace();
 
 respMean = respOrg;
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
@@ -236,6 +241,12 @@ fDisp = []; dispAx = [];
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
 
+if ddogs_pred and descrMod==3: # i.e. is d-DoG-S model
+    all_preds = hf.parker_hawken_all_stim(trialInf, expInd, descrParams, comm_s_calc=comm_S_calc&(joint>0));
+    _, _, pred_org, pred_all = hf.organize_resp(all_preds, trialInf, expInd, respsAsRate=True)
+else:
+    pred_org = None;
+
 for d in range(nDisps):
     
     v_cons = val_con_by_disp[d];
@@ -269,8 +280,11 @@ for d in range(nDisps):
 
         ## plot descr fit
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
+        descrResp = hf.get_descrResp(prms_curr, stim_sf=sfs_plot, DoGmodel=descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
         dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=currClr, label='descr. fit');
+        # --- and also ddogs prediction (perhaps...)
+        if pred_org is not None:
+            dispAx[d][c_plt_ind, 0].plot(sfVals, baseline_resp + pred_org[d, v_sfs, v_cons[c]], color=currClr, linestyle='--', clip_on=False, label='pred');
 
         ## if flexGauss plot peak & frac of peak
         frac_freq = hf.sf_highCut(prms_curr, descrMod, frac=peakFrac, sfRange=(0.1, 15), baseline_sub=baseline_resp);
@@ -313,6 +327,12 @@ for d in range(nDisps):
           descr_curr = descrResp - to_sub;
           abvThresh = [descr_curr>minResp_toPlot]
           dispAx[d][c_plt_ind, 1].plot(sfs_plot[abvThresh], descr_curr[abvThresh], color=currClr, label='descr. fit', clip_on=False)
+
+          if pred_org is not None:
+              to_cut = pred_org[d, v_sfs, v_cons[c]];
+              abvThresh = [to_cut>minResp_toPlot];
+              dispAx[d][c_plt_ind, 1].plot(sfVals[abvThresh], to_cut[abvThresh], color=currClr, linestyle='--', clip_on=False, label='pred');
+
           if not hf.is_mod_DoG(descrMod):
             psf = hf.descr_prefSf(prms_curr, dog_model=descrMod);
             #if psf != np.nan: 
@@ -400,6 +420,8 @@ for d in range(nDisps):
 
         curr_line, = dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], '-o', clip_on=False, \
                                        color=col, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
+        if baseline_resp > 0:
+            dispAx[d][0].axhline(baseline_resp, linestyle='--', color='k');
         lines.append(curr_line);
  
         # plot descr fit [1]

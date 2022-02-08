@@ -21,7 +21,7 @@ expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experimen
 #expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits%s_220131' % hpcSuff;
+dogName = 'descrFits%s_220131c' % hpcSuff;
 #dogName = 'descrFits_220103';
 #dogName = 'descrFits_211214';
 #dogName = 'descrFits_211020_f030';

@@ -1173,9 +1173,6 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
       #proj = np.multiply(amp[i], np.cos(np.deg2rad(phi_resp[i])-np.deg2rad(phi_true)))
       all_proj.append(proj);
       
-      #if i == len(amp)-1:
-      #   pdb.set_trace();
-
     elif disp > 0: # then we'll need to use the allCompSf to get the right phase advance fit for each component
       if amp[i] == []: # 
         all_proj.append([]);
@@ -2249,7 +2246,8 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
     sqrtMax = np.sqrt(maxResp); # sqrtMax is a useful way of sampling for a maximum response gain (per Hawk...)
     init_kc1 = maxResp + random_in_range((-1, 3))[0] * sqrtMax;
     init_xc1 = random_in_range((0.02, 0.2))[0];
-    init_kc2 = random_in_range((0.2, 0.55))[0] * init_kc1; # start out with kc2 is smaller than kc1
+    init_kc2 = random_in_range((-1.4, 0.8))[0]; # temporarily, as sigmoid rel. to kc1
+    #init_kc2 = random_in_range((0.2, 0.55))[0] * init_kc1; # start out with kc2 is smaller than kc1
     init_kS_rel1, init_kS_rel2 = random_in_range((-1.4, 0.8), size=2); # will be used as input to sigmoid
     init_gPr = random_in_range((-1.09, 1.09))[0]; # input to sigmoid (alone); 
 
@@ -2442,7 +2440,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     # -- first, some general bounds that we can apply as needed for different parameters
     gtMult_bound = (1, None); # (1, None) multiplier limit when we want param >= mult*orig_param [greaterThan-->gt] ||| was previously (1, 7) --> then (1,5) --> then (1, 15)
     #mult_bound_xc = (0.2, 5); # 
-    mult_bound_xc = (0.5, 5); # force to be close-ish to xc1
+    mult_bound_xc = (1, 5); # force to be close-ish to xc1
     sigmoid_bound = (None, None); # params that are input to sigmoids are unbounded - since sigmoid is bounded [0,1]
     noSurr_radBound = (0.01, 0.010001); # gain will be 0 if we are turning off surround; this will be just a small range of radius values to stop the optimization from exploring this parameter space
     noSurr_gainBound = (-9999.00001, -9999); # sigmoid of this value will be basically 0
@@ -2462,9 +2460,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     #surr1_gain_bound = noSurr_gainBound if DoGmodel==3 else (0,1e-5); # note that surr_gain_bound is LESS restrictive than Hawk
     #surr1_rad_bound = (1,1.00001) if DoGmodel==3 else (xc2_bound[1]+0.2, xc2_bound[1]+0.200001); # per Hawk
     # -- next, the second (i.e. flanking) gaussian
-    kc2_bound = (0, kc1_bound[1]); # same, regardless of model; upper bound=kc upper, but can go down to zero, per Hawk
-    xc2_bound = (1,1.00001); #mult_bound_xc; #xc1_bound;
-    #xc2_bound = mult_bound_xc if DoGmodel==3 else xc1_bound; # was previously gtMult_bound if ... else (0.015, 2*xc1_bound[1])
+    kc2_bound = sigmoid_bound;
+    #kc2_bound = (0, kc1_bound[1]); # same, regardless of model; upper bound=kc upper, but can go down to zero, per Hawk
+    #xc2_bound = (1,1.00001); #mult_bound_xc; #xc1_bound;
+    xc2_bound = mult_bound_xc if DoGmodel==3 else xc1_bound; # was previously gtMult_bound if ... else (0.015, 2*xc1_bound[1])
     # ---- temporarily turn off the second gaussian surround
     #surr2_gain_bound = noSurr_gainBound if DoGmodel==3 else (0,1e-5); # note that surr_gain_bound is LESS restrictive than Hawk
     #surr2_rad_bound = (1,1.00001) if DoGmodel==3 else (xc2_bound[1]+0.2, xc2_bound[1]+0.200001); # per Hawk
@@ -2472,8 +2471,9 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     surr2_gain_bound = surr1_gain_bound; # note that surr_gain_bound is LESS restrictive than Hawk
     surr2_rad_bound = gtMult_bound if DoGmodel==3 else (xc2_bound[1]+0.2, surr1_rad_bound[1]); # per Hawk
     # -- finally, the g & S parameters
-    #g_bound = (0, 1e-6); #sigmoid_bound; #(-9999.00001, -9999); # sigmoid of this value will be basically 0; was prevously sigmoid_bound (i.e. b/t 0--1)
-    g_bound = sigmoid_bound; #(-9999.00001, -9999); # sigmoid of this value will be basically 0; was prevously sigmoid_bound (i.e. b/t 0--1)
+    g_bound = (-9999.00001, -9999); # sigmoid of this value will be basically 0
+    #g_bound = (0, 1e-6); # sigmoid of this value will be basically 0.5
+    #g_bound = sigmoid_bound; # sigmoid_bound, i.e. b/t 0--1
     #S_bound = (0.1/8, 0.9*xc1_bound[1]);
     S_bound = sigmoid_bound if DoGmodel==3 else (0.1/8, 1.5*xc1_bound[1]); # was previously 0.1/6 (as compromise between {4,8} for {low,high} SF, per Hawk
 
@@ -2600,7 +2600,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
       # choose optimization method
       methodStr = 'L-BFGS-B'; # previously, alternated between L-BFGS-B and TNC (even/odd)
-
+      
       if no_surr:
          # perhaps hacky (while we test it out), but important for passing in params
          obj = lambda params: DoG_loss([*params[0:2], -np.inf, 1,
@@ -2632,7 +2632,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
       if debug:
         save_all.append([wax, init_params]);
-
+        
       if np.isnan(bestNLL[con]) or NLL < bestNLL[con]:
         bestNLL[con] = NLL;
         currParams[con, :] = params;
@@ -2706,10 +2706,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       methodStr = 'L-BFGS-B';
       obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, vol_lam=vol_lam, n_fits=len(allResps));
       # --- debugging ---
-      #pdb.set_trace();
       # --- debugging ---
-      #if n_try>0:
-      #   allInitParams = params_curr;
       try: # 95000; 35000; 975000
         maxfun = 1975000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model often needs more iters to finish
         wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds, options={'ftol': ftol, 'maxfun': maxfun});
@@ -2720,8 +2717,6 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       # compare
       NLL = wax['fun'];
       params_curr = wax['x'];
-      #if n_try==0:
-      #   pdb.set_trace();
 
       if np.isnan(overallNLL) or NLL < overallNLL or len(params_curr) != len(params): # the final check is if the # of parameters here is different from the exising # params --> then update, because our separate fits have updated and we have different # of conditions to fit
         overallNLL = NLL;
@@ -2977,18 +2972,20 @@ def parker_hawken_transform(params, twoDim=False, space_in_arcmin=False, isMult=
           S = numpy.minimum(xc1, xc2) + sigmoid(Spr) * numpy.maximum(xc1, xc2); # 220120 ;i.e. must be between [min(xc1, xc2), xc1+xc2]
        else:
           ref_xc1, ref_xc2 = ref_params[1], ref_params[1]*ref_params[5];
-          S = numpy.minimum(ref_xc1, ref_xc2) + sigmoid(Spr) * numpy.maximum(ref_xc1, ref_xc2); # 220121a
+          S = numpy.minimum(ref_xc1, ref_xc2) + sigmoid(Spr) * 2 * numpy.maximum(ref_xc1, ref_xc2); # 220121a--; temporarily sigmoid()*2*(max)
           # ^^ i.e. must be between [min(xc1, xc2), xc1+xc2]
           #S = sigmoid(Spr) * (ref_xc1 + ref_xc2); # 220120a-e, g
        #S = numpy.minimum(xc1, xc2) + sigmoid(Spr) * numpy.maximum(xc1, xc2); # 220120 ;i.e. must be between [min(xc1, xc2), xc1+xc2]
        #'''
     else:
        S = Spr;
+    kc2 = sigmoid(kc2)*kc1;
     ks1 = sigmoid(kS_rel1)*kc1;
     ks2 = sigmoid(kS_rel2)*kc2;
 
     params[2] = ks1;
     params[3] = xs1;
+    params[4] = kc2;
     params[5] = xc2;
     params[6] = ks2;
     params[7] = xs2;
@@ -3095,11 +3092,62 @@ def parker_hawken_space_from_stim(stim_sfs, stim_cons, stim_tfs, stim_phi, stim_
       # -- this gives the step size in space between adjacent samples
       resp_time[ts] = np.multiply(scalar, np.dot(wave_curr, space_rf));
 
-   resp_thresh = np.maximum(resp_time, 0);
+   resp_thresh = 0.5*np.pi*np.maximum(resp_time, 0); # why multiply by pi/2? that's the scale offset from half-wave rectification
    if debug:
       return np.mean(resp_thresh), resp_time;
    else:
       return np.mean(resp_thresh);
+
+def parker_hawken_all_stim(trialInf, expInd, curr_params, spaceRange=0.5, nSteps=100, tSamp=400, debug=False, comm_s_calc=False):
+   ''' wrapper to call parker_hawken_space_from_stim for all trials of a given cell
+       we assume:
+       - curr_params is [nDisp, nCons, params] --> we'll draw from single grating fits to predict all stimuli
+       --- more specifically, we'll get the filter which corresponds to the highest contrast grating present, and compute with that
+   '''
+   np = numpy;
+   try:
+      nTrials = len(trialInf['num']);
+   except:
+      nTrials = len(trialInf['con'][0]);
+   nStimComp = get_exp_params(expInd).nStimComp;
+   stimDur = get_exp_params(expInd).stimDur;
+   _, stimVals, val_con_by_disp, _, _ = tabulate_responses(trialInf, expInd);
+   all_cons = stimVals[1]; # stimVals is [disp, con, sf]
+
+   rsps = np.nan * np.zeros((nTrials, ));
+   if debug:
+      rsps_time = [];
+
+   ref_params = curr_params[0, -1, :] if comm_s_calc else None;
+
+   for tr in range(nTrials):
+      #stimOr = numpy.empty((nStimComp,));
+      stimTf = numpy.empty((nStimComp,));
+      stimCo = numpy.empty((nStimComp,));
+      stimPh = numpy.empty((nStimComp,));
+      stimSf = numpy.empty((nStimComp,));
+      
+      for iC in range(nStimComp):
+         #stimOr[iC] = trialInf['ori'][iC][tr] * numpy.pi/180; # in radians
+         stimTf[iC] = trialInf['tf'][iC][tr];          # in cycles per second
+         stimCo[iC] = trialInf['con'][iC][tr];         # in Michelson contrast
+         stimPh[iC] = trialInf['ph'][iC][tr] * numpy.pi/180;  # in radians
+         stimSf[iC] = trialInf['sf'][iC][tr];          # in cycles per degree
+         
+      conInd = np.argmin(np.square(all_cons[val_con_by_disp[0]] - np.max(stimCo)));
+      curr_pms = curr_params[0, val_con_by_disp[0][conInd], :];
+      # once we've chosen the right filter, however, we just want the contrasts relative to the highest present (i.e. normalized)
+      stimCoNorm = np.divide(stimCo, np.max(stimCo));
+      if debug:
+         rsps[tr], rsp_time = parker_hawken_space_from_stim(stimSf, stimCoNorm, stimTf, stimPh, stimDur, curr_pms, ref_params, spaceRange, nSteps, tSamp, debug);
+         rsps_time.append(rsp_time);
+      else:
+         rsps[tr] = parker_hawken_space_from_stim(stimSf, stimCoNorm, stimTf, stimPh, stimDur, curr_pms, ref_params, spaceRange, nSteps, tSamp, debug);
+
+   if debug:
+      return rsps, rsps_time;
+   else:
+      return rsps;
 
 def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1, baseline=0, fracSig=1, sach_equiv_p_h=True, ref_params=None):
   ''' returns only pred_spikes; 0 is flexGauss.; 1 is DoG sach; 2 is DoG (tony)
@@ -4419,9 +4467,6 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                     else: # default behavior
                       divFactor = stimDur;
  
-                    #if d == 0 and sf == 8 and con==11:
-                    #  pdb.set_trace();
-
                     try:
                       if cross_val is None:
                         curr_modResp = resample_array(resample, modResp[valid_tr]); # will just be the array if resample==0
