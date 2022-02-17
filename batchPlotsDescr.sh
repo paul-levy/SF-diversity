@@ -44,20 +44,21 @@ HPC=${5:-0}
 # note: dog_mod=0 means flex; 1 means sach (DoG)
 
 if [ "$EXP_DIR" = "V1/" ]; then
-  for run in {1..45}
+  for run in {1..30}
   do 
     python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC &
   done
   wait
-  for run in {46..81}
+  for run in {31..60}
   do 
     python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC &
   done
   wait
-  #for run in {37..56}
-  #do 
-  #  python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC &
-  #done
+  for run in {61..81}
+  do 
+    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC &
+  done
+  wait
 fi
 if [ "$EXP_DIR" = "LGN/" ]; then
   for run in {1..25}

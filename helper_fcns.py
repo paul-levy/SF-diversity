@@ -2127,16 +2127,18 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
            curr_params = [*params[start_ind:start_ind+3], params[0],
                              *params[start_ind+3:start_ind+6], params[1], params[2], params[3]];
            # also compute the high contrast parameters --> why? This will serve as reference for computing S at all contrasts
-           ref_ind=2+(n_fits-1)*nParam;
-           ref_params = [*params[ref_ind:ref_ind+nParam], params[0], params[1]];
+           ref_ind=4+(n_fits-1)*nParam;
+           ref_params = [*params[ref_ind:ref_ind+3], params[0], 
+                         *params[ref_ind+3:ref_ind+6], params[1], params[2], params[3]];
         elif joint==3: # surr_gain/rad [same for both central and flank] AND g, S are constant
            nParam = nParams_descrMod(DoGmodel)-6; # we sub. off 6 for the 6 joint parameters (the surr gain/radius apply twice)
            start_ind=4+i*nParam; # but we're still only starting at +4
            curr_params = [*params[start_ind:start_ind+2], params[0], params[1],
                              *params[start_ind+2:start_ind+4], params[0], params[1], params[2], params[3]];
            # also compute the high contrast parameters --> why? This will serve as reference for computing S at all contrasts
-           ref_ind=2+(n_fits-1)*nParam;
-           ref_params = [*params[ref_ind:ref_ind+nParam], params[0], params[1]];
+           ref_ind=4+(n_fits-1)*nParam;
+           ref_params = [*params[ref_ind:ref_ind+2], params[0], params[1],
+                         *params[ref_ind+2:ref_ind+4], params[0], params[1], params[2], params[3]];
 
       if enforceMaxPenalty:
         max_data = np.max(curr_resps);
@@ -2956,23 +2958,20 @@ def parker_hawken_transform(params, twoDim=False, space_in_arcmin=False, isMult=
     # --- 
     # - xc1 is first priority to specify (directly parameterized)
     # - then, we get xs1 relative to xc1 (xs1 >= xc1 and xs1 <= Z*xc1, e.g. Z=4) 
-    #xs1 = 0.2 + A*xc1 if isMult else A;
     xs1 = A*xc1 if isMult else A;
     # - in parallel, xc2 relative to xc1 (xc2>=xc1)
-    #xc2 = B
     xc2 = B*xc1 if isMult else B;
     # finally, xs2 relative to xc2 (xs2>=xc2)
-    #xs2 = 0.2 + C*xc2 if isMult else C;
     xs2 = C*xc2 if isMult else C;
     if isMult:
        #S = Spr;
        #'''
        if ref_params is None:
           #S = sigmoid(Spr) * (xc1 + xc2); # 220120a-e, g
-          S = numpy.minimum(xc1, xc2) + sigmoid(Spr) * numpy.maximum(xc1, xc2); # 220120 ;i.e. must be between [min(xc1, xc2), xc1+xc2]
+          S = numpy.minimum(xc1, xc2) + sigmoid(Spr) * 1 * numpy.maximum(xc1, xc2); # 220120 ;i.e. must be between [min(xc1, xc2), xc1+xc2]
        else:
           ref_xc1, ref_xc2 = ref_params[1], ref_params[1]*ref_params[5];
-          S = numpy.minimum(ref_xc1, ref_xc2) + sigmoid(Spr) * 2 * numpy.maximum(ref_xc1, ref_xc2); # 220121a--; temporarily sigmoid()*2*(max)
+          S = numpy.minimum(ref_xc1, ref_xc2) + sigmoid(Spr) * 1 * numpy.maximum(ref_xc1, ref_xc2); # 220121a--; temporarily sigmoid()*2*(max)
           # ^^ i.e. must be between [min(xc1, xc2), xc1+xc2]
           #S = sigmoid(Spr) * (ref_xc1 + ref_xc2); # 220120a-e, g
        #S = numpy.minimum(xc1, xc2) + sigmoid(Spr) * numpy.maximum(xc1, xc2); # 220120 ;i.e. must be between [min(xc1, xc2), xc1+xc2]
