@@ -568,27 +568,29 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1):
+def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1, float32=True):
   ''' Just create the empty numpy arrays that we'll fill up 
+      -- float32: numpy default is float64 -- float32 will be 2x smaller on memory
       -- TODO: Do I need this control statement or can it be cleaned up?
   '''
   nBoots = 1 if nBoots <= 0 else nBoots;
+  dt = np.float32 if float32 else np.float64;
 
   ## Yes, I'm pre-pending the nBoots dimensions, but if it's one, we'll use np.squeeze at the end to remove that
   # Set the default values (NaN for everything)
-  bestNLL = np.ones((nBoots, nDisps, nCons)) * np.nan;
-  currParams = np.ones((nBoots, nDisps, nCons, nParam)) * np.nan;
-  varExpl = np.ones((nBoots, nDisps, nCons)) * np.nan;
-  prefSf = np.ones((nBoots, nDisps, nCons)) * np.nan;
-  charFreq = np.ones((nBoots, nDisps, nCons)) * np.nan;
+  bestNLL = np.ones((nBoots, nDisps, nCons), dtype=dt) * np.nan;
+  currParams = np.ones((nBoots, nDisps, nCons, nParam), dtype=dt) * np.nan;
+  varExpl = np.ones((nBoots, nDisps, nCons), dtype=dt) * np.nan;
+  prefSf = np.ones((nBoots, nDisps, nCons), dtype=dt) * np.nan;
+  charFreq = np.ones((nBoots, nDisps, nCons), dtype=dt) * np.nan;
   if joint>0:
-    totalNLL = np.ones((nBoots, nDisps, )) * np.nan;
+    totalNLL = np.ones((nBoots, nDisps, ), dtype=dt) * np.nan;
     paramList = np.ones((nBoots, nDisps, ), dtype='O') * np.nan;
-    success = np.ones((nBoots, nDisps, )) * np.nan;
+    success = np.ones((nBoots, nDisps, ), dtype=np.bool_) * np.nan; # this should just be bool
   else:
     totalNLL = None;
     paramList = None;
-    success = np.ones((nBoots, nDisps, nCons)) * np.nan;
+    success = np.ones((nBoots, nDisps, nCons), dtype=np.bool_) * np.nan; # this should just be bool
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success;
  

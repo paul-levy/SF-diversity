@@ -2311,7 +2311,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
 
   return init_params
 
-def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=0, gain_reg=0, ref_varExpl=None, veThresh=60, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0, modRecov=False, ftol=2.220446049250313e-09, jointMinCons=2, no_surr=False, isolFits=None):
+def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=0, gain_reg=0, ref_varExpl=None, veThresh=60, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0, modRecov=False, ftol=2.220446049250313e-09, jointMinCons=2, no_surr=False, isolFits=None, flt32=True):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint>0, (and DoGmodel is not flexGauss), then we fit assuming
       --- joint==1: a fixed ratio for the center-surround gains and [freq/radius]
@@ -2321,6 +2321,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       --- joint==3: a surround radius for all contrasts; all other parameters (both gains, center radius) free at al contrasts
       - note that ref_varExpl (optional) will be of the same form that the output for varExpl will be
       - note that jointMinCons is the minimum # of contrasts that must be included for a joint fit to be run (e.g. 2)
+      - if flt32, return param_list (for joint fits only) as float32 rather than float64 (the default)
       - As of 21.12.06, no_surr only applies with d-DoG-S model
       --- NOTE: We only use ftol if joint; if boot, we will artificially restrict ftol to avoid too many iteration steps (which yield minimal improvement)
       --- fracSig: if on, then the right-half (high SF) of the flex. gauss tuning curve is expressed as a fraction of the lower half
@@ -2718,7 +2719,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       print('%d: %s --> %s [loss: %.2e]' % (n_try, wax['success'], wax['message'], wax['fun']));
       # compare
       NLL = wax['fun'];
-      params_curr = wax['x'];
+      params_curr = np.asarray(wax['x'], np.float32) if flt32 else wax['x'];
 
       if np.isnan(overallNLL) or NLL < overallNLL or len(params_curr) != len(params): # the final check is if the # of parameters here is different from the exising # params --> then update, because our separate fits have updated and we have different # of conditions to fit
         overallNLL = NLL;
