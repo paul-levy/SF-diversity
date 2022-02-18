@@ -193,15 +193,16 @@ def np_smart_load(file_path, encoding_str='latin1', allow_pickle=True):
    while(nTry > 0):
      try:
          loaded = numpy.load(file_path, encoding=encoding_str, allow_pickle=True).item();
+         print('load with %d rem.' % nTry);
          break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-        sleep_time = random_in_range([3, 5])[0];
+        sleep_time = random_in_range([.3, 8])[0];
         sleep(sleep_time); # i.e. wait for 10 seconds
      except EOFError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-        sleep_time = random_in_range([3, 5])[0];
+        sleep_time = random_in_range([.3, 8])[0];
         sleep(sleep_time); # i.e. wait for 10 seconds
      except: # pickling error???
-        sleep_time = random_in_range([3, 5])[0];
+        sleep_time = random_in_range([.3, 8])[0];
         sleep(sleep_time); # i.e. wait for 10 seconds
      nTry -= 1 #don't try indefinitely!
 
@@ -2362,7 +2363,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     varExpl = np.ones((nCons, )) * np.nan;
     prefSf = np.ones((nCons, )) * np.nan;
     charFreq = np.ones((nCons, )) * np.nan;
-    success = np.ones((nCons, )) * np.nan;
+    success = np.ones((nCons, ), dtype=np.bool_);
     if joint>0:
       overallNLL = np.nan;
       params = np.nan;
@@ -2613,7 +2614,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       else:
          obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1, vol_lam=vol_lam);
       try:
-        maxfun = 45000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model often needs more iters to finish
+        maxfun = 145000 if not is_mod_DoG(DoGmodel) else 145000; # default is 15000; d-dog-s model often needs more iters to finish
         wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds, options={'maxfun': maxfun});
       except:
         continue; # the fit has failed (bound issue, for example); so, go back to top of loop, try again
@@ -2711,7 +2712,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       # --- debugging ---
       # --- debugging ---
       try: # 95000; 35000; 975000
-        maxfun = 1975000 if not is_mod_DoG(DoGmodel) else 15000; # default is 15000; d-dog-s model often needs more iters to finish
+        maxfun = 1975000 if not is_mod_DoG(DoGmodel) else 155000; # default is 15000; d-dog-s model often needs more iters to finish
         wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds, options={'ftol': ftol, 'maxfun': maxfun});
       except:
         continue; # if that particular fit fails, go back and try again
@@ -2719,7 +2720,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       print('%d: %s --> %s [loss: %.2e]' % (n_try, wax['success'], wax['message'], wax['fun']));
       # compare
       NLL = wax['fun'];
-      params_curr = np.asarray(wax['x'], np.float32) if flt32 else wax['x'];
+      params_curr = np.asarray(wax['x'], np.float32) if flt32 else wax['x']
 
       if np.isnan(overallNLL) or NLL < overallNLL or len(params_curr) != len(params): # the final check is if the # of parameters here is different from the exising # params --> then update, because our separate fits have updated and we have different # of conditions to fit
         overallNLL = NLL;
