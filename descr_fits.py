@@ -18,22 +18,16 @@ else:
   hpcSuff = '';
 
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
-#expName = 'dataList_glx_mr.npy'
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
-#df_f0 = 'descrFits_190503_sach_flex.npy';
-dogName = 'descrFits%s_220131c' % hpcSuff;
-#dogName = 'descrFits_220103';
-#dogName = 'descrFits_211214';
-#dogName = 'descrFits_211020_f030';
-#dogName = 'descrFits_211005';
-phAdvName = 'phaseAdvanceFits_211108'
-#phAdvName = 'phaseAdvanceFits_210914'
-rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-#rvcName_f0 = 'rvcFits_210914_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-#rvcName_f1 = 'rvcFits_211108'; # FOR LGN
-rvcName_f1 = 'rvcFits_210914'; # FOR V1
-#rvcName_f0 = 'rvcFits_210524_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-#rvcName_f1 = 'rvcFits_210524';
+dogName = 'descrFits%s_220219' % hpcSuff;
+if sys.argv[3] == 'LGN/':
+  phAdvName = 'phaseAdvanceFits_211108'
+  rvcName_f1 = 'rvcFits_211108'; # FOR LGN
+  rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+else:
+  phAdvName = 'phaseAdvanceFits_210914'
+  rvcName_f1 = 'rvcFits_210914'; # FOR V1
+  rvcName_f0 = 'rvcFits_210914_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 
 '''
 modelRecov = 0; # 
@@ -568,13 +562,13 @@ def invalid(params, bounds):
       return True;
   return False;
 
-def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1, float32=True):
+def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1, flt32=True):
   ''' Just create the empty numpy arrays that we'll fill up 
-      -- float32: numpy default is float64 -- float32 will be 2x smaller on memory
+      -- flt32: numpy default is float64 -- float32 will be 2x smaller on memory
       -- TODO: Do I need this control statement or can it be cleaned up?
   '''
   nBoots = 1 if nBoots <= 0 else nBoots;
-  dt = np.float32 if float32 else np.float64;
+  dt = np.float32 if flt32 else np.float64;
 
   ## Yes, I'm pre-pending the nBoots dimensions, but if it's one, we'll use np.squeeze at the end to remove that
   # Set the default values (NaN for everything)
@@ -586,11 +580,11 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1, float32=True):
   if joint>0:
     totalNLL = np.ones((nBoots, nDisps, ), dtype=dt) * np.nan;
     paramList = np.ones((nBoots, nDisps, ), dtype='O') * np.nan;
-    success = np.ones((nBoots, nDisps, ), dtype=np.bool_) * np.nan; # this should just be bool
+    success = np.ones((nBoots, nDisps, ), dtype=np.bool_);
   else:
     totalNLL = None;
     paramList = None;
-    success = np.ones((nBoots, nDisps, nCons), dtype=np.bool_) * np.nan; # this should just be bool
+    success = np.ones((nBoots, nDisps, nCons), dtype=np.bool_);
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success;
  
@@ -730,7 +724,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
 
   for boot_i in range(nBoots):
     if nBoots > 1:
-      ftol = 1e-5; # artificially lower value that has minimal impact on parameter values; will avoid too many fit iterations
+      ftol = 1e-6; # artificially lower value (was prev. 1e-5) that has minimal impact on parameter values; will avoid too many fit iterations
       if np.mod(boot_i, int(np.floor(nBoots/5))) == 0:
         print('iteration %d of %d' % (boot_i, nBoots));
     else:
@@ -1088,10 +1082,15 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, nBoots=nBoots);
       if descr_fits == 1:
-        n_repeats = 5 if joint>0 else 12; # was previously be 3, 15, then 7, 15
+        if nBoots > 1:
+          n_repeats = 2 if joint>0 else 5; # fewer if repeat
+        else:
+          n_repeats = 5 if joint>0 else 12; # was previously be 3, 15, then 7, 15
 
         #import cProfile, re
         #cProfile.run('fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov)');
+        if hf.is_mod_DoG(dog_model):
+          sleep(hf.random_in_range((0, 20))[0]); # why? DoG fits run so quickly that successive load/save calls take place in an overlapping way and we lose the result of some calls
         fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons);
 
       if rvcF0_fits == 1:
