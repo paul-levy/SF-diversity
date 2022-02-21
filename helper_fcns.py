@@ -193,7 +193,6 @@ def np_smart_load(file_path, encoding_str='latin1', allow_pickle=True):
    while(nTry > 0):
      try:
          loaded = numpy.load(file_path, encoding=encoding_str, allow_pickle=True).item();
-         print('load with %d rem.' % nTry);
          break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
         sleep_time = random_in_range([.3, 8])[0];
@@ -2372,12 +2371,12 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       bestNLL, currParams, varExpl, prefSf, charFreq, success = prevFits['NLL'], prevFits['params'], prevFits['varExpl'], prevFits['prefSf'], prevFits['charFreq'], prevFits['success'];
     else:
       bestNLL, currParams, varExpl, prefSf, charFreq, success = prevFits['NLL'][disp,:], prevFits['params'][disp,:], prevFits['varExpl'][disp,:], prevFits['prefSf'][disp,:], prevFits['charFreq'][disp,:], prevFits['success'][disp];
-      if joint>0:
-         try:
-            overallNLL = prevFits['totalNLL'][disp];
-            params = prevFits['paramList'][disp];
-         except:
-            overallNLL = np.nan; params = np.nan;
+    if joint>0:
+       try:
+          overallNLL = prevFits['totalNLL'][disp];
+          params = prevFits['paramList'][disp];
+       except:
+          overallNLL = np.nan; params = np.nan;
     if modRecov:
       # ALSO, if it's model recovery, then we are overwriting the existing fits, so let's make the loss NaN
       # --- yes, this is hacky, but we want to easily pass in the fit parameters while also saving these fits

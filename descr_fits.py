@@ -54,7 +54,7 @@ else:
 ## fit_RVC_f0        - forces f0 spikes for RVC
 
 ## invalid
-## DoG_loss
+## fit_descr_empties -- creates the arrays to be filled
 ## fit_descr_DoG
 
 ### 1: Recreate Movshon, Kiorpes, Hawken, Cavanaugh '05 figure 6 analyses
@@ -443,7 +443,11 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=25, fLname = rvcName_f0, dLname=exp
   cellStruct = hf.np_smart_load(data_loc + cellName + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
   # get expInd, load rvcFits [if existing]
-  expInd, expName = hf.get_exp_ind(data_loc, cellName);
+  try:
+    overwriteExpName = dataList['expType'][cell_num-1]
+  except:
+    overwriteExpName = None if not overwriteExpName else overwriteExpName; # we would've already established it above
+  expInd, expName = hf.get_exp_ind(data_loc, cellName, overwriteExpName);
   print('Making RVC (F0) fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
  
   # first, get the set of stimulus values:

@@ -11,11 +11,15 @@ import pdb
 basePath = os.getcwd() + '/';
 data_suff = 'V1_BB/structures/';
 
-expName = hf.get_datalist('V1_BB/');
+if 'pl1465' in basePath:
+  hpcSuff = 'HPC';
+else:
+  hpcSuff = '';
 
-sfName = 'descrFits_211214';
-#sfName = 'descrFits_210916';
-rvcName = 'rvcFits_210916';
+expName = hf.get_datalist('V1_BB/', force_full=1);
+
+sfName = 'descrFits%s_220219' % hpcSuff;
+rvcName = 'rvcFits%s_220220' % hpcSuff;
 
 def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, toSave=1, fracSig=1, nBoots=0, n_repeats=25, jointSf=0):
   ''' Separate fits for DC, F1 
@@ -133,8 +137,8 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
         fix_baseline = True;
       resp_str = hf_sf.get_resp_str(respMeasure=measure);
 
-      whichResp = [mask_only, mask_base];
-      whichKey = ['mask', 'both'];
+      whichResp = [mask_only]#, mask_base];
+      whichKey = ['mask']#, 'both'];
 
       if fit_rvc == 1 or fit_rvc is not None:
         ''' Fit RVCs responses (see helper_fcns.rvc_fit for details) for:
@@ -219,19 +223,24 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
             sfFit_curr = None
 
           # -- by default, loss_type=2 (meaning sqrt loss); why expand dims and transpose? dog fits assumes the data is in [disp,sf,con] and we just have [con,sf]
-          nll, prms, vExp, pSf, cFreq, totNLL, totPrm = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), None, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig, n_repeats=n_repeats, joint=jointSf) # noDisp=1 means that we don't index dispersion when accessins prevFits
+          nll, prms, vExp, pSf, cFreq, totNLL, totPrm, success = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), None, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig, n_repeats=n_repeats, joint=jointSf) # noDisp=1 means that we don't index dispersion when accessins prevFits
 
           if resample:
             if boot_i == 0: # i.e. first time around
               # - pre-allocate empty array of length nBoots (save time over appending each time around)
-              sfFits_curr_toSave[resp_str][wK]['boot_loss'] = np.empty((nBoots,) + nll.shape);
-              sfFits_curr_toSave[resp_str][wK]['boot_params'] = np.empty((nBoots,) + prms.shape);
-              sfFits_curr_toSave[resp_str][wK]['boot_prefSf'] = np.empty((nBoots,) + pSf.shape);
-              sfFits_curr_toSave[resp_str][wK]['boot_conGain'] = np.empty((nBoots,) + vExp.shape);
-              sfFits_curr_toSave[resp_str][wK]['boot_varExpl'] = np.empty((nBoots,) + cFreq.shape);
+              sfFits_curr_toSave[resp_str][wK]['boot_loss'] = np.empty((nBoots,) + nll.shape, dtype=np.float32);
+              sfFits_curr_toSave[resp_str][wK]['boot_params'] = np.empty((nBoots,) + prms.shape, dtype=np.float32);
+              sfFits_curr_toSave[resp_str][wK]['boot_prefSf'] = np.empty((nBoots,) + pSf.shape, dtype=np.float32);
+              sfFits_curr_toSave[resp_str][wK]['boot_conGain'] = np.empty((nBoots,) + vExp.shape, dtype=np.float32);
+              sfFits_curr_toSave[resp_str][wK]['boot_varExpl'] = np.empty((nBoots,) + cFreq.shape, dtype=np.float32);
               if jointSf>=1:
-                sfFits_curr_toSave[resp_str][wK]['boot_totalNLL'] = np.empty((nBoots,) + totNLL.shape);
-                sfFits_curr_toSave[resp_str][wK]['boot_paramList'] = np.empty((nBoots,) + paramList.shape);
+                sfFits_curr_toSave[resp_str][wK]['boot_totalNLL'] = np.empty((nBoots,) + totNLL.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_paramList'] = np.empty((nBoots,) + paramList.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_success'] = np.empty((nBoots, ), dtype=np.bool_);
+              else: # only if joint=0 will success be an array (and not just one value)
+                sfFits_curr_toSave[resp_str][wK]['boot_success'] = np.empty((nBoots, ) + success.shape, dtype=np.bool_);
+
+
             # then -- put in place
             sfFits_curr_toSave[resp_str][wK]['boot_loss'][boot_i] = nll;
             sfFits_curr_toSave[resp_str][wK]['boot_params'][boot_i] = prms;
@@ -239,17 +248,19 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
             sfFits_curr_toSave[resp_str][wK]['boot_conGain'][boot_i] = vExp
             sfFits_curr_toSave[resp_str][wK]['boot_varExpl'][boot_i] = cFreq
             if jointSf>=1:
-              sfFits_curr_toSave[resp_str][wK]['boot_loss'] = np.empty((nBoots,) + totNLL.shape);
-              sfFits_curr_toSave[resp_str][wK]['boot_loss'] = np.empty((nBoots,) + paramList.shape);
+              sfFits_curr_toSave[resp_str][wK]['boot_totalNLL'] = totNLL;
+              sfFits_curr_toSave[resp_str][wK]['boot_paramList'] = totPrm;
+              sfFits_curr_toSave[resp_str][wK]['boot_success'] = success;
           else: # otherwise, we'll only be here once
-            sfFits_curr_toSave[resp_str][wK]['NLL'] = nll;
-            sfFits_curr_toSave[resp_str][wK]['params'] = prms;
-            sfFits_curr_toSave[resp_str][wK]['varExpl'] = vExp;
-            sfFits_curr_toSave[resp_str][wK]['prefSf'] = pSf;
-            sfFits_curr_toSave[resp_str][wK]['charFreq'] = cFreq;
+            sfFits_curr_toSave[resp_str][wK]['NLL'] = nll.astype(np.float32);
+            sfFits_curr_toSave[resp_str][wK]['params'] = prms.astype(np.float32);
+            sfFits_curr_toSave[resp_str][wK]['varExpl'] = vExp.astype(np.float32);
+            sfFits_curr_toSave[resp_str][wK]['prefSf'] = pSf.astype(np.float32);
+            sfFits_curr_toSave[resp_str][wK]['charFreq'] = cFreq.astype(np.float32);
+            sfFits_curr_toSave[resp_str][wK]['success'] = success#.astype(np.bool_);
             if jointSf>=1:
-              sfFits_curr_toSave[resp_str][wK]['totalNLL'] = totNLL;
-              sfFits_curr_toSave[resp_str][wK]['paramList'] = totPrm;
+              sfFits_curr_toSave[resp_str][wK]['totalNLL'] = totNLL.astype(np.float32);
+              sfFits_curr_toSave[resp_str][wK]['paramList'] = totPrm.astype(np.float32);
         ######## 
         # END of sf fit (for this measure, boot iteration)
         ######## 
@@ -340,7 +351,10 @@ if __name__ == '__main__':
 
     #make_descr_fits((10, dataList['unitName'][10]), fit_rvc=pass_rvc, fit_sf=pass_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig)
 
-    n_repeats = 25 if joint==0 else 5; # don't need so many repeats if it's the joint fitting
+    if nBoots > 1:
+      n_repeats = 2 if joint>0 else 5; # fewer if repeat
+    else:
+      n_repeats = 5 if joint>0 else 12; # was previously be 3, 15, then 7, 15
 
     with mp.Pool(processes = nCpu) as pool:
       # if we're doing as parallel, do NOT save
@@ -376,5 +390,10 @@ if __name__ == '__main__':
         np.save(dataPath + sfNameFinal, sfFits);
 
   else:
-    make_descr_fits(cell_num, fit_rvc=fit_rvc, fit_sf=fit_sf, rvcMod=rvc_mod, sfMod=sf_mod, loss_type=loss_type, nBoots=nBoots, jointSf=jointSf);
+    if nBoots > 1:
+      n_repeats = 2 if jointSf>0 else 5; # fewer if boot
+    else:
+      n_repeats = 5 if jointSf>0 else 12; # was previously be 3, 15, then 7, 15
+
+    make_descr_fits(cell_num, fit_rvc=fit_rvc, fit_sf=fit_sf, rvcMod=rvc_mod, sfMod=sf_mod, loss_type=loss_type, nBoots=nBoots, jointSf=jointSf, n_repeats=n_repeats);
 
