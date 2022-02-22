@@ -2402,7 +2402,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     bound_gainCent = (1, 1.5*max_resp) if DoGmodel == 1 else (1, None); 
     # if DoGm=1, don't allow the max. resp to go over 50% of the maximum response
     #bound_gainCent = (1e-3, None);
-    bound_radiusCent= (1e-2, 0.5);
+    bound_radiusCent= (1e-2, 1.5);
     bound_gainSurr = (1e-2, 1); # multiplier on gainCent, thus the center must be weaker than the surround
     bound_radiusSurr = (1, 10); # multiplier on radiusCent, thus the surr. radius must be larger than the center
     if joint>0: 
