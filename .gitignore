@@ -7,6 +7,11 @@ V1/figures/*
 V1_BB/structures/**
 V1_BB/structures/m*
 V1_BB/figures/*
+V1_BB/*.exx*
+pytorch/*
+altExp/*.m
+altExp/exp_*
+altExp/*.xl*
 altExp/figures/**
 altExp/structures/m*
 **/.ipynb_checkpoints/**

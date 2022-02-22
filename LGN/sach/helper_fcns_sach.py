@@ -126,14 +126,17 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
   resps_mean = np.subtract(resps_mean, min_resp-1); # i.e. make the minimum response 1 spk/s...
 
   # and set up initial arrays
-  bestNLL = np.ones((nCons, )) * np.nan;
-  currParams = np.ones((nCons, nParam)) * np.nan;
-  varExpl = np.ones((nCons, )) * np.nan;
-  prefSf = np.ones((nCons, )) * np.nan;
-  charFreq = np.ones((nCons, )) * np.nan;
+  bestNLL = np.ones((nCons, ), dtype=np.float32) * np.nan;
+  currParams = np.ones((nCons, nParam), dtype=np.float32) * np.nan;
+  varExpl = np.ones((nCons, ), dtype=np.float32) * np.nan;
+  prefSf = np.ones((nCons, ), dtype=np.float32) * np.nan;
+  charFreq = np.ones((nCons, ), dtype=np.float32) * np.nan;
   if joint>0:
     overallNLL = np.nan;
     params = np.nan;
+    success = False;
+  else:
+    success = np.zeros((nCons, ), dtype=np.bool_);
 
   ### set bounds
   if DoGmodel == 0:
@@ -149,7 +152,6 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
       allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
   elif DoGmodel == 1: # SACH
     bound_gainCent = (1, 1.5*max_resp);
-    #bound_gainCent = (1e-3, None);
     bound_radiusCent= (1e-3, None);
     bound_gainSurr = (1e-2, 1); # multiplier on gainCent, thus the center must be weaker than the surround
     bound_radiusSurr = (1, 10); # (1,10) # multiplier on radiusCent, thus the surr. radius must be larger than the center
@@ -186,7 +188,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
       allBounds = (bound_gainCent, bound_freqCent, bound_gainFracSurr, bound_freqFracSurr);
 
   ### organize responses -- and fit, if joint=0
-  allResps = []; allRespsSem = []; valCons = []; start_incl = 0; incl_inds = [];
+  allResps = []; allRespsSem = []; allSfs = []; valCons = []; start_incl = 0; incl_inds = [];
   base_rate = np.min(resps_mean.flatten());
   for con in range(nCons):
     if all_cons[con] == 0: # skip 0 contrast...
@@ -208,6 +210,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
 
       allResps.append(resps_curr);
       allRespsSem.append(sem_curr);
+      allSfs.append(all_sfs);
       incl_inds.append(con);
       # and add to the bounds list!
       if DoGmodel == 1:
@@ -259,14 +262,15 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
         varExpl[con] = var_expl_direct(resps_curr[all_sfs>0], curr_mod[all_sfs>0]); # do not include 0/cdeg SF conditoin
         prefSf[con] = dog_prefSf(params, dog_model=DoGmodel, all_sfs=all_sfs[all_sfs>0]); # do not include 0 c/deg SF condition
         charFreq[con] = dog_charFreq(params, DoGmodel=DoGmodel);
+        success[con] = wax['success'];
 
   if joint==0: # then we're DONE
-    return bestNLL, currParams, varExpl, prefSf, charFreq, None, None; # placeholding None for overallNLL, params [full list]
+    return bestNLL, currParams, varExpl, prefSf, charFreq, None, None, success; # placeholding None for overallNLL, params [full list]
 
   ### NOW, we do the fitting if joint=True
   if joint>0:
     if len(allResps)<jointMinCons: # need at least jointMinCons contrasts!
-      return bestNLL, currParams, varExpl, prefSf, charFreq, overallNLL, params;
+      return bestNLL, currParams, varExpl, prefSf, charFreq, overallNLL, params, success;
     ### now, we fit!
     for n_try in range(n_repeats):
       # first, estimate the joint parameters; then we'll add the per-contrast parameters after
@@ -291,7 +295,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
           allInitParams = [*allInitParams, curr_init[0], curr_init[2]];
 
       methodStr = 'L-BFGS-B';
-      obj = lambda params: DoG_loss(params, allResps, all_sfs, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, joint=joint, n_fits=len(allResps));
+      obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, joint=joint, n_fits=len(allResps)); # if joint, it's just one fit!
       wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds, options={'ftol': ftol});
 
       # compare
@@ -301,6 +305,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
       if np.isnan(overallNLL) or NLL < overallNLL:
         overallNLL = NLL;
         params = params_curr;
+        success = wax['success'];
 
     ### Done with multi-start fits; now, unpack the fits to fill in the "true" parameters for each contrast
     # --- first, get the global parameters
@@ -339,7 +344,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
       charFreq[conInd] = dog_charFreq(curr_params, DoGmodel=DoGmodel);    
 
     # and NOW, we can return!
-    return bestNLL, currParams, varExpl, prefSf, charFreq, overallNLL, params;
+    return bestNLL, currParams, varExpl, prefSf, charFreq, overallNLL, params, success;
 ##
 
 
