@@ -144,7 +144,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
 
     HPC = 'HPC' if 'pl1465' in data_loc else '';
 
-    fLname = 'descrFits%s_s220219' % HPC;
+    fLname = 'descrFits%s_s220220' % HPC;
     #fLname = 'descrFits_s211206';
     #fLname = 'descrFits_s211006';
 

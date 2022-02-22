@@ -95,7 +95,7 @@ def var_explained(data, modParams, whichInd, DoGmodel=1, rvcModel=None):
 
 ## - for fitting DoG models
 
-def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, ref_varExpl=None, veThresh=65, fracSig=1, ftol=2.220446049250313e-09, jointMinCons=3):
+def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, ref_varExpl=None, veThresh=-np.nan, fracSig=1, ftol=2.220446049250313e-09, jointMinCons=3):
   ''' Helper function for fitting descriptive funtions to SF responses
       if joint=True, (and DoGmodel is 1 or 2, i.e. not flexGauss), then we fit assuming
       a fixed ratio for the center-surround gains and [freq/radius]
@@ -151,8 +151,8 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
     else:
       allBounds = (bound_baseline, bound_range, bound_mu, bound_sig, bound_sig);
   elif DoGmodel == 1: # SACH
-    bound_gainCent = (1, 1.5*max_resp);
-    bound_radiusCent= (1e-3, None);
+    bound_gainCent = (1, 3*max_resp);
+    bound_radiusCent= (1e-2, 1.5);
     bound_gainSurr = (1e-2, 1); # multiplier on gainCent, thus the center must be weaker than the surround
     bound_radiusSurr = (1, 10); # (1,10) # multiplier on radiusCent, thus the surr. radius must be larger than the center
     if joint>0:
