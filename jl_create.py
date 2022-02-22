@@ -111,7 +111,7 @@ if area == 'LGN':
   #expDirs = ['LGN/']
   #expNames = ['dataList.npy']
   expDirs = ['LGN/', 'LGN/sach/'];
-  expNames = ['dataList_210524.npy', 'sachData.npy']
+  expNames = ['dataList_220222.npy', 'sachData.npy']
   #expDirs = ['LGN/sach/'];
   #expNames = ['sachData.npy']
 
@@ -130,11 +130,10 @@ if area == 'LGN':
   #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
   dogMod = 1; # 1 (sach) or 2 (Tony)
   jointType = 2; # [1/2/3 --> fix gs, rs/fix rs/fix rc, rs]
-  #dogNames = ['descrFits_211005_sach_sach.npy', 'descrFits_s211006_sach_sach.npy'];
-  dogNames = ['descrFits_211206_sqrt_sach_JTsurrShape.npy', 'descrFits_s211206_sqrt_sach_JTsurrShape.npy'];
-  #dogNames = ['descrFits_211020_sach_sach.npy', 'descrFits_s211020_sach_sach.npy'];
+  #dogNames = ['descrFits_211206_sqrt_sach_JTsurrShape.npy', 'descrFits_s211206_sqrt_sach_JTsurrShape.npy'];
+  dogNames = ['descrFitsHPC_220219_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220219_sqrt_sach_JTsurrShape.npy'];
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
-  descrNames = ['descrFits_211005_sach_flex.npy', 'descrFits_s211006_sach_flex.npy'];
+  descrNames = ['descrFits_211005_sqrt_flex.npy', 'descrFitsHPC_s220219_sqrt_flex.npy'];
   #dogNames = ['descrFits_191023_sach_sach.npy'];
   #descrNames = ['descrFits_200507_sqrt_flex.npy'];
 
@@ -162,8 +161,8 @@ if area == 'LGN':
   #### these are now defaults in hf.jl_create - but here, nonetheless, for reference!
 
   # any parameters we need for analysis below?
-  varExplThresh = 60; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  dog_varExplThresh = 60; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  dog_varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
 
   sf_range = [0.01, 10]; # allowed values of 'mu' for fits - see descr_fit.py for details
 
@@ -174,4 +173,6 @@ if area == 'LGN':
   from datetime import datetime
   suffix = datetime.today().strftime('%y%m%d')
 
-  np.save(base_dir + 'jointList_LGN_%s_vT%02d_dvT%02d' % (suffix, varExplThresh, dog_varExplThresh), jointList)
+  varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
+  dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
+  np.save(base_dir + 'jointList_LGN_%s_vT%02d_dvT%02d' % (suffix, varExplThresh_str, dog_varExplThresh_str), jointList)

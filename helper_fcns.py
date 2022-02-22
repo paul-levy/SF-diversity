@@ -330,8 +330,8 @@ def get_datalist(expDir, force_full=0):
     return 'dataList_200507.npy' if force_full==0 else 'dataList.npy'; # limited set of data
     #return 'dataList.npy';
   elif expDir == 'LGN/':
-    return 'dataList_210524.npy'
-    #return 'dataList.npy';
+    #return 'dataList_210524.npy'
+    return 'dataList_220222.npy';
   elif expDir == 'V1/':
     return 'dataList_glx_200507.npy' if force_full==0 else 'dataList_210721.npy' #'dataList_glx.npy'; # limited set of data
     #return 'dataList_glx_200507.npy' if force_full==0 else 'dataList_210528.npy' #'dataList_glx.npy'; # limited set of data
@@ -2285,7 +2285,8 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
       init_gainCent = maxResp*random_in_range((0.7, 1.3))[0]/(np.pi*np.square(init_radiusCent));
     # -- surround parameters are relataive to center
     init_gainSurr = random_in_range((0.1, 0.8))[0]; #init_gainCent * random_in_range((0.5, 0.9))[0]; # start with a stronger surround?
-    init_radiusSurr = random_in_range((1.1, 2))[0]; #init_radiusCent * random_in_range((0.9, 4))[0];
+    init_radiusSurr = random_in_range((2, 4))[0]; #init_radiusCent * random_in_range((0.9, 4))[0];
+    #init_radiusSurr = random_in_range((1.1, 2))[0]; #init_radiusCent * random_in_range((0.9, 4))[0];
     init_params = [init_gainCent, init_radiusCent, init_gainSurr, init_radiusSurr];
   ############
   ## TONY
@@ -4011,7 +4012,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       #  oh = perCell_summary(30);
       #  pdb.set_trace();
 
-      #oh = perCell_summary(78);
+      #oh = perCell_summary(20);
       #pdb.set_trace();
 
       nCpu = mp.cpu_count();
