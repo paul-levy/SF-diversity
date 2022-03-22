@@ -45,19 +45,20 @@ allData = hf.np_smart_load(dataPath + 'sachData.npy');
 cellStruct = allData[which_cell-1];
 
 # #### Load descriptive model fits, RVC Naka-Rushton fits, [comp. model fits]
-zSub = 1; # are we loading fits that were fit to responses adjusted s.t. the lowest value is 1?
+zSub = 0; # are we loading fits that were fit to responses adjusted s.t. the lowest value is 1?
 #######
 ## NOTE: SF tuning curves with with zSub; RVCs are not, so we must subtract respAdj from the RVC curve to align with what we fit (i.e. the zSub'd data)
 #######
 HPC = 'HPC' if isHPC else '';
-fLname = 'descrFits%s_s220220' % HPC; #211006';
+fLname = 'descrFits%s_s220227' % HPC; #211006';
 mod_str = hf.descrMod_name(sf_DoG_model);
 fLname_full = hf.descrFit_name(sf_loss_type, fLname, mod_str, joint=joint);
 descrFits = hf.np_smart_load(dataPath + fLname_full);
 descrFits = descrFits[which_cell-1]; # just get this cell
 
 rvcSuff = hf.rvc_mod_suff(rvcMod);
-rvcBase = 'rvcFits_211006';
+rvcBase = 'rvcFits%s_220219' % HPC;
+#rvcBase = 'rvcFits_211006';
 #rvcBase = 'rvcFits_210721';
 rvcFits = hf.np_smart_load(dataPath + hf.rvc_fit_name(rvcBase, rvcMod));
 rvcFits = rvcFits[which_cell-1];
@@ -90,8 +91,6 @@ f1 = resps[1]; # power at fundamental freq. of stimulus
 #########
 # #### All SF tuning on one graph
 #########
-
-plotThresh = 1e-1;
 maxResp = np.max(np.max(f1['mean']));
 minResp = np.nanmin(f1['mean'].flatten());
 if zSub == 1:
@@ -100,7 +99,9 @@ else:
   respAdj = np.array([0]);
 
 f, ax = plt.subplots(1, 2, figsize=(35, 20), sharey=True);
- 
+
+minResp_toPlot = 5e-1; 
+
 lines = [];
 for c in reversed(range(nCons)):
 
@@ -110,19 +111,21 @@ for c in reversed(range(nCons)):
     col = [(nCons-c-1)/float(nCons), (nCons-c-1)/float(nCons), (nCons-c-1)/float(nCons)];
     respAbBaseline = np.reshape(f1['mean'][c, val_sfs], (len(val_sfs), ));
     respVar = np.reshape(f1['sem'][c, val_sfs], (len(val_sfs), )); 
+    abvBound = respAbBaseline>minResp_toPlot;
     # DO NOT actually plot error bar on these...
-    ax[0].plot(all_sfs[val_sfs], respAbBaseline - respAdj, '-o', clip_on=False, color=col, label='%d%%' % (int(100*np.round(all_cons[c], conDig))))
+    ax[0].plot(all_sfs[val_sfs][abvBound], respAbBaseline[abvBound] - respAdj, '-o', clip_on=False, color=col, label='%d%%' % (int(100*np.round(all_cons[c], conDig))))
  
     # then descriptive fit
     sfs_plot = np.geomspace(all_sfs[val_sfs[0]], all_sfs[val_sfs[-1]], 100);
     prms_curr = descrFits['params'][c];
     descrResp = hf.get_descrResp(prms_curr, sfs_plot, sf_DoG_model);
-    ax[1].plot(sfs_plot, descrResp, '-', clip_on=False, color=col); #, label=str(np.round(all_cons[c], conDig)))
+    abvZero = descrResp>minResp_toPlot;
+    ax[1].plot(sfs_plot[abvZero], descrResp[abvZero], '-', clip_on=False, color=col); #, label=str(np.round(all_cons[c], conDig)))
 
 for i in range(2):
   #ax[i].set_aspect('equal', 'box'); 
   ax[i].set_xlim((0.5*np.min(all_sfs[val_sfs]), 1.2*np.max(all_sfs[val_sfs])));
-  ax[i].set_ylim((5e-1, 300)); # common y axis for ALL plots
+  ax[i].set_ylim((minResp_toPlot, 300)); # common y axis for ALL plots
   #ax[i].set_ylim((5e-2, 1.5*maxResp));
 
   #ax.set_xscale('symlog', linthreshx=all_sfs[1]); # all_sfs[0] = 0, but all_sfs[0]>1
@@ -179,7 +182,7 @@ for c in reversed(range(nCons)):
     for i in range(2):
 
       # plot data
-      sfsAx[c_plt_ind, i].errorbar(data_sfs, curr_resps_adj[abvThresh], 
+      sfsAx[c_plt_ind, i].errorbar(data_sfs[abvThresh], curr_resps_adj[abvThresh], 
                                     curr_sem[v_sfs][abvThresh], fmt='o', markersize=10, clip_on=False, color=col);
 
       # plot descriptive model fit and inferred characteristic frequency

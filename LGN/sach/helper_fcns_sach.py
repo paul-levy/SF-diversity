@@ -123,7 +123,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
   ############
   ### WARNING - we're subtracting min_resp-1 from all responses
   ############  
-  resps_mean = np.subtract(resps_mean, min_resp-1); # i.e. make the minimum response 1 spk/s...
+  #resps_mean = np.subtract(resps_mean, min_resp-1); # i.e. make the minimum response 1 spk/s...
 
   # and set up initial arrays
   bestNLL = np.ones((nCons, ), dtype=np.float32) * np.nan;
@@ -352,18 +352,20 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
 
 #####
 
-def blankResp(data):
+def blankResp(data, get_dc=0):
   blanks = np.where(data['cont'] == 0);
 
-  mu = np.mean(data['f0'][blanks]);
-  std = np.std(data['f0'][blanks]);
+  key = 'f0' if get_dc else 'f1';
+  mu = np.mean(data[key][blanks]);
+  std = np.std(data[key][blanks]);
 
   return mu, std;
 
-def tabulateResponses(data, resample=False):
+def tabulateResponses(data, resample=False, sub_f1_blank=False):
   ''' Given the dictionary containing all of the data, organize the data into the proper responses
   Specifically, we know that Sach's experiments varied contrast and spatial frequency
   Thus, we will organize responses along these dimensions
+  - NOTE: Sach's data has marked offset, even on F1 -- if sub_f1_blank is True, we'll subtract that off
   '''
   all_cons = np.unique(data['cont']);
   all_cons = all_cons[all_cons>0];
@@ -380,6 +382,8 @@ def tabulateResponses(data, resample=False):
   f0arr = dict();
   f1arr = dict();
   
+  to_sub = blankResp(data, get_dc=False)[0] if sub_f1_blank else 0;
+
   for con in range(len(all_cons)):
     val_con = np.where(data['cont'] == all_cons[con]);
     f0arr[con] = dict();
@@ -391,10 +395,10 @@ def tabulateResponses(data, resample=False):
         non_nan = np.where(~np.isnan(data['f1arr'][val_con][val_sf]))[-1]; # we accidentally create a singleton 1st dim. with this indexing; ignore it
         new_inds = np.random.choice(non_nan, len(non_nan));
         f0arr[con][sf] = nan_rm(data['f0arr'][val_con][val_sf][0][new_inds]); # internal [0] is again due to poor indexing
-        f1arr[con][sf] = nan_rm(data['f1arr'][val_con][val_sf][0][new_inds])
+        f1arr[con][sf] = nan_rm(data['f1arr'][val_con][val_sf][0][new_inds] - to_sub)
       else:
         f0arr[con][sf] = nan_rm(data['f0arr'][val_con][val_sf]);
-        f1arr[con][sf] = nan_rm(data['f1arr'][val_con][val_sf]);
+        f1arr[con][sf] = nan_rm(data['f1arr'][val_con][val_sf] - to_sub);
 
       # take mean, since some conditions have repeats - just average them
       f0mean[con, sf] = np.mean(f0arr[con][sf]); #np.mean(data['f0'][val_con][val_sf]);
