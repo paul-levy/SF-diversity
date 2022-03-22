@@ -3,6 +3,7 @@ from scipy.stats import norm, mode, poisson, nbinom, sem
 from scipy.stats.mstats import gmean as geomean
 from numpy.matlib import repmat
 from helper_fcns_sfBB import get_resp_str
+from re import findall as re_findall
 import scipy.optimize as opt
 import os, sys
 import importlib as il
@@ -1105,7 +1106,10 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, des
         hiCon = 0; # holdover from hf.organize_resp (with expInd==1, sent to V1_orig/helper_fcns.organize_modResp
       else:
         hiCon = -1;
-      prefSfEst[i] = dfits[cellNum-1]['prefSf'][0][hiCon]; # get high contrast, single grating prefSf
+      try:
+         prefSfEst[i] = dfits[cellNum-1]['prefSf'][0][hiCon]; # get high contrast, single grating prefSf
+      except:
+         pass
   # now "trim" prefSfEst (i.e. remove the second entry if dfn_f1 is None)
   prefSfEst = prefSfEst[~np.isnan(prefSfEst)];
   man_prefSfEst = np.array([np.argmax(resps[0, :, -1]) for resps in rates_org]); # get peak resp for f0 and f1
@@ -3189,7 +3193,7 @@ def get_rvcResp(params, curr_cons, rvcMod):
 ##################################################################
 ##################################################################
 
-def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, localBoots=100, bootThresh=0.25, oldVersion=False, jointType=0):
+def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0):
 
    ''' - bootThresh (fraction of time for which a boot metric must be defined in order to be included in analysis)
    '''
@@ -3203,7 +3207,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    # get experiment name, load cell
    if isSach or isBB: # if it's Sach or Bauman+Bonds
      if isSach:
-       expName = dataList[cell_ind]['progName'];
+       expName = dataList[cell_ind]['cellName'];
        expInd = np.nan; # not applicable...
        cell = dataList[cell_ind];
        data = cell['data'];
@@ -3261,6 +3265,10 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
         # TODO: note, this is dangerous; thus far, only V1 cells don't have 'unitType' field in dataList, so we can safely do this
         cellType = 'V1'; 
 
+   if expName[0] == 'm':
+      mInd = int(re_findall('\d+', expName)[0]);
+   else:
+      mInd = '';
    meta = dict([('fullPath', data_loc),
                ('cellNum', cell_ind+1),
                ('dataList', dL_nm),
@@ -3273,6 +3281,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                ('jointType', jointType), 
                ('rvcFits', rv_nm),
                ('expName', expName),
+               ('mInd', mInd),
                ('expInd', expInd),
                ('stimVals', stimVals),
                ('cellType', cellType),
@@ -3476,14 +3485,22 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    # the last values to set-up -- done here so that we properly access sfBB
    try:
      nBoots_descr = descrFits[cell_ind]['boot_params'].shape[0]; # this is where we find out how many boot iters are present
-     nBoots_dog = dogFits[cell_ind]['boot_params'].shape[0]; # this is where we find out how many boot iters are present
-     if nBoots_descr == 1:
-       nBoots_descr = descrFits[cell_ind]['boot_params'].shape[1]; # HORRIBLE HACK FOR SF_BB -- fix
-     if nBoots_dog == 1:
-       nBoots_dog = dogFits[cell_ind]['boot_params'].shape[1]; # HORRIBLE HACK FOR SF_BB -- fix
    except:
      nBoots_descr = 1;
+   try:
+     nBoots_dog = dogFits[cell_ind]['boot_params'].shape[0]; # this is where we find out how many boot iters are present
+   except:
      nBoots_dog = 1;
+   if nBoots_descr == 1:
+      try:
+         nBoots_descr = descrFits[cell_ind]['boot_params'].shape[1]; # HORRIBLE HACK FOR SF_BB -- fix
+      except:
+         pass;
+   if nBoots_dog == 1:
+      try:
+         nBoots_dog = dogFits[cell_ind]['boot_params'].shape[1]; # HORRIBLE HACK FOR SF_BB -- fix
+      except:
+         pass;
    # storing bootstrap values for computing, analysis later on [initialize here]
    boots_size_descr = (nDisps, nCons, nBoots_descr);
    boots_size_dog = (nDisps, nCons, nBoots_dog);
@@ -3500,6 +3517,8 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      #######
      ## spatial frequency stuff
      #######
+     start_incl = False; # Once the lowest contrast value has passed the thresold, we start including
+     start_incl_dog = False;
      for c in range(nCons):
 
        # zeroth...model-free metrics
@@ -3514,23 +3533,6 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        sf_gt0 = np.where(curr_sfs>0)[0]; # if we include a zero-SF condition, then everything goes to zero!
 
        dataMetrics['sfCom'][d, c] = sf_com(curr_resps[sf_gt0], curr_sfs[sf_gt0])
-       '''
-       # do some bootstrapping here for non-descr. metrics
-       boot_com = np.zeros((localBoots, ));
-       boot_var = np.zeros((localBoots, ));
-       for i in range(localBoots):
-         non_nan = nan_rm(curr_resps[sf_gt0]);
-         curr_resps = numpy.random.choice(non_nan, len(non_nan));
-         cr, cs = curr_resps[sf_gt0], curr_sfs[sf_gt0]
-         boot_com[i] = sf_com(cr, cs);
-         boot_var[i] = sf_var(cr, cs, boot_com[i]);
-         
-       boot_sfCom_mn[d, c] = np.nanmean(boot_com);
-       boot_sfCom_md[d, c] = np.nanmedian(boot_com);
-       boot_sfCom_std[d, c] = np.nanstd(boot_com);
-       '''
-       #sfComLin[d, c] = sf_com(curr_resps[sf_gt0], curr_sfs[sf_gt0], logSF=False)
-
        dataMetrics['sfVar'][d, c] = sf_var(curr_resps[sf_gt0], curr_sfs[sf_gt0], dataMetrics['sfCom'][d, c]);
 
        # get the c.o.m. based on the restricted set of SFs, only
@@ -3545,16 +3547,27 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
            # NOTE: We don't have real threshold for inclusion IF the fits are joint
            # --- why? As of 21.12.04, the joint fits use Sach's approach, which is to only include in the joint fits
            # ----- the contrasts starting with the lowest which has a varExpl greater than the threshold (typically 60%)
-           thresh_to_use = -np.inf if jointType > 0 else dog_varExplThresh;
-           if varExpl > thresh_to_use:
+           #thresh_to_use = -np.inf if jointType > 0 else dog_varExplThresh;
+           ### TEMP: Switch back to keeping threshold
+           thresh_to_use = dog_varExplThresh;
+           if not start_incl_dog: # check to see if we can start ubckydubg
+              if varExpl > thresh_to_use:
+                 start_incl_dog = True;
+           if start_incl_dog:
              dataMetrics['dog_varExpl'][d,c] = varExpl;
              # on data
              dataMetrics['dog_pSf'][d, c] = dogFits[cell_ind]['prefSf'][d, c]
              dataMetrics['dog_charFreq'][d, c] = dogFits[cell_ind]['charFreq'][d, c]
-             #if is_mod_DoG(dogMod):
-             #   dataMetrics['dog_charFreq'][d, c] = dogFits[cell_ind]['charFreq'][d, c]
-             #else: # get center radius of central DoG
-             #   dataMetrics['dog_charFreq'][d, c] =                 
+             '''
+             if is_mod_DoG(dogMod):
+                dataMetrics['dog_charFreq'][d, c] = dogFits[cell_ind]['charFreq'][d, c]
+             else: # get center radius of central DoG
+                try:
+                   dataMetrics['dog_charFreq'][d, c] = 1./(np.pi*dogFits[cell_ind]['params'][d,c,1]); # this index is the center radius --> 1/f is charFreq
+                except Exception as e:
+                   print('----jl_perCell error [%s/%02d]: %s' % (expDir, cell_ind+1, e));
+                   pass;
+             '''
              # get the params and do bandwidth, high-freq. cut-off measures
              dog_params_curr = dogFits[cell_ind]['params'][d, c];
              for ky,height in zip(['dog_bwHalf', 'dog_bw34'], [0.5, 0.75]):
@@ -3567,7 +3580,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
              for ky,frac in zip(['dog_sf70', 'dog_sfE'], [0.7, eFrac]):
                 dataMetrics[ky][d, c] = sf_highCut(dog_params_curr, sfMod=dogMod, frac=frac, sfRange=(0.1, 15));
              # Also get spatial params, i.e. center gain, radius, volume; surround gain, radius, volume
-             if dogMod == 3: # if it's sach, then let's get the "mech" for the center Gaussian
+             if not is_mod_DoG(dogMod): # i.e. it's a d-DoG-S
                dataMetrics['dog_mech'][d, c] = [dog_get_param(dog_params_curr[0:4], 1, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]; #dogMod 1, since they're param. like Sach
              else:
                dataMetrics['dog_mech'][d, c] = [dog_get_param(dog_params_curr, dogMod, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']];
@@ -3580,7 +3593,10 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                if boot_prms.shape[0] == 1:
                  boot_prms = np.transpose(boot_prms, axes=(1,0,2,3)); # i.e. flip 1st and 2nd axes
                # ---- zeroth, mechanism
-               dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, :]), dogMod, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]);
+               if not is_mod_DoG(dogMod): # i.e. it's a d-DoG-S
+                  dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, 0:4]), 1, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]); #dogMod 1, since they're param. like Sach
+               else:
+                  dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, :]), dogMod, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]);
                # then, in order: sf70, pSf, charFreq
                metrs = ['pSf', 'charFreq', 'sf70', 'bwHalf', 'bw34'];
                compute = ['np.nanmedian(', 'np.nanmean(', 'np.nanstd(', 'np.nanstd(np.log10(']
@@ -3593,6 +3609,12 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                   elif 'pSf' in metr or 'charFreq' in metr:
                      # --- must manually specify for pSf, since we call it "pSf" but fits have "prefSf"
                      dataMetrics[curr_key][d,c] = dogFits[cell_ind]['boot_%s' % metr][:, d, c] if 'charFreq' in metr else dogFits[cell_ind]['boot_prefSf'][:, d, c]
+                     '''
+                     if is_mod_DoG(dogMod):
+                        dataMetrics[curr_key][d,c] = dogFits[cell_ind]['boot_%s' % metr][:, d, c] if 'charFreq' in metr else dogFits[cell_ind]['boot_prefSf'][:, d, c]
+                     else: # d-DoG-S, as of 22.03.01, need to compute charFreq here from the center radius (index=1)
+                        dataMetrics[curr_key][d,c] = 1./(np.pi*boot_prms[:, d, c, 1]) if 'charFreq' in metr else dogFits[cell_ind]['boot_prefSf'][:, d, c]
+                     '''
                   elif 'bw' in metr:
                      height = 0.5 if 'Half' in metr else 0.75; # assumes it's either half or 3/4th height
                      dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=dogMod)[1] for boot_i in range(boot_prms.shape[0])]);
@@ -3604,9 +3626,12 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                      #if n_nonNan >= bootThresh*boot_prms.shape[0]: # i.e. BW should be defined at least X% of the time!
                      try: # need the if/else to handle the case where two parantheses need closing
                         dataMetrics[boot_key][d,c] = eval('%sdataMetrics[curr_key][d,c]))' % comp) if 'stdLog' in boot_metr else eval('%sdataMetrics[curr_key][d,c])' % comp);
-                     except:
+                     except Exception as e:
+                        print('----jl_perCell error: %s' % e);
                         pass
-             except:
+            
+             except Exception as e:
+               print('----jl_perCell error [%s/%02d]: %s' % (expDir, cell_ind+1, e));
                pass
                   
          except: # then this dispersion does not have that contrast value, but it's ok - we already have nan
@@ -3616,7 +3641,11 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        if cell_ind in descrFits:
          try:
            varExpl = descrFits[cell_ind]['varExpl'][d, c];
-           if varExpl > varExplThresh:
+           thresh_to_use = varExplThresh;
+           if not start_incl: # check to see if we can start ubckydubg
+              if varExpl > thresh_to_use:
+                 start_incl = True;
+           if start_incl:
              dataMetrics['sfVarExpl'][d, c] = varExpl;
              # on data
              dataMetrics['lsfv'][d, c] = compute_LSFV(descrFits[cell_ind]['params'][d, c, :]);
@@ -3951,7 +3980,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    return cellSummary;
 
 def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods,
-              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, localBoots=100, jointType=0):
+              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, jointType=0):
   ''' create the "super structure" that we use to analyze data across multiple versions of the experiment
       TODO: update this to get proper spikes/tuning measures based on f1/f0 ratio (REQUIRES descrFits to be like rvcFits, i.e. fit F1 or F0 responses, accordingly)
       inputs:
@@ -3980,7 +4009,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
 
   for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, rvcMod in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods):
 
-    #if 'ach' in expDir:
+    #if expDir != 'V1_BB/':
     #   continue;
 
     # get the current directory, load data list
@@ -4006,13 +4035,13 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     isBB = 1 if 'BB' in expDir else 0;
 
     if toPar:
-      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, localBoots=localBoots, jointType=jointType)
+      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType)
 
       #if isBB:
       #  oh = perCell_summary(30);
       #  pdb.set_trace();
 
-      #oh = perCell_summary(20);
+      #oh = perCell_summary(37);
       #pdb.set_trace();
 
       nCpu = mp.cpu_count();

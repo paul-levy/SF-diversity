@@ -100,7 +100,11 @@ fracSig = 1;
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
-descrBase = 'descrFits%s_220219' % hpc_str;
+if expDir == 'LGN/':# or expDir == 'altExp':
+    descrBase = 'descrFits%s_220228' % hpc_str;
+else:
+    descrBase = 'descrFits%s_220320' % hpc_str;
+    #descrBase = 'descrFits%s_220307e' % hpc_str;
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_211129';
