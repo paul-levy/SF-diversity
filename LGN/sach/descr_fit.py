@@ -12,8 +12,82 @@ import pdb
 ### RVC
 #################
 
-def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0, nBoots=0):
-  ''' Piggy-backing off of phase_advance_fit above, get prepared to project the responses onto the proper phase to get the correct amplitude
+def phase_advance_fit(cell_num, data_loc, phAdvName, dir=1, to_save=1, returnMod=1):
+  ''' Modeled after the call in the "standard" helper_fcns, but specific to accessing responses of Sach data '''
+
+  # load cell information
+  if data_loc is not None:
+    dataList = hf.np_smart_load(data_loc + 'sachData.npy');
+    assert dataList!=[], "data file not found!"
+    data = dataList[cell_num-1]['data'];
+  else: # if we make data_loc=None, then we've already passed in the data in cell_num
+    data = cell_num; 
+
+  if to_save:
+    phAdvFinal = hf.phase_fit_name(phAdvName, dir);
+    # first, load the file if it already exists
+    if os.path.isfile(data_loc + phAdvFinal):
+        try:
+          phFits = hf.np_smart_load(data_loc + phAdvFinal);
+        except:
+          phFits = np.load(data_loc + phAdvFinal, allow_pickle=True).item();
+        try:
+          phFits_curr = phFits[cell_num-1];
+        except:
+          phFits_curr = None;
+    else:
+        phFits = dict();
+        phFits_curr = None;
+
+  print('Doing the work, now');
+
+  all_f1_tr = [hf.nan_rm(x) for x in data['f1arr']]; # nan rm first
+  all_f1ph_tr = [hf.nan_rm(x) for x in data['f1pharr']]; # nan rm first
+  allAmp_mean, allPhi_mean, allAmp_std, allPhi_var = hf.polar_vec_mean(all_f1_tr, all_f1ph_tr);
+
+  # then, we'll need to organize into list of lists -- by SF (outer), then by asc. con (inner), with [mean, std OR var] per each
+  cons = np.unique(data['cont']);
+  sfs = np.unique(data['sf']);
+  allAmp = []; allPhi = []; allCons = []; allTf = [];
+  for sf_val in sfs:
+    curr_amp = []; curr_phi = []; curr_tf = [];
+    ok_sf = data['sf']==sf_val;
+    for con_val in cons:
+      which_ind = np.where(np.logical_and(data['cont']==con_val, ok_sf))[0][0];
+      curr_amp.append([allAmp_mean[which_ind], allAmp_std[which_ind]]);
+      curr_phi.append([allPhi_mean[which_ind], allPhi_var[which_ind]]);
+      curr_tf.append([data['tf'][which_ind]]); # should be same for all conditions
+    allAmp.append(curr_amp);
+    allPhi.append(curr_phi);
+    allCons.append(cons);
+    allTf.append(curr_tf);
+
+  phAdv_model, all_opts, all_phAdv, all_loss = hf.phase_advance(allAmp, allPhi, allCons, allTf);
+
+  # update stuff - load again in case some other run has saved/made changes
+  curr_fit = dict();
+  curr_fit['loss'] = all_loss;
+  curr_fit['params'] = all_opts;
+  curr_fit['phAdv'] = all_phAdv;
+  curr_fit['cellNum'] = cell_num;
+
+  if to_save:
+    if os.path.isfile(data_loc + phAdvFinal):
+      print('reloading phAdvFits...');
+      phFits = hf.np_smart_load(data_loc + phAdvFinal);
+    else:
+      phFits = dict();
+    phFits[cell_num-1] = curr_fit;
+    np.save(data_loc + phAdvFinal, phFits);
+    print('saving phase advance fit for cell ' + str(cell_num));
+
+  if returnMod: # default
+    return phAdv_model, all_opts;
+  else:
+    return curr_fit;
+
+def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0, nBoots=0, phAdjusted=1, dir=1):
+  ''' IF phAdjusted=1, then we Piggy-backing off of phase_advance_fit above, get prepared to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
       - as of 19.11.07, we will fit non-baseline subtracted responses 
           (F1 have baseline of 0 always, but now we will not subtract baseline from F0 responses)
