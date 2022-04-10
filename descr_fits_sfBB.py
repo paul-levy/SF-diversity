@@ -18,7 +18,7 @@ else:
 
 expName = hf.get_datalist('V1_BB/', force_full=1);
 
-sfName = 'descrFits%s_220219' % hpcSuff;
+sfName = 'descrFits%s_220405' % hpcSuff;
 rvcName = 'rvcFits%s_220220' % hpcSuff;
 
 def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, toSave=1, fracSig=1, nBoots=0, n_repeats=25, jointSf=0):
@@ -78,6 +78,11 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
   # Set up whether we will bootstrap straight away
   resample = False if nBoots <= 0 else True;
   nBoots = 1 if nBoots <= 0 else nBoots;
+  if nBoots>1:
+    ftol = 5e-9;
+    #ftol = 1e-6;
+  else:
+    ftol = 2.220446049250313e-09; # the default value, per scipy guide (scipy.optimize, for L-BFGS-B) 
   
   #########
   ### Get the responses - base only, mask+base [base F1], mask only (mask F1)
@@ -133,10 +138,13 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
       elif measure == 1:
         baseline = 0;
         mask_only = respMatrixF1_onlyMask;
+        # TODO::: VEC CORRECT BY TRIAL FIRST??? (INSTEAD OF JUST TAKING AMP)
+        mask_only_all = respMatrixF1_onlyMask_resample[0]; # only mean (ignore phase for now...)
         mask_base = respMatrixF1_maskTf;
         fix_baseline = True;
       resp_str = hf_sf.get_resp_str(respMeasure=measure);
 
+      whichAll = [mask_only_all];
       whichResp = [mask_only]#, mask_base];
       whichKey = ['mask']#, 'both'];
 
@@ -153,7 +161,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
 
         cons = expInfo['maskCon'];
         # first, mask only; then mask+base
-        for wR, wK in zip(whichResp, whichKey):
+        for wR, wK, wA in zip(whichResp, whichKey, whichAll):
           # create room for an empty dict, if not already present
           if wK not in rvcFits_curr_toSave[resp_str]:
             rvcFits_curr_toSave[resp_str][wK] = dict();
@@ -212,7 +220,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
         stimVals = [[0], cons, sfs];
         valConByDisp = [np.arange(0,len(cons))]; # all cons are valid in sfBB experiment
 
-        for wR, wK in zip(whichResp, whichKey):
+        for wR, wK, wA in zip(whichResp, whichKey, whichAll):
           if wK not in sfFits_curr_toSave[resp_str]:
             sfFits_curr_toSave[resp_str][wK] = dict();
 
@@ -222,20 +230,32 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
           except:
             sfFit_curr = None
 
+          # try to load isolated fits...
+          if jointSf>0:
+            try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
+              modStr  = hf.descrMod_name(DoGmodel);
+              ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0));
+              isolFits = ref_fits[cell_num-1][resp_str][wK]['params'];
+            except:
+               isolFits = None;
+          else:
+            isolFits = None;
+
+          allCurr = np.expand_dims(np.transpose(wA, [1,0,2]), axis=0); 
           # -- by default, loss_type=2 (meaning sqrt loss); why expand dims and transpose? dog fits assumes the data is in [disp,sf,con] and we just have [con,sf]
-          nll, prms, vExp, pSf, cFreq, totNLL, totPrm, success = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), None, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig, n_repeats=n_repeats, joint=jointSf) # noDisp=1 means that we don't index dispersion when accessins prevFits
+          nll, prms, vExp, pSf, cFreq, totNLL, totPrm, success = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), allCurr, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig, n_repeats=n_repeats, isolFits=isolFits, joint=jointSf, ftol=ftol) # noDisp=1 means that we don't index dispersion when accessins prevFits
 
           if resample:
             if boot_i == 0: # i.e. first time around
               # - pre-allocate empty array of length nBoots (save time over appending each time around)
               sfFits_curr_toSave[resp_str][wK]['boot_loss'] = np.empty((nBoots,) + nll.shape, dtype=np.float32);
               sfFits_curr_toSave[resp_str][wK]['boot_params'] = np.empty((nBoots,) + prms.shape, dtype=np.float32);
+              sfFits_curr_toSave[resp_str][wK]['boot_varExpl'] = np.empty((nBoots,) + vExp.shape, dtype=np.float32);
               sfFits_curr_toSave[resp_str][wK]['boot_prefSf'] = np.empty((nBoots,) + pSf.shape, dtype=np.float32);
-              sfFits_curr_toSave[resp_str][wK]['boot_conGain'] = np.empty((nBoots,) + vExp.shape, dtype=np.float32);
-              sfFits_curr_toSave[resp_str][wK]['boot_varExpl'] = np.empty((nBoots,) + cFreq.shape, dtype=np.float32);
+              sfFits_curr_toSave[resp_str][wK]['boot_charFreq'] = np.empty((nBoots,) + cFreq.shape, dtype=np.float32);
               if jointSf>=1:
                 sfFits_curr_toSave[resp_str][wK]['boot_totalNLL'] = np.empty((nBoots,) + totNLL.shape, dtype=np.float32);
-                sfFits_curr_toSave[resp_str][wK]['boot_paramList'] = np.empty((nBoots,) + paramList.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_paramList'] = np.empty((nBoots,) + totPrm.shape, dtype=np.float32);
                 sfFits_curr_toSave[resp_str][wK]['boot_success'] = np.empty((nBoots, ), dtype=np.bool_);
               else: # only if joint=0 will success be an array (and not just one value)
                 sfFits_curr_toSave[resp_str][wK]['boot_success'] = np.empty((nBoots, ) + success.shape, dtype=np.bool_);
@@ -244,13 +264,13 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
             # then -- put in place
             sfFits_curr_toSave[resp_str][wK]['boot_loss'][boot_i] = nll;
             sfFits_curr_toSave[resp_str][wK]['boot_params'][boot_i] = prms;
+            sfFits_curr_toSave[resp_str][wK]['boot_charFreq'][boot_i] = cFreq;
+            sfFits_curr_toSave[resp_str][wK]['boot_varExpl'][boot_i] = vExp
             sfFits_curr_toSave[resp_str][wK]['boot_prefSf'][boot_i] = pSf;
-            sfFits_curr_toSave[resp_str][wK]['boot_conGain'][boot_i] = vExp
-            sfFits_curr_toSave[resp_str][wK]['boot_varExpl'][boot_i] = cFreq
+            sfFits_curr_toSave[resp_str][wK]['boot_success'][boot_i] = success;
             if jointSf>=1:
-              sfFits_curr_toSave[resp_str][wK]['boot_totalNLL'] = totNLL;
-              sfFits_curr_toSave[resp_str][wK]['boot_paramList'] = totPrm;
-              sfFits_curr_toSave[resp_str][wK]['boot_success'] = success;
+              sfFits_curr_toSave[resp_str][wK]['boot_totalNLL'][boot_i] = totNLL;
+              sfFits_curr_toSave[resp_str][wK]['boot_paramList'][boot_i] = totPrm;
           else: # otherwise, we'll only be here once
             sfFits_curr_toSave[resp_str][wK]['NLL'] = nll.astype(np.float32);
             sfFits_curr_toSave[resp_str][wK]['params'] = prms.astype(np.float32);
@@ -292,18 +312,32 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
       print('Saving %s, %s @ %s' % (resp_str, wK, rvcNameFinal))
 
     if fit_sf:
-      # load fits again in case some other run has saved/made changes
-      if os.path.isfile(data_path + sfNameFinal):
-        print('reloading sfFits...');
-        sfFits = hf.np_smart_load(data_path + sfNameFinal);
-      if cellNum-1 not in sfFits:
-        sfFits[cellNum-1] = dict();
 
-      sfFits[cellNum-1] = sfFits_curr_toSave;
-          
-      # now save
-      np.save(data_path + sfNameFinal, sfFits);
-      print('Saving %s, %s @ %s' % (resp_str, wK, sfNameFinal))
+      pass_check=False;
+      while not pass_check: # keep saving/reloading until the fit has properly saved everything...
+
+        # load fits again in case some other run has saved/made changes
+        if os.path.isfile(data_path + sfNameFinal):
+          print('reloading sfFits...');
+          sfFits = hf.np_smart_load(data_path + sfNameFinal);
+        if cellNum-1 not in sfFits:
+          sfFits[cellNum-1] = dict();
+
+        sfFits[cellNum-1] = sfFits_curr_toSave;
+
+        # now save
+        np.save(data_path + sfNameFinal, sfFits);
+        print('Saving %s, %s @ %s' % (resp_str, wK, sfNameFinal))
+
+        # now check...
+        check = hf.np_smart_load(data_path + sfNameFinal);
+        if resample: # check that the boot stuff is there
+          if 'boot' in check[cell_num-1]['dc']['mask'].keys():
+            pass_check = True;
+        else:
+          if 'NLL' in check[cell_num-1]['dc']['mask'].keys(): # just check that any relevant key is there
+            pass_check = True;
+        # --- and if neither pass_check was triggered, then we go back and reload, etc
 
     ### End of saving (both RVC and SF)
   else:
@@ -330,7 +364,7 @@ if __name__ == '__main__':
   sf_mod     = int(sys.argv[5]);
   loss_type  = int(sys.argv[6]); # default will be 2 (i.e. sqrt)
   nBoots     = int(sys.argv[7]);
-  jointSf      = int(sys.argv[8]);
+  jointSf    = int(sys.argv[8]);
 
   fracSig = 1; # why fracSig =1? For V1 fits, we want to contrasin the upper-half sigma of the two-half gaussian as a fraction of the lower half
 
@@ -352,9 +386,11 @@ if __name__ == '__main__':
     #make_descr_fits((10, dataList['unitName'][10]), fit_rvc=pass_rvc, fit_sf=pass_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig)
 
     if nBoots > 1:
-      n_repeats = 2 if joint>0 else 5; # fewer if repeat
+      n_repeats = 2 if jointSf>0 else 5; # fewer if repeat
     else:
-      n_repeats = 5 if joint>0 else 12; # was previously be 3, 15, then 7, 15
+      #n_repeats = 50 if jointSf>0 else 12; # was previously be 3, 15, then 7, 15
+      #n_repeats = 10 if jointSf>0 else 12; # was previously be 3, 15, then 7, 15
+      n_repeats = 5 if jointSf>0 else 12; # was previously be 3, 15, then 7, 15
 
     with mp.Pool(processes = nCpu) as pool:
       # if we're doing as parallel, do NOT save

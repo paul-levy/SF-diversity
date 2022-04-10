@@ -19,7 +19,7 @@ else:
 
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
-dogName = 'descrFits%s_220219' % hpcSuff;
+dogName = 'descrFits%s_220405' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits_211108'
   rvcName_f1 = 'rvcFits_211108'; # FOR LGN
@@ -653,6 +653,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       ref_varExpl = None; # as of 22.01.14, no longer restricting which conditions are fit jointly
       #ref_varExpl = ref_fits[cell_num-1]['varExpl'][0]; # reference varExpl for single gratings
       isolFits = ref_fits[cell_num-1];
+      # below block is commented out --> no longer try to initialize joint=N from joint=N-1 (always just get non-joint fits)
+      '''
       try: 
         # try to get joint==1 fits, it joint==2; otherwise, and in all other cases, single grats
         # why? seems that going from jt=0 --> jt=1, we get fits to converge
@@ -660,6 +662,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
         isolFits = ref_fits[cell_num-1];
       except:
         pass; # we've already specified isolFits, if that doesn't work
+      '''
     except:
       ref_varExpl = None;
       isolFits = None;
@@ -728,7 +731,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
 
   for boot_i in range(nBoots):
     if nBoots > 1:
-      ftol = 1e-6; # artificially lower value (was prev. 1e-5) that has minimal impact on parameter values; will avoid too many fit iterations
+      ftol = 5e-9; # artificially lower value (was prev. 1e-5) that has minimal impact on parameter values; will avoid too many fit iterations
       if np.mod(boot_i, int(np.floor(nBoots/5))) == 0:
         print('iteration %d of %d' % (boot_i, nBoots));
     else:
@@ -762,9 +765,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     for d in range(1): #nDisps): # works for all disps
       # a separate fitting call for each dispersion
       if debug:
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits)
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits, ftol=ftol)
       else:
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits)
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits, ftol=ftol)
         
       if cross_val is not None and resample:
         # compute the loss, varExpl on the heldout (i.e. test) data
@@ -897,19 +900,32 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
   # -- and save, if that's what we're doing here
   if to_save: # i.e. this is the final boot iteration
 
-    # reload in case another thread/call has changed descrFits
-    if os.path.isfile(data_loc + fLname):
-      descrFits = hf.np_smart_load(data_loc + fLname);
-    else:
-      descrFits = dict();
+    pass_check=False;
+    while not pass_check: # keep saving/reloading until the fit has properly saved everything...
 
-    # then save
-    # --- first, if model recovery, change the name here; why? Keeping the same name for earlier on allows the 
-    if modRecov:
-      fLname = fLname.replace('.npy', '_modRecov.npy');
-    descrFits[cell_num-1] = prevFits_toSave;
-    np.save(data_loc + fLname, descrFits);
-    print('saving for cell ' + str(cell_num));
+      # reload in case another thread/call has changed descrFits
+      if os.path.isfile(data_loc + fLname):
+        descrFits = hf.np_smart_load(data_loc + fLname);
+      else:
+        descrFits = dict();
+
+      # then save
+      # --- first, if model recovery, change the name here; why? Keeping the same name for earlier on allows the 
+      if modRecov:
+        fLname = fLname.replace('.npy', '_modRecov.npy');
+      descrFits[cell_num-1] = prevFits_toSave;
+      np.save(data_loc + fLname, descrFits);
+      print('saving for cell ' + str(cell_num));
+
+      # now check...
+      check = hf.np_smart_load(data_loc + fLname);
+      if resample: # check that the boot stuff is there
+        if 'boot' in check[cell_num-1].keys():
+          pass_check = True;
+      else:
+        if 'NLL' in check[cell_num-1].keys(): # just check that any relevant key is there
+          pass_check = True;
+      # --- and if neither pass_check was triggered, then we go back and reload, etc
 
   # -- and return, if specified
   if returnDict:
@@ -1093,9 +1109,9 @@ if __name__ == '__main__':
 
         #import cProfile, re
         #cProfile.run('fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov)');
-        if hf.is_mod_DoG(dog_model):
+        if hf.is_mod_DoG(dog_model) and nBoots<10:
           sleep(hf.random_in_range((0, 20))[0]); # why? DoG fits run so quickly that successive load/save calls take place in an overlapping way and we lose the result of some calls
-        fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, force_dc=force_dc, force_f1=force_f1, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons);
+        fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons);
 
       if rvcF0_fits == 1:
         fit_RVC_f0(cell_num, data_loc=dataPath, rvcMod=rvc_model, nBoots=nBoots);
