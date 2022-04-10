@@ -64,7 +64,7 @@ def PDFwrapper(folder, output):
     hid_file = '.';
     for f in all_files:
         # vvv adjust here!!! vvv
-        if 'cell' in f and f[0] != hid_file and 'allCons' not in f: # allCons_log
+        if 'cell' in f and f[0] != hid_file and 'allCons' in f: # allCons_log
             to_merge.append(str(folder + f));
 
     PDFmerge(to_merge, str(folder + output));
