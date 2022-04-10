@@ -40,7 +40,7 @@ fi
 # default is zero, i.e. not HPC fits...
 
 # 20 cells if original datalist; 41 cells if dataList_210222
-for run in {1..58}
+for run in {1..47} # was ..58 before cutting dataList_210721
 do
   ######
   ## New version, model fits - the doubled (i.e. two-digit) inputs are, in order, normTypes, (lgn)conTypes, lgnFrontEnd

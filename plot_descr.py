@@ -101,10 +101,12 @@ expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
 if expDir == 'LGN/':# or expDir == 'altExp':
-    descrBase = 'descrFits%s_220228' % hpc_str;
+    #descrBase = 'descrFits%s_220302' % hpc_str;
+    #descrBase = 'descrFits%s_220323' % hpc_str;
+    descrBase = 'descrFits%s_220405' % hpc_str;
 else:
-    descrBase = 'descrFits%s_220320' % hpc_str;
-    #descrBase = 'descrFits%s_220307e' % hpc_str;
+    #descrBase = 'descrFits%s_220323' % hpc_str;
+    descrBase = 'descrFits%s_220405' % hpc_str;
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_211129';
@@ -1271,7 +1273,10 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
           c_plt_ind = len(v_cons) - c - 1;
           currClr = [(n_v_cons-c-1)/float(n_v_cons), (n_v_cons-c-1)/float(n_v_cons), (n_v_cons-c-1)/float(n_v_cons)];
 
-          dispAx[d][row_ind, col_ind].set_title('con: %s%%' % str(int(100*(np.round(all_cons[v_cons[c]], 2)))));
+          try:
+              dispAx[d][row_ind, col_ind].set_title('con: %s%%' % str(int(100*(np.round(all_cons[v_cons[c]], 2)))));
+          except:
+              pass;
 
           # plot model
           prms_curr = descrParams[d, v_cons[c]];

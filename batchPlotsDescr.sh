@@ -98,5 +98,17 @@ if [ "$EXP_DIR" = "altExp/" ]; then
     python3.6 plot_descr.py $run altExp/ $DOG_MOD $LOSS_TYPE $JOINT 0 1 1 $HPC &
   done
 fi
+if [ "$EXP_DIR" = "V1_BB/" ]; then
+  for run in {1..23}
+  do 
+    python3.6 plot_descr_sfBB.py $run V1_BB/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 $HPC 0 0 &
+  done
+  wait
+  for run in {24..47}
+  do 
+    python3.6 plot_descr_sfBB.py $run V1_BB/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 $HPC 0 0 &
+  done
+ fi
+
 
 # leave a blank line at the end
