@@ -17,7 +17,7 @@ sys.path.insert(0, maindir);
 ##############
 # -- basic things
 from helper_fcns import nan_rm, np_smart_load, bw_lin_to_log, bw_log_to_lin, resample_array, descrFit_name, random_in_range
-from helper_fcns import polar_vec_mean, phase_fit_name, phase_advance, project_resp
+from helper_fcns import polar_vec_mean, phase_fit_name, phase_advance, project_resp, get_phAdv_model
 from helper_fcns import descrLoss_name, descrMod_name, descrFit_name
 from helper_fcns import flatten_list as flatten
 # -- rvc
@@ -363,11 +363,13 @@ def blankResp(data, get_dc=0):
 
   return mu, std;
 
-def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=True, dir=1):
+def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=0, dir=1):
   ''' Given the dictionary containing all of the data, organize the data into the proper responses
   Specifically, we know that Sach's experiments varied contrast and spatial frequency
   Thus, we will organize responses along these dimensions
-  - NOTE: If phAdjusted=True, then we return the phase-adjusted responses (amplitudes)!
+  - NOTE: If phAdjusted=1, then we return the phase-adjusted responses (amplitudes)!
+          if phAdjusted=0, then we return vec-corrected but NOT phase-amplitude adjusted 
+          if phAdjusted=-1, then we do the (dumb, non-vector) scalar average
   ----  : We discovered on 22.04.07 that Sach's mean F1 phase/amplitude were not done using proper vector math (i.e. he simply took the mean of the amplitudes)
   ----  : So, we not only do the proper vector math but also apply the phase-amplitude relationship correction that we apply for my own LGN data
   - NOTE (ONLY APPLIED PRE-PHASE CORRECTION): Sach's data has marked offset, even on F1 -- if sub_f1_blank is True, we'll subtract that off
@@ -386,18 +388,20 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=True,
   # rather than getting just the mean/s.e.m., we can also record/transfer the firing rate of each individual stimulus run
   f0arr = dict();
   f1arr = dict();
-  
+  f1arr_prePhCorr = dict();
+
   to_sub = blankResp(data, get_dc=False)[0] if sub_f1_blank else 0;
 
-  if phAdjusted:
+  if phAdjusted==1:
     # phAdv_model is used to project the responses; all_opts is organized by SF (ascending)
     phAdv_model, all_opts = df.phase_advance_fit(data, None, 'phAdv_dummy', dir=dir, to_save=0);
-    phAdv_model, all_opts_neg = df.phase_advance_fit(data, None, 'phAdv_dummy', dir=-1, to_save=0);
+    #phAdv_model, all_opts_neg = df.phase_advance_fit(data, None, 'phAdv_dummy', dir=-1, to_save=0);
 
   for con in range(len(all_cons)):
     val_con = np.where(data['cont'] == all_cons[con]);
     f0arr[con] = dict();
     f1arr[con] = dict();
+    f1arr_prePhCorr[con] = dict();
     for sf in range(len(all_sfs)):
       val_sf = np.where(data['sf'][val_con] == all_sfs[sf]);
 
@@ -406,18 +410,27 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=True,
         new_inds = np.random.choice(non_nan, len(non_nan));
         f0arr[con][sf] = nan_rm(data['f0arr'][val_con][val_sf][0][new_inds]); # internal [0] is again due to poor indexing
         f1amps = nan_rm(data['f1arr'][val_con][val_sf][0][new_inds] - to_sub)
-        if phAdjusted:
-          f1phs = nan_rm(data['f1pharr'][val_con][val_sf][0][new_inds]);
+        f1phs = nan_rm(data['f1pharr'][val_con][val_sf][0][new_inds]);
+        if phAdjusted==1:
           f1arr[con][sf] = project_resp([f1amps], [f1phs], phAdv_model, [all_opts[sf]], disp=0)[0];
-        else:
-          f1arr[con][sf] = f1amps;
+        elif phAdjusted==0:
+          mean_amp, mean_ph,_,_ = polar_vec_mean([f1amps], [f1phs]);
+          f1arr[con][sf] = np.multiply(f1amps, np.cos(np.deg2rad(mean_ph) - np.deg2rad(f1phs)));
+        elif phAdjusted==-1:
+          f1arr[con][sf] = np.mean(f1amps);
       else: # TODO: Could make this and the prior block less redundant
         f0arr[con][sf] = nan_rm(data['f0arr'][val_con][val_sf]);
         f1amps = nan_rm(data['f1arr'][val_con][val_sf] - to_sub)
-        if phAdjusted:
-          f1phs = nan_rm(data['f1pharr'][val_con][val_sf]);
+        f1phs = nan_rm(data['f1pharr'][val_con][val_sf]);
+        if phAdjusted==1:
+          if con>(len(all_cons)-3): # i.e. a high contrast..
+            pdb.set_trace();
           f1arr[con][sf] = project_resp([f1amps], [f1phs], phAdv_model, [all_opts[sf]], disp=0)[0];
-        else:
+          f1arr_prePhCorr[con][sf] = f1amps;
+        elif phAdjusted==0:
+          mean_amp, mean_ph,_,_ = polar_vec_mean([f1amps], [f1phs]);
+          f1arr[con][sf] = np.multiply(f1amps, np.cos(np.deg2rad(mean_ph) - np.deg2rad(f1phs)));
+        elif phAdjusted==-1:
           f1arr[con][sf] = f1amps;
 
       # take mean, since some conditions have repeats - just average them
@@ -425,15 +438,16 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=True,
       f0mean[con, sf] = np.mean(f0arr[con][sf]); #np.mean(data['f0'][val_con][val_sf]);
       f0sem[con, sf] = sem(f0arr[con][sf]); #np.mean(data['f0sem'][val_con][val_sf]);
       f1mean[con, sf] = np.mean(f1arr[con][sf]); #np.mean(data['f1'][val_con][val_sf]);
+      #f1mean_prePhCorr[con, sf] = polar_vec_mean(f1amps, f1phs);
       f1sem[con, sf] = sem(f1arr[con][sf]); #np.mean(data['f1sem'][val_con][val_sf]);
-
 
   f0['mean'] = f0mean;
   f0['sem'] = f0sem;
   f1['mean'] = f1mean;
+  #f1['mean_prePhCorr'] = f1mean_prePhCorr;
   f1['sem'] = f1sem;
 
-  return [f0, f1], [all_cons, all_sfs], [f0arr, f1arr];
+  return [f0, f1], [all_cons, all_sfs], [f0arr, f1arr]#; [f0arr, f1arr, f1arr_prePhCorr];
 
 def writeDataTxt(cellNum, f1, sfs, contrast, save_loc):
   

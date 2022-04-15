@@ -47,6 +47,7 @@ def phase_advance_fit(cell_num, data_loc, phAdvName, dir=1, to_save=1, returnMod
 
   # then, we'll need to organize into list of lists -- by SF (outer), then by asc. con (inner), with [mean, std OR var] per each
   cons = np.unique(data['cont']);
+  cons = cons[cons>0]; # exclude 0% contrast from this analysis (it's noise!!!)
   sfs = np.unique(data['sf']);
   allAmp = []; allPhi = []; allCons = []; allTf = [];
   for sf_val in sfs:
@@ -72,21 +73,30 @@ def phase_advance_fit(cell_num, data_loc, phAdvName, dir=1, to_save=1, returnMod
   curr_fit['cellNum'] = cell_num;
 
   if to_save:
-    if os.path.isfile(data_loc + phAdvFinal):
-      print('reloading phAdvFits...');
-      phFits = hf.np_smart_load(data_loc + phAdvFinal);
-    else:
-      phFits = dict();
-    phFits[cell_num-1] = curr_fit;
-    np.save(data_loc + phAdvFinal, phFits);
-    print('saving phase advance fit for cell ' + str(cell_num));
+    pass_check = False;
+    while not pass_check:
+      if os.path.isfile(data_loc + phAdvFinal):
+        print('reloading phAdvFits...');
+        phFits = hf.np_smart_load(data_loc + phAdvFinal);
+      else:
+        phFits = dict();
+      phFits[cell_num-1] = curr_fit;
+      np.save(data_loc + phAdvFinal, phFits);
+      print('saving phase advance fit for cell ' + str(cell_num));
+
+      # now check...
+      check = hf.np_smart_load(data_loc + phAdvFinal);
+      if cell_num-1 in check:
+        if 'loss' in check[cell_num-1].keys(): # just check that any relevant key is there
+          pass_check = True;
+      # --- and if neither pass_check was triggered, then we go back and reload, etc
 
   if returnMod: # default
     return phAdv_model, all_opts;
   else:
     return curr_fit;
 
-def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0, nBoots=0, phAdjusted=1, dir=1):
+def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0, nBoots=0, phAdjusted=0, dir=1):
   ''' IF phAdjusted=1, then we Piggy-backing off of phase_advance_fit above, get prepared to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
       - as of 19.11.07, we will fit non-baseline subtracted responses 
@@ -218,7 +228,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
 
     HPC = 'HPC' if 'pl1465' in data_loc else '';
 
-    fLname = 'descrFits%s_s220220' % HPC;
+    fLname = 'descrFits%s_s220412' % HPC;
     #fLname = 'descrFits_s211206';
     #fLname = 'descrFits_s211006';
 
@@ -374,9 +384,9 @@ if __name__ == '__main__':
 
     HPC = 'HPC' if 'pl1465' in data_loc else '';
 
-    #rvcBase = 'rvcFits_210520'
-    #rvcBase = 'rvcFits_211006'
-    rvcBase = 'rvcFits%s_220219' % HPC;
+    #rvcBase = 'rvcFits%s_220219' % HPC;
+    rvcBase = 'rvcFits%s_220412' % HPC;
+    phBase = 'phAdv%s_220412' % HPC;
 
     fracSig = 0; # should be unconstrained, per Tony (21.05.19) for LGN fits
 
@@ -390,6 +400,7 @@ if __name__ == '__main__':
     nBoots    = int(sys.argv[6]);
 
     if rvcModel >= 0:
+      phase_advance_fit(cellNum, data_loc, phBase)
       rvc_fit(cellNum, data_loc, rvcBase, rvcModel, nBoots=nBoots); 
 
     if DoGmodel >= 0:
