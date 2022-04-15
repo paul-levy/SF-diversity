@@ -19,10 +19,13 @@ else:
 
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
-dogName = 'descrFits%s_220405' % hpcSuff;
+dogName = 'descrFits%s_220414pV' % hpcSuff;
+#dogName = 'descrFits%s_220405' % hpcSuff;
 if sys.argv[3] == 'LGN/':
-  phAdvName = 'phaseAdvanceFits_211108'
-  rvcName_f1 = 'rvcFits_211108'; # FOR LGN
+  phAdvName = 'phaseAdvanceFits_220414pV'
+  rvcName_f1 = 'rvcFits_220414pV';
+  #phAdvName = 'phaseAdvanceFits_211108'
+  #rvcName_f1 = 'rvcFits_211108'; # FOR LGN
   rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 else:
   phAdvName = 'phaseAdvanceFits_210914'
@@ -117,6 +120,7 @@ def phase_advance_fit(cell_num, expInd, data_loc, phAdvName=phAdvName, to_save=1
 
   # for all con/sf values for this dispersion, compute the mean amplitude/phase per condition
   allAmp, allPhi, allTf, _, _ = hf.get_all_fft(data, disp, expInd, dir=dir, all_trials=0); # all_trials=1 for debugging (0 is default)
+  aa, ap, _, _, _ = hf.get_all_fft(data, disp, expInd, dir=dir, all_trials=1);
      
   # now, compute the phase advance
   conInds = valConByDisp[disp];
@@ -124,7 +128,11 @@ def phase_advance_fit(cell_num, expInd, data_loc, phAdvName=phAdvName, to_save=1
   nConds = len(allAmp); # this is how many conditions are present for this dispersion
   # recall that nConds = nCons * nSfs
   allCons = [conVals] * nConds; # repeats list and nests
-  phAdv_model, all_opts, all_phAdv, all_loss = hf.phase_advance(allAmp, allPhi, allCons, allTf);
+  # get list of mean amp, mean phi, std. mean, var phi
+  # --- we can try to use this in fitting the phase-amplitude relationship...
+  oyvey = [[hf.polar_vec_mean([aa[i_sf][i_con][2]], [ap[i_sf][i_con][2]]) for i_con in range(len(ap[i_sf]))] for i_sf in range(len(aa))];
+  phiVars = [[oyvey[x][y][3] for y in range(len(oyvey[x]))] for x in range(len(oyvey))];
+  phAdv_model, all_opts, all_phAdv, all_loss = hf.phase_advance(allAmp, allPhi, allCons, allTf, ampSem=None, phiVar=phiVars);
 
   # update stuff - load again in case some other run has saved/made changes
   curr_fit = dict();
@@ -194,6 +202,8 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
     cellName = dataList['unitName'][cell_num-1];
   cellStruct = hf.np_smart_load(data_loc + cellName + '_sfm.npy');
   data = cellStruct['sfm']['exp']['trial'];
+  if vecF1==1:
+    dir=None;
   rvcNameFinal = hf.rvc_fit_name(rvcName, rvcMod, dir, vecF1);
 
   #########
@@ -282,7 +292,7 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
       consRepeat = [valCons] * len(adjMeans);
 
       ### NOTE: From vecF1==0 case, we know that 
-      ### --- adjMeans is list of lists, len 11; each sublist of len 9 (i.e. sfs x con)
+      ### --- adjMeans is list of lists, len 11 (or #sfs); each sublist of len 9 (or #con) (i.e. sfs x con)
       ### --- adjByTrial as with adjMeans, but further subdivided to have nTr in inner-most list
 
       if disp > 0: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)

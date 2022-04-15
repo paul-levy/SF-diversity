@@ -1304,7 +1304,7 @@ def get_true_phase(data, val_trials, expInd, dir=-1, psth_binWidth=1e-3):
 
 def polar_vec_mean(amps, phases, sem=0):
    ''' Given a set of amplitudes ("r") and phases ("theta"; in degrees) for a given stimulus condition (or set of conditions)
-       RETURN the mean amplitude and phase (in degrees) computed by vector summation/averaging
+       RETURN: mean amplitude, mean ph, std. amp, var. ph (from vector averaging)
        Note: amps/phases must be passed in as arrays of arrays, so that we can compute the vec mean for multiple different
              stimulus conditions just by calling this function once
        --- IF sem=1, then we give s.e.m. rather than std for "r"
@@ -1482,7 +1482,7 @@ def get_descr_recovResponses(params, descrMod, sfVals, nTr):
 
   return resps;
 
-def phase_advance(amps, phis, cons, tfs, n_repeats=100):
+def phase_advance(amps, phis, cons, tfs, n_repeats=50, ampSem=None, phiVar=None):
    ''' Given the mean amplitude/phase of responses over a range of contrasts, compute the linear model
        fit which describes the phase advance per unit contrast as described in Eq. 4 of
        Movshon, Kiorpes, Hawken, Cavanaugh; 2005
@@ -1495,6 +1495,9 @@ def phase_advance(amps, phis, cons, tfs, n_repeats=100):
          allAmp/allPhi[i][j] - [mean, variance] (for sf "i", contrast "j")
          allCons[i] - list of contrasts (typically ascending) presented for sf "i"
          allTf[i] - as in allCons
+         n_repeats - how many attempts for fitting (with different initializations)
+         ampSem - what's the S.E.M. for each amplitude (currently unused)
+         phiVar - what's the variance 
          -- note: allTf[i][j] should always be an array (even if just one grating)
    '''
    np = numpy;
@@ -1513,7 +1516,10 @@ def phase_advance(amps, phis, cons, tfs, n_repeats=100):
      curr_ampMean = get_mean(curr_amps);
      curr_phis = phis[i]; # phase for ...
      curr_phiMean = get_mean(curr_phis);
-     obj = lambda params: np.sum(np.square(abs_angle_diff(curr_phiMean, phAdv_model(params[0], params[1], curr_ampMean)))); 
+     if phiVar is not None:
+        obj = lambda params: np.sum(np.square(abs_angle_diff(curr_phiMean, phAdv_model(params[0], params[1], curr_ampMean))) / flatten_list(np.sqrt(phiVar[i])));
+     else:
+        obj = lambda params: np.sum(np.square(abs_angle_diff(curr_phiMean, phAdv_model(params[0], params[1], curr_ampMean))));
      # just least squares...
      #obj = lambda params: np.sum(np.square(curr_phiMean - phAdv_model(params[0], params[1], curr_ampMean))); # just least squares...
      # phi0 (i.e. phase at zero response) --> just guess the phase at the lowest amplitude response
@@ -1523,13 +1529,13 @@ def phase_advance(amps, phis, cons, tfs, n_repeats=100):
      diff_sin = np.arcsin(np.sin(np.deg2rad(curr_phiMean[max_resp_ind]) - np.deg2rad(curr_phiMean[min_resp_ind])));
      init_slope = (np.rad2deg(diff_sin))/(curr_ampMean[max_resp_ind]-curr_ampMean[min_resp_ind]);
      init_slope = np.maximum(0,init_slope); # test, as of 21.10.28, on restricting phAdv slope
-     init_params = [random_in_range([0.8, 1.2])[0]*curr_phiMean[min_resp_ind], random_in_range([0.5, 1.5])[0]*init_slope];
      best_loss = np.nan; best_params = [];
 
      for rpt in range(n_repeats):
+        init_params = [random_in_range([0.5, 2])[0]*curr_phiMean[min_resp_ind], random_in_range([0.5, 2])[0]*init_slope];
         # 21.10.26 -- restrict slope to be positive?
-        to_opt = opt.minimize(obj, init_params, bounds=((None,None), (0,None)));
-        #to_opt = opt.minimize(obj, init_params);
+        # 22.04.12 -- and no greater than 10
+        to_opt = opt.minimize(obj, init_params, bounds=((None,None), (0,10)));
         if np.isnan(best_loss) or to_opt['fun'] < best_loss:
            best_loss = to_opt['fun'];
            best_params = to_opt['x'];
