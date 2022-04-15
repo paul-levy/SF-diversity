@@ -102,11 +102,10 @@ expName = hf.get_datalist(expDir, force_full=1);
 hpc_str = 'HPC' if isHPC else '';
 if expDir == 'LGN/':# or expDir == 'altExp':
     #descrBase = 'descrFits%s_220302' % hpc_str;
-    #descrBase = 'descrFits%s_220323' % hpc_str;
-    descrBase = 'descrFits%s_220405' % hpc_str;
+    descrBase = 'descrFits%s_220414pV' % hpc_str;
 else:
     #descrBase = 'descrFits%s_220323' % hpc_str;
-    descrBase = 'descrFits%s_220405' % hpc_str;
+    descrBase = 'descrFits%s_220410' % hpc_str;
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_211129';
@@ -123,7 +122,8 @@ else:
 # NOTE: Temporarily ignoring HPC for rvcFits
 ##############
 if expDir == 'LGN/':
-  rvcBase = 'rvcFits%s_211108' % ''#hpc_str;
+  rvcBase = 'rvcFits%s_220414pV' % ''#hpc_str;
+  #rvcBase = 'rvcFits%s_211108' % ''#hpc_str;
 else:
   rvcBase = 'rvcFits%s_210914' % ''#hpc_str; # if V1?
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 

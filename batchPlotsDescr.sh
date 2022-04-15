@@ -63,17 +63,32 @@ fi
 if [ "$EXP_DIR" = "LGN/" ]; then
   for run in {1..25}
   do 
+    # mov RVC
     python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 0 1 $HPC 0 &
+    # N-R RVC
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 1 $HPC 0 &
+    # --- trying vec correction only
+    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 &
   done
   wait
   for run in {26..50}
   do 
+    # mov RVC
     python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 0 1 $HPC 0 &
+    # N-R RVC
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 1 $HPC 0 &
+    # --- trying vec correction only
+    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 &
   done
   wait
   for run in {50..81}
   do 
+    # mov RVC
     python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 0 1 $HPC 0 &
+    # N-R RVC
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 1 $HPC 0 &
+    # --- trying vec correction only
+    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 &
   done
 fi
 if [ "$EXP_DIR" = "V1_orig/" ]; then

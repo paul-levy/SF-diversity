@@ -39,6 +39,7 @@ loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/';
 #loc_base = '/home/pl1465/SF_diversity/';
 
 expDir = sys.argv[3];
+phAdv_set_ylim = 1; # if 1, then we make the ylim [0,360] for phAdv-mean plot; otherwise, we don't specify the limit
 
 ######
 ##settings
@@ -57,12 +58,12 @@ save_loc = loc_base + expDir + saveDir;
 expName = hf.get_datalist(expDir);
 descrFit_f0 = None;
 #descrFit_f0 = 'descrFits_191023_sach_flex.npy';
-#phAdvName = 'phaseAdvanceFits_191023';
-#rvcName = 'rvcFits_191023_f1';
-#phAdvName = 'phaseAdvanceFits_210914';
-#rvcName = 'rvcFits_210914';
-phAdvName = 'phaseAdvanceFits_211028';
-rvcName = 'rvcFits_211028';
+#phAdvName = 'phaseAdvanceFits_211028';
+#rvcName = 'rvcFits_211028';
+#phAdvName = 'phaseAdvanceFits_211108';
+#rvcName = 'rvcFits_211108';
+phAdvName = 'phaseAdvanceFits_220414pV';
+rvcName = 'rvcFits_220414pV';
 
 ######
 ## contents
@@ -267,7 +268,7 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
   cellName  = dataList['unitName'][which_cell-1];
   expInd = hf.get_exp_ind(dp, cellName)[0];
   cellStruct = hf.np_smart_load(str(dp + cellName + '_sfm.npy'));
-
+    
   rvcFits = hf.np_smart_load(str(dp + hf.phase_fit_name(rvcStr, dir)));
   rvcFits = rvcFits[which_cell-1];
   rvc_model = hf.get_rvc_model();
@@ -341,13 +342,13 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
 
     ax = plt.subplot(2, 2, 1);
     plot_amp = adj_means;
-    plt_measured = ax.scatter(allCons[con_inds], plot_amp, s=100, color=colors);
-    plt_og = ax.plot(allCons[con_inds], r, linestyle='None', marker='o', markeredgecolor='k', markerfacecolor='None', alpha=0.5);
-    plt_fit = ax.plot(plot_cons, mod_fit, linestyle='--', color='k');
+    plt_measured = ax.scatter(allCons[con_inds], plot_amp, s=100, color=colors, label='ph. corr');
+    plt_og = ax.plot(allCons[con_inds], r, linestyle='None', marker='o', markeredgecolor='k', markerfacecolor='None', alpha=0.5, label='vec. mean');
+    plt_fit = ax.plot(plot_cons, mod_fit, linestyle='--', color='k', label='rvc fit');
     ax.set_xlabel('contrast');
     ax.set_ylabel('response (f1)');
     ax.set_title('response versus contrast')
-    ax.legend((plt_measured, plt_fit[0]), ('data', 'model fit'), loc='upper left')
+    ax.legend(loc='upper left')
 
     # also summarize the model fit on this plot
     ymax = np.maximum(np.max(r), np.max(mod_fit));
@@ -363,21 +364,32 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     mod_fit = phAdv_model(opt_params_phAdv[0], opt_params_phAdv[1], plot_amps);
 
     ax = plt.subplot(2, 1, 2);
-    plt_measured = ax.scatter(r, th, s=100, color=colors);
-    plt_fit = ax.plot(plot_amps, mod_fit, linestyle='--', color='k');
+    plt_measured = ax.scatter(r, th, s=100, color=colors, clip_on=False, label='vec. mean');
+    plt_fit = ax.plot(plot_amps, mod_fit, linestyle='--', color='k', clip_on=False, label='phAdv model');
     ax.set_xlabel('response amplitude');
+    if phAdv_set_ylim:
+      ax.set_ylim([0, 360]);
     ax.set_ylabel('response phase');
     ax.set_title('phase advance with amplitude')
-    ax.legend((plt_measured, plt_fit[0]), ('data', 'model fit'), loc='upper left')
+    ax.legend(loc='upper left')
 
     ## and again, summarize the model fit on the plot
     xmax = np.maximum(np.max(r), np.max(plot_amps));
     ymin = np.minimum(np.min(th), np.min(mod_fit));
     ymax = np.maximum(np.max(th), np.max(mod_fit));
     yrange = ymax-ymin;
-    plt.text(0.8*xmax, ymin + 0.25 * yrange, 'phi0: %.2f' % (opt_params_phAdv[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-    plt.text(0.8*xmax, ymin + 0.15 * yrange, 'slope:%.2f' % (opt_params_phAdv[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-    plt.text(0.8*xmax, ymin + 0.05 * yrange, 'phase advance: %.2f ms' % (ph_adv), fontsize=12, horizontalalignment='center', verticalalignment='center');
+    if phAdv_set_ylim:
+      if mod_fit[-1]>260: # then start from ymin and go dwn
+        start, sign = mod_fit[-1]-30, -1;
+      else:
+        start, sign = mod_fit[-1]+30, 1;
+      plt.text(0.9*xmax, start + 1*30*sign, 'phi0: %.2f' % (opt_params_phAdv[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+      plt.text(0.9*xmax, start + 2*30*sign, 'slope:%.2f' % (opt_params_phAdv[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+      plt.text(0.9*xmax, start + 3*30*sign, 'phase advance: %.2f ms' % (ph_adv), fontsize=12, horizontalalignment='center', verticalalignment='center');
+    else:
+      plt.text(0.8*xmax, ymin + 0.25 * yrange, 'phi0: %.2f' % (opt_params_phAdv[0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+      plt.text(0.8*xmax, ymin + 0.15 * yrange, 'slope:%.2f' % (opt_params_phAdv[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+      plt.text(0.8*xmax, ymin + 0.05 * yrange, 'phase advance: %.2f ms' % (ph_adv), fontsize=12, horizontalalignment='center', verticalalignment='center');
 
     #center_phi = lambda ph1, ph2: np.arcsin(np.sin(np.deg2rad(ph1) - np.deg2rad(ph2)));
 
@@ -394,9 +406,6 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
     model_centered = np.mod(mod_fit-th_center, 360);
     ax.scatter(np.deg2rad(data_centered), r, s=50, color=colors)
     ax.plot(np.deg2rad(model_centered), plot_amps, linestyle='--', color='k');
-    #print('data|model');
-    #print(data_centered);
-    #print(model_centered);
     ax.set_ylim(0, 1.25*np.max(r))
     ax.set_title('phase advance')
 
