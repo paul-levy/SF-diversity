@@ -691,9 +691,15 @@ def descrJoint_name(joint=0, modelName=None):
         jStr = '_JTflankSurrShape'; # g, S AND the surround shape
   elif joint==3:
      if modelName is None or 'ddogs' not in modelName:
-        jStr = '_JTsurrShape' # the surround shape is fixed for all contrasts
+        jStr = '_JTvolRatio' # the volume ratio can vary (i.e. independent center, surround gains), but the radii are fixed
      else: # then this is a d-DoG-S fit, so the surround names/constraints are different
         jStr = '_JTsurr' # the surround gain, radius apply to both central and flanking DoG, and joint across all cons
+  elif joint==4:
+     jStr = '_JTcenterShape' # the center radius is fixed
+  elif joint==5:
+     jStr = '_JTsurrShapeAbs' # the surround radius is fixed (absolute, unlike relative, as in joint==2)
+  elif joint==6:
+     jStr = '_JTctrSurr' # the center and surround radii are free, as is the center gain (surround gain is fixed across contrast)
 
   return jStr;
 
@@ -1755,7 +1761,7 @@ def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf, baseline=0):
   #tune = baseline + np.maximum(0, gain*(np.exp(-np.square(stim_sf/f_c)) - gain_s * np.exp(-np.square(stim_sf/(f_c*j_s))))); 
   return tune, [];
 
-def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, parker_hawken_equiv=True):
+def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, parker_hawken_equiv=True, ref_rc_val=None):
   ''' Difference of gaussians as described in Sach's thesis
   [0] gain_c    - gain of the center mechanism
   [1] r_c       - radius of the center
@@ -1765,11 +1771,13 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, parker_hawken_equiv=T
   --- If parker_hawken_equiv, we change the multiplictive terms in front of the exp to be in parallel with Parker-Hawken model
   ------ DEFAULT IS TRUE, MEANING NOT BACKWARD COMPATIBLE (gain term will have multiplicative scalar offset)
   ------ in that case, we also re-parameterize the surround gain/radii to be relative to the center's
+  --- If ref_rc_val is not None, then we compute the surround radius relative to ref_rc_val
   '''
   np = numpy;
 
   if parker_hawken_equiv:
-    tune = baseline + gain_c*(np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.exp(-np.square(stim_sf*np.pi*r_s*r_c)));
+     r_c_ref = ref_rc_val if ref_rc_val is not None else r_c; # do we have a reference center radius? (used for joint=5)
+     tune = baseline + gain_c*(np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.exp(-np.square(stim_sf*np.pi*r_s*r_c_ref)));
   else:
     tune = baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(stim_sf*np.pi*r_s)));
   return tune, [];
@@ -1782,7 +1790,7 @@ def DoGsachVol(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0):
   tune = baseline + gain_c*np.pi*(np.square(r_c)*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.square(r_c*r_s)*np.exp(-np.square(stim_sf*np.pi*r_s*r_c)));
   return tune, [];
  
-def var_explained(data_resps, modParams, sfVals, dog_model = 2, baseline=0, ref_params=None):
+def var_explained(data_resps, modParams, sfVals, dog_model = 2, baseline=0, ref_params=None, ref_rc_val=None):
   ''' given a set of responses and model parameters, compute the variance explained by the model 
       UPDATE: If sfVals is None, then modParams is actually modResps, so we can just skip to the end...
   '''
@@ -1796,7 +1804,7 @@ def var_explained(data_resps, modParams, sfVals, dog_model = 2, baseline=0, ref_
   if sfVals is None:
     mod_resps = modParams;
   else:
-    mod_resps = get_descrResp(modParams, stim_sf=sfVals, DoGmodel=dog_model, baseline=baseline, ref_params=ref_params);
+    mod_resps = get_descrResp(modParams, stim_sf=sfVals, DoGmodel=dog_model, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val);
   try:
     return var_expl(mod_resps, data_resps, data_mean);
   except:
@@ -1874,7 +1882,7 @@ def c50_empirical(rvcMod, params):
 
   return c50_lsq, c50_eval;
 
-def descr_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11), baseline=0, nSamps=500, ref_params=None):
+def descr_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11), baseline=0, nSamps=500, ref_params=None, ref_rc_val=None):
   ''' Compute the preferred SF given a set of DoG [or in the case of dog_model==0, not DoG...) parameters
   '''
   np = numpy;
@@ -1883,7 +1891,7 @@ def descr_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11), base
     return modParams[2]; # direct read out in this model!
   # if the solution is not analytical, then we compute
   sf_samps = np.geomspace(all_sfs[0], all_sfs[-1], nSamps);
-  tuning = get_descrResp(modParams, sf_samps, dog_model, ref_params=ref_params);
+  tuning = get_descrResp(modParams, sf_samps, dog_model, ref_params=ref_params, ref_rc_val=ref_rc_val);
   sf_evals = np.argmax(tuning);
   sf_peak = sf_samps[sf_evals];
 
@@ -2080,7 +2088,7 @@ def dog_total_volume(params, DoGmodel):
 
 ## - for fitting DoG models
 
-def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, var_to_mean=None, gain_reg=0, vol_lam=0, minThresh=0.1, joint=0, baseline=0, fracSig=1, enforceMaxPenalty=0, sach_equiv_p_h=True, n_fits=1, ref_params=None):
+def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, var_to_mean=None, gain_reg=0, vol_lam=0, minThresh=0.1, joint=0, baseline=0, fracSig=1, enforceMaxPenalty=0, sach_equiv_p_h=True, n_fits=1, ref_params=None, ref_rc_val=None):
   '''Given the model params (i.e. sach or tony formulation)), the responses, sf values
   return the loss
   loss_type: 1 - lsq
@@ -2128,10 +2136,16 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
       if is_mod_DoG(DoGmodel):
         if joint==1:
           curr_params = [params[2+i*2], params[3+i*2], params[0], params[1]];
-        elif joint==2:
+        elif joint==2 or joint==5:
           curr_params = [params[1+i*3], params[2+i*3], params[3+i*3], params[0]];
+          if joint == 5:
+             ref_rc_val = params[2]; # 2+(i=0)*3=2 --> center radius for the high contrast condition, which serves as reference for surround radius for all contrasts
         elif joint==3:
           curr_params = [params[2+i*2], params[0], params[3+i*2], params[1]];
+        elif joint==4: # fixed center radius
+          curr_params = [params[1+i*3], params[0], params[2+i*3], params[3+i*3]];
+        elif joint==6: # fixed center:surround gain ratio
+          curr_params = [params[1+i*3], params[2+i*3], params[0], params[3+i*3]];
       else: # here, we can handle the no_surr case here, too
         # we know there are 10 params
         if joint==1:
@@ -2163,9 +2177,9 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
       if enforceMaxPenalty:
         max_data = np.max(curr_resps);
 
-    pred_spikes = get_descrResp(curr_params, curr_sfs, DoGmodel, minThresh, baseline, fracSig, sach_equiv_p_h=sach_equiv_p_h, ref_params=ref_params);
+    pred_spikes = get_descrResp(curr_params, curr_sfs, DoGmodel, minThresh, baseline, fracSig, sach_equiv_p_h=sach_equiv_p_h, ref_params=ref_params, ref_rc_val=ref_rc_val);
     if enforceMaxPenalty: # check if this gives separate max for each condition
-      max_mod = get_descrResp(curr_params, np.array([descr_prefSf(curr_params, DoGmodel)]), DoGmodel, minThresh, baseline, fracSig, ref_params=ref_params)[0];
+      max_mod = get_descrResp(curr_params, np.array([descr_prefSf(curr_params, DoGmodel)]), DoGmodel, minThresh, baseline, fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val)[0];
       applyPen = 1 if (max_mod-1.40*max_data)>0 else 0;
       # TODO: Make this penalty smooth/continuous rather than discrete...
       maxPen = applyPen*1*(max_mod-1.4*max_data); # scale factor of 1 chosen to be within the typical loss values (O(10),O(100), at least for loss_type=2) so this regularization does not overwhelm
@@ -2436,10 +2450,22 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         bound_radiusRatio= (1, 10); # the surround radius will always be greater than the ctr r
         # we'll add to allBounds later, reflecting joint gain/radius ratios common across all cons
         allBounds = (bound_gainRatio, bound_radiusRatio);
-      elif joint == 2: # fixed surround radius for all contrasts
+      elif joint == 2 or joint == 5: # fixed surround radius for all contrasts
         allBounds = (bound_radiusSurr, );
       elif joint == 3: # fixed center AND surround radius for all contrasts
         allBounds = (bound_radiusCent, bound_radiusSurr);
+      # In advance of the thesis/publishing the LGN data, we will replicate some of Sach's key results
+      # In particular, his thesis covers 4 joint models:
+      # -- volume ratio: center and surround radii are fixed, but gains can vary (already covered in joint == 3)
+      # -- center radius: fixed center radius across contrast (joint=4)
+      # -- surround radius: fixed surround radius across contrast (joint=5) // fixed not in proportion to center, but in absolute value
+      # -- center-surround: center and surround radii can vary, but ratio of gains is fixed (joint == 6)
+      elif joint == 4: # fixed center radius
+         allBounds = (bound_radiusCent, ); # only center radius is fixed across condition
+      #elif joint == 5: # fixed surround radius (again, in absolute terms here, not relative, as is usually specified)
+      #   allBounds = (bound_radiusSurr, ); # only surround radius is fixed across condition
+      elif joint == 6: # fixed center:surround gain ratio
+         allBounds = (bound_gainSurr, ); # we can fix the ratio by allowing the center gain to vary and keeping the surround in fixed proportion
     else:
       allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
   elif DoGmodel == 2: # TONY
@@ -2592,19 +2618,23 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       allRespsTr.append(resps_all_flat);
       allSfsTr.append(valSfVals_tile);
       # and add to the parameter list!
-      if DoGmodel == 1:
+      if DoGmodel == 1: # SACH
         if joint == 1: # add the center gain and center radius for each contrast 
           allBounds = (*allBounds, bound_gainCent, bound_radiusCent);
-        if joint == 2: # add the center and surr. gain and center radius for each contrast 
+        elif joint == 2 or joint == 5: # add the center and surr. gain and center radius for each contrast 
           allBounds = (*allBounds, bound_gainCent, bound_radiusCent, bound_gainSurr);
-        if joint == 3:  # add the center and surround gain for each contrast 
+        elif joint == 3:  # add the center and surround gain for each contrast 
           allBounds = (*allBounds, bound_gainCent, bound_gainSurr);
-      elif DoGmodel == 2:
+        elif joint == 4: # fixed center radius, so add all other parameters
+          allBounds = (*allBounds, bound_gainCent, bound_gainSurr, bound_radiusSurr);
+        elif joint == 6: # fixed center:surround gain ratio
+          allBounds = (*allBounds, bound_gainCent, bound_radiusCent, bound_radiusSurr);
+      elif DoGmodel == 2: # TONY
         if joint == 1: # add the center gain and center radius for each contrast 
           allBounds = (*allBounds, bound_gainCent, bound_freqCent);
-        if joint == 2: # add the center and surr. gain and center radius for each contrast 
+        elif joint == 2: # add the center and surr. gain and center radius for each contrast 
           allBounds = (*allBounds, bound_gainCent, bound_freqCent, bound_gainFracSurr);
-        if joint == 3:  # add the center and surround gain for each contrast 
+        elif joint == 3:  # add the center and surround gain for each contrast 
           allBounds = (*allBounds, bound_gainCent, bound_gainFracSurr);
       elif DoGmodel == 3 or DoGmodel == 5: # d-DoG-S models
         if joint == 1: # add the center gain and center radius for each contrast 
@@ -2736,10 +2766,14 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       if is_mod_DoG(DoGmodel):
          if joint == 1: # gain ratio (i.e. surround gain) [0] and shape ratio (i.e. surround radius) [1] are joint
             allInitParams = [ref_init[2], ref_init[3]];
-         elif joint == 2: #  surround radius [0] (as ratio) is joint
+         elif joint == 2 or joint == 5: #  surround radius [0] (as ratio in 2; fixed in 5) is joint
             allInitParams = [ref_init[3]];
          elif joint == 3: # center radius [0] and surround radius [1] ratio are joint
             allInitParams = [ref_init[1], ref_init[3]];
+         elif joint == 4: # center radius only is fixed
+            allInitParams = [ref_init[1]];
+         elif joint == 6: # center:surround gain is fixed
+            allInitParams = [ref_init[2]];
       else: # d-DoG-S models
          if joint==1 or (no_surr and joint==2):
             allInitParams = [*ref_init[-2:]] # g,S (i.e. the final two parameters
@@ -2770,10 +2804,14 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         if is_mod_DoG(DoGmodel):
            if joint == 1:
               allInitParams = [*allInitParams, curr_init[0], curr_init[1]];
-           elif joint == 2: # then we add center gain, center radius, surround gain (i.e. params 0:3
+           elif joint == 2 or joint == 5: # then we add center gain, center radius, surround gain (i.e. params 0:3
               allInitParams = [*allInitParams, curr_init[0], curr_init[1], curr_init[2]];
            elif joint == 3: # then we add center gain and surround gain (i.e. params 0, 2)
               allInitParams = [*allInitParams, curr_init[0], curr_init[2]];
+           elif joint == 4: # then we add center gain, surround gain/radius
+              allInitParams = [*allInitParams, curr_init[0], curr_init[2], curr_init[3]];
+           elif joint == 6: # then we add center gain and both radii
+              allInitParams = [*allInitParams, curr_init[0], curr_init[1], curr_init[3]];
         else: # d-DoG-S models
            if joint==1:# or (no_surr and joint==2):
               allInitParams = [*allInitParams, *curr_init[0:-2]];
@@ -2785,8 +2823,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       # previously, we choose optimization method (L-BFGS-B for even, TNC for odd) --- we now just choose the former
       methodStr = 'L-BFGS-B';
       #obj = lambda params: DoG_loss(params, allRespsTr, allSfsTr, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, vol_lam=vol_lam, n_fits=len(allResps)); # trial-by-trial
-      obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, vol_lam=vol_lam, n_fits=len(allResps));
-      # --- debugging ---
+      obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, vol_lam=vol_lam, n_fits=len(allResps), );
       # --- debugging ---
       try: # 95000; 35000; 975000
         maxfun = 1975000 if not is_mod_DoG(DoGmodel) else 155000; # default is 15000; d-dog-s model often needs more iters to finish
@@ -2806,20 +2843,27 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
     ### Done with multi-start fits; now, unpack the fits to fill in the "true" parameters for each contrast
     # --- first, get the global parameters
+    ref_rc_val = None; # only used if is_mod_DoG and joint==5; otherwise, just pass in None
     if is_mod_DoG(DoGmodel):
       if joint == 1:
         gain_rat, shape_rat = params[0], params[1];
-      elif joint == 2:
+      elif joint == 2 or joint == 5:
         surr_shape = params[0]; # radius or frequency, if Tony model
+        if joint==5:
+           ref_rc_val = params[2]; # center radius for high contrast
       elif joint == 3:
         center_shape, surr_shape = params[0], params[1]; # radius or frequency, if Tony model
+      elif joint == 4: # center radius fixed
+        center_shape = params[0];
+      elif joint == 6: # ctr:surr gain fixed
+        surr_gain = params[0];
     else:
-     if joint == 1:
+      if joint == 1:
         g, S = params[0], params[1];
-     elif joint == 2:
+      elif joint == 2:
         surr1_rad, surr2_rad = params[0], params[1];
         g, S = params[2:4];
-     elif joint == 3:
+      elif joint == 3:
         surr_gain, surr_rad = params[0], params[1];
         g, S = params[2:4];
     for con in reversed(range(len(allResps))):
@@ -2829,7 +2873,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
              center_gain = params[2+con*2]; 
              center_shape = params[3+con*2]; # shape, as in radius/freq, depending on DoGmodel
              curr_params = [center_gain, center_shape, gain_rat, shape_rat];
-          elif joint == 2: # center gain, center radus, surround gain
+          elif joint == 2 or joint == 5: # center gain, center radus, surround gain
              center_gain = params[1+con*3]; 
              center_shape = params[2+con*3];
              surr_gain = params[3+con*3];
@@ -2837,6 +2881,16 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
           elif joint == 3: # center gain, surround gain
              center_gain = params[2+con*2]; 
              surr_gain = params[3+con*2];
+             curr_params = [center_gain, center_shape, surr_gain, surr_shape];
+          elif joint == 4: # center radius fixed for all contrasts
+             center_gain = params[1+con*3]; 
+             surr_gain = params[2+con*3];
+             surr_shape = params[3+con*3];
+             curr_params = [center_gain, center_shape, surr_gain, surr_shape];
+          elif joint == 6: # ctr:surr gain fixed for all contrasts
+             center_gain = params[1+con*3]; 
+             center_shape = params[2+con*3];
+             surr_shape = params[3+con*3];
              curr_params = [center_gain, center_shape, surr_gain, surr_shape];
        else: ### unpack the d-DoG-S parameters [for joint fits]
           if joint == 1: # we've already grabbed g, S
@@ -2864,10 +2918,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
           ref_params = curr_params;
 
        # now, compute loss, explained variance, etc
-       bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, sfs_curr, resps_std=sem_curr, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=0, baseline=baseline, vol_lam=vol_lam, ref_params=ref_params); # not joint, now!
+       bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, sfs_curr, resps_std=sem_curr, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=0, baseline=baseline, vol_lam=vol_lam, ref_params=ref_params, ref_rc_val=ref_rc_val); # not joint, now!
        currParams[respConInd, :] = curr_params;
-       varExpl[respConInd] = var_explained(resps_curr, curr_params, valSfVals, DoGmodel, baseline=baseline, ref_params=ref_params);
-       prefSf[respConInd] = descr_prefSf(curr_params, dog_model=DoGmodel, all_sfs=valSfVals, baseline=baseline, ref_params=ref_params);
+       varExpl[respConInd] = var_explained(resps_curr, curr_params, valSfVals, DoGmodel, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val);
+       prefSf[respConInd] = descr_prefSf(curr_params, dog_model=DoGmodel, all_sfs=valSfVals, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val);
        charFreq[respConInd] = dog_charFreq(curr_params, DoGmodel=DoGmodel);
         
 
@@ -3221,18 +3275,18 @@ def parker_hawken_all_stim(trialInf, expInd, curr_params, spaceRange=0.5, nSteps
    else:
       return rsps;
 
-def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1, baseline=0, fracSig=1, sach_equiv_p_h=True, ref_params=None):
+def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1, baseline=0, fracSig=1, sach_equiv_p_h=True, ref_params=None, ref_rc_val=None):
   ''' returns only pred_spikes; 0 is flexGauss.; 1 is DoG sach; 2 is DoG (tony)
       --- baseline is a non-optimized for additive constant that we can optionally use for diff. of gauss fits
       --- i.e. if we use it, we're simply adding the baseline response to the data, so the model fit is on top of that
-
       --- sach_equiv_p_h==True means that we use the version of the Sach DoG model in which the scalars are equivalent to those in the parker-hawken model
-
+      --- ref_params --> used for d-DoG-S, only
+      --- ref_rc, ref_rc_val --> used for Sach DoG only
   '''
   if DoGmodel == 0:
     pred_spikes = flexible_Gauss_np(params, stim_sf=stim_sf, minThresh=minThresh, fracSig=fracSig);
   elif DoGmodel == 1:
-    pred_spikes, _ = DoGsach(*params, stim_sf=stim_sf, baseline=baseline, parker_hawken_equiv=sach_equiv_p_h);
+    pred_spikes, _ = DoGsach(*params, stim_sf=stim_sf, baseline=baseline, parker_hawken_equiv=sach_equiv_p_h, ref_rc_val=None);
   elif DoGmodel == 2:
     pred_spikes, _ = DiffOfGauss(*params, stim_sf=stim_sf, baseline=baseline);
   elif DoGmodel == 3:

@@ -62,21 +62,22 @@ DESCR_FIT=$3
 BOOT_REPS=$4
 JOINT=${5:-0}
 MOD_RECOV=${6:-0}
+CROSS_VAL=${7:--1}
 
 if [ "$EXP_DIR" = "V1/" ]; then
   # V1/ -- vec F1 adjustment with full dataset
   if [[ $RVC_FIT -eq 1 ]]; then
     ## RVCs ONLY with NO phase adjustment (instead, vector correction for F1)
     # -- Naka-Rushton
-    python3.6 descr_fits.py -181 0 V1/ -1 1 0 1 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV 
-    python3.6 descr_fits.py -181 1 V1/ -1 1 0 1 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV
-    python3.6 descr_fits.py -181 2 V1/ -1 1 0 1 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV
-    python3.6 descr_fits.py -181 3 V1/ -1 1 0 1 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV
+    python3.6 descr_fits.py -181 0 V1/ -1 1 0 1 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py -181 1 V1/ -1 1 0 1 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py -181 2 V1/ -1 1 0 1 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py -181 3 V1/ -1 1 0 1 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL
     # -- Movshon RVC
-    python3.6 descr_fits.py -181 0 V1/ -1 1 0 0 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV
-    python3.6 descr_fits.py -181 1 V1/ -1 1 0 0 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV
-    python3.6 descr_fits.py -181 2 V1/ -1 1 0 0 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV
-    python3.6 descr_fits.py -181 3 V1/ -1 1 0 0 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV
+    python3.6 descr_fits.py -181 0 V1/ -1 1 0 0 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py -181 1 V1/ -1 1 0 0 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py -181 2 V1/ -1 1 0 0 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py -181 3 V1/ -1 1 0 0 0 0 2 $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL
   fi
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
@@ -86,7 +87,7 @@ if [ "$EXP_DIR" = "V1/" ]; then
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 4 $BOOT_REPS $JOINT 0 $MOD_RECOV # d-DoG-S, sach loss (to account for variability)
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 4 $BOOT_REPS $JOINT 0 $MOD_RECOV # d-DoG-S, sach loss
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 5 4 $BOOT_REPS $JOINT 0 $MOD_RECOV # d-DoG-S Hawk, sachloss
-    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 2 $BOOT_REPS $JOINT 0 $MOD_RECOV # d-DoG-S, sqrt loss
+    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 2 $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S, sqrt loss
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 5 2 $BOOT_REPS $JOINT 0 $MOD_RECOV # d-DoG-S HAWK, sqrt loss
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 2 2 $BOOT_REPS $JOINT 0 $MOD_RECOV # Tony DoG
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 1 2 $BOOT_REPS $JOINT 0 $MOD_RECOV # sach DoG
@@ -161,14 +162,14 @@ if [ "$EXP_DIR" = "LGN/" ]; then
     # Descr fits (based on Movshon RVCs)   
     ### with model recovery
     # --- no phase correction
-    #python3.6 descr_fits.py -181 0 LGN/ -1 0 0 0 1 1 2 $BOOT_REPS $JOINT 0 $MOD_RECOV # sach DoG (sqrt)
+    #python3.6 descr_fits.py -181 0 LGN/ -1 0 0 0 1 1 2 $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL  # sach DoG (sqrt)
     # --- normal (with phase correction)
-    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS $JOINT 1 $MOD_RECOV # sach DoG (sqrt)
-    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS $JOINT 1 $MOD_RECOV # sach DoG (sach loss)
-    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 4 $BOOT_REPS $JOINT 1 $MOD_RECOV # tony DoG (sach loss)
-    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 2 $BOOT_REPS $JOINT 1 $MOD_RECOV # tony DoG (sqrt)
-    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 4 4 $BOOT_REPS $JOINT 1 $MOD_RECOV # sachVol DoG (sach loss)
-    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 4 2 $BOOT_REPS $JOINT 1 $MOD_RECOV # sachVol DoG (sqrt)
+    python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 2 $BOOT_REPS $JOINT 1 $MOD_RECOV $CROSS_VAL # sach DoG (sqrt)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 1 4 $BOOT_REPS $JOINT 1 $MOD_RECOV $CROSS_VAL # sach DoG (sach loss)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 4 $BOOT_REPS $JOINT 1 $MOD_RECOV $CROSS_VAL # tony DoG (sach loss)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 2 2 $BOOT_REPS $JOINT 1 $MOD_RECOV $CROSS_VAL # tony DoG (sqrt)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 4 4 $BOOT_REPS $JOINT 1 $MOD_RECOV $CROSS_VAL # sachVol DoG (sach loss)
+    #python3.6 descr_fits.py -181 0 LGN/ 0 0 0 0 1 4 2 $BOOT_REPS $JOINT 1 $MOD_RECOV $CROSS_VAL # sachVol DoG (sqrt)
   fi
   wait
 fi

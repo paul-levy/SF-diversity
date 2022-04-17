@@ -19,11 +19,11 @@ else:
 
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
-dogName = 'descrFits%s_220414pV' % hpcSuff;
+dogName = 'descrFits%s_220415' % hpcSuff;
 #dogName = 'descrFits%s_220405' % hpcSuff;
 if sys.argv[3] == 'LGN/':
-  phAdvName = 'phaseAdvanceFits_220414pV'
-  rvcName_f1 = 'rvcFits_220414pV';
+  phAdvName = 'phaseAdvanceFits_220415'
+  rvcName_f1 = 'rvcFits_220415';
   #phAdvName = 'phaseAdvanceFits_211108'
   #rvcName_f1 = 'rvcFits_211108'; # FOR LGN
   rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
@@ -635,6 +635,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
  
   # Set up whether we will bootstrap straight away
   resample = False if nBoots <= 0 else True;
+  if cross_val is not None:
+    # we also set to true if cross_val is not None...
+    resample = True
   nBoots = 1 if nBoots <= 0 else nBoots;
 
   nParam = hf.nParams_descrMod(DoGmodel);
@@ -979,7 +982,9 @@ if __name__ == '__main__':
     else:
       modRecov = False;
     if len(sys.argv) > 15:
-      cross_val  = int(sys.argv[15]);
+      cross_val  = float(sys.argv[15]);
+      if cross_val <= 0: # but if it's <=0, we set it back to None
+        cross_val = None;
     else:
       cross_val = None;
     if len(sys.argv) > 16:
