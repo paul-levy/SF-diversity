@@ -19,7 +19,7 @@ else:
 
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
-dogName = 'descrFits%s_220415' % hpcSuff;
+dogName = 'descrFits%s_220418' % hpcSuff;
 #dogName = 'descrFits%s_220405' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits_220415'
@@ -729,7 +729,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
   if cross_val is not None and resample:
     _, _, _, r_all_noresamp = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=False, cellNum=cell_num);
     n_nonNan = np.nanmax(np.sum(~np.isnan(r_all_noresamp), axis=-1));
-    nBoots = n_nonNan;
+    if nBoots<=1:
+      nBoots = n_nonNan; # at least as many boots as there are trials
   bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success = fit_descr_empties(nDisps, nCons, nParam, joint, nBoots);
 
   #import cProfile
@@ -742,6 +743,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     test_nll = np.copy(bestNLL);
     test_vExp = np.copy(varExpl);
 
+  print('# boots --> %03d' % nBoots);
   for boot_i in range(nBoots):
     if nBoots > 1:
       ftol = 5e-9; # artificially lower value (was prev. 1e-5) that has minimal impact on parameter values; will avoid too many fit iterations
@@ -750,7 +752,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     else:
       ftol = 2.220446049250313e-09; # the default value, per scipy guide (scipy.optimize, for L-BFGS-B)
 
-    cross_val_curr = None if cross_val is None else (cross_val, boot_i);
+    cross_val_curr = None if cross_val is None else (cross_val, -1); # why -1? To make resampling rather than sequential sampling
+    #cross_val_curr = None if cross_val is None else (cross_val, boot_i);
     _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=resample, cellNum=cell_num, cross_val=cross_val_curr);
 
     if cross_val is not None and resample:
@@ -767,6 +770,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       heldout = np.abs(all_data - training) > 1e-6; # if the difference is g.t. this, it means they are different value
       test_data = np.nan * np.zeros_like(resps_all);
       test_data[heldout] = all_data[heldout]; # then put the heldout values here
+      print('boot %d' % boot_i);
 
     resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
     base_rate = hf.blankResp(cellStruct, expInd, spks_sum, spksAsRate=True)[0] if which_measure==0 else None;
@@ -927,8 +931,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       if modRecov:
         fLname = fLname.replace('.npy', '_modRecov.npy');
       descrFits[cell_num-1] = prevFits_toSave;
-      np.save(data_loc + fLname, descrFits);
-      print('saving for cell ' + str(cell_num));
+      np.save(data_loc + fLname, descrFits);   
+      #print('saving for cell ' + str(cell_num));
 
       # now check...
       check = hf.np_smart_load(data_loc + fLname);

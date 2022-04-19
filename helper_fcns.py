@@ -240,15 +240,20 @@ def bw_log_to_lin(log_bw, pref_sf):
     
     return lin_bw, sf_range
 
-def resample_array(resample, arr, holdout_frac=1, start_ind=None):
-  # NOTE: by default, this allows resampling with replacement
+def resample_array(resample, arr, holdout_frac=1, start_ind=None, return_inds=False):
   # --- if holdout_frac < 1, then we are doing holdout cross-validation
-  # --- we simply
+  # --- if start_ind is not None, we simply start at index 'i' and go to 'j',
+  # ----- where 'j' is determined based on the holdout_frac (e.g. 60% of all data) and the start value 'i'
+  # --- if start_ind is None, then we randomly sample WITHOUT replacement
+  # --- if return_inds, we also return the train indices (to facilitate partitioning test/train data in descr_fits)
   if resample:
     non_nan = nan_rm(arr);
     if holdout_frac == 1:
       curr_resps = numpy.random.choice(non_nan, len(non_nan));
-      return curr_resps;
+      if return_inds:
+         return curr_resps, np.arange(len(curr_resps));
+      else:
+         return curr_resps;
     elif holdout_frac < 1: # then we are, for ex., doing cross-validation 
       # -- so, do NOT draw with replacement and instead partition into train, test
       n_train = numpy.floor(len(non_nan)*holdout_frac).astype('int');
@@ -261,9 +266,15 @@ def resample_array(resample, arr, holdout_frac=1, start_ind=None):
       curr_resps = non_nan[curr_inds];
       test_resps = non_nan[test_inds];
       # as of 21.10.31, still only return the current resps (will work out the test resps separately)
-      return curr_resps#, test_resps;
+      if return_inds:
+         return curr_resps, curr_inds;
+      else:
+         return curr_resps#, test_resps;
   else:
-    return arr;                  
+    if return_inds:
+       return arr, np.arange(len(arr));
+    else:
+       return arr;
 
 def sf_highCut(params, sfMod, frac, sfRange=(0.1, 10), baseline_sub=None):
   ''' given a fraction of peak response (e.g. 0.5 or 1/e or...), compute the frequency (above the peak)
@@ -4488,8 +4499,8 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
         respsAsRates/modsAsRate: optional argument - if False (or if overwriteSpikes is None), then divide response by stimDur
         if resample; then for cross_val:
         -- if not None, then cross_val should be tuple with (fracInTest, startInd); i.e. what fraction of overall data is test, which index to start with?
-
-
+        ---- Further note: if startInd is negative, then we'll just randomly sample WITHOUT replacement
+        ----> why? for joint fits, better to randomly sample then take trials i through j for all conditions
     '''
     np = numpy;
     conDig = 3; # round contrast to the thousandth
@@ -4581,9 +4592,12 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                     continue;
                     
                 if cross_val is None:
-                  curr_resps = resample_array(resample, respToUse[valid_tr]); # will just be respToUse[valid_tr] if resample==0
+                   curr_resps = resample_array(resample, respToUse[valid_tr]); # will just be respToUse[valid_tr] if resample==0
                 else:
-                  curr_resps = resample_array(resample, respToUse[valid_tr], holdout_frac=cross_val[0], start_ind=cross_val[1]);
+                   if cross_val[1]>=0: # then take with start_ind
+                      curr_resps = resample_array(resample, respToUse[valid_tr], holdout_frac=cross_val[0], start_ind=cross_val[1]);
+                   else: # random resampling without replacement (just ignore start_ind argument)
+                      curr_resps = resample_array(resample, respToUse[valid_tr], holdout_frac=cross_val[0]);
 
                 respMean[d, sf, con] = np.mean(curr_resps/respDiv);
                 respStd[d, sf, con] = np.std(curr_resps/respDiv);
@@ -4621,12 +4635,18 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                     try:
                       if cross_val is None:
                         curr_modResp = resample_array(resample, modResp[valid_tr]); # will just be the array if resample==0
-                      else:
-                        curr_modResp = resample_array(resample, modResp[valid_tr], holdout_frac=cross_val[0], start_ind=cross_val[1]);
                         nTrCurr = len(curr_modResp); # rewrite the nTrCurr, since it will be different if holdout_frac < 1
-                      modRespOrg[d, sf, con, 0:nTrCurr] = np.divide(curr_modResp, divFactor);
+                        modRespOrg[d, sf, con, 0:nTrCurr] = np.divide(curr_modResp, divFactor);
+                      else:
+                        if cross_val[1]>=0: # then take with start_ind
+                           curr_modResp = resample_array(resample, modResp[valid_tr], holdout_frac=cross_val[0], start_ind=cross_val[1]);
+                           nTrCurr = len(curr_modResp); # rewrite the nTrCurr, since it will be different if holdout_frac < 1
+                           modRespOrg[d, sf, con, 0:nTrCurr] = np.divide(curr_modResp, divFactor);
+                        else:
+                           curr_modResp, test_inds = resample_array(resample, modResp[valid_tr], holdout_frac=cross_val[0], return_inds=True);
+                           modRespOrg[d, sf, con, test_inds] = np.divide(curr_modResp, divFactor);
                     except:
-                      #print('FAILED: uhoh [cell %d]: d/sf/con %d/%d/%d -- %d trial(s) out of %d/%d in the data/modResp' % (cellNum, d, sf, con, nTrCurr, len(val_tr), len(modResp)));
+                      print('FAILED: uhoh [cell %d]: d/sf/con %d/%d/%d -- %d trial(s) out of %d/%d in the data/modResp' % (cellNum, d, sf, con, nTrCurr, len(val_tr), len(modResp)));
                       pass
 
             if np.any(~np.isnan(respMean[d, :, con])):
@@ -4688,6 +4708,8 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, re
         - resample: if True, we'll resample the data to create a bootstrapped set of data
         -- NOTE: resample applies only to rateSfMix and allSfMix 
         -- if not None, then cross_val should be tuple with (fracInTest, startInd); i.e. what fraction of overall data is test, which index to start with?
+        ---- Further note: if startInd is negative, then we'll just randomly sample WITHOUT replacement
+        ------> why? for joint fits, better to randomly sample then take trials i through j for all conditions
     '''
     # the blockIDs are fixed...
     exper = get_exp_params(expInd);
