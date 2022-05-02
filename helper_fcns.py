@@ -249,6 +249,7 @@ def resample_array(resample, arr, holdout_frac=1, start_ind=None, return_inds=Fa
   if resample:
     non_nan = nan_rm(arr);
     if holdout_frac == 1:
+      # note that np.random.choice is WITH replacement by default
       curr_resps = numpy.random.choice(non_nan, len(non_nan));
       if return_inds:
          return curr_resps, np.arange(len(curr_resps));
@@ -1063,6 +1064,8 @@ def adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3, 
         # finally, project the response as usual
         if np.any(np.isnan(phi_mean)): # hacky way of saying that there were no spikes! hence phi is undefined
           resp_proj = r_byTrial[val_trials, :]; # just set it equal to r value, which will be zero anyway
+          print('condition d/con/sf || %02d/%02d/%02d has (some?) nan phi; r values below');
+          print(r_byTrial[val_trials, :]);
         else:
           resp_proj = np.multiply(r_byTrial[val_trials, :], np.cos(np.deg2rad(phi_mean) - np.deg2rad(phase_rel_stim)));
 
@@ -1408,8 +1411,6 @@ def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3,
       if resample: # COULD make this as part of resample_array function (or separate function)...but for now, it lives here (21.09.13)
         new_inds = numpy.random.randint(0, len(rel_amp), len(rel_amp));
         rel_amp, ph_rel_stim = rel_amp[new_inds], ph_rel_stim[new_inds]
-        #if len(curr_tf[0]) > 1:
-        #  pdb.set_trace();
         # must handle tf separately, to keep it as a list (rather than np array)
         curr_tf = [curr_tf[i] for i in new_inds];
 
@@ -2147,14 +2148,15 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
       if is_mod_DoG(DoGmodel):
         if joint==1:
           curr_params = [params[2+i*2], params[3+i*2], params[0], params[1]];
-        elif joint==2 or joint==5:
+        elif joint==2:
           curr_params = [params[1+i*3], params[2+i*3], params[3+i*3], params[0]];
-          if joint == 5:
-             ref_rc_val = params[2]; # 2+(i=0)*3=2 --> center radius for the high contrast condition, which serves as reference for surround radius for all contrasts
         elif joint==3:
           curr_params = [params[2+i*2], params[0], params[3+i*2], params[1]];
-        elif joint==4: # fixed center radius
-          curr_params = [params[1+i*3], params[0], params[2+i*3], params[3+i*3]];
+        elif joint==4: # fixed center radius, surr. gain
+          curr_params = [params[2+i*2], params[0], params[1], params[3+i*2]];
+        elif joint==5: # fixed surr. radius, surr. gain
+          curr_params = [params[2+i*2], params[3+i*2], params[0], params[1]];
+          ref_rc_val = params[2]; # 2+(i=0)*3=2 --> center radius for the high contrast condition, which serves as reference for surround radius for all contrasts
         elif joint==6: # fixed center:surround gain ratio
           curr_params = [params[1+i*3], params[2+i*3], params[0], params[3+i*3]];
       else: # here, we can handle the no_surr case here, too
@@ -2461,20 +2463,21 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         bound_radiusRatio= (1, 10); # the surround radius will always be greater than the ctr r
         # we'll add to allBounds later, reflecting joint gain/radius ratios common across all cons
         allBounds = (bound_gainRatio, bound_radiusRatio);
-      elif joint == 2 or joint == 5: # fixed surround radius for all contrasts
+      elif joint == 2: # fixed surround radius for all contrasts
         allBounds = (bound_radiusSurr, );
       elif joint == 3: # fixed center AND surround radius for all contrasts
         allBounds = (bound_radiusCent, bound_radiusSurr);
       # In advance of the thesis/publishing the LGN data, we will replicate some of Sach's key results
       # In particular, his thesis covers 4 joint models:
       # -- volume ratio: center and surround radii are fixed, but gains can vary (already covered in joint == 3)
-      # -- center radius: fixed center radius across contrast (joint=4)
-      # -- surround radius: fixed surround radius across contrast (joint=5) // fixed not in proportion to center, but in absolute value
+      # -- center radius: fixed center radius across contrast (joint=4) AND fixed volume (i.e. make surround gain constant across contrast)
+      # -- surround radius: fixed surround radius across contrast (joint=5) AND fixed volume (i.e. make surround gain constant across contrast) // fixed not in proportion to center, but in absolute value
       # -- center-surround: center and surround radii can vary, but ratio of gains is fixed (joint == 6)
+      # ---- NOTE: joints 3-5 have 2*nCons + 2 parms; joint==6 has 3*nCons + 1
       elif joint == 4: # fixed center radius
-         allBounds = (bound_radiusCent, ); # only center radius is fixed across condition
-      #elif joint == 5: # fixed surround radius (again, in absolute terms here, not relative, as is usually specified)
-      #   allBounds = (bound_radiusSurr, ); # only surround radius is fixed across condition
+         allBounds = (bound_radiusCent, bound_gainSurr, ); # center radius AND bound_gainSurr are fixed across condition
+      elif joint == 5: # fixed surround radius (again, in absolute terms here, not relative, as is usually specified)
+         allBounds = (bound_gainSurr, bound_radiusSurr, ); # surround radius AND bound_gainSurr are fixed across condition
       elif joint == 6: # fixed center:surround gain ratio
          allBounds = (bound_gainSurr, ); # we can fix the ratio by allowing the center gain to vary and keeping the surround in fixed proportion
     else:
@@ -2632,12 +2635,14 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       if DoGmodel == 1: # SACH
         if joint == 1: # add the center gain and center radius for each contrast 
           allBounds = (*allBounds, bound_gainCent, bound_radiusCent);
-        elif joint == 2 or joint == 5: # add the center and surr. gain and center radius for each contrast 
+        elif joint == 2: # add the center and surr. gain and center radius for each contrast 
           allBounds = (*allBounds, bound_gainCent, bound_radiusCent, bound_gainSurr);
         elif joint == 3:  # add the center and surround gain for each contrast 
           allBounds = (*allBounds, bound_gainCent, bound_gainSurr);
         elif joint == 4: # fixed center radius, so add all other parameters
-          allBounds = (*allBounds, bound_gainCent, bound_gainSurr, bound_radiusSurr);
+          allBounds = (*allBounds, bound_gainCent, bound_radiusSurr);
+        elif joint == 5: # add the center and surr. gain and center radius for each contrast 
+          allBounds = (*allBounds, bound_gainCent, bound_radiusCent);
         elif joint == 6: # fixed center:surround gain ratio
           allBounds = (*allBounds, bound_gainCent, bound_radiusCent, bound_radiusSurr);
       elif DoGmodel == 2: # TONY
@@ -2777,12 +2782,14 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       if is_mod_DoG(DoGmodel):
          if joint == 1: # gain ratio (i.e. surround gain) [0] and shape ratio (i.e. surround radius) [1] are joint
             allInitParams = [ref_init[2], ref_init[3]];
-         elif joint == 2 or joint == 5: #  surround radius [0] (as ratio in 2; fixed in 5) is joint
+         elif joint == 2: #  surround radius [0] (as ratio in 2; fixed in 5) is joint
             allInitParams = [ref_init[3]];
          elif joint == 3: # center radius [0] and surround radius [1] ratio are joint
             allInitParams = [ref_init[1], ref_init[3]];
-         elif joint == 4: # center radius only is fixed
-            allInitParams = [ref_init[1]];
+         elif joint == 4: # center radius, surr. gain fixed
+            allInitParams = [ref_init[1], ref_init[2]];
+         elif joint == 5: #  surround gain AND radius [0] (as ratio in 2; fixed in 5) are joint
+            allInitParams = [ref_init[2], ref_init[3]];
          elif joint == 6: # center:surround gain is fixed
             allInitParams = [ref_init[2]];
       else: # d-DoG-S models
@@ -2815,12 +2822,14 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         if is_mod_DoG(DoGmodel):
            if joint == 1:
               allInitParams = [*allInitParams, curr_init[0], curr_init[1]];
-           elif joint == 2 or joint == 5: # then we add center gain, center radius, surround gain (i.e. params 0:3
+           elif joint == 2: # then we add center gain, center radius, surround gain (i.e. params 0:3
               allInitParams = [*allInitParams, curr_init[0], curr_init[1], curr_init[2]];
            elif joint == 3: # then we add center gain and surround gain (i.e. params 0, 2)
               allInitParams = [*allInitParams, curr_init[0], curr_init[2]];
-           elif joint == 4: # then we add center gain, surround gain/radius
-              allInitParams = [*allInitParams, curr_init[0], curr_init[2], curr_init[3]];
+           elif joint == 4: # then we add center gain, surround radius
+              allInitParams = [*allInitParams, curr_init[0], curr_init[3]];
+           elif joint == 5: # then we add center gain, center radius
+              allInitParams = [*allInitParams, curr_init[0], curr_init[1]];
            elif joint == 6: # then we add center gain and both radii
               allInitParams = [*allInitParams, curr_init[0], curr_init[1], curr_init[3]];
         else: # d-DoG-S models
@@ -2858,14 +2867,15 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     if is_mod_DoG(DoGmodel):
       if joint == 1:
         gain_rat, shape_rat = params[0], params[1];
-      elif joint == 2 or joint == 5:
+      elif joint == 2:
         surr_shape = params[0]; # radius or frequency, if Tony model
-        if joint==5:
-           ref_rc_val = params[2]; # center radius for high contrast
       elif joint == 3:
         center_shape, surr_shape = params[0], params[1]; # radius or frequency, if Tony model
-      elif joint == 4: # center radius fixed
-        center_shape = params[0];
+      elif joint == 4: # center radius, surr. gain fixed
+        center_shape, surr_gain = params[0], params[1];
+      elif joint == 5: # surr. gain, surr. radius fixed
+        surr_gain, surr_shape = params[0], params[1];
+        ref_rc_val = params[2]; # center radius for high contrast
       elif joint == 6: # ctr:surr gain fixed
         surr_gain = params[0];
     else:
@@ -2884,19 +2894,22 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
              center_gain = params[2+con*2]; 
              center_shape = params[3+con*2]; # shape, as in radius/freq, depending on DoGmodel
              curr_params = [center_gain, center_shape, gain_rat, shape_rat];
-          elif joint == 2 or joint == 5: # center gain, center radus, surround gain
+          elif joint == 2: # center gain, center radius, surround gain
              center_gain = params[1+con*3]; 
              center_shape = params[2+con*3];
              surr_gain = params[3+con*3];
              curr_params = [center_gain, center_shape, surr_gain, surr_shape];
-          elif joint == 3: # center gain, surround gain
+          elif joint == 3: # center radius, surr radius fixed for all contrasts
              center_gain = params[2+con*2]; 
              surr_gain = params[3+con*2];
              curr_params = [center_gain, center_shape, surr_gain, surr_shape];
-          elif joint == 4: # center radius fixed for all contrasts
-             center_gain = params[1+con*3]; 
-             surr_gain = params[2+con*3];
-             surr_shape = params[3+con*3];
+          elif joint == 4: # center radius, surr. gain fixed for all contrasts
+             center_gain = params[2+con*2]; 
+             surr_shape = params[3+con*2];
+             curr_params = [center_gain, center_shape, surr_gain, surr_shape];
+          elif joint == 5: # surround gain, radius fixed for all contrasts
+             center_gain = params[2+con*2]; 
+             center_shape = params[3+con*2];
              curr_params = [center_gain, center_shape, surr_gain, surr_shape];
           elif joint == 6: # ctr:surr gain fixed for all contrasts
              center_gain = params[1+con*3]; 
@@ -4564,7 +4577,6 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
         mod = 0;
     else:
         nRepsMax = 20; # assume we'll never have more than 20 reps for any given condition...
-        # WHY BREAK SOMETIMES?
         modRespOrg = np.nan * np.empty((nDisps, nSfs, nCons, nRepsMax));
         mod = 1;
         
@@ -4657,14 +4669,14 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
 
 def organize_adj_responses(data, rvcFits, expInd, vecF1=0):
   ''' Used as a wrapper to call the organize_adj_responses function for a given experiment
-      BUT, also has organize_adj_responses for newer experiments ( see "except" assoc. with main try)
+      BUT, also has organize_adj_responses for newer experiments (see "except" assoc. with main try block)
       We set the organize_adj_responses separately for each experiment since some versions don't have adjusted responses
         and for those that do, some aspects of the calculation may differ
   '''
   ### First, we'll see if there is a direct helper_fcns method for this
   dir = get_exp_params(expInd).dir;
   to_import = dir.replace('/', '.') + 'helper_fcns';
-  if os.path.isfile(dir + 'helper_fcns'): # i.e. what if we don't have an associated helper_fcns? then do "except"
+  if os.path.isfile(dir + 'helper_fcns'): # i.e. what if we don't have an associated helper_fcns? then do the (implicit) else below
     new_hf = il.import_module(to_import);
     if hasattr(new_hf, 'organize_adj_responses'):
       return new_hf.organize_adj_responses(data, rvcFits)[1]; # 2nd returned argument (pos 1) is responses by trial
@@ -5178,9 +5190,6 @@ def makeStimulus(stimFamily, conLevel, sf_c, template, expInd=1):
     # grab Tf and Phase [IN RADIANS] from each grating for the given trial
     Tf = numpy.asarray([i[trial_to_copy] for i in trial.get('tf')]);
     Ph = numpy.asarray([i[trial_to_copy] * math.pi/180 for i in trial.get('ph')]);
-    
-    if numpy.any(numpy.isnan(Tf)):
-      pdb.set_trace();
 
     # now, sort by contrast (descending) with ties given to lower SF:
     inds_asc = numpy.argsort(Co); # this sorts ascending
