@@ -117,7 +117,8 @@ expName = hf.get_datalist(expDir, force_full=1);
 hpc_str = 'HPC' if isHPC else '';
 if expDir == 'LGN/':# or expDir == 'altExp':
     #descrBase = 'descrFits%s_220418' % hpc_str;
-    descrBase = 'descrFits%s_220421' % hpc_str;
+    #descrBase = 'descrFits%s_220421' % hpc_str;
+    descrBase = 'descrFits%s_220504' % hpc_str;
 else:
     #descrBase = 'descrFits%s_220323' % hpc_str;
     descrBase = 'descrFits%s_220410' % hpc_str;
@@ -125,7 +126,8 @@ else:
 # 
 ##############
 if expDir == 'LGN/':
-  rvcBase = 'rvcFits%s_220421' % hpc_str;
+  rvcBase = 'rvcFits%s_220504' % hpc_str;
+  #rvcBase = 'rvcFits%s_220421' % hpc_str;
   #rvcBase = 'rvcFits%s_220418' % hpc_str;
 else:
   rvcBase = 'rvcFits%s_210914' % ''#hpc_str; # if V1?
@@ -311,7 +313,7 @@ for d in range(1):
         if j>0: # need to get means..
             respsCurr = np.nanmean(by_trial, axis=-1);
 
-        curr_loss = 0;
+        curr_loss = 0; data_loss = 0;
         vExps = [];
         for c in reversed(range(n_v_cons)):
             v_sfs = ~np.isnan(respsCurr[d, :, v_cons[c]]);        
@@ -330,6 +332,13 @@ for d in range(1):
                 # compute model loss...
                 curr_loss += hf.DoG_loss(prms_curr, respsCurr[d,v_sfs,v_cons[c]], all_sfs[v_sfs], loss_type=descrLoss, DoGmodel=descrMod, dir=dir, joint=0, baseline=baseline_resp, ref_params=ref_params, ref_rc_val=ref_rc_val);
                 vExps.append(hf.var_explained(respsCurr[d,v_sfs,v_cons[c]], prms_curr, all_sfs[v_sfs], descrMod, baseline=baseline_resp, ref_params=ref_params, ref_rc_val=ref_rc_val));
+                # AND compute data loss --> per discussion with Tim on 22.05.03, let's set a reference for the subsetted losses by computing the loss between the full dataset and the current subsample
+                if descrLoss==1:
+                    data_loss += np.sum(np.square(respsCurr[d,v_sfs,v_cons[c]] - respMean[d,v_sfs,v_cons[c]]));
+                elif descrLoss==2:
+                    rS = respsCurr[d,v_sfs,v_cons[c]];
+                    rA = respMean[d,v_sfs,v_cons[c]];
+                    data_loss += np.sum(np.square(np.sign(rS)*np.sqrt(np.abs(rS)) - np.sign(rA)*np.sqrt(np.abs(rA))));
 
             elif j==-1: # model
                 # plot descr fit [1]
@@ -358,7 +367,7 @@ for d in range(1):
         lbl_str = '' if row_i==0 else 'above baseline ';
         curr_vExp = np.nanmedian(vExps);
         ref_loss = '||%.2f' % descrFits[cellNum-1]['totalNLL'][d] if j == 0 else '';
-        dispAx[d][row_i][col_i].set_title('%s (%.2f%s;%.2f)' % (comp_ind_to_str(j), curr_loss, ref_loss, curr_vExp));
+        dispAx[d][row_i][col_i].set_title('%s ([%.2f]--%.2f%s;%.2f)' % (comp_ind_to_str(j), data_loss, curr_loss, ref_loss, curr_vExp));
         if col_i==0:
             dispAx[d][row_i][col_i].set_ylabel('resp %s(sps)' % lbl_str);
         if row_i==0 and col_i==0:

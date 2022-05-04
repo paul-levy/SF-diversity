@@ -417,7 +417,7 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=0, di
           mean_amp, mean_ph,_,_ = polar_vec_mean([f1amps], [f1phs]);
           f1arr[con][sf] = np.multiply(f1amps, np.cos(np.deg2rad(mean_ph) - np.deg2rad(f1phs)));
         elif phAdjusted==-1:
-          f1arr[con][sf] = np.mean(f1amps);
+          f1arr[con][sf] = f1amps;
       else: # TODO: Could make this and the prior block less redundant
         f0arr[con][sf] = nan_rm(data['f0arr'][val_con][val_sf]);
         f1amps = nan_rm(data['f1arr'][val_con][val_sf] - to_sub)
