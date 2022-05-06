@@ -16,7 +16,7 @@ sys.path.insert(0, maindir);
 ### Imports from "main" helper_fcns
 ##############
 # -- basic things
-from helper_fcns import nan_rm, np_smart_load, bw_lin_to_log, bw_log_to_lin, resample_array, descrFit_name, random_in_range
+from helper_fcns import nan_rm, np_smart_load, bw_lin_to_log, bw_log_to_lin, resample_array, random_in_range
 from helper_fcns import polar_vec_mean, phase_fit_name, phase_advance, project_resp, get_phAdv_model
 from helper_fcns import descrLoss_name, descrMod_name, descrFit_name
 from helper_fcns import flatten_list as flatten
@@ -363,7 +363,7 @@ def blankResp(data, get_dc=0):
 
   return mu, std;
 
-def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=0, dir=1):
+def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, dir=1):
   ''' Given the dictionary containing all of the data, organize the data into the proper responses
   Specifically, we know that Sach's experiments varied contrast and spatial frequency
   Thus, we will organize responses along these dimensions
@@ -382,7 +382,8 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=0, di
   f0mean= np.nan * np.zeros((len(all_cons), len(all_sfs))); 
   f0sem = np.nan * np.zeros((len(all_cons), len(all_sfs))); 
   f1 = dict();
-  f1mean = np.nan * np.zeros((len(all_cons), len(all_sfs))); 
+  f1mean = np.nan * np.zeros((len(all_cons), len(all_sfs)));
+  f1mean_phCorrOnMeans = np.copy(f1mean);
   f1sem = np.nan * np.zeros((len(all_cons), len(all_sfs))); 
 
   # rather than getting just the mean/s.e.m., we can also record/transfer the firing rate of each individual stimulus run
@@ -423,8 +424,8 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=0, di
         f1amps = nan_rm(data['f1arr'][val_con][val_sf] - to_sub)
         f1phs = nan_rm(data['f1pharr'][val_con][val_sf]);
         if phAdjusted==1:
-          if con>(len(all_cons)-3): # i.e. a high contrast..
-            pdb.set_trace();
+          #if con>(len(all_cons)-3): # i.e. a high contrast..
+          #  pdb.set_trace();
           f1arr[con][sf] = project_resp([f1amps], [f1phs], phAdv_model, [all_opts[sf]], disp=0)[0];
           f1arr_prePhCorr[con][sf] = f1amps;
         elif phAdjusted==0:
@@ -438,12 +439,17 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=0, di
       f0mean[con, sf] = np.mean(f0arr[con][sf]); #np.mean(data['f0'][val_con][val_sf]);
       f0sem[con, sf] = sem(f0arr[con][sf]); #np.mean(data['f0sem'][val_con][val_sf]);
       f1mean[con, sf] = np.mean(f1arr[con][sf]); #np.mean(data['f1'][val_con][val_sf]);
+      # --- TEMPORARY?
+      mean_amp, mean_ph,_,_ = polar_vec_mean([f1amps], [f1phs]);
+      f1mean_phCorrOnMeans[con, sf] = project_resp([mean_amp], [mean_ph], phAdv_model, [all_opts[sf]], disp=0)[0];
+      # --- end TEMPORARY?
       #f1mean_prePhCorr[con, sf] = polar_vec_mean(f1amps, f1phs);
       f1sem[con, sf] = sem(f1arr[con][sf]); #np.mean(data['f1sem'][val_con][val_sf]);
 
   f0['mean'] = f0mean;
   f0['sem'] = f0sem;
   f1['mean'] = f1mean;
+  f1['mean_phCorrOnMeans'] = f1mean_phCorrOnMeans;
   #f1['mean_prePhCorr'] = f1mean_prePhCorr;
   f1['sem'] = f1sem;
 

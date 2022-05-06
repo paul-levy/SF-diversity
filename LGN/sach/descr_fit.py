@@ -211,9 +211,9 @@ def fit_descr_empties(nCons, nParam, joint=0, nBoots=1):
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 1, joint=0, fracSig=0, nBoots=0, forceOverwrite=False):
+def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 1, joint=0, fracSig=0, nBoots=0, forceOverwrite=False, phAdj=1):
 
-    # Set up whether we will bootstrap straight away
+  # Set up whether we will bootstrap straight away
     resample = False if nBoots <= 0 else True;
     nBoots = 1 if nBoots <= 0 else nBoots;
 
@@ -228,9 +228,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
 
     HPC = 'HPC' if 'pl1465' in data_loc else '';
 
-    fLname = 'descrFits%s_s220412' % HPC;
+    fLname = 'descrFits%s_s220506' % HPC;
     #fLname = 'descrFits_s211206';
-    #fLname = 'descrFits_s211006';
 
     if joint>0:
       try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
@@ -270,7 +269,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
 
     for boot_i in range(nBoots):
 
-      to_unpack = hf.tabulateResponses(data, resample);
+      to_unpack = hf.tabulateResponses(data, resample, phAdjusted=phAdj);
       [_, f1] = to_unpack[0];
       [_, f1arr] = to_unpack[2];
 
@@ -384,9 +383,10 @@ if __name__ == '__main__':
 
     HPC = 'HPC' if 'pl1465' in data_loc else '';
 
-    #rvcBase = 'rvcFits%s_220219' % HPC;
-    rvcBase = 'rvcFits%s_220412' % HPC;
-    phBase = 'phAdv%s_220412' % HPC;
+    rvcBase = 'rvcFits%s_220506' % HPC;
+    phBase = 'phAdv%s_220506' % HPC;
+    #rvcBase = 'rvcFits%s_220412' % HPC;
+    #phBase = 'phAdv%s_220412' % HPC;
 
     fracSig = 0; # should be unconstrained, per Tony (21.05.19) for LGN fits
 
