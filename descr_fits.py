@@ -19,17 +19,19 @@ else:
 
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
-dogName = 'descrFits%s_220418' % hpcSuff;
-#dogName = 'descrFits%s_220405' % hpcSuff;
+#dogName = 'descrFits%s_220418' % hpcSuff;
+dogName = 'descrFits%s_220505' % hpcSuff;
 if sys.argv[3] == 'LGN/':
-  phAdvName = 'phaseAdvanceFits_220415'
-  rvcName_f1 = 'rvcFits_220415';
+  phAdvName = 'phaseAdvanceFits%s_220504' % hpcSuff
+  rvcName_f1 = 'rvcFits%s_220504' % hpcSuff;
+  #phAdvName = 'phaseAdvanceFits%s_220415' % hpcSuff
+  #rvcName_f1 = 'rvcFits%s_220418' % hpcSuff;
   #phAdvName = 'phaseAdvanceFits_211108'
   #rvcName_f1 = 'rvcFits_211108'; # FOR LGN
   rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 else:
-  phAdvName = 'phaseAdvanceFits_210914'
-  rvcName_f1 = 'rvcFits_210914'; # FOR V1
+  phAdvName = 'phaseAdvanceFits%s_210914' % hpcSuff
+  rvcName_f1 = 'rvcFits%s_210914' % hpcSuff; # FOR V1
   rvcName_f0 = 'rvcFits_210914_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 
 '''
@@ -142,14 +144,33 @@ def phase_advance_fit(cell_num, expInd, data_loc, phAdvName=phAdvName, to_save=1
   curr_fit['cellNum'] = cell_num;
 
   if to_save:
-    if os.path.isfile(data_loc + phAdvName):
-      print('reloading phAdvFits...');
-      phFits = hf.np_smart_load(data_loc + phAdvName);
-    else:
-      phFits = dict();
-    phFits[cell_num-1] = curr_fit;
-    np.save(data_loc + phAdvName, phFits);
-    print('saving phase advance fit for cell ' + str(cell_num));
+
+    pass_check=False
+    n_tries=100;
+    while not pass_check:
+    
+      if os.path.isfile(data_loc + phAdvName):
+        print('reloading phAdvFits...');
+        phFits = hf.np_smart_load(data_loc + phAdvName);
+      else:
+        phFits = dict();
+      phFits[cell_num-1] = curr_fit;
+      np.save(data_loc + phAdvName, phFits);
+      print('saving phase advance fit for cell ' + str(cell_num));
+
+      # now check...
+      check = hf.np_smart_load(data_loc + phAdvName);
+      try:
+        if 'loss' in check[cell_num-1].keys(): # just check that any relevant key is there
+          pass_check = True;
+          print('...cell %02d passed!' % cell_num);
+      except:
+        pass; # then we didn't pass --> keep trying
+      # --- and if neither pass_check was triggered, then we go back and reload, etc
+      n_tries -= 1;
+      if n_tries <= 0:
+        pass_check = True;
+        print('never really passed...');
 
   if returnMod: # default
     return phAdv_model, all_opts;
@@ -417,11 +438,47 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
     prevFits_toSave['adjSem'] = adjSemTr;
     prevFits_toSave['adjSemComp'] = adjSemCompTr;
 
-  rvcFits[cell_num-1][disp] = prevFits_toSave;
-
   if to_save:
-    np.save(data_loc + rvcNameFinal, rvcFits);
-    print('saving rvc fit [%s] for cell %d, disp %d' % (rvcNameFinal, cell_num, disp));
+
+    pass_check=False
+    n_tries=100;
+    while not pass_check:
+    
+      # update stuff - load again in case some other run has saved/made changes
+      if os.path.isfile(data_loc + rvcNameFinal):
+        print('reloading rvcFits...');
+        rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
+      if cell_num-1 not in rvcFits:
+        rvcFits[cell_num-1] = dict();
+        rvcFits[cell_num-1][disp] = dict();
+      else: # cell_num-1 is a key in rvcFits
+        if disp not in rvcFits[cell_num-1]:
+          rvcFits[cell_num-1][disp] = dict();
+
+      rvcFits[cell_num-1][disp] = prevFits_toSave;
+      np.save(data_loc + rvcNameFinal, rvcFits);
+      print('saving rvc fit [%s] for cell %d, disp %d' % (rvcNameFinal, cell_num, disp));
+
+      # now check...
+      check = hf.np_smart_load(data_loc + rvcNameFinal);
+      if resample: # check that the boot stuff is there
+        try:
+          if np.any(['boot' in x for x in check[cell_num-1][disp].keys()]):
+            pass_check = True;
+        except:
+          pass; # then we didn't pass --> keep trying
+      else:
+        try:
+          if 'loss' in check[cell_num-1][disp].keys(): # just check that any relevant key is there
+            pass_check = True;
+            print('...cell %02d passed!' % cell_num);
+        except:
+          pass; # then we didn't pass --> keep trying
+      # --- and if neither pass_check was triggered, then we go back and reload, etc
+      n_tries -= 1;
+      if n_tries <= 0:
+        pass_check = True;
+        print('never really passed...');
 
   if returnMod:
     return rvc_model, all_opts, all_conGains, adjMeans;
@@ -594,11 +651,11 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1, flt32=True):
   if joint>0:
     totalNLL = np.ones((nBoots, nDisps, ), dtype=dt) * np.nan;
     paramList = np.ones((nBoots, nDisps, ), dtype='O') * np.nan;
-    success = np.ones((nBoots, nDisps, ), dtype=np.bool_);
+    success = np.zeros((nBoots, nDisps, ), dtype=np.bool_);
   else:
     totalNLL = None;
     paramList = None;
-    success = np.ones((nBoots, nDisps, nCons), dtype=np.bool_);
+    success = np.zeros((nBoots, nDisps, nCons), dtype=np.bool_);
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success;
  
@@ -659,10 +716,11 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
   expInd, expName = hf.get_exp_ind(data_loc, cellName, overwriteExpName);
   print('Making descriptive SF fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
 
+  phAdj = None if vecF1==1 else 1;
   if joint>0:
     try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
       modStr  = hf.descrMod_name(DoGmodel);
-      ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0));
+      ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0, phAdj=phAdj));
       ref_varExpl = None; # as of 22.01.14, no longer restricting which conditions are fit jointly
       #ref_varExpl = ref_fits[cell_num-1]['varExpl'][0]; # reference varExpl for single gratings
       isolFits = ref_fits[cell_num-1];
@@ -687,9 +745,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num, rvcName=rvcName, rvcMod=rvcMod, direc=dir, vecF1=vecF1); # see default arguments in helper_fcns.py
   else:
     rvcFits = None;
-    
+
   modStr  = hf.descrMod_name(DoGmodel);
-  fLname  = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=joint); # why add modRecov at the end? we want to load the non-modRecov fits first
+  fLname  = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=joint, phAdj=phAdj); # why add modRecov at the end? we want to load the non-modRecov fits first
   prevFits = None; # default to none, but we'll try to load previous fits...
   prevFits_toSave = dict();
   if os.path.isfile(data_loc + fLname):
@@ -715,9 +773,13 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
   nDisps = len(all_disps);
   nCons = len(all_cons);
 
+  make_cv_train_subset = False; # make the test-length-matched subsample of the training data? 
   if cross_val == 2.0:
-    nBoots = nCons*len(stimVals[2]); # stimVals[2] is sfs
+    nBoots = len(valConByDisp[0])*len(stimVals[2]); # stimVals[2] is sfs
     print('# boots is %03d' % nBoots);
+  if cross_val is not None:
+    if cross_val>0 and cross_val<1:
+      make_cv_train_subset = True;
 
   # -- we'll ask which response measure is returned (DC or F1) so that we can pass in None for base_rate if it's F1 (will become 0)
   # ---- NOTE: We pass in rvcMod=-1 so that we know we're passing in the already loaded rvcFit for that cell
@@ -746,6 +808,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     # also create infra. to save nll, vExp
     test_nll = np.copy(bestNLL);
     test_vExp = np.copy(varExpl);
+    if make_cv_train_subset:
+      tr_subset_nll = np.copy(bestNLL);
+      tr_subset_vExp = np.copy(varExpl);
 
   print('# boots --> %03d' % nBoots);
   for boot_i in range(nBoots):
@@ -757,13 +822,12 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       ftol = 2.220446049250313e-09; # the default value, per scipy guide (scipy.optimize, for L-BFGS-B)
 
     cross_val_curr = None if cross_val is None else (cross_val, -1); # why -1? To make resampling rather than sequential sampling
-    #cross_val_curr = None if cross_val is None else (cross_val, boot_i);
-    if cross_val_curr[0] == 2.0: # this is a code to specify restricting by condition:
+    if cross_val == 2.0: # this is a code to specify restricting by condition:
       val_sfs = hf.get_valid_sfs(cellStruct, disp=disp, con=valConByDisp[0][0], expInd=expInd, stimVals=stimVals, validByStimVal=validByStimVal);
       con_ind, sf_ind = np.floor(np.divide(boot_i, len(val_sfs))).astype('int'), np.mod(boot_i, len(val_sfs)).astype('int');
       print('holding out con/sf indices %02d/%02d' % (con_ind, sf_ind));
       resps_all = np.copy(r_all_noresamp);
-      resps_all[disp, valConByDisp[disp][con_ind], val_sfs[sf_ind]] = np.nan;
+      resps_all[disp, val_sfs[sf_ind], valConByDisp[disp][con_ind]] = np.nan;
       resps_mean = np.nanmean(resps_all, axis=-1);
     else:
       _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=resample, cellNum=cell_num, cross_val=cross_val_curr);
@@ -786,6 +850,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
 
     resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
     base_rate = hf.blankResp(cellStruct, expInd, spks_sum, spksAsRate=True)[0] if which_measure==0 else None;
+    baseline = 0 if base_rate is None else base_rate; # what's the baseline to add
 
     ######
     # 3b. Loop for each dispersion, making fit
@@ -805,6 +870,14 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
         # assumes not joint??
         test_nlls = np.nan*np.zeros_like(nll);
         test_vExps = np.nan*np.zeros_like(vExp);
+        if make_cv_train_subset:
+          tr_subset_nlls = np.nan*np.zeros_like(nll);
+          tr_subset_vExps = np.nan*np.zeros_like(vExp);
+
+        # set up ref_params, ref_rc_val; will only be used IF applicable
+        ref_params = prms[-1]; # high contrast condition
+        ref_rc_val = totPrm[2];
+        
         for ii, prms_curr in enumerate(prms):
           # we'll iterate over the parameters, which are fit for each contrast (the final dimension of test_mn)
           if np.any(np.isnan(prms_curr)):
@@ -812,12 +885,28 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
           non_nans = np.where(~np.isnan(test_mn[d,:,ii]))[0];
           curr_sfs = stimVals[2][non_nans];
           resps_curr = test_mn[d, non_nans, ii]
+          if make_cv_train_subset:
+            # now, let's also make a size-matched subset of the training data to see if the small N is the source of the noise
+            len_test = np.array([np.sum(~np.isnan(test_data[d, nn, ii])) for nn in non_nans]);
+            len_train = np.array([np.sum(~np.isnan(resps_all[d, nn, ii])) for nn in non_nans]);
+            to_repl = False if np.max(len_test)<np.max(len_train) else True; # if the training set is SMALLER then the test set, then we should allow resampling; otherwise, don't
+            try:
+              train_subset_curr = np.array([np.nanmean(np.random.choice(hf.nan_rm(resps_all[d, nn, ii]), num, replace=to_repl)) for nn,num in zip(non_nans, len_test)]);
+            except: # we could have all-NaN subset?
+              train_subset_curr = None;
 
-          pdb.set_trace();
-          test_nlls[ii] = hf.DoG_loss(prms_curr, resps_curr, curr_sfs, resps_std=test_sem[d, non_nans, ii], loss_type=loss_type, DoGmodel=DoGmodel, gain_reg=gain_reg, joint=joint, enforceMaxPenalty=0) # why not enforce max? b/c fewer resps means more varied range of max, don't want to wrongfully penalize
-          test_vExps[ii] = hf.var_explained(resps_curr, prms_curr, curr_sfs, DoGmodel);
+          test_nlls[ii] = hf.DoG_loss(prms_curr, resps_curr, curr_sfs, resps_std=test_sem[d, non_nans, ii], loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=0, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val) # why not enforce max? b/c fewer resps means more varied range of max, don't want to wrongfully penalize
+          test_vExps[ii] = hf.var_explained(resps_curr, prms_curr, curr_sfs, DoGmodel, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val);
+          # and evaluate loss, vExp on a subset of the TRAINING data that has the same # of trials as the test data
+          # --- why? per Tony + Eero (22.04.21), we want to see if the large discrepancy in loss has to do with noise in smaller samples
+          if make_cv_train_subset and train_subset_curr is not None:
+            tr_subset_nlls[ii] = hf.DoG_loss(prms_curr, train_subset_curr, curr_sfs, resps_std=test_sem[d, non_nans, ii], loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=0, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val) # why not enforce max? b/c fewer resps means more varied range of max, don't want to wrongfully penalize
+            tr_subset_vExps[ii] = hf.var_explained(train_subset_curr, prms_curr, curr_sfs, DoGmodel, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val);
         test_nll[boot_i, d] = test_nlls;
         test_vExp[boot_i, d] = test_vExps;
+        if make_cv_train_subset:
+          tr_subset_nll[boot_i, d] = tr_subset_nlls;
+          tr_subset_vExp[boot_i, d] = tr_subset_vExps;
 
       # Update the fits! Now, what we do depends on:
       # -- joint?
@@ -886,6 +975,11 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
         prevFits_toSave['boot_cv_lambdas'] = [];
         prevFits_toSave['boot_NLL_cv_test'] = [];
         prevFits_toSave['boot_vExp_cv_test'] = [];
+        if make_cv_train_subset:
+          # --- temporary: 22.04.21
+          prevFits_toSave['boot_NLL_cv_train_subset'] = [];
+          prevFits_toSave['boot_vExp_cv_train_subset'] = [];
+          # --- end temporary: 22.04.21
         prevFits_toSave['boot_NLL_cv_train'] = [];
         prevFits_toSave['boot_vExp_cv_train'] = [];
         # --- these are all implicitly based on training data
@@ -897,6 +991,11 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       prevFits_toSave['boot_cv_lambdas'].append(vol_lam);
       prevFits_toSave['boot_NLL_cv_test'].append(test_nll);
       prevFits_toSave['boot_vExp_cv_test'].append(test_vExp);
+      if make_cv_train_subset:
+        # --- temporary: 22.04.21
+        prevFits_toSave['boot_NLL_cv_train_subset'].append(tr_subset_nll);
+        prevFits_toSave['boot_vExp_cv_train_subset'].append(tr_subset_vExp);
+        # --- end temporary: 22.04.21
       prevFits_toSave['boot_NLL_cv_train'].append(bestNLL);
       prevFits_toSave['boot_vExp_cv_train'].append(varExpl);
       prevFits_toSave['boot_cv_params'].append(currParams);
@@ -931,11 +1030,14 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
   if to_save: # i.e. this is the final boot iteration
 
     pass_check=False;
+    n_tries = 100;
     while not pass_check: # keep saving/reloading until the fit has properly saved everything...
 
       # reload in case another thread/call has changed descrFits
       if os.path.isfile(data_loc + fLname):
         descrFits = hf.np_smart_load(data_loc + fLname);
+        if descrFits == []:
+          continue; # don't try to save the results if we didn't load the dictionary properly
       else:
         descrFits = dict();
 
@@ -945,17 +1047,22 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
         fLname = fLname.replace('.npy', '_modRecov.npy');
       descrFits[cell_num-1] = prevFits_toSave;
       np.save(data_loc + fLname, descrFits);   
-      #print('saving for cell ' + str(cell_num));
 
       # now check...
       check = hf.np_smart_load(data_loc + fLname);
       if resample: # check that the boot stuff is there
-        if 'boot' in check[cell_num-1].keys():
+        if np.any(['boot' in x for x in check[cell_num-1].keys()]):
           pass_check = True;
       else:
-        if 'NLL' in check[cell_num-1].keys(): # just check that any relevant key is there
-          pass_check = True;
+        try:
+          if 'NLL' in check[cell_num-1].keys(): # just check that any relevant key is there
+            pass_check = True;
+        except:
+          pass; # then we didn't pass...
       # --- and if neither pass_check was triggered, then we go back and reload, etc
+      n_tries -= 1;
+      if n_tries <= 0:
+        pass_check = True;
 
   # -- and return, if specified
   if returnDict:
@@ -990,7 +1097,7 @@ if __name__ == '__main__':
     nBoots     = int(sys.argv[11]);
     joint   = int(sys.argv[12]);
     if len(sys.argv) > 13:
-      dir = float(sys.argv[13]);
+      dir = int(sys.argv[13]);
     else:
       dir = 1; # default
     # --- first, 
@@ -1045,18 +1152,23 @@ if __name__ == '__main__':
       force_dc = False;
 
     vecF1 = 1 if ph_fits == -1 else 0;
+    print('ph fits | rvc_fits | vecF1 = %d|%d|%d' % (ph_fits, rvc_fits, vecF1));
+    if vecF1:
+      dir = 0;
     fracSig = 1;
     #fracSig = 0 if data_dir == 'LGN/' else 1; # we only enforce the "upper-half sigma as fraction of lower half" for V1 cells!
-
+    
     if asMulti:
       from functools import partial
       import multiprocessing as mp
       nCpu = mp.cpu_count();
+      print('cpu count: %02d' % nCpu);
 
       ### Phase fits
-      if ph_fits == 1:
+      if ph_fits == 1 and disp==0: # only call this if disp=0!
+        print('phase advance fits!!!');
         with mp.Pool(processes = nCpu) as pool:
-          ph_perCell = partial(phase_advance_fit, data_loc=dataPath, disp=disp, dir=dir, returnMod=0, to_save=0); 
+          ph_perCell = partial(phase_advance_fit, data_loc=dataPath, disp=disp, dir=dir, returnMod=0, to_save=0);
           phFits = pool.starmap(ph_perCell, zip(zip(range(start_cell, end_cell+1), dL['unitName']), expInds));
           ### do the saving HERE!
           phAdvName = hf.phase_fit_name(phAdvName, dir);
@@ -1071,6 +1183,7 @@ if __name__ == '__main__':
 
       ### RVC fits
       if rvc_fits == 1:
+        print('rvc fits!!!');
         with mp.Pool(processes = nCpu) as pool:
           rvc_perCell = partial(rvc_adjusted_fit, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, returnMod=0, to_save=0, nBoots=nBoots);
           rvcFits = pool.starmap(rvc_perCell, zip(zip(range(start_cell, end_cell+1), dL['unitName']), expInds));
@@ -1092,7 +1205,13 @@ if __name__ == '__main__':
       ### Descriptive fits
       if descr_fits == 1:
 
-        n_repeats = 5 if joint>0 else 15; # was previously be 3, 15
+        if nBoots > 1:
+          n_repeats = 2 if joint>0 else 5; # fewer if repeat
+        else:
+          #n_repeats = 50 if joint>0 else 100; # was previously be 3, 15, then 7, 15
+          n_repeats = 5 if joint>0 else 15; # was previously be 3, 15
+          
+        print('descr fits! --> %03d boots, cross_val %.2f' % (nBoots, cross_val if cross_val is not None else -99));
 
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
@@ -1101,7 +1220,8 @@ if __name__ == '__main__':
 
           print('debug');
           ### do the saving HERE!
-          dogNameFinal = hf.descrFit_name(loss_type, descrBase=dogName, modelName=hf.descrMod_name(dog_model), modRecov=modRecov, joint=joint);
+          phAdj = None if vecF1==1 else 1;
+          dogNameFinal = hf.descrFit_name(loss_type, descrBase=dogName, modelName=hf.descrMod_name(dog_model), modRecov=modRecov, joint=joint, phAdj=phAdj);
           if os.path.isfile(dataPath + dogNameFinal):
             dogFitNPY = hf.np_smart_load(dataPath + dogNameFinal);
           else:
@@ -1137,12 +1257,13 @@ if __name__ == '__main__':
         if nBoots > 1:
           n_repeats = 2 if joint>0 else 5; # fewer if repeat
         else:
-          n_repeats = 5 if joint>0 else 12; # was previously be 3, 15, then 7, 15
+          n_repeats = 50 if joint>0 else 100; # was previously be 3, 15, then 7, 15
 
         #import cProfile, re
         #cProfile.run('fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov)');
         if hf.is_mod_DoG(dog_model) and nBoots<10:
           sleep(hf.random_in_range((0, 20))[0]); # why? DoG fits run so quickly that successive load/save calls take place in an overlapping way and we lose the result of some calls
+        dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
         fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons);
 
       if rvcF0_fits == 1:

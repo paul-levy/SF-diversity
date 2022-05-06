@@ -715,16 +715,19 @@ def descrJoint_name(joint=0, modelName=None):
 
   return jStr;
 
-def descrFit_name(lossType, descrBase=None, modelName = None, modRecov=False, joint=0):
-  ''' if modelName is none, then we assume we're fitting descriptive tuning curves to the data
-      otherwise, pass in the fitlist name in that argument, and we fit descriptive curves to the model
-      this simply returns the name
+def descrFit_name(lossType, descrBase=None, modelName = None, modRecov=False, joint=0, phAdj=None):
+  ''' if modelName is none, then we assume we're fitting descriptive tuning curves to the data otherwise, pass in the fitlist name in that argument, and we fit descriptive curves to the model this simply returns the name
   '''
   # load descrFits
   floss_str = descrLoss_name(lossType);
   if descrBase is None:
     descrBase = 'descrFits';
-  descrFitBase = '%s%s' % (descrBase, floss_str);
+  vecF1_str = ''; # default
+  if phAdj==1: # from 22.05 on, we'll assume that all descrFits are on vecF1 responses, since that's the default for all V1 data; however, we put a flag if it's ph-amp adj. (e.g. like some LGN fits)
+     phAdj_str = '_phAdj';
+  else:
+     phAdj_str = '';
+  descrFitBase = '%s%s%s' % (descrBase, phAdj_str, floss_str);
 
   if modelName is None:
     descrName = '%s.npy' % descrFitBase;
@@ -2473,16 +2476,12 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       # -- center radius: fixed center radius across contrast (joint=4) AND fixed volume (i.e. make surround gain constant across contrast)
       # -- surround radius: fixed surround radius across contrast (joint=5) AND fixed volume (i.e. make surround gain constant across contrast) // fixed not in proportion to center, but in absolute value
       # -- center-surround: center and surround radii can vary, but ratio of gains is fixed (joint == 6)
-      # -- SLOPES: center gain and radius are determined from an equation by contrast (joint == 7)
-      # ---- first attempt on 22.05.02 --> center gain given from 
       # ---- NOTE: joints 3-5 have 2*nCons + 2 parms; joint==6 has 3*nCons + 1
       elif joint == 4: # fixed center radius
          allBounds = (bound_radiusCent, bound_gainSurr, ); # center radius AND bound_gainSurr are fixed across condition
       elif joint == 5: # fixed surround radius (again, in absolute terms here, not relative, as is usually specified)
          allBounds = (bound_gainSurr, bound_radiusSurr, ); # surround radius AND bound_gainSurr are fixed across condition
       elif joint == 6: # fixed center:surround gain ratio
-         allBounds = (bound_gainSurr, ); # we can fix the ratio by allowing the center gain to vary and keeping the surround in fixed proportion
-      elif joint == 7: # we'll fit naka-rushton for center gain, ax+b slope (in log-log) for r_c
          allBounds = (bound_gainSurr, ); # we can fix the ratio by allowing the center gain to vary and keeping the surround in fixed proportion
     else:
       allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
@@ -2613,6 +2612,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
     ### prepare for the joint fitting, if that's what we've specified!
     if joint>0:
+      if resps_curr.size == 0:
+         continue;
       if ref_varExpl is None:
         start_incl = 1; # this means if we don't have a reference varExpl, we just fit all conditions
       if start_incl == 0:
@@ -2808,6 +2809,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
       # now, we cycle through all responses and add the per-contrast parameters
       for resps_curr, sfs_curr, stds_curr, curr_init, resps_curr_tr, sfs_curr_tr in zip(allResps, allSfs, allRespsSem, isolParams, allRespsTr, allSfsTr):
+        if resps_curr.size == 0:
+           continue;
         if curr_init == [] or n_try>0:
            curr_init = dog_init_params(resps_curr, base_rate, all_sfs, sfs_curr, DoGmodel, bounds=refBounds);
            if joint==2 and DoGmodel==3: # we'll initialize by fitting d-DoG-S separately with all joint parameters fixed...
@@ -2893,6 +2896,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         surr_gain, surr_rad = params[0], params[1];
         g, S = params[2:4];
     for con in reversed(range(len(allResps))):
+       if allResps[con].size == 0:
+          continue;
        # --- then, go through each contrast and get the "local", i.e. per-contrast, parameters
        if is_mod_DoG(DoGmodel):
           if joint == 1: # center gain, center shape
@@ -4778,10 +4783,9 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, re
     else:
       # NOTE: we are getting the modRespOrg output of tabulate_responses, and ensuring the spikes are treated as rates (or raw counts) based on how they are passed in here
       allSfMix  = tabulate_responses(expStructure, expInd, spikes, mask, modsAsRate = respsAsRate, resample=resample, cellNum=cellNum, cross_val=cross_val)[4];
-      
       rateSfMix = numpy.nanmean(allSfMix, -1);
 
-    return rateOr, rateCo, rateSfMix, allSfMix;
+    return rateOr, rateCo, rateSfMix, allSfMix;  
 
 def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes = None, vecF1=0):
   ''' Get trial-by-trial spike count

@@ -40,6 +40,9 @@ LGN/experiments
 LGN/sach/figures/
 LGN/sach/forTony/
 LGN/sach/sach-data/
+batch*HPC*
+*_*_22*.py
+*_*_22*.sh
 *~
 **/*~
 **/*.out
