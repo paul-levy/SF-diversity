@@ -2473,12 +2473,16 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       # -- center radius: fixed center radius across contrast (joint=4) AND fixed volume (i.e. make surround gain constant across contrast)
       # -- surround radius: fixed surround radius across contrast (joint=5) AND fixed volume (i.e. make surround gain constant across contrast) // fixed not in proportion to center, but in absolute value
       # -- center-surround: center and surround radii can vary, but ratio of gains is fixed (joint == 6)
+      # -- SLOPES: center gain and radius are determined from an equation by contrast (joint == 7)
+      # ---- first attempt on 22.05.02 --> center gain given from 
       # ---- NOTE: joints 3-5 have 2*nCons + 2 parms; joint==6 has 3*nCons + 1
       elif joint == 4: # fixed center radius
          allBounds = (bound_radiusCent, bound_gainSurr, ); # center radius AND bound_gainSurr are fixed across condition
       elif joint == 5: # fixed surround radius (again, in absolute terms here, not relative, as is usually specified)
          allBounds = (bound_gainSurr, bound_radiusSurr, ); # surround radius AND bound_gainSurr are fixed across condition
       elif joint == 6: # fixed center:surround gain ratio
+         allBounds = (bound_gainSurr, ); # we can fix the ratio by allowing the center gain to vary and keeping the surround in fixed proportion
+      elif joint == 7: # we'll fit naka-rushton for center gain, ax+b slope (in log-log) for r_c
          allBounds = (bound_gainSurr, ); # we can fix the ratio by allowing the center gain to vary and keeping the surround in fixed proportion
     else:
       allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
@@ -2580,7 +2584,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       continue;
 
     if validByStimVal is not None:
-      valSfInds = get_valid_sfs(None, disp, con, expInd, stimVals, validByStimVal); # we pass in None for data, since we're giving stimVals/validByStimVal, anyway
+      valSfInds = np.array(get_valid_sfs(None, disp, con, expInd, stimVals, validByStimVal)); # we pass in None for data, since we're giving stimVals/validByStimVal, anyway
     else: # then we aren't skipping any
       valSfInds = np.arange(0,len(all_sfs));
     valSfVals = all_sfs[valSfInds];
@@ -2598,13 +2602,14 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       sem_curr   = sem(resps_recov, axis=1);
       var_curr   = np.var(resps_recov, axis=1);
     else:
-      resps_curr = resps_mean[disp, valSfInds, con];
-      sem_curr   = resps_sem[disp, valSfInds, con];
-      var_curr = np.nanvar(resps_all[disp,valSfInds,con], axis=1);
-      resps_all_curr = resps_all[disp, valSfInds, con];
+      valSfInds_curr = np.where(~np.isnan(resps_mean[disp, valSfInds, con]))[0];
+      resps_curr = resps_mean[disp, valSfInds[valSfInds_curr], con];
+      sem_curr   = resps_sem[disp, valSfInds[valSfInds_curr], con];
+      var_curr = np.nanvar(resps_all[disp,valSfInds[valSfInds_curr],con], axis=1);
+      resps_all_curr = resps_all[disp, valSfInds[valSfInds_curr], con];
       nn = ~np.isnan(resps_all_curr);
       resps_all_flat = resps_all_curr[nn];
-      valSfVals_tile = np.repeat(valSfVals, np.sum(nn,axis=1))
+      valSfVals_tile = np.repeat(valSfVals[valSfInds_curr], np.sum(nn,axis=1))
 
     ### prepare for the joint fitting, if that's what we've specified!
     if joint>0:
@@ -2628,7 +2633,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       allResps.append(resps_curr);
       allRespsSem.append(sem_curr);
       allRespsVar.append(var_curr);
-      allSfs.append(valSfVals);
+      allSfs.append(valSfVals[valSfInds_curr]);
       allRespsTr.append(resps_all_flat);
       allSfsTr.append(valSfVals_tile);
       # and add to the parameter list!
@@ -2944,7 +2949,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
        # now, compute loss, explained variance, etc
        bestNLL[respConInd] = DoG_loss(curr_params, resps_curr, sfs_curr, resps_std=sem_curr, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=0, baseline=baseline, vol_lam=vol_lam, ref_params=ref_params, ref_rc_val=ref_rc_val); # not joint, now!
        currParams[respConInd, :] = curr_params;
-       varExpl[respConInd] = var_explained(resps_curr, curr_params, valSfVals, DoGmodel, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val);
+       varExpl[respConInd] = var_explained(resps_curr, curr_params, sfs_curr, DoGmodel, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val);
        prefSf[respConInd] = descr_prefSf(curr_params, dog_model=DoGmodel, all_sfs=valSfVals, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val);
        charFreq[respConInd] = dog_charFreq(curr_params, DoGmodel=DoGmodel);
         
@@ -4773,9 +4778,10 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, re
     else:
       # NOTE: we are getting the modRespOrg output of tabulate_responses, and ensuring the spikes are treated as rates (or raw counts) based on how they are passed in here
       allSfMix  = tabulate_responses(expStructure, expInd, spikes, mask, modsAsRate = respsAsRate, resample=resample, cellNum=cellNum, cross_val=cross_val)[4];
+      
       rateSfMix = numpy.nanmean(allSfMix, -1);
 
-    return rateOr, rateCo, rateSfMix, allSfMix;  
+    return rateOr, rateCo, rateSfMix, allSfMix;
 
 def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes = None, vecF1=0):
   ''' Get trial-by-trial spike count

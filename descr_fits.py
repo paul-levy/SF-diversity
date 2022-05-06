@@ -687,7 +687,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     rvcFits = hf.get_rvc_fits(data_loc, expInd, cell_num, rvcName=rvcName, rvcMod=rvcMod, direc=dir, vecF1=vecF1); # see default arguments in helper_fcns.py
   else:
     rvcFits = None;
-
+    
   modStr  = hf.descrMod_name(DoGmodel);
   fLname  = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=joint); # why add modRecov at the end? we want to load the non-modRecov fits first
   prevFits = None; # default to none, but we'll try to load previous fits...
@@ -714,6 +714,10 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
 
   nDisps = len(all_disps);
   nCons = len(all_cons);
+
+  if cross_val == 2.0:
+    nBoots = nCons*len(stimVals[2]); # stimVals[2] is sfs
+    print('# boots is %03d' % nBoots);
 
   # -- we'll ask which response measure is returned (DC or F1) so that we can pass in None for base_rate if it's F1 (will become 0)
   # ---- NOTE: We pass in rvcMod=-1 so that we know we're passing in the already loaded rvcFit for that cell
@@ -754,7 +758,15 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
 
     cross_val_curr = None if cross_val is None else (cross_val, -1); # why -1? To make resampling rather than sequential sampling
     #cross_val_curr = None if cross_val is None else (cross_val, boot_i);
-    _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=resample, cellNum=cell_num, cross_val=cross_val_curr);
+    if cross_val_curr[0] == 2.0: # this is a code to specify restricting by condition:
+      val_sfs = hf.get_valid_sfs(cellStruct, disp=disp, con=valConByDisp[0][0], expInd=expInd, stimVals=stimVals, validByStimVal=validByStimVal);
+      con_ind, sf_ind = np.floor(np.divide(boot_i, len(val_sfs))).astype('int'), np.mod(boot_i, len(val_sfs)).astype('int');
+      print('holding out con/sf indices %02d/%02d' % (con_ind, sf_ind));
+      resps_all = np.copy(r_all_noresamp);
+      resps_all[disp, valConByDisp[disp][con_ind], val_sfs[sf_ind]] = np.nan;
+      resps_mean = np.nanmean(resps_all, axis=-1);
+    else:
+      _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=resample, cellNum=cell_num, cross_val=cross_val_curr);
 
     if cross_val is not None and resample:
       ########
@@ -801,6 +813,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
           curr_sfs = stimVals[2][non_nans];
           resps_curr = test_mn[d, non_nans, ii]
 
+          pdb.set_trace();
           test_nlls[ii] = hf.DoG_loss(prms_curr, resps_curr, curr_sfs, resps_std=test_sem[d, non_nans, ii], loss_type=loss_type, DoGmodel=DoGmodel, gain_reg=gain_reg, joint=joint, enforceMaxPenalty=0) # why not enforce max? b/c fewer resps means more varied range of max, don't want to wrongfully penalize
           test_vExps[ii] = hf.var_explained(resps_curr, prms_curr, curr_sfs, DoGmodel);
         test_nll[boot_i, d] = test_nlls;
