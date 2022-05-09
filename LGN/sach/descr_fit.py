@@ -112,7 +112,10 @@ def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0, nBoots=0, phAdjusted=0, dir=1
   assert dataList!=[], "data file not found!"
   data = dataList[cell_num-1]['data'];
 
-  rvcNameFinal = hf.rvc_fit_name(rvcName, rvcMod);
+  if phAdjusted<1: # either vec corr or neither
+    dir=None;
+  vecF1 = 1 if phAdjusted==0 else None;
+  rvcNameFinal = hf.rvc_fit_name(rvcName, rvcMod, dir=dir, vecF1=vecF1);
   # first, load the file if it already exists
   if os.path.isfile(data_loc + rvcNameFinal):
       try:
@@ -130,7 +133,7 @@ def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0, nBoots=0, phAdjusted=0, dir=1
   print('Doing the work, now');
 
   # running tabulate once to know shape of experiment (e.g. nCons, nSfs)
-  to_unpack = hf.tabulateResponses(data);
+  to_unpack = hf.tabulateResponses(data); # no need to pass in phAdj, dir since we ignore responses
   [all_cons, all_sfs] = to_unpack[1];
   v_sfs = all_sfs;
   n_v_sfs = len(v_sfs);
@@ -140,7 +143,7 @@ def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0, nBoots=0, phAdjusted=0, dir=1
 
   for boot_i in range(nBoots):
 
-    to_unpack = hf.tabulateResponses(data, resample);
+    to_unpack = hf.tabulateResponses(data, resample, phAdjusted=phAdjusted, dir=dir);
     [_, f1] = to_unpack[0];
     [_, f1arr] = to_unpack[2];
 
@@ -234,7 +237,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
     if joint>0:
       try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
         modStr  = hf.descrMod_name(DoGmodel);
-        fitName = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0)
+        fitName = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0, phAdj=phAdj)
         try:
           ref_fits = hf.np_smart_load(data_loc + fitName);
         except:
@@ -246,7 +249,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
       ref_varExpl = None; # set to None as default
 
     mod_str = hf.descrMod_name(DoGmodel);
-    fLname = str(data_loc + hf.descrFit_name(loss_type, fLname, mod_str, joint=joint));
+    fLname = str(data_loc + hf.descrFit_name(loss_type, fLname, mod_str, joint=joint, phAdj=phAdj));
 
     if os.path.isfile(fLname):
       try:
@@ -259,7 +262,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
     data = dataList[cell_num-1]['data'];
     
     # First, set the default values (NaN for everything); if no resample, we'll remove the singleton dimension
-    to_unpack = hf.tabulateResponses(data); # a quick call to figure out how many cons
+    to_unpack = hf.tabulateResponses(data); # we can ignore phAdj, dir since we ignore responses with this call
     [all_cons, all_sfs] = to_unpack[1];
     nCons = len(all_cons);
     # pre-fill the values
@@ -269,7 +272,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
 
     for boot_i in range(nBoots):
 
-      to_unpack = hf.tabulateResponses(data, resample, phAdjusted=phAdj);
+      to_unpack = hf.tabulateResponses(data, resample, phAdjusted=phAdj, dir=dir);
       [_, f1] = to_unpack[0];
       [_, f1arr] = to_unpack[2];
 
@@ -398,10 +401,12 @@ if __name__ == '__main__':
     DoGmodel  = int(sys.argv[4])
     joint     = int(sys.argv[5]);
     nBoots    = int(sys.argv[6]);
+    phAdj     = int(sys.argv[7]); # +1 for phAdj; 0 for vec mean; -1 for scaler mean (BAD)
 
     if rvcModel >= 0:
-      phase_advance_fit(cellNum, data_loc, phBase)
-      rvc_fit(cellNum, data_loc, rvcBase, rvcModel, nBoots=nBoots); 
+      if phAdj==1:
+        phase_advance_fit(cellNum, data_loc, phBase)
+      rvc_fit(cellNum, data_loc, rvcBase, rvcModel, nBoots=nBoots, phAdjusted=phAdj, dir=dir); 
 
     if DoGmodel >= 0:
       if nBoots > 1:
@@ -409,5 +414,5 @@ if __name__ == '__main__':
       else:
         n_repeats = 5 if joint>0 else 12; # was previously be 3, 15, then 7, 15
 
-      fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel, joint, fracSig=fracSig, nBoots=nBoots);
+      fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel, joint, fracSig=fracSig, nBoots=nBoots, phAdj=phAdj);
 

@@ -14,18 +14,19 @@ DOG_LOSS=${2:-3}
 RVC_MOD=${3:-0}
 BOOT_ITER=${4:-0}
 JOINT=${5:-0}
+PHADJ=${6:-0}
 
 for run in {1..11}
 do
-  python3.6 descr_fit.py $run $RVC_MOD $DOG_LOSS $DOG_MOD $JOINT $BOOT_ITER & 
+  python3.6 descr_fit.py $run $RVC_MOD $DOG_LOSS $DOG_MOD $JOINT $BOOT_ITER $PHADJ & 
 done
 wait
 for run in {12..22}
 do
-  python3.6 descr_fit.py $run $RVC_MOD $DOG_LOSS $DOG_MOD $JOINT $BOOT_ITER & 
+  python3.6 descr_fit.py $run $RVC_MOD $DOG_LOSS $DOG_MOD $JOINT $BOOT_ITER $PHADJ & 
 done
 wait
 for run in {23..34}
 do
-  python3.6 descr_fit.py $run $RVC_MOD $DOG_LOSS $DOG_MOD $JOINT $BOOT_ITER & 
+  python3.6 descr_fit.py $run $RVC_MOD $DOG_LOSS $DOG_MOD $JOINT $BOOT_ITER $PHADJ & 
 done

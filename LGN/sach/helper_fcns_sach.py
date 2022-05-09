@@ -441,7 +441,8 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, di
       f1mean[con, sf] = np.mean(f1arr[con][sf]); #np.mean(data['f1'][val_con][val_sf]);
       # --- TEMPORARY?
       mean_amp, mean_ph,_,_ = polar_vec_mean([f1amps], [f1phs]);
-      f1mean_phCorrOnMeans[con, sf] = project_resp([mean_amp], [mean_ph], phAdv_model, [all_opts[sf]], disp=0)[0];
+      if phAdjusted==1:
+        f1mean_phCorrOnMeans[con, sf] = project_resp([mean_amp], [mean_ph], phAdv_model, [all_opts[sf]], disp=0)[0];
       # --- end TEMPORARY?
       #f1mean_prePhCorr[con, sf] = polar_vec_mean(f1amps, f1phs);
       f1sem[con, sf] = sem(f1arr[con][sf]); #np.mean(data['f1sem'][val_con][val_sf]);

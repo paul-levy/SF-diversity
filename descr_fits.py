@@ -20,10 +20,10 @@ else:
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #dogName = 'descrFits%s_220418' % hpcSuff;
-dogName = 'descrFits%s_220505' % hpcSuff;
+dogName = 'descrFits%s_220506' % hpcSuff;
 if sys.argv[3] == 'LGN/':
-  phAdvName = 'phaseAdvanceFits%s_220504' % hpcSuff
-  rvcName_f1 = 'rvcFits%s_220504' % hpcSuff;
+  phAdvName = 'phaseAdvanceFits%s_220506' % hpcSuff
+  rvcName_f1 = 'rvcFits%s_220506' % hpcSuff;
   #phAdvName = 'phaseAdvanceFits%s_220415' % hpcSuff
   #rvcName_f1 = 'rvcFits%s_220418' % hpcSuff;
   #phAdvName = 'phaseAdvanceFits_211108'
@@ -1161,8 +1161,8 @@ if __name__ == '__main__':
     if asMulti:
       from functools import partial
       import multiprocessing as mp
-      nCpu = mp.cpu_count();
-      print('cpu count: %02d' % nCpu);
+      nCpu = mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
+      print('***cpu count: %02d***' % nCpu);
 
       ### Phase fits
       if ph_fits == 1 and disp==0: # only call this if disp=0!
@@ -1170,16 +1170,18 @@ if __name__ == '__main__':
         with mp.Pool(processes = nCpu) as pool:
           ph_perCell = partial(phase_advance_fit, data_loc=dataPath, disp=disp, dir=dir, returnMod=0, to_save=0);
           phFits = pool.starmap(ph_perCell, zip(zip(range(start_cell, end_cell+1), dL['unitName']), expInds));
-          ### do the saving HERE!
-          phAdvName = hf.phase_fit_name(phAdvName, dir);
-          if os.path.isfile(dataPath + phAdvName):
-            print('reloading phAdvFits...');
-            phFitNPY = hf.np_smart_load(dataPath + phAdvName);
-          else:
-            phFitNPY = dict();
-          for iii, phFit in enumerate(phFits):
-            phFitNPY[iii] = phFit;
-          np.save(dataPath + phAdvName, phFitNPY)
+          pool.close();
+
+        ### do the saving HERE!
+        phAdvName = hf.phase_fit_name(phAdvName, dir);
+        if os.path.isfile(dataPath + phAdvName):
+          print('reloading phAdvFits...');
+          phFitNPY = hf.np_smart_load(dataPath + phAdvName);
+        else:
+          phFitNPY = dict();
+        for iii, phFit in enumerate(phFits):
+          phFitNPY[iii] = phFit;
+        np.save(dataPath + phAdvName, phFitNPY)
 
       ### RVC fits
       if rvc_fits == 1:
@@ -1187,20 +1189,21 @@ if __name__ == '__main__':
         with mp.Pool(processes = nCpu) as pool:
           rvc_perCell = partial(rvc_adjusted_fit, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, returnMod=0, to_save=0, nBoots=nBoots);
           rvcFits = pool.starmap(rvc_perCell, zip(zip(range(start_cell, end_cell+1), dL['unitName']), expInds));
+          pool.close();
 
-          ### do the saving HERE!
-          rvcNameFinal = hf.rvc_fit_name(rvcName_f1, rvc_model, dir, vecF1);
-          if os.path.isfile(dataPath + rvcNameFinal):
-            print('reloading rvcFits...');
-            rvcFitNPY = hf.np_smart_load(dataPath + rvcNameFinal);
-          else:
-            rvcFitNPY = dict();
+        ### do the saving HERE!
+        rvcNameFinal = hf.rvc_fit_name(rvcName_f1, rvc_model, dir, vecF1);
+        if os.path.isfile(dataPath + rvcNameFinal):
+          print('reloading rvcFits...');
+          rvcFitNPY = hf.np_smart_load(dataPath + rvcNameFinal);
+        else:
+          rvcFitNPY = dict();
           
-          for iii, rvcFit in enumerate(rvcFits):
-            if iii not in rvcFitNPY:
-              rvcFitNPY[iii] = dict(); # create the key
-            rvcFitNPY[iii][disp] = rvcFit;
-          np.save(dataPath + rvcNameFinal, rvcFitNPY)
+        for iii, rvcFit in enumerate(rvcFits):
+          if iii not in rvcFitNPY:
+            rvcFitNPY[iii] = dict(); # create the key
+          rvcFitNPY[iii][disp] = rvcFit;
+        np.save(dataPath + rvcNameFinal, rvcFitNPY)
 
       ### Descriptive fits
       if descr_fits == 1:
@@ -1217,37 +1220,39 @@ if __name__ == '__main__':
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
           descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons);
           dogFits = pool.map(descr_perCell, zip(range(start_cell, end_cell+1), dL['unitName'], dL['expType']));
+          pool.close();
 
-          print('debug');
-          ### do the saving HERE!
-          phAdj = None if vecF1==1 else 1;
-          dogNameFinal = hf.descrFit_name(loss_type, descrBase=dogName, modelName=hf.descrMod_name(dog_model), modRecov=modRecov, joint=joint, phAdj=phAdj);
-          if os.path.isfile(dataPath + dogNameFinal):
-            dogFitNPY = hf.np_smart_load(dataPath + dogNameFinal);
-          else:
-            dogFitNPY = dict();
+        print('debug');
+        ### do the saving HERE!
+        phAdj = None if vecF1==1 else 1;
+        dogNameFinal = hf.descrFit_name(loss_type, descrBase=dogName, modelName=hf.descrMod_name(dog_model), modRecov=modRecov, joint=joint, phAdj=phAdj);
+        if os.path.isfile(dataPath + dogNameFinal):
+          dogFitNPY = hf.np_smart_load(dataPath + dogNameFinal);
+        else:
+          dogFitNPY = dict();
           
-          for iii, dogFit in enumerate(dogFits):
-            dogFitNPY[iii] = dogFit;
-          np.save(dataPath + dogNameFinal, dogFitNPY)
+        for iii, dogFit in enumerate(dogFits):
+          dogFitNPY[iii] = dogFit;
+        np.save(dataPath + dogNameFinal, dogFitNPY)
 
       ### rvcF0 fits
       if rvcF0_fits == 1:
         with mp.Pool(processes = nCpu) as pool:
           rvc_perCell = partial(fit_RVC_f0, data_loc=dataPath, rvcMod=rvc_model, to_save=0, returnDict=1, nBoots=nBoots);
           rvcFits = pool.map(rvc_perCell, zip(range(start_cell, end_cell+1), dL['unitName']));
+          pool.close();
 
-          ### do the saving HERE!
-          rvcNameFinal = '%s%s.npy' % (rvcName_f0, hf.rvc_mod_suff(rvc_model));
-          if os.path.isfile(dataPath + rvcNameFinal):
-            print('reloading rvcFits...');
-            rvcFitNPY = hf.np_smart_load(dataPath + rvcNameFinal);
-          else:
-            rvcFitNPY = dict();
-          for iii, rvcFit in enumerate(rvcFits):
-            rvcFitNPY[iii] = rvcFit;
-          np.save(dataPath + rvcNameFinal, rvcFitNPY)
-    else:
+        ### do the saving HERE!
+        rvcNameFinal = '%s%s.npy' % (rvcName_f0, hf.rvc_mod_suff(rvc_model));
+        if os.path.isfile(dataPath + rvcNameFinal):
+          print('reloading rvcFits...');
+          rvcFitNPY = hf.np_smart_load(dataPath + rvcNameFinal);
+        else:
+          rvcFitNPY = dict();
+        for iii, rvcFit in enumerate(rvcFits):
+          rvcFitNPY[iii] = rvcFit;
+        np.save(dataPath + rvcNameFinal, rvcFitNPY)
+    else: # if not multi (i.e. parallel...)
       # then, put what to run here...
       if ph_fits == 1:
         phase_advance_fit(cell_num, expInd=expInd, data_loc=dataPath, disp=disp, dir=dir);
