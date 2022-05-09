@@ -133,21 +133,23 @@ if area == 'LGN':
   #dogNames = ['descrFits_s210304_sach_sach.npy'];
   #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
   dogMod = 1; # 1 (sach) or 2 (Tony)
-  jointType = 2; # [1/2/3 --> fix gs, rs/fix rs/fix rc, rs]
+  jointType = 0; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
+  dogNames = ['descrFitsHPC_220506_sqrt_sach.npy', 'descrFitsHPC_s220508_sqrt_sach.npy'];
+  #dogNames = ['descrFitsHPC_220302_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220225_sqrt_sach_JTsurrShape.npy'];
   #dogNames = ['descrFits_211206_sqrt_sach_JTsurrShape.npy', 'descrFits_s211206_sqrt_sach_JTsurrShape.npy'];
-  dogNames = ['descrFitsHPC_220302_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220225_sqrt_sach_JTsurrShape.npy'];
   #dogNames = ['descrFitsHPC_220228_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220225_sqrt_sach_JTsurrShape.npy'];
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
   descrNames = ['descrFits_211005_sqrt_flex.npy', 'descrFits_s211006_sach_flex.npy'];
   #dogNames = ['descrFits_191023_sach_sach.npy'];
   #descrNames = ['descrFits_200507_sqrt_flex.npy'];
 
-  #rvcNames = ['rvcFits_191023_pos.npy']; 
-  #rvcMods = [0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
-  rvcNames = ['rvcFits_210914_pos.npy', 'rvcFitsHPC_220219_pos.npy'];
-  #rvcNames = ['rvcFits_210914_pos.npy', 'rvcFits_211006_pos.npy'];
   rvcMods = [0,0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
+  rvcNames = ['rvcFitsHPC_220506_vecF1.npy', 'rvcFitsHPC_220508_vecF1.npy'];
+  #rvcNames = ['rvcFits_210914_pos.npy', 'rvcFitsHPC_220219_pos.npy'];
+  #rvcNames = ['rvcFits_210914_pos.npy', 'rvcFits_211006_pos.npy'];
+  #rvcMods = [0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
   #rvcNames = ['rvcFits_210304.npy']; 
+  #rvcNames = ['rvcFits_191023_pos.npy']; 
   #rvcMods = [0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
 
   # pack to easily tile
