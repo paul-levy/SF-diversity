@@ -96,7 +96,7 @@ def phase_advance_fit(cell_num, data_loc, phAdvName, dir=1, to_save=1, returnMod
   else:
     return curr_fit;
 
-def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0, nBoots=0, phAdjusted=0, dir=1):
+def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0, nBoots=0, phAdjusted=0, dir=1, to_save=1):
   ''' IF phAdjusted=1, then we Piggy-backing off of phase_advance_fit above, get prepared to project the responses onto the proper phase to get the correct amplitude
       Then, with the corrected response amplitudes, fit the RVC model
       - as of 19.11.07, we will fit non-baseline subtracted responses 
@@ -125,10 +125,10 @@ def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0, nBoots=0, phAdjusted=0, dir=1
       try:
         rvcFits_curr = rvcFits[cell_num-1];
       except:
-        rvcFits_curr = None;
+        rvcFits_curr = dict();
   else:
       rvcFits = dict();
-      rvcFits_curr = None;
+      rvcFits_curr = dict();
 
   print('Doing the work, now');
 
@@ -155,29 +155,35 @@ def rvc_fit(cell_num, data_loc, rvcName, rvcMod=0, nBoots=0, phAdjusted=0, dir=1
 
     if resample:
       boot_loss.append(all_loss); boot_params.append(all_opts); boot_conGain.append(all_conGain); boot_varExpl.append(varExpl);
-
-  if os.path.isfile(data_loc + rvcNameFinal):
-    print('reloading rvcFits...');
-    try:
-      rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
-    except:
-      rvcFits = np.load(data_loc + rvcNameFinal, allow_pickle=True).item();
-
-  if cell_num-1 not in rvcFits:
-    rvcFits[cell_num-1] = dict();
+  # end of boot
 
   if resample:
-    rvcFits[cell_num-1]['boot_loss'] = boot_loss;
-    rvcFits[cell_num-1]['boot_params'] = boot_params;
-    rvcFits[cell_num-1]['boot_conGain'] = boot_conGain;
-    rvcFits[cell_num-1]['boot_varExpl'] = boot_varExpl;
+    rvcFits_curr['boot_loss'] = boot_loss;
+    rvcFits_curr['boot_params'] = boot_params;
+    rvcFits_curr['boot_conGain'] = boot_conGain;
+    rvcFits_curr['boot_varExpl'] = boot_varExpl;
   else:
-    rvcFits[cell_num-1]['loss'] = all_loss;
-    rvcFits[cell_num-1]['params'] = all_opts;
-    rvcFits[cell_num-1]['conGain'] = all_conGain;
-    rvcFits[cell_num-1]['varExpl'] = varExpl;
- 
-  np.save(data_loc + rvcNameFinal, rvcFits);
+    rvcFits_curr['loss'] = all_loss;
+    rvcFits_curr['params'] = all_opts;
+    rvcFits_curr['conGain'] = all_conGain;
+    rvcFits_curr['varExpl'] = varExpl;
+
+  if to_save:
+    if os.path.isfile(data_loc + rvcNameFinal):
+      print('reloading rvcFits...');
+      try:
+        rvcFits = hf.np_smart_load(data_loc + rvcNameFinal);
+      except:
+        rvcFits = np.load(data_loc + rvcNameFinal, allow_pickle=True).item();
+
+    if cell_num-1 not in rvcFits:
+      rvcFits[cell_num-1] = dict();
+    rvcFits[cell_num-1] = rvcFits_curr;
+      
+    np.save(data_loc + rvcNameFinal, rvcFits);
+
+  # now, just return
+  return rvcFits_curr;
 
 #################
 ### DESCRIPTIVE SF (DoG)
@@ -214,7 +220,7 @@ def fit_descr_empties(nCons, nParam, joint=0, nBoots=1):
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success;
 
-def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 1, joint=0, fracSig=0, nBoots=0, forceOverwrite=False, phAdj=1):
+def fit_descr_DoG(cell_num, data_loc, dogBase, n_repeats = 15, loss_type = 3, DoGmodel = 1, joint=0, fracSig=0, nBoots=0, forceOverwrite=False, phAdj=1, to_save=1):
 
   # Set up whether we will bootstrap straight away
     resample = False if nBoots <= 0 else True;
@@ -231,13 +237,10 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
 
     HPC = 'HPC' if 'pl1465' in data_loc else '';
 
-    fLname = 'descrFits%s_s220506' % HPC;
-    #fLname = 'descrFits_s211206';
-
     if joint>0:
       try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
         modStr  = hf.descrMod_name(DoGmodel);
-        fitName = hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0, phAdj=phAdj)
+        fitName = hf.descrFit_name(loss_type, descrBase=dogBase, modelName=modStr, joint=0, phAdj=phAdj)
         try:
           ref_fits = hf.np_smart_load(data_loc + fitName);
         except:
@@ -249,7 +252,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
       ref_varExpl = None; # set to None as default
 
     mod_str = hf.descrMod_name(DoGmodel);
-    fLname = str(data_loc + hf.descrFit_name(loss_type, fLname, mod_str, joint=joint, phAdj=phAdj));
+    fLname = str(data_loc + hf.descrFit_name(loss_type, dogBase, mod_str, joint=joint, phAdj=phAdj));
 
     if os.path.isfile(fLname):
       try:
@@ -258,6 +261,10 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
         descrFits = np.load(fLname, allow_pickle=True).item();
     else:
       descrFits = dict();
+    try:
+      descrFits_curr = descrFits[cell_num-1];
+    except:
+      descrFits_curr = dict();
 
     data = dataList[cell_num-1]['data'];
     
@@ -306,27 +313,20 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
       paramList = np.squeeze(paramList, axis=0) if paramList.shape[0]==1 else paramList;
       totalNLL = np.squeeze(totalNLL, axis=0) if totalNLL.shape[0]==1 else totalNLL;
 
-    # before we update stuff - load again in case some other run has saved/made changes
-    if os.path.isfile(fLname):
-      print('reloading descrFits...');
-      try:
-        descrFits = hf.np_smart_load(fLname);
-      except:
-        descrFits = np.load(fLname, allow_pickle=True).item();
     if cell_num-1 not in descrFits:
       descrFits[cell_num-1] = dict(); # and previously created NaN for everything
     else:
       if not resample: # do not reload these values if it is resample...
         try: # If we made a mistake and saved boot_* first, we might not be able to do this; hence the try/except
-          bestNLL = descrFits[cell_num-1]['NLL'];
-          currParams = descrFits[cell_num-1]['params'];
-          varExpl = descrFits[cell_num-1]['varExpl'];
-          prefSf = descrFits[cell_num-1]['prefSf'];
-          charFreq = descrFits[cell_num-1]['charFreq'];
-          success = descrFits[cell_num-1]['success'];
+          bestNLL = descrFits_curr['NLL'];
+          currParams = descrFits_curr['params'];
+          varExpl = descrFits_curr['varExpl'];
+          prefSf = descrFits_curr['prefSf'];
+          charFreq = descrFits_curr['charFreq'];
+          success = descrFits_curr['success'];
           if joint>0:
-            totalNLL = descrFits[cell_num-1]['totalNLL'];
-            paramList = descrFits[cell_num-1]['paramList'];
+            totalNLL = descrFits_curr['totalNLL'];
+            paramList = descrFits_curr['paramList'];
         except:
           pass
       
@@ -355,29 +355,41 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats = 15, loss_type = 3, DoGmodel = 
             success[con] = succ[con];
 
     if resample:
-      descrFits[cell_num-1]['boot_NLL'] = bestNLL;
-      descrFits[cell_num-1]['boot_params'] = currParams;
-      descrFits[cell_num-1]['boot_varExpl'] = varExpl;
-      descrFits[cell_num-1]['boot_prefSf'] = prefSf;
-      descrFits[cell_num-1]['boot_charFreq'] = charFreq;
-      descrFits[cell_num-1]['boot_success'] = success;
+      descrFits_curr['boot_NLL'] = bestNLL;
+      descrFits_curr['boot_params'] = currParams;
+      descrFits_curr['boot_varExpl'] = varExpl;
+      descrFits_curr['boot_prefSf'] = prefSf;
+      descrFits_curr['boot_charFreq'] = charFreq;
+      descrFits_curr['boot_success'] = success;
       if joint>0:
-        descrFits[cell_num-1]['boot_totalNLL'] = totalNLL;
-        descrFits[cell_num-1]['boot_paramList'] = paramList;
+        descrFits_curr['boot_totalNLL'] = totalNLL;
+        descrFits_curr['boot_paramList'] = paramList;
     else:
-      descrFits[cell_num-1]['NLL'] = bestNLL;
-      descrFits[cell_num-1]['params'] = currParams;
-      descrFits[cell_num-1]['varExpl'] = varExpl;
-      descrFits[cell_num-1]['prefSf'] = prefSf;
-      descrFits[cell_num-1]['charFreq'] = charFreq;
-      descrFits[cell_num-1]['success'] = success;
+      descrFits_curr['NLL'] = bestNLL;
+      descrFits_curr['params'] = currParams;
+      descrFits_curr['varExpl'] = varExpl;
+      descrFits_curr['prefSf'] = prefSf;
+      descrFits_curr['charFreq'] = charFreq;
+      descrFits_curr['success'] = success;
       if joint>0:
-        descrFits[cell_num-1]['totalNLL'] = totalNLL;
-        descrFits[cell_num-1]['paramList'] = paramList;
+        descrFits_curr['totalNLL'] = totalNLL;
+        descrFits_curr['paramList'] = paramList;
 
-    np.save(fLname, descrFits);
-    print('saving for cell ' + str(cell_num));
-                
+    if to_save:
+      # before we update stuff - load again in case some other run has saved/made changes
+      if os.path.isfile(fLname):
+        print('reloading descrFits...');
+        try:
+          descrFits = hf.np_smart_load(fLname);
+        except:
+          descrFits = np.load(fLname, allow_pickle=True).item();
+        descrFits[cell_num-1] = descrFits_curr;
+
+      np.save(fLname, descrFits);
+      print('saving for cell ' + str(cell_num));
+
+    return descrFits_curr;
+      
 if __name__ == '__main__':
 
     basePath = os.getcwd() + '/';
@@ -386,8 +398,9 @@ if __name__ == '__main__':
 
     HPC = 'HPC' if 'pl1465' in data_loc else '';
 
-    rvcBase = 'rvcFits%s_220506' % HPC;
-    phBase = 'phAdv%s_220506' % HPC;
+    rvcBase = 'rvcFits%s_220508' % HPC;
+    phBase = 'phAdv%s_220508' % HPC;
+    dogBase = 'descrFits%s_s220508' % HPC;
     #rvcBase = 'rvcFits%s_220412' % HPC;
     #phBase = 'phAdv%s_220412' % HPC;
 
@@ -396,6 +409,14 @@ if __name__ == '__main__':
     print('Running cell ' + sys.argv[1] + '...');
 
     cellNum   = int(sys.argv[1])
+    if cellNum < -99: 
+      # i.e. 3 digits AND negative, then we'll treat the first two digits as where to start, and the second two as when to stop
+      # -- in that case, we'll do this as multiprocessing
+      asMulti = 1;
+      end_cell = int(np.mod(-cellNum, 100));
+      start_cell = int(np.floor(-cellNum/100));
+    else:
+      asMulti = 0;
     rvcModel  = int(sys.argv[2]);
     loss_type = int(sys.argv[3])
     DoGmodel  = int(sys.argv[4])
@@ -403,16 +424,83 @@ if __name__ == '__main__':
     nBoots    = int(sys.argv[6]);
     phAdj     = int(sys.argv[7]); # +1 for phAdj; 0 for vec mean; -1 for scaler mean (BAD)
 
-    if rvcModel >= 0:
-      if phAdj==1:
-        phase_advance_fit(cellNum, data_loc, phBase)
-      rvc_fit(cellNum, data_loc, rvcBase, rvcModel, nBoots=nBoots, phAdjusted=phAdj, dir=dir); 
+    if asMulti:
 
-    if DoGmodel >= 0:
-      if nBoots > 1:
-        n_repeats = 2 if joint>0 else 5; # fewer if repeat
-      else:
-        n_repeats = 5 if joint>0 else 12; # was previously be 3, 15, then 7, 15
+      from functools import partial
+      import multiprocessing as mp
+      nCpu = mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
+      print('***cpu count: %02d***' % nCpu);
+      vecF1 = 1 if phAdj==0 else None;
+      
+      if rvcModel >= 0:
+        if phAdj==1:
+          with mp.Pool(processes = nCpu) as pool:
+            ph_perCell = partial(phase_advance_fit, data_loc=data_loc, phAdvName=phBase, dir=dir, to_save=0, returnMod=0);
+            phFits = pool.map(ph_perCell, range(start_cell, end_cell+1));
+            pool.close();
 
-      fit_descr_DoG(cellNum, data_loc, n_repeats, loss_type, DoGmodel, joint, fracSig=fracSig, nBoots=nBoots, phAdj=phAdj);
+          ### do the saving HERE!
+          phAdvName = hf.phase_fit_name(phBase, dir);
+          if os.path.isfile(data_loc + phAdvName):
+            print('reloading phAdvFits...');
+            phFitNPY = hf.np_smart_load(data_loc + phAdvName);
+          else:
+            phFitNPY = dict();
+          for iii, phFit in enumerate(phFits):
+            phFitNPY[iii] = phFit;
+            np.save(data_loc + phAdvName, phFitNPY)
+ 
+        # Now, do RVC!
+        with mp.Pool(processes = nCpu) as pool:
+          rvc_perCell = partial(rvc_fit, data_loc=data_loc, rvcName=rvcBase, rvcMod=rvcModel, nBoots=nBoots, phAdjusted=phAdj, dir=dir, to_save=0); 
+          rvcFits = pool.map(rvc_perCell, range(start_cell, end_cell+1));
+          pool.close();
+
+        ### do the saving HERE!
+        rvcName = hf.rvc_fit_name(rvcBase, rvcModel, dir=dir, vecF1=vecF1);
+        if os.path.isfile(data_loc + rvcName):
+          print('reloading rvcFits...');
+          rvcFitNPY = hf.np_smart_load(data_loc + rvcName);
+        else:
+          rvcFitNPY = dict();
+        for iii, phFit in enumerate(rvcFits):
+          rvcFitNPY[iii] = phFit;
+          np.save(data_loc + rvcName, rvcFitNPY)
+            
+      if DoGmodel >= 0:
+        if nBoots > 1:
+          n_repeats = 2 if joint>0 else 5; # fewer if repeat
+        else:
+          n_repeats = 5 if joint>0 else 12; # was previously be 3, 15, then 7, 15
+
+        with mp.Pool(processes = nCpu) as pool:
+          descr_perCell = partial(fit_descr_DoG, data_loc=data_loc, dogBase=dogBase, n_repeats=n_repeats, loss_type=loss_type, DoGmodel=DoGmodel, joint=joint, fracSig=fracSig, nBoots=nBoots, phAdj=phAdj, to_save=0);
+          dogFits = pool.map(descr_perCell, range(start_cell, end_cell+1));
+          pool.close();
+
+        ### do the saving HERE!
+        dogNameFinal = hf.descrFit_name(loss_type, descrBase=dogBase, modelName=hf.descrMod_name(DoGmodel), joint=joint, phAdj=phAdj);
+        if os.path.isfile(data_loc + dogNameFinal):
+          dogFitNPY = hf.np_smart_load(data_loc + dogNameFinal);
+        else:
+          dogFitNPY = dict();
+          
+        for iii, dogFit in enumerate(dogFits):
+          dogFitNPY[iii] = dogFit;
+        np.save(data_loc + dogNameFinal, dogFitNPY)
+         
+    else: # by cell (i.e. not multi...)
+    
+      if rvcModel >= 0:
+        if phAdj==1:
+          phase_advance_fit(cellNum, data_loc, phBase)
+        rvc_fit(cellNum, data_loc, rvcBase, rvcModel, nBoots=nBoots, phAdjusted=phAdj, dir=dir); 
+
+      if DoGmodel >= 0:
+        if nBoots > 1:
+          n_repeats = 2 if joint>0 else 5; # fewer if repeat
+        else:
+          n_repeats = 5 if joint>0 else 12; # was previously be 3, 15, then 7, 15
+
+        fit_descr_DoG(cellNum, data_loc, dogBase, n_repeats, loss_type, DoGmodel, joint, fracSig=fracSig, nBoots=nBoots, phAdj=phAdj);
 
