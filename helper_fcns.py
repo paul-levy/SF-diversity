@@ -3373,6 +3373,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
           cellType = 'parvo';
        else: # all other types, just keep as is...
           cellType = cellTypeOrig
+       sys.path.append(os.path.dirname('LGN/sach/'))# fixed relative location to this file, always
        from LGN.sach.helper_fcns_sach import tabulateResponses as sachTabulate
        tabulated = sachTabulate(data);
        stimVals = [[1], tabulated[1][0], tabulated[1][1]] # disp X con X SF
