@@ -417,7 +417,7 @@ def blankResp(data, get_dc=0):
 def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, dir=1):
   ''' Given the dictionary containing all of the data, organize the data into the proper responses
   Specifically, we know that Sach's experiments varied contrast and spatial frequency
-  Thus, we will organize responses along these dimensions
+  Thus, we will organize responses along these dimensions [con, sf] OR [con][sf] (mean/arr, respectively)
   - NOTE: If phAdjusted=1, then we return the phase-adjusted responses (amplitudes)!
           if phAdjusted=0, then we return vec-corrected but NOT phase-amplitude adjusted 
           if phAdjusted=-1, then we do the (dumb, non-vector) scalar average
