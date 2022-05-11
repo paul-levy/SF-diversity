@@ -185,4 +185,4 @@ if area == 'LGN':
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
-  np.save(base_dir + 'jointList_LGNos_%s_vT%02d_dvT%02d' % (suffix, varExplThresh_str, dog_varExplThresh_str), jointList)
+  np.save(base_dir + 'jointList_LGN_%s_vT%02d_dvT%02d' % (suffix, varExplThresh_str, dog_varExplThresh_str), jointList)

@@ -2,7 +2,7 @@ import math
 import descr_fit as df
 import numpy as np
 import scipy.optimize as opt
-import os, sys
+import os, sys, itertools
 import random
 from time import sleep
 from scipy.stats import poisson, sem
@@ -28,13 +28,15 @@ from helper_fcns import dog_charFreq, dog_get_param, dog_init_params, deriv_gaus
 from helper_fcns import DiffOfGauss, DoGsach, dog_prefSfMod, dog_charFreqMod
 from helper_fcns import DoG_loss, get_descrResp
 from helper_fcns import flexible_Gauss_np as flexible_Gauss
-from helper_fcns import descr_prefSf as dog_prefSf # to keep the function call here unchanged
+from helper_fcns import descr_prefSf as dog_prefSf # to keep the function call here unchanged from previous version
 
 ##############
 ### Code written *here*, i.e. just for Sach stuff
 ##############
 
 # load_modParams - [UNUSED] load the 4 parameters from the Tony fits...
+
+# unpack_f1arr - to keep back-compatability, unpack f1arr[con][sf] dict-of-dicts into array
 
 # var_explained - compute the variance explained given data/model fit
 
@@ -60,6 +62,11 @@ def load_modParams(which_cell, contrast, loadPath='/home/pl1465/SF_diversity/LGN
 
 #######
 
+def unpack_f1arr(f1arr):
+  assert len(f1arr.keys())>0;
+  assert len(f1arr[0].keys())>0;
+  return np.array([[f1arr[x][y] for y in f1arr[x].keys()] for x in f1arr.keys()]);
+
 def var_expl_direct(obs_mean, pred_mean):
   # Just compute variance explained given the data and model responses (assumed same SF for each)
   resp_dist = lambda x, y: np.sum(np.square(x-y))/np.maximum(len(x), len(y))
@@ -69,7 +76,7 @@ def var_expl_direct(obs_mean, pred_mean):
     
   return var_expl(pred_mean, obs_mean, obs_grand_mean);
 
-def var_explained(data, modParams, whichInd, DoGmodel=1, rvcModel=None):
+def var_explained(data, modParams, whichInd=None, DoGmodel=1, rvcModel=None, whichSfs = None, ref_params=None, ref_rc_val=None, dataAreResps=False):
   ''' given a set of responses and model parameters, compute the variance explained by the model (DoGsach)
       --- whichInd is either the contrast index (if doing SF tuning)
                               or SF index (if doing RVCs)
@@ -77,17 +84,23 @@ def var_explained(data, modParams, whichInd, DoGmodel=1, rvcModel=None):
   resp_dist = lambda x, y: np.sum(np.square(x-y))/np.maximum(len(x), len(y))
   var_expl = lambda m, r, rr: 100 * (1 - resp_dist(m, r)/resp_dist(r, rr));
 
-  respsSummary, stims, allResps = tabulateResponses(data); # Need to fit on f1 
-  f1 = respsSummary[1];
-  if rvcModel is None: # SF
-    all_sfs = stims[1];
-    obs_mean = f1['mean'][whichInd, :];
+  if dataAreResps:
+    obs_mean = data; # we've directly passed in the means of interest
   else:
-    all_cons = stims[0];
-    obs_mean = f1['mean'][:, whichInd];
+    respsSummary, stims, allResps = tabulateResponses(data); # Need to fit on f1 
+    f1 = respsSummary[1];
+    if rvcModel is None: # SF
+      all_sfs = stims[1];
+      obs_mean = f1['mean'][whichInd, :];
+    else:
+      all_cons = stims[0];
+      obs_mean = f1['mean'][:, whichInd];
 
+  if whichSfs is not None:
+    all_sfs = whichSfs; # maybe we've passed in the Sfs to use...
+    
   if rvcModel is None: # then we're doing vExp for SF tuning
-    pred_mean = get_descrResp(modParams, all_sfs, DoGmodel);
+    pred_mean = get_descrResp(modParams, all_sfs, DoGmodel, ref_rc_val=ref_rc_val);
   else: # then we've getting RVC responses!
     pred_mean = get_rvcResp(modParams, cons, rvcMod)
 
@@ -210,11 +223,14 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
         continue;
     else:
       valCons.append(con);
-    resps_curr = resps_mean[con, :];
-    sem_curr   = resps_sem[con, :];
+    valSfInds_curr = np.where(~np.isnan(resps_mean[con,:]))[0];
+    resps_curr = resps_mean[con, valSfInds_curr];
+    sem_curr   = resps_sem[con, valSfInds_curr];
 
     ### prepare for the joint fitting, if that's what we've specified!
     if joint>0:
+      if resps_curr.size == 0:
+         continue;
       if ref_varExpl is None:
         start_incl = 1; # hacky...
       if start_incl == 0:
@@ -225,7 +241,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
 
       allResps.append(resps_curr);
       allRespsSem.append(sem_curr);
-      allSfs.append(all_sfs);
+      allSfs.append(all_sfs[valSfInds_curr]);
       incl_inds.append(con);
       # and add to the bounds list!
       if DoGmodel == 1:
@@ -253,13 +269,13 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
 
     ### otherwise, we're really going to fit here! [i.e. if joint is False]
     # first, specify the objection function!
-    obj = lambda params: DoG_loss(params, resps_curr, all_sfs, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, joint=joint); # if we're here, then joint=0, but we'll still keep joint=joint
+    obj = lambda params: DoG_loss(params, resps_curr, all_sfs[valSfInds_curr], resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, joint=joint); # if we're here, then joint=0, but we'll still keep joint=joint
 
     for n_try in range(n_repeats):
       ###########
       ### pick initial params
       ###########
-      init_params = dog_init_params(resps_curr, base_rate, all_sfs, all_sfs, DoGmodel, fracSig=fracSig, bounds=allBounds)
+      init_params = dog_init_params(resps_curr, base_rate, all_sfs, valSfInds_curr, DoGmodel, fracSig=fracSig, bounds=allBounds)
 
       # choose optimization method
       if np.mod(n_try, 2) == 0:
@@ -279,8 +295,9 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
       if np.isnan(bestNLL[con]) or NLL < bestNLL[con]:
         bestNLL[con] = NLL;
         currParams[con, :] = params;
-        curr_mod = get_descrResp(params, all_sfs, DoGmodel);
-        varExpl[con] = var_expl_direct(resps_curr[all_sfs>0], curr_mod[all_sfs>0]); # do not include 0/cdeg SF conditoin
+        curr_mod = get_descrResp(params, all_sfs[valSfInds_curr], DoGmodel);
+        # TODO: 22.05.10 --> previously ignored sf==0 case for varExpl
+        varExpl[con] = var_expl_direct(resps_curr, curr_mod);
         prefSf[con] = dog_prefSf(params, dog_model=DoGmodel, all_sfs=all_sfs[all_sfs>0]); # do not include 0 c/deg SF condition
         charFreq[con] = dog_charFreq(params, DoGmodel=DoGmodel);
         success[con] = wax['success'];
@@ -389,11 +406,11 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
 
       # now, compute!
       conInd = incl_inds[con];
-      bestNLL[conInd] = DoG_loss(curr_params, resps_curr, all_sfs, resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, joint=0, ref_rc_val=ref_rc_val); # now it's NOT joint!
+      bestNLL[conInd] = DoG_loss(curr_params, resps_curr, allSfs[con], resps_std=sem_curr, loss_type=loss_type, DoGmodel=DoGmodel, joint=0, ref_rc_val=ref_rc_val); # now it's NOT joint!
       currParams[conInd, :] = curr_params;
-      curr_mod = get_descrResp(curr_params, all_sfs, DoGmodel);
+      curr_mod = get_descrResp(curr_params, allSfs[con], DoGmodel, ref_rc_val=ref_rc_val);
       varExpl[conInd] = var_expl_direct(resps_curr, curr_mod);
-      prefSf[conInd] = dog_prefSf(curr_params, dog_model=DoGmodel, all_sfs=all_sfs[all_sfs>0]);
+      prefSf[conInd] = dog_prefSf(curr_params, dog_model=DoGmodel, all_sfs=all_sfs[all_sfs>0], ref_rc_val=ref_rc_val);
       charFreq[conInd] = dog_charFreq(curr_params, DoGmodel=DoGmodel);    
 
     # and NOW, we can return!
@@ -414,11 +431,11 @@ def blankResp(data, get_dc=0):
 
   return mu, std;
 
-def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, dir=1):
+def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, dir=1, cross_val=1):
   ''' Given the dictionary containing all of the data, organize the data into the proper responses
   Specifically, we know that Sach's experiments varied contrast and spatial frequency
   Thus, we will organize responses along these dimensions [con, sf] OR [con][sf] (mean/arr, respectively)
-  - NOTE: If phAdjusted=1, then we return the phase-adjusted responses (amplitudes)!
+  NOTE: If phAdjusted=1, then we return the phase-adjusted responses (amplitudes)!
           if phAdjusted=0, then we return vec-corrected but NOT phase-amplitude adjusted 
           if phAdjusted=-1, then we do the (dumb, non-vector) scalar average
   ----  : We discovered on 22.04.07 that Sach's mean F1 phase/amplitude were not done using proper vector math (i.e. he simply took the mean of the amplitudes)
@@ -449,54 +466,88 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, di
     phAdv_model, all_opts = df.phase_advance_fit(data, None, 'phAdv_dummy', dir=dir, to_save=0);
     #phAdv_model, all_opts_neg = df.phase_advance_fit(data, None, 'phAdv_dummy', dir=-1, to_save=0);
 
+  n_trials = data['f1arr'].shape[-1]; # nConds x nTrials
+  cntr_sizes = np.unique(data['cntr_size']); # choose larger size
+  #pdb.set_trace();
+  val_size = np.where(data['cntr_size']==cntr_sizes[-1]); # why specifying size? Cell 33 has multiple sizes!!!
+  if ~np.isnan(data['opac1'][0]):
+    # then also make sure that the size takes into account when the opacity of the second grating is 0 (i.e. off)
+    val_size = np.where(np.logical_and(val_size, data['opac1'][val_size]==0))[-1];
   for con in range(len(all_cons)):
-    val_con = np.where(data['cont'] == all_cons[con]);
+    val_con = np.where(data['cont'][val_size] == all_cons[con]);
     f0arr[con] = dict();
     f1arr[con] = dict();
     f1arr_prePhCorr[con] = dict();
     for sf in range(len(all_sfs)):
-      val_sf = np.where(data['sf'][val_con] == all_sfs[sf]);
+      val_sf = np.where(data['sf'][val_size][val_con] == all_sfs[sf]);
+      f0arr[con][sf] = np.nan * np.zeros((n_trials, ));
+      f1arr[con][sf] = np.nan * np.zeros((n_trials, ));
+      f1arr_prePhCorr[con][sf] = np.nan * np.zeros((n_trials, ));
+      
+      # Organize ALL trial -- we'll resample afterwards
+      non_nan = nan_rm(data['f0arr'][val_size][val_con][val_sf]);
+      #if len(non_nan)>n_trials:
+      #  pdb.set_trace();
+      f0arr[con][sf][0:len(non_nan)] = non_nan;
+      f1amps = nan_rm(data['f1arr'][val_size][val_con][val_sf] - to_sub)
+      f1phs = nan_rm(data['f1pharr'][val_size][val_con][val_sf]);
+      # compute the mean amp, mean ph for vecF1 corrections (apply all data to resample and nonresampled)
+      mean_amp, mean_ph,_,_ = polar_vec_mean([f1amps], [f1phs]);
 
+      if cross_val is None:
+        holdout_frac = 1;
+      else:
+        holdout_frac = cross_val if cross_val<=1 else None;
+      non_nan_inds = np.where(~np.isnan(data['f1arr'][val_size][val_con][val_sf]))[-1];
+      new_inds = resample_array(resample, non_nan_inds, holdout_frac=holdout_frac);
+      save_inds = new_inds if holdout_frac<1 else range(len(new_inds));
+
+      if phAdjusted==1:
+        f1arr[con][sf][save_inds] = project_resp([f1amps[new_inds]], [f1phs[new_inds]], phAdv_model, [all_opts[sf]], disp=0)[0];
+        f1arr_prePhCorr[con][sf][save_inds] = f1amps[new_inds];
+      elif phAdjusted==0:
+        f1arr[con][sf][save_inds] = np.multiply(f1amps[new_inds], np.cos(np.deg2rad(mean_ph) - np.deg2rad(f1phs[new_inds])));
+      elif phAdjusted==-1:
+        f1arr[con][sf][save_inds] = f1amps[new_inds];
+      
+      ''' # LESS CONCISE, but also correct code is below
       if resample: # we'll do it manually, since we want to keep f0/f1 resamplings aligned
         non_nan = np.where(~np.isnan(data['f1arr'][val_con][val_sf]))[-1]; # we accidentally create a singleton 1st dim. with this indexing; ignore it
-        new_inds = np.random.choice(non_nan, len(non_nan));
-        f0arr[con][sf] = nan_rm(data['f0arr'][val_con][val_sf][0][new_inds]); # internal [0] is again due to poor indexing
-        f1amps = nan_rm(data['f1arr'][val_con][val_sf][0][new_inds] - to_sub)
-        f1phs = nan_rm(data['f1pharr'][val_con][val_sf][0][new_inds]);
+        #new_inds = np.random.choice(non_nan, len(non_nan)); # by default, allow replacement
+        holdout_frac = cross_val if cross_val<=1 else None;
+        # we'll resample an array of indices (with replacement iff holdout_frac=1)
+        new_inds = resample_array(resample, non_nan, holdout_frac=holdout_frac);
+        # Now, if holdout_frac=1, then we dont care about trial order; otherwise, we're doing cross-val and we want to preserve the order of trials and we did NOT allow replacement when sampling (hence save_inds=new_inds)
+        save_inds = new_inds if holdout_frac<1 else range(len(new_inds));
+        f0arr[con][sf][save_inds]= data['f0arr'][val_con][val_sf][0][new_inds]; # internal [0] is again due to poor indexing
         if phAdjusted==1:
-          f1arr[con][sf] = project_resp([f1amps], [f1phs], phAdv_model, [all_opts[sf]], disp=0)[0];
+          f1arr[con][sf][save_inds] = project_resp([f1amps[new_inds]], [f1phs[new_inds]], phAdv_model, [all_opts[sf]], disp=0)[0];
         elif phAdjusted==0:
-          mean_amp, mean_ph,_,_ = polar_vec_mean([f1amps], [f1phs]);
-          f1arr[con][sf] = np.multiply(f1amps, np.cos(np.deg2rad(mean_ph) - np.deg2rad(f1phs)));
+          f1arr[con][sf][save_inds] = np.multiply(f1amps[new_inds], np.cos(np.deg2rad(mean_ph) - np.deg2rad(f1phs[new_inds])));
         elif phAdjusted==-1:
-          f1arr[con][sf] = f1amps;
-      else: # TODO: Could make this and the prior block less redundant
-        f0arr[con][sf] = nan_rm(data['f0arr'][val_con][val_sf]);
-        f1amps = nan_rm(data['f1arr'][val_con][val_sf] - to_sub)
-        f1phs = nan_rm(data['f1pharr'][val_con][val_sf]);
+          f1arr[con][sf][save_inds] = f1amps[new_inds];
+      else:
         if phAdjusted==1:
-          #if con>(len(all_cons)-3): # i.e. a high contrast..
-          #  pdb.set_trace();
-          f1arr[con][sf] = project_resp([f1amps], [f1phs], phAdv_model, [all_opts[sf]], disp=0)[0];
-          f1arr_prePhCorr[con][sf] = f1amps;
+          f1arr[con][sf][0:len(non_nan)] = project_resp([f1amps], [f1phs], phAdv_model, [all_opts[sf]], disp=0)[0];
+          f1arr_prePhCorr[con][sf][0:len(non_nan)] = f1amps;
         elif phAdjusted==0:
-          mean_amp, mean_ph,_,_ = polar_vec_mean([f1amps], [f1phs]);
-          f1arr[con][sf] = np.multiply(f1amps, np.cos(np.deg2rad(mean_ph) - np.deg2rad(f1phs)));
+          f1arr[con][sf][0:len(non_nan)] = np.multiply(f1amps, np.cos(np.deg2rad(mean_ph) - np.deg2rad(f1phs)));
         elif phAdjusted==-1:
-          f1arr[con][sf] = f1amps;
+          f1arr[con][sf][0:len(non_nan)] = f1amps;
+      '''
 
       # take mean, since some conditions have repeats - just average them
       # --- this applies regardless of phAdjustment, since the amplitudes would then be corrected
-      f0mean[con, sf] = np.mean(f0arr[con][sf]); #np.mean(data['f0'][val_con][val_sf]);
-      f0sem[con, sf] = sem(f0arr[con][sf]); #np.mean(data['f0sem'][val_con][val_sf]);
-      f1mean[con, sf] = np.mean(f1arr[con][sf]); #np.mean(data['f1'][val_con][val_sf]);
+      f0mean[con, sf] = np.nanmean(f0arr[con][sf]); #np.mean(data['f0'][val_con][val_sf]);
+      f0sem[con, sf] = sem(f0arr[con][sf], nan_policy='omit'); #np.mean(data['f0sem'][val_con][val_sf]);
+      f1mean[con, sf] = np.nanmean(f1arr[con][sf]); #np.mean(data['f1'][val_con][val_sf]);
       # --- TEMPORARY?
       mean_amp, mean_ph,_,_ = polar_vec_mean([f1amps], [f1phs]);
       if phAdjusted==1:
         f1mean_phCorrOnMeans[con, sf] = project_resp([mean_amp], [mean_ph], phAdv_model, [all_opts[sf]], disp=0)[0];
       # --- end TEMPORARY?
       #f1mean_prePhCorr[con, sf] = polar_vec_mean(f1amps, f1phs);
-      f1sem[con, sf] = sem(f1arr[con][sf]); #np.mean(data['f1sem'][val_con][val_sf]);
+      f1sem[con, sf] = sem(f1arr[con][sf], nan_policy='omit'); #np.mean(data['f1sem'][val_con][val_sf]);
 
   f0['mean'] = f0mean;
   f0['sem'] = f0sem;

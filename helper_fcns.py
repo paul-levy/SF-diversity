@@ -2346,7 +2346,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
   ############
   elif DoGmodel == 2:
     init_gainCent = maxResp * random_in_range((0.9, 1.2))[0];
-    init_freqCent = np.maximum(all_sfs[2], freqAtMaxResp * random_in_range((1.2, 1.5))[0]); # don't pick all_sfs[0] -- that's zero (we're avoiding that)
+    init_freqCent = np.maximum(all_sfs[2], freqAtMaxResp * random_in_range((1.2, 1.5))[0]); # don't pick all_sfs[0] -- that could be zero (we're avoiding that)
     init_gainFracSurr = random_in_range((0.7, 1))[0];
     init_freqFracSurr = random_in_range((.25, .35))[0];
     init_params = [init_gainCent, init_freqCent, init_gainFracSurr, init_freqFracSurr];

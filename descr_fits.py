@@ -976,10 +976,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
         prevFits_toSave['boot_NLL_cv_test'] = [];
         prevFits_toSave['boot_vExp_cv_test'] = [];
         if make_cv_train_subset:
-          # --- temporary: 22.04.21
           prevFits_toSave['boot_NLL_cv_train_subset'] = [];
           prevFits_toSave['boot_vExp_cv_train_subset'] = [];
-          # --- end temporary: 22.04.21
         prevFits_toSave['boot_NLL_cv_train'] = [];
         prevFits_toSave['boot_vExp_cv_train'] = [];
         # --- these are all implicitly based on training data
@@ -992,10 +990,8 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       prevFits_toSave['boot_NLL_cv_test'].append(test_nll);
       prevFits_toSave['boot_vExp_cv_test'].append(test_vExp);
       if make_cv_train_subset:
-        # --- temporary: 22.04.21
         prevFits_toSave['boot_NLL_cv_train_subset'].append(tr_subset_nll);
         prevFits_toSave['boot_vExp_cv_train_subset'].append(tr_subset_vExp);
-        # --- end temporary: 22.04.21
       prevFits_toSave['boot_NLL_cv_train'].append(bestNLL);
       prevFits_toSave['boot_vExp_cv_train'].append(varExpl);
       prevFits_toSave['boot_cv_params'].append(currParams);
