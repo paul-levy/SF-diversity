@@ -102,28 +102,19 @@ expName = hf.get_datalist(expDir, force_full=1);
 hpc_str = 'HPC' if isHPC else '';
 if expDir == 'LGN/':# or expDir == 'altExp':
     #descrBase = 'descrFits%s_220302' % hpc_str;
-    descrBase = 'descrFits%s_220414pV' % hpc_str;
+    descrBase = 'descrFits%s_220511' % hpc_str;
+    #descrBase = 'descrFits%s_220414pV' % hpc_str;
 else:
     #descrBase = 'descrFits%s_220323' % hpc_str;
     descrBase = 'descrFits%s_220410' % hpc_str;
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
-#descrBase = 'descrFits_211129';
-#descrBase = 'descrFits_211028';
-#descrBase = 'descrFits_211020_f030'; #211005'; #210929';
-#descrBase = 'descrFits_210524';
 #descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
 #descrBase = 'descrFits_200507'; # for altExp
-### RVCFITS
-#rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
-#rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are adde
-#rvcBase = 'rvcFits_200714'; # direc flag & '.npy' are adde
-##############
-# NOTE: Temporarily ignoring HPC for rvcFits
-##############
 if expDir == 'LGN/':
-  rvcBase = 'rvcFits%s_220414pV' % ''#hpc_str;
-  #rvcBase = 'rvcFits%s_211108' % ''#hpc_str;
+  rvcBase = 'rvcFits%s_220511' % hpc_str;
+  #rvcBase = 'rvcFits%s_220414pV' % hpc_str;
+  #rvcBase = 'rvcFits%s_211108' % #hpc_str;
 else:
   rvcBase = 'rvcFits%s_210914' % ''#hpc_str; # if V1?
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
@@ -135,7 +126,7 @@ rvcAdj = np.abs(rvcAdj);
 ##################
 
 modStr  = hf.descrMod_name(descrMod)
-fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint);
+fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint, phAdj=1 if rvcAdj==1 else None);
 descrFits = hf.np_smart_load(data_loc + fLname);
 pause_tm = 2.0*np.random.rand();
 time.sleep(pause_tm);
@@ -266,6 +257,7 @@ for d in range(nDisps):
     maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
     
     ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+    ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
 
     for c in reversed(range(n_v_cons)):
         c_plt_ind = len(v_cons) - c - 1;
@@ -286,7 +278,7 @@ for d in range(nDisps):
 
         ## plot descr fit
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, stim_sf=sfs_plot, DoGmodel=descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
+        descrResp = hf.get_descrResp(prms_curr, stim_sf=sfs_plot, DoGmodel=descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
         dispAx[d][c_plt_ind, 0].plot(sfs_plot, descrResp, color=currClr, label='descr. fit');
         # --- and also ddogs prediction (perhaps...)
         if pred_org is not None:
@@ -332,7 +324,7 @@ for d in range(nDisps):
 
           # plot descriptive model fit -- and inferred characteristic frequency (or peak...)
           prms_curr = descrParams[d, v_cons[c]];
-          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
+          descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
           descr_curr = descrResp - to_sub;
           abvThresh = [descr_curr>minResp_toPlot]
           dispAx[d][c_plt_ind, 1].plot(sfs_plot[abvThresh], descr_curr[abvThresh], color=currClr, label='descr. fit', clip_on=False)
@@ -412,6 +404,7 @@ for d in range(nDisps):
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));  
     minToPlot = 5e-1;
     ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+    ref_rc_val = ref_params[2] if joint>0 else None;
 
     lines = [];
     for c in reversed(range(n_v_cons)):
@@ -435,7 +428,7 @@ for d in range(nDisps):
  
         # plot descr fit [1]
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
         dispAx[d][1].plot(sfs_plot, descrResp-to_sub, color=col);
 
     for i in range(len(dispCurr)):
@@ -490,6 +483,7 @@ for d in range(nDisps):
     n_v_cons = len(v_cons);
     
     ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+    ref_rc_val = ref_params[2] if joint>0 else None;
 
     for c in reversed(range(n_v_cons)):
         c_plt_ind = n_v_cons - c - 1;
@@ -513,7 +507,7 @@ for d in range(nDisps):
 
         # plot descrFit
         prms_curr = descrParams[d, v_cons[c]];
-        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
         if c_plt_ind == 0 and d==0: # only make the legend here
           sfMixAx[c_plt_ind, d].plot(sfs_plot, descrResp, label=modTxt, color=modClr);
         else:
@@ -694,6 +688,10 @@ for d in range(nDisps):
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
     minResp_plot = 1e-0;
     ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+    try:
+        ref_rc_val = ref_params[2] if joint>0 else None;
+    except:
+        print('cell %d --> bad ref_rc_val?' % cellNum);
 
     lines_log = [];
     for sf in range(n_v_sfs):
@@ -736,7 +734,7 @@ for d in range(nDisps):
         if plt_sf_as_rvc:
             cons = all_cons[v_cons];
             try:
-                resps_curr = np.array([hf.get_descrResp(descrParams[d, vc], all_sfs[sf_ind], descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params) for vc in np.where(v_cons)[0]]) - to_sub;
+                resps_curr = np.array([hf.get_descrResp(descrParams[d, vc], all_sfs[sf_ind], descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val) for vc in np.where(v_cons)[0]]) - to_sub;
                 crfAx[d][2].plot(all_cons[v_cons], resps_curr, color=col, \
                          clip_on=False, linestyle='--', marker='o');
                 crfAx[d][2].set_title('D%d: RVC from SF fit' % (d+1));
@@ -1037,11 +1035,12 @@ for d in range(1): #nDisps
   plt_sfs = np.geomspace(all_sfs[0], all_sfs[-1], sf_steps);
   descrResps = np.zeros((len(val_cons), sf_steps));
   ref_params = descrParams[d, val_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+  ref_rc_val = ref_params[2] if joint>0 else None;
 
   for c_itr, c in enumerate(val_cons):
     curr_params = descrCurr[c];
     curr_sfs = plt_sfs;
-    descrResps[c_itr, range(len(curr_sfs))] = hf.get_descrResp(curr_params, curr_sfs, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
+    descrResps[c_itr, range(len(curr_sfs))] = hf.get_descrResp(curr_params, curr_sfs, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
 
   ovr_min = np.minimum(np.min(curr_resps), np.minimum(np.min(rvcResps), np.min(descrResps)))
   ovr_max = np.maximum(np.max(curr_resps), np.maximum(np.max(rvcResps), np.max(descrResps)))

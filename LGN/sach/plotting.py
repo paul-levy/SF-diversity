@@ -31,7 +31,8 @@ sf_DoG_model = int(sys.argv[3]);
 rvcMod       = int(sys.argv[4]);
 joint        = int(sys.argv[5]);
 isHPC        = int(sys.argv[6]);
-fromFile     = int(sys.argv[7]); 
+phAdj        = int(sys.argv[7]);
+fromFile     = int(sys.argv[8]); 
 
 loc_base = os.getcwd() + '/';
 
@@ -50,22 +51,27 @@ zSub = 0; # are we loading fits that were fit to responses adjusted s.t. the low
 ## NOTE: SF tuning curves with with zSub; RVCs are not, so we must subtract respAdj from the RVC curve to align with what we fit (i.e. the zSub'd data)
 #######
 HPC = 'HPC' if isHPC else '';
-fLname = 'descrFits%s_s220506' % HPC;
+fLname = 'descrFits%s_s220511' % HPC;
 #fLname = 'descrFits%s_s220412' % HPC;
 #fLname = 'descrFits%s_s220410a' % HPC;
 #fLname = 'descrFits%s_s220227' % HPC;
 mod_str = hf.descrMod_name(sf_DoG_model);
-fLname_full = hf.descrFit_name(sf_loss_type, fLname, mod_str, joint=joint);
+fLname_full = hf.descrFit_name(sf_loss_type, fLname, mod_str, joint=joint, phAdj=phAdj);
 descrFits = hf.np_smart_load(dataPath + fLname_full);
 descrFits = descrFits[which_cell-1]; # just get this cell
 
 rvcSuff = hf.rvc_mod_suff(rvcMod);
-rvcBase = 'rvcFits%s_220506' % HPC;
+rvcBase = 'rvcFits%s_220511' % HPC;
 #rvcBase = 'rvcFits%s_220412' % HPC;
 #rvcBase = 'rvcFits%s_220219' % HPC;
 #rvcBase = 'rvcFits_211006';
 #rvcBase = 'rvcFits_210721';
-rvcFits = hf.np_smart_load(dataPath + hf.rvc_fit_name(rvcBase, rvcMod));
+vecF1 = 1 if phAdj==0 else 0;
+if phAdj<1: # either vec corr or neither
+  dir=None;
+else:
+  dir=1; # default...
+rvcFits = hf.np_smart_load(dataPath + hf.rvc_fit_name(rvcBase, rvcMod, vecF1=vecF1, dir=dir));
 rvcFits = rvcFits[which_cell-1];
 
 ### now, get the FULL save_loc (should have fit name)
@@ -79,7 +85,7 @@ if not os.path.exists(save_loc):
 
 data = cellStruct['data'];
 
-resps, stimVals, _ = hf.tabulateResponses(data);
+resps, stimVals, _ = hf.tabulateResponses(data, phAdjusted=phAdj);
 # all responses on log ordinate (y axis) should be baseline subtracted
 
 all_cons = stimVals[0];
