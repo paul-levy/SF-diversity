@@ -502,9 +502,9 @@ if __name__ == '__main__':
 
     HPC = 'HPC' if 'pl1465' in data_loc else '';
 
-    rvcBase = 'rvcFits%s_220510' % HPC;
-    phBase = 'phAdv%s_220510' % HPC;
-    dogBase = 'descrFits%s_s220510' % HPC;
+    rvcBase = 'rvcFits%s_220511' % HPC;
+    phBase = 'phAdv%s_220511' % HPC;
+    dogBase = 'descrFits%s_s220511' % HPC;
     #rvcBase = 'rvcFits%s_220412' % HPC;
     #phBase = 'phAdv%s_220412' % HPC;
 
@@ -534,6 +534,8 @@ if __name__ == '__main__':
     else:
       cross_val = None;
 
+    dir = 1; # by default...
+      
     if asMulti:
 
       from functools import partial
