@@ -50,21 +50,23 @@ def phase_advance_fit(cell_num, data_loc, phAdvName, dir=1, to_save=1, returnMod
   cons = np.unique(data['cont']);
   cons = cons[cons>0]; # exclude 0% contrast from this analysis (it's noise!!!)
   sfs = np.unique(data['sf']);
-  allAmp = []; allPhi = []; allCons = []; allTf = [];
+  allAmp = []; allPhi = []; allCons = []; allTf = []; allPhiVar = [];
   for sf_val in sfs:
-    curr_amp = []; curr_phi = []; curr_tf = [];
+    curr_amp = []; curr_phi = []; curr_tf = []; curr_phiVar = [];
     ok_sf = data['sf']==sf_val;
     for con_val in cons:
       which_ind = np.where(np.logical_and(data['cont']==con_val, ok_sf))[0][0];
       curr_amp.append([allAmp_mean[which_ind], allAmp_std[which_ind]]);
       curr_phi.append([allPhi_mean[which_ind], allPhi_var[which_ind]]);
       curr_tf.append([data['tf'][which_ind]]); # should be same for all conditions
+      curr_phiVar.append([allPhi_var[which_ind]]);
     allAmp.append(curr_amp);
     allPhi.append(curr_phi);
     allCons.append(cons);
     allTf.append(curr_tf);
+    allPhiVar.append(curr_phiVar);
 
-  phAdv_model, all_opts, all_phAdv, all_loss = hf.phase_advance(allAmp, allPhi, allCons, allTf);
+  phAdv_model, all_opts, all_phAdv, all_loss = hf.phase_advance(allAmp, allPhi, allCons, allTf, phiVar=allPhiVar);
 
   # update stuff - load again in case some other run has saved/made changes
   curr_fit = dict();
