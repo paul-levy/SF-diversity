@@ -2326,7 +2326,10 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
   ## SACH [and sachVol]
   ############
   elif DoGmodel == 1 or DoGmodel == 4:
-    init_radiusCent = random_in_range((0.02, 0.5))[0];
+    max_sf_index = np.argmax(resps_curr); # what sf index gives peak response?
+    mu_guess = valSfVals[max_sf_index];
+    init_radiusCent = 1./(np.pi*mu_guess*random_in_range((1.3, 2.2))[0]) # f_c = 1/(pi*xc) where f_c=pSf*ratio
+    #init_radiusCent = random_in_range((0.02, 0.5))[0];
     if DoGmodel == 1:
       if sach_equiv_p_h: # then, to get maxResp, gainCent should be maxResp/{np.sqrt(pi)*radiusCent}
         init_gainCent = maxResp * random_in_range((0.85, 1.2))[0]; # 
