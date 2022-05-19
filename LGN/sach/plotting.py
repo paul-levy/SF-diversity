@@ -51,7 +51,7 @@ zSub = 0; # are we loading fits that were fit to responses adjusted s.t. the low
 ## NOTE: SF tuning curves with with zSub; RVCs are not, so we must subtract respAdj from the RVC curve to align with what we fit (i.e. the zSub'd data)
 #######
 HPC = 'HPC' if isHPC else '';
-fLname = 'descrFits%s_s220511' % HPC;
+fLname = 'descrFits%s_s220518' % HPC;
 #fLname = 'descrFits%s_s220412' % HPC;
 #fLname = 'descrFits%s_s220410a' % HPC;
 #fLname = 'descrFits%s_s220227' % HPC;
@@ -61,7 +61,7 @@ descrFits = hf.np_smart_load(dataPath + fLname_full);
 descrFits = descrFits[which_cell-1]; # just get this cell
 
 rvcSuff = hf.rvc_mod_suff(rvcMod);
-rvcBase = 'rvcFits%s_220511' % HPC;
+rvcBase = 'rvcFits%s_220518' % HPC;
 #rvcBase = 'rvcFits%s_220412' % HPC;
 #rvcBase = 'rvcFits%s_220219' % HPC;
 #rvcBase = 'rvcFits_211006';
@@ -321,7 +321,7 @@ v_sfs = all_sfs;
 n_v_sfs = len(all_sfs);
 
 maxResp = np.max(np.max(f1['mean']));
-
+ymin = 1e-1
 f, ax = plt.subplots(1, 2, figsize=(35, 20), sharex=True, sharey='row');
 
 lines = [];
@@ -329,8 +329,9 @@ for sf in reversed(range(n_v_sfs)):
 
     # plot data
     col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
-    respAbBaseline = f1['mean'][:, sf];
-    curr_line, = ax[0].plot(all_cons, respAbBaseline - respAdj, '-o', clip_on=False, color=col, label=str(np.round(all_sfs[sf], conDig)));
+    resps = f1['mean'][:, sf];
+    whereAbBaseline = np.where(resps>ymin)[0];
+    curr_line, = ax[0].plot(all_cons[whereAbBaseline], resps[whereAbBaseline] - respAdj, '-o', clip_on=False, color=col, label=str(np.round(all_sfs[sf], conDig)));
     lines.append(curr_line);
 
     # now plot model
@@ -348,7 +349,7 @@ for i in range(2):
 
   #ax[i].set_aspect('equal', 'box'); 
   ax[i].set_xlim((0.5*min(all_cons), 1.2*max(all_cons)));
-  ax[i].set_ylim((1e-1, 1.5*maxResp));
+  ax[i].set_ylim((ymin, 1.5*maxResp));
 
   ax[i].set_xscale('log');
   ax[i].set_yscale('log');
