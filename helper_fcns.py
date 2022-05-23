@@ -712,6 +712,10 @@ def descrJoint_name(joint=0, modelName=None):
      jStr = '_JTsurrShapeAbs' # the surround radius is fixed (absolute, unlike relative, as in joint==2)
   elif joint==6:
      jStr = '_JTctrSurr' # the center and surround radii are free, as is the center gain (surround gain is fixed across contrast)
+  elif joint==7:
+     jStr = '_JTsurrShapeCtrRaSlope';
+  elif joint==8:
+     jStr = '_JTsurrGainCtrRaSlope';
 
   return jStr;
 
@@ -1776,6 +1780,11 @@ def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf, baseline=0):
   #tune = baseline + np.maximum(0, gain*(np.exp(-np.square(stim_sf/f_c)) - gain_s * np.exp(-np.square(stim_sf/(f_c*j_s))))); 
   return tune, [];
 
+def get_xc_from_slope(intercept, slope, con, base=10):
+   # let's assume a power law for determining the center radius given the contrast
+   # --- we get the the contrasts in arbitrary "base" by dividing the ln(con) by ln(base)
+   return numpy.power(base, intercept + slope * numpy.log(con)/numpy.log(base));
+
 def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, parker_hawken_equiv=True, ref_rc_val=None):
   ''' Difference of gaussians as described in Sach's thesis
   [0] gain_c    - gain of the center mechanism
@@ -2103,7 +2112,7 @@ def dog_total_volume(params, DoGmodel):
 
 ## - for fitting DoG models
 
-def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, var_to_mean=None, gain_reg=0, vol_lam=0, minThresh=0.1, joint=0, baseline=0, fracSig=1, enforceMaxPenalty=0, sach_equiv_p_h=True, n_fits=1, ref_params=None, ref_rc_val=None):
+def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=None, var_to_mean=None, gain_reg=0, vol_lam=0, minThresh=0.1, joint=0, baseline=0, fracSig=1, enforceMaxPenalty=0, sach_equiv_p_h=True, n_fits=1, ref_params=None, ref_rc_val=None, conVals=None):
   '''Given the model params (i.e. sach or tony formulation)), the responses, sf values
   return the loss
   loss_type: 1 - lsq
@@ -2162,6 +2171,10 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
           ref_rc_val = params[2]; # 2+(i=0)*3=2 --> center radius for the high contrast condition, which serves as reference for surround radius for all contrasts
         elif joint==6: # fixed center:surround gain ratio
           curr_params = [params[1+i*3], params[2+i*3], params[0], params[3+i*3]];
+        elif joint==7 or joint==8: # surround radius [7] or gain [8] is fixed, center radius is determined from power law
+          # we have two unique params per contrast, and three joint
+          xc_curr = get_xc_from_slope(params[0], params[1], conVals[i]); # intercept, slope are first two args for get_xc_from_slope func
+          curr_params = [params[3+i*2], xc_curr, params[4+i*2], params[2]] if joint==7 else [params[3+i*2], xc_curr, params[2], params[4+i*2]];
       else: # here, we can handle the no_surr case here, too
         # we know there are 10 params
         if joint==1:
@@ -2486,6 +2499,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
          allBounds = (bound_gainSurr, bound_radiusSurr, ); # surround radius AND bound_gainSurr are fixed across condition
       elif joint == 6: # fixed center:surround gain ratio
          allBounds = (bound_gainSurr, ); # we can fix the ratio by allowing the center gain to vary and keeping the surround in fixed proportion
+      elif joint == 7 or joint == 8: # center radius determined by slope! we'll also fixed surround radius; if joint == 8, fixed surround gain instead of radius
+         bound_xc_slope = (-1, 1); # 220511 fits inbounded; 220519 fits bounded (-1,1)
+         bound_xc_inter = (None, None); #bound_radiusCent; # intercept - shouldn't start outside the bounds we choose for radiusCent
+         allBounds = (bound_xc_slope, bound_xc_inter, bound_radiusSurr, ) if joint == 7 else (bound_xc_slope, bound_xc_inter, bound_gainSurr, )
     else:
       allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
   elif DoGmodel == 2: # TONY
@@ -2578,12 +2595,13 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
                  kc2_bound, xc2_bound, surr2_gain_bound, surr2_rad_bound, g_bound, S_bound);
 
   ### organize responses -- and fit, if joint=0
-  allResps = []; allRespsSem = []; allRespsVar = []; allSfs = []; allRespsTr = []; allSfsTr = []; start_incl = 0; incl_inds = [];
+  allResps = []; allRespsSem = []; allRespsVar = []; allSfs = []; allRespsTr = []; allSfsTr = []; start_incl = 0; incl_inds = []; allCons = [];
   isolParams = []; # keep track of the previously saved parameters by contrast?
 
   for con in range(nCons):
     if con not in valConByDisp[disp]:
       continue;
+    allCons.append(all_cons[con]);
 
     if validByStimVal is not None:
       valSfInds = np.array(get_valid_sfs(None, disp, con, expInd, stimVals, validByStimVal)); # we pass in None for data, since we're giving stimVals/validByStimVal, anyway
@@ -2654,6 +2672,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
           allBounds = (*allBounds, bound_gainCent, bound_radiusCent);
         elif joint == 6: # fixed center:surround gain ratio
           allBounds = (*allBounds, bound_gainCent, bound_radiusCent, bound_radiusSurr);
+        elif joint == 7: # center radius det. by slope, surround radius fixed
+          allBounds = (*allBounds, bound_gainCent, bound_gainSurr);
+        elif joint == 8: # center radius det. by slope, surround gain fixed
+          allBounds = (*allBounds, bound_gainCent, bound_radiusSurr);
       elif DoGmodel == 2: # TONY
         if joint == 1: # add the center gain and center radius for each contrast 
           allBounds = (*allBounds, bound_gainCent, bound_freqCent);
@@ -2801,6 +2823,12 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
             allInitParams = [ref_init[2], ref_init[3]];
          elif joint == 6: # center:surround gain is fixed
             allInitParams = [ref_init[2]];
+         elif joint == 7 or joint == 8: # center radius offset and slope fixed; surround radius fixed [7] or surr. gain fixed [8]
+            # the slope will be calculated on log contrast, and will start from the lowest contrast
+            # -- i.e. xc = np.power(10, init+slope*log10(con))
+            # to start, let's assume no slope, so the intercept should be equal to our xc guess
+            init_intercept, init_slope = np.log10(ref_init[1]), 0;
+            allInitParams = [init_intercept, init_slope, ref_init[3]] if joint == 7 else [init_intercept, init_slope, ref_init[2]];
       else: # d-DoG-S models
          if joint==1 or (no_surr and joint==2):
             allInitParams = [*ref_init[-2:]] # g,S (i.e. the final two parameters
@@ -2843,6 +2871,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
               allInitParams = [*allInitParams, curr_init[0], curr_init[1]];
            elif joint == 6: # then we add center gain and both radii
               allInitParams = [*allInitParams, curr_init[0], curr_init[1], curr_init[3]];
+           elif joint == 7: # then we add center and surround gains
+              allInitParams = [*allInitParams, curr_init[0], curr_init[2]];
+           elif joint == 8: # then we add center gain, surr. radius
+              allInitParams = [*allInitParams, curr_init[0], curr_init[3]];
+
         else: # d-DoG-S models
            if joint==1:# or (no_surr and joint==2):
               allInitParams = [*allInitParams, *curr_init[0:-2]];
@@ -2854,7 +2887,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       # previously, we choose optimization method (L-BFGS-B for even, TNC for odd) --- we now just choose the former
       methodStr = 'L-BFGS-B';
       #obj = lambda params: DoG_loss(params, allRespsTr, allSfsTr, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, vol_lam=vol_lam, n_fits=len(allResps)); # trial-by-trial
-      obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, vol_lam=vol_lam, n_fits=len(allResps), );
+      obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, vol_lam=vol_lam, n_fits=len(allResps), conVals=allCons, );
       # --- debugging ---
       try: # 95000; 35000; 975000
         maxfun = 1975000 if not is_mod_DoG(DoGmodel) else 155000; # default is 15000; d-dog-s model often needs more iters to finish
@@ -2889,6 +2922,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         ref_rc_val = params[2]; # center radius for high contrast
       elif joint == 6: # ctr:surr gain fixed
         surr_gain = params[0];
+      elif joint == 7: # center gain det. from slope, surround radius fixed
+        xc_inter, xc_slope, surr_shape = params[0:3];
+      elif joint == 8: # center gain det. from slope, surround gain fixed
+        xc_inter, xc_slope, surr_gain = params[0:3];
     else:
       if joint == 1:
         g, S = params[0], params[1];
@@ -2928,6 +2965,14 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
              center_gain = params[1+con*3]; 
              center_shape = params[2+con*3];
              surr_shape = params[3+con*3];
+             curr_params = [center_gain, center_shape, surr_gain, surr_shape];
+          elif joint == 7 or joint == 8: # surr radius [7] or gain [8] fixed; need to determine center radius from slope
+             center_gain = params[3+con*2]; 
+             center_shape = get_xc_from_slope(params[0], params[1], allCons[con]);
+             if joint == 7:
+                surr_gain = params[4+con*2];
+             elif joint == 8:
+                surr_shape = params[4+con*2];
              curr_params = [center_gain, center_shape, surr_gain, surr_shape];
        else: ### unpack the d-DoG-S parameters [for joint fits]
           if joint == 1: # we've already grabbed g, S

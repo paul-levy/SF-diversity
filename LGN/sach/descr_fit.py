@@ -504,9 +504,9 @@ if __name__ == '__main__':
 
     HPC = 'HPC' if 'pl1465' in data_loc else '';
 
-    rvcBase = 'rvcFits%s_220511' % HPC;
-    phBase = 'phAdv%s_220511' % HPC;
-    dogBase = 'descrFits%s_s220511' % HPC;
+    rvcBase = 'rvcFits%s_220518' % HPC;
+    phBase = 'phAdv%s_220518' % HPC;
+    dogBase = 'descrFits%s_s220518' % HPC;
     #rvcBase = 'rvcFits%s_220412' % HPC;
     #phBase = 'phAdv%s_220412' % HPC;
 
