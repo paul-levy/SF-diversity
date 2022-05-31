@@ -51,22 +51,17 @@ zSub = 0; # are we loading fits that were fit to responses adjusted s.t. the low
 ## NOTE: SF tuning curves with with zSub; RVCs are not, so we must subtract respAdj from the RVC curve to align with what we fit (i.e. the zSub'd data)
 #######
 HPC = 'HPC' if isHPC else '';
-fLname = 'descrFits%s_s220520' % HPC;
-#fLname = 'descrFits%s_s220412' % HPC;
-#fLname = 'descrFits%s_s220410a' % HPC;
-#fLname = 'descrFits%s_s220227' % HPC;
+fLname = 'descrFits%s_s220531' % HPC;
+#fLname = 'descrFits%s_s220520' % HPC;
 mod_str = hf.descrMod_name(sf_DoG_model);
 fLname_full = hf.descrFit_name(sf_loss_type, fLname, mod_str, joint=joint, phAdj=phAdj);
 descrFits = hf.np_smart_load(dataPath + fLname_full);
 descrFits = descrFits[which_cell-1]; # just get this cell
 
 rvcSuff = hf.rvc_mod_suff(rvcMod);
-rvcBase = 'rvcFits%s_220512' % HPC;
+rvcBase = 'rvcFits%s_220531' % HPC;
+#rvcBase = 'rvcFits%s_220512' % HPC;
 #rvcBase = 'rvcFits%s_220518' % HPC;
-#rvcBase = 'rvcFits%s_220412' % HPC;
-#rvcBase = 'rvcFits%s_220219' % HPC;
-#rvcBase = 'rvcFits_211006';
-#rvcBase = 'rvcFits_210721';
 vecF1 = 1 if phAdj==0 else 0;
 if phAdj<1: # either vec corr or neither
   dir=None;
