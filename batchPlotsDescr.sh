@@ -40,23 +40,24 @@ DOG_MOD=$2
 LOSS_TYPE=${3:-2}
 JOINT=${4:-0}
 HPC=${5:-0}
+PHADJ=${6:-0}
 
 # note: dog_mod=0 means flex; 1 means sach (DoG)
 
 if [ "$EXP_DIR" = "V1/" ]; then
   for run in {1..30}
   do 
-    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC &
+    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC &
   done
   wait
   for run in {31..60}
   do 
-    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC &
+    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC &
   done
   wait
   for run in {61..81}
   do 
-    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC &
+    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC &
   done
   wait
 fi
@@ -64,64 +65,64 @@ if [ "$EXP_DIR" = "LGN/" ]; then
   for run in {1..25}
   do 
     # mov RVC
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 0 1 $HPC 0 &
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 0 1 $HPC 0 &
     # N-R RVC
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 1 $HPC 0 &
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 0 &
     # --- trying vec correction only
-    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 &
+    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 0 &
   done
   wait
   for run in {26..50}
   do 
     # mov RVC
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 0 1 $HPC 0 &
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 0 1 $HPC 0 &
     # N-R RVC
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 1 $HPC 0 &
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 0 &
     # --- trying vec correction only
-    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 &
+    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 0 &
   done
   wait
   for run in {50..81}
   do 
     # mov RVC
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 0 1 $HPC 0 &
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 0 1 $HPC 0 &
     # N-R RVC
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 1 $HPC 0 &
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 0 &
     # --- trying vec correction only
-    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 &
+    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 0 &
   done
 fi
 if [ "$EXP_DIR" = "V1_orig/" ]; then
   for run in {1..20}
   do 
-    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD $LOSS_TYPE $JOINT 0 1 1 $HPC &
+    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC &
   done
   wait
   for run in {21..40}
   do 
-    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD $LOSS_TYPE $JOINT 0 1 1 $HPC &
+    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC &
   done
   wait
   for run in {41..59}
   do 
-    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD $LOSS_TYPE $JOINT 0 1 1 $HPC &
+    python3.6 plot_descr.py $run V1_orig/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC &
   done
  fi
 if [ "$EXP_DIR" = "altExp/" ]; then
   for run in {1..8}
   do 
-    python3.6 plot_descr.py $run altExp/ $DOG_MOD $LOSS_TYPE $JOINT 0 1 1 $HPC &
+    python3.6 plot_descr.py $run altExp/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC &
   done
 fi
 if [ "$EXP_DIR" = "V1_BB/" ]; then
   for run in {1..23}
   do 
-    python3.6 plot_descr_sfBB.py $run V1_BB/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 $HPC 0 0 &
+    python3.6 plot_descr_sfBB.py $run V1_BB/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 0 0 &
   done
   wait
   for run in {24..47}
   do 
-    python3.6 plot_descr_sfBB.py $run V1_BB/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 $HPC 0 0 &
+    python3.6 plot_descr_sfBB.py $run V1_BB/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 0 0 &
   done
  fi
 

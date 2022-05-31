@@ -2475,6 +2475,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     bound_gainCent = (1, None);
     bound_radiusCent= (1e-2, 1.5);
     bound_gainSurr = (1e-2, 1); # multiplier on gainCent, thus the center must be weaker than the surround
+    #bound_radiusSurr = (3, 3.0001); # multiplier on radiusCent, thus the surr. radius must be larger than the center
     bound_radiusSurr = (1, 10); # multiplier on radiusCent, thus the surr. radius must be larger than the center
     if joint>0: 
       if joint == 1: # original joint (fixed gain and radius ratios across all contrasts)

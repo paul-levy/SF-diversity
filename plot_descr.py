@@ -102,8 +102,8 @@ expName = hf.get_datalist(expDir, force_full=1);
 hpc_str = 'HPC' if isHPC else '';
 if expDir == 'LGN/':# or expDir == 'altExp':
     #descrBase = 'descrFits%s_220302' % hpc_str;
-    descrBase = 'descrFits%s_220511' % hpc_str;
-    #descrBase = 'descrFits%s_220414pV' % hpc_str;
+    #descrBase = 'descrFits%s_220511' % hpc_str;
+    descrBase = 'descrFits%s_220526' % hpc_str;
 else:
     #descrBase = 'descrFits%s_220323' % hpc_str;
     descrBase = 'descrFits%s_220410' % hpc_str;
@@ -126,7 +126,7 @@ rvcAdj = np.abs(rvcAdj);
 ##################
 
 modStr  = hf.descrMod_name(descrMod)
-fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint, phAdj=1 if rvcAdj==1 else None);
+fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint, phAdj=1 if rvcAdjSigned==1 else None);
 descrFits = hf.np_smart_load(data_loc + fLname);
 pause_tm = 2.0*np.random.rand();
 time.sleep(pause_tm);
@@ -687,7 +687,7 @@ for d in range(nDisps):
 
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
     minResp_plot = 1e-0;
-    ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+    ref_params = descrParams[d, np.where(v_cons)[0][-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
     try:
         ref_rc_val = ref_params[2] if joint>0 else None;
     except:

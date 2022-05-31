@@ -60,21 +60,22 @@ expDir    = sys.argv[2];
 descrMod  = int(sys.argv[3]);
 descrLoss = int(sys.argv[4]);
 joint     = int(sys.argv[5]);
-rvcMod    = int(sys.argv[6]);
-if len(sys.argv) > 7:
-  respVar = int(sys.argv[7]);
+phAdj     = int(sys.argv[6]);
+rvcMod    = int(sys.argv[7]);
+if len(sys.argv) > 8:
+  respVar = int(sys.argv[8]);
 else:
   respVar = 1;
-if len(sys.argv) >8:
-  isHPC = int(sys.argv[8]);
+if len(sys.argv) >9:
+  isHPC = int(sys.argv[9]);
 else:
   isHPC = 0;
-if len(sys.argv) > 9: # plot prediction to all stimuli from spatial rep. of d-DoG-S model???
-  ddogs_pred = int(sys.argv[9]);
+if len(sys.argv) > 10: # plot prediction to all stimuli from spatial rep. of d-DoG-S model???
+  ddogs_pred = int(sys.argv[10]);
 else:
   ddogs_pred = 1;
-if len(sys.argv) > 10:
-  forceLog = int(sys.argv[10]); # used for byDisp/allCons_... (sf plots)
+if len(sys.argv) > 11:
+  forceLog = int(sys.argv[11]); # used for byDisp/allCons_... (sf plots)
 else:
   forceLog = 0;
 
@@ -84,6 +85,9 @@ data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
 fracSig = 1;
+
+phAdjSigned = phAdj;
+phAdj = np.abs(phAdj);
 
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
@@ -99,7 +103,7 @@ rvcBase = 'rvcFits%s_220220' % hpc_str;
 ##################
 
 modStr  = hf.descrMod_name(descrMod)
-fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint);
+fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint, phAdj=1 if rvcAdj==1 else None);
 descrFits = hf.np_smart_load(data_loc + fLname);
 pause_tm = 2.0*np.random.rand();
 time.sleep(pause_tm);
@@ -122,7 +126,7 @@ try:
   overwriteExpName = dataList['expType'][cellNum-1];
 except:
   overwriteExpName = None;
-expInd = -1;
+expInd = -1
 vecCorrected = 1;
 rvcFits = hf.np_smart_load(data_loc + hf.rvc_fit_name(rvcBase, modNum=rvcMod, dir=None, vecF1=vecCorrected));
 force_baseline = False; # plotting baseline will depend on F1/F0 designation
