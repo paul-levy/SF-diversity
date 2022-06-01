@@ -1783,6 +1783,7 @@ def DiffOfGauss(gain, f_c, gain_s, j_s, stim_sf, baseline=0):
 def get_xc_from_slope(intercept, slope, con, base=10):
    # let's assume a power law for determining the center radius given the contrast
    # --- we get the the contrasts in arbitrary "base" by dividing the ln(con) by ln(base)
+
    return numpy.power(base, intercept + slope * numpy.log(con)/numpy.log(base));
 
 def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, parker_hawken_equiv=True, ref_rc_val=None):
@@ -2501,9 +2502,9 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       elif joint == 6: # fixed center:surround gain ratio
          allBounds = (bound_gainSurr, ); # we can fix the ratio by allowing the center gain to vary and keeping the surround in fixed proportion
       elif joint == 7 or joint == 8: # center radius determined by slope! we'll also fixed surround radius; if joint == 8, fixed surround gain instead of radius
-         bound_xc_slope = (-1, 1); # 220511 fits inbounded; 220519 fits bounded (-1,1)
+         bound_xc_slope = (-1, 1); # 220505 fits inbounded; 220519 fits bounded (-1,1)
          bound_xc_inter = (None, None); #bound_radiusCent; # intercept - shouldn't start outside the bounds we choose for radiusCent
-         allBounds = (bound_xc_slope, bound_xc_inter, bound_radiusSurr, ) if joint == 7 else (bound_xc_slope, bound_xc_inter, bound_gainSurr, )
+         allBounds = (bound_xc_inter, bound_xc_slope, bound_radiusSurr, ) if joint == 7 else (bound_xc_slope, bound_xc_inter, bound_gainSurr, )
     else:
       allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
   elif DoGmodel == 2: # TONY
@@ -2824,11 +2825,12 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
             allInitParams = [ref_init[2], ref_init[3]];
          elif joint == 6: # center:surround gain is fixed
             allInitParams = [ref_init[2]];
-         elif joint == 7 or joint == 8: # center radius offset and slope fixed; surround radius fixed [7] or surr. gain fixed [8]
+         elif joint == 7 or joint == 8: # center radius offset and slope fixed; surround radius fixed [7] or surr. gain fixed [8];
             # the slope will be calculated on log contrast, and will start from the lowest contrast
             # -- i.e. xc = np.power(10, init+slope*log10(con))
             # to start, let's assume no slope, so the intercept should be equal to our xc guess
-            init_intercept, init_slope = np.log10(ref_init[1]), 0;
+            init_intercept, init_slope = random_in_range([-1.3, -0.6])[0], random_in_range([-0.1,0.2])[0]
+            #init_intercept, init_slope = np.log10(ref_init[1]), 0;
             allInitParams = [init_intercept, init_slope, ref_init[3]] if joint == 7 else [init_intercept, init_slope, ref_init[2]];
       else: # d-DoG-S models
          if joint==1 or (no_surr and joint==2):

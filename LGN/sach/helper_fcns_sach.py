@@ -25,7 +25,7 @@ from helper_fcns import rvc_mod_suff, rvc_fit_name, get_rvc_model
 from helper_fcns import naka_rushton, get_rvcResp, rvc_fit
 # -- sf 
 from helper_fcns import dog_charFreq, dog_get_param, dog_init_params, deriv_gauss, compute_SF_BW, fix_params
-from helper_fcns import DiffOfGauss, DoGsach, dog_prefSfMod, dog_charFreqMod
+from helper_fcns import DiffOfGauss, DoGsach, dog_prefSfMod, dog_charFreqMod, get_xc_from_slope
 from helper_fcns import DoG_loss, get_descrResp
 from helper_fcns import flexible_Gauss_np as flexible_Gauss
 from helper_fcns import descr_prefSf as dog_prefSf # to keep the function call here unchanged from previous version
@@ -193,6 +193,10 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
          allBounds = (bound_gainSurr, bound_radiusSurr, ); # surround radius AND bound_gainSurr are fixed across condition
       elif joint == 6: # fixed center:surround gain ratio
          allBounds = (bound_gainSurr, ); # we can fix the ratio by allowing the center gain to vary and keeping the surround in fixed proportion
+      elif joint == 7 or joint == 8: # center radius determined by slope! we'll also fixed surround radius; if joint == 8, fixed surround gain instead of radius
+         bound_xc_slope = (-1, 1); # 220505 fits inbounded; 220519 fits bounded (-1,1)
+         bound_xc_inter = (None, None); #bound_radiusCent; # intercept - shouldn't start outside the bounds we choose for radiusCent
+         allBounds = (bound_xc_inter, bound_xc_slope, bound_radiusSurr, ) if joint == 7 else (bound_xc_slope, bound_xc_inter, bound_gainSurr, )
     else:
       allBounds = (bound_gainCent, bound_radiusCent, bound_gainSurr, bound_radiusSurr);
   elif DoGmodel == 2:
@@ -222,7 +226,7 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
     if all_cons[con] == 0: # skip 0 contrast...
         continue;
     else:
-      valCons.append(con);
+      valCons.append(all_cons[con]);
     valSfInds_curr = np.where(~np.isnan(resps_mean[con,:]))[0];
     resps_curr = resps_mean[con, valSfInds_curr];
     sem_curr   = resps_sem[con, valSfInds_curr];
@@ -257,6 +261,10 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
           allBounds = (*allBounds, bound_gainCent, bound_radiusCent);
         elif joint == 6: # fixed center:surround gain ratio
           allBounds = (*allBounds, bound_gainCent, bound_radiusCent, bound_radiusSurr);
+        elif joint == 7: # center radius det. by slope, surround radius fixed
+          allBounds = (*allBounds, bound_gainCent, bound_gainSurr);
+        elif joint == 8: # center radius det. by slope, surround gain fixed
+          allBounds = (*allBounds, bound_gainCent, bound_radiusSurr);
       elif DoGmodel == 2:
         if joint == 1: # add the center gain and center radius for each contrast 
           allBounds = (*allBounds, bound_gainCent, bound_freqCent);
@@ -327,6 +335,14 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
         allInitParams = [ref_init[2], ref_init[3]];
       elif joint == 6: # center:surround gain is fixed
         allInitParams = [ref_init[2]];
+      elif joint == 7 or joint == 8: # center radius offset and slope fixed; surround radius fixed [7] or surr. gain fixed [8]
+        # the slope will be calculated on log contrast, and will start from the lowest contrast
+        # -- i.e. xc = np.power(10, init+slope*log10(con))
+        # to start, let's assume no slope, so the intercept should be equal to our xc guess
+        init_intercept, init_slope = random_in_range([-1.3, -0.6])[0], random_in_range([-0.1,0.2])[0]
+        #init_intercept, init_slope = np.log10(ref_init[1]), 0;
+        allInitParams = [init_intercept, init_slope, ref_init[3]] if joint == 7 else [init_intercept, init_slope, ref_init[2]];
+
       # now, we cycle through all responses and add the per-contrast parameters
       for resps_curr in allResps:
         curr_init = dog_init_params(resps_curr, base_rate, all_sfs, all_sfs, DoGmodel);
@@ -342,9 +358,13 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
           allInitParams = [*allInitParams, curr_init[0], curr_init[1]];
         elif joint == 6: # then we add center gain and both radii
           allInitParams = [*allInitParams, curr_init[0], curr_init[1], curr_init[3]];
+        elif joint == 7: # then we add center and surround gains
+          allInitParams = [*allInitParams, curr_init[0], curr_init[2]];
+        elif joint == 8: # then we add center gain, surr. radius
+          allInitParams = [*allInitParams, curr_init[0], curr_init[3]];
 
       methodStr = 'L-BFGS-B';
-      obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, joint=joint, n_fits=len(allResps)); # if joint, it's just one fit!
+      obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, loss_type=loss_type, DoGmodel=DoGmodel, joint=joint, n_fits=len(allResps), conVals=valCons, ); # if joint, it's just one fit!
       wax = opt.minimize(obj, allInitParams, method=methodStr, bounds=allBounds, options={'ftol': ftol});
 
       # compare
@@ -372,6 +392,11 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
       ref_rc_val = params[2]; # center radius for high contrast
     elif joint == 6: # ctr:surr gain fixed
       surr_gain = params[0];
+    elif joint == 7: # center gain det. from slope, surround radius fixed
+      xc_inter, xc_slope, surr_shape = params[0:3];
+    elif joint == 8: # center gain det. from slope, surround gain fixed
+      xc_inter, xc_slope, surr_gain = params[0:3];
+      
     for con in range(len(allResps)):
       # --- then, go through each contrast and get the "local", i.e. per-contrast, parameters
       if joint == 1: # center gain, center shape
@@ -400,6 +425,15 @@ def dog_fit(resps, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=0, r
         center_shape = params[2+con*3];
         surr_shape = params[3+con*3];
         curr_params = [center_gain, center_shape, surr_gain, surr_shape];
+      elif joint == 7 or joint == 8: # surr radius [7] or gain [8] fixed; need to determine center radius from slope
+        center_gain = params[3+con*2]; 
+        center_shape = get_xc_from_slope(params[0], params[1], all_cons[con]);
+        if joint == 7:
+          surr_gain = params[4+con*2];
+        elif joint == 8:
+          surr_shape = params[4+con*2];
+        curr_params = [center_gain, center_shape, surr_gain, surr_shape];
+
       # -- then the responses, and overall contrast index
       resps_curr = allResps[con];
       sem_curr   = allRespsSem[con];
@@ -551,8 +585,9 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, di
 
   f0['mean'] = f0mean;
   f0['sem'] = f0sem;
-  f1['mean'] = f1mean;
-  f1['mean_phCorrOnMeans'] = f1mean_phCorrOnMeans;
+  #f1['mean'] = f1mean;
+  f1['mean'] = f1mean_phCorrOnMeans;
+  #f1['mean_phCorrOnMeans'] = f1mean_phCorrOnMeans;
   #f1['mean_prePhCorr'] = f1mean_prePhCorr;
   f1['sem'] = f1sem;
 

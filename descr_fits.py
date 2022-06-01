@@ -19,13 +19,13 @@ else:
 
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
-#dogName = 'descrFits%s_220418' % hpcSuff;
-dogName = 'descrFits%s_220526' % hpcSuff;
+dogName = 'descrFits%s_220531' % hpcSuff;
+#dogName = 'descrFits%s_220520' % hpcSuff;
 if sys.argv[3] == 'LGN/':
-  phAdvName = 'phaseAdvanceFits%s_220519' % hpcSuff
-  rvcName_f1 = 'rvcFits%s_220519' % hpcSuff;
-  #phAdvName = 'phaseAdvanceFits%s_220415' % hpcSuff
-  #rvcName_f1 = 'rvcFits%s_220418' % hpcSuff;
+  phAdvName = 'phaseAdvanceFits%s_220531' % hpcSuff
+  rvcName_f1 = 'rvcFits%s_220531' % hpcSuff;
+  #phAdvName = 'phaseAdvanceFits%s_220519' % hpcSuff
+  #rvcName_f1 = 'rvcFits%s_220519' % hpcSuff;
   #phAdvName = 'phaseAdvanceFits_211108'
   #rvcName_f1 = 'rvcFits_211108'; # FOR LGN
   rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
@@ -734,6 +734,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       except:
         pass; # we've already specified isolFits, if that doesn't work
       '''
+      print('properly loaded isol fits');
     except:
       ref_varExpl = None;
       isolFits = None;

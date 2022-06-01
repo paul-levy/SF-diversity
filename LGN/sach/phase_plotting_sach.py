@@ -33,10 +33,9 @@ rcParams['errorbar.capsize'] = 0;
 
 ### SET-UP
 loc_base = os.getcwd() + '/';
-date_suffix = '220511';
-hpc_suffix = 'HPC' if int(sys.argv[3])==1 else ''; # third input is HPC...
-phAdvName = 'phAdv%s_%s' % (hpc_suffix, date_suffix); 
-rvcName = 'rvcFits%s_220219' % hpc_suffix;
+date_suffix = '220411';
+phAdvName = 'phAdv_%s' % date_suffix; 
+rvcName = 'rvcFitsHPC_220219';
 
 phAdv_set_ylim = 1; # if 1, then we make the ylim [0,360] for phAdv-mean plot; otherwise, we don't specify the limit
 
