@@ -104,8 +104,8 @@ if expDir == 'LGN/':# or expDir == 'altExp':
     #descrBase = 'descrFits%s_220511' % hpc_str;
     descrBase = 'descrFits%s_220531' % hpc_str;
 else:
-    #descrBase = 'descrFits%s_220323' % hpc_str;
-    descrBase = 'descrFits%s_220410' % hpc_str;
+    descrBase = 'descrFits%s_220531' % hpc_str;
+    #descrBase = 'descrFits%s_220410' % hpc_str;
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
 #descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
