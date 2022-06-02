@@ -133,10 +133,10 @@ if area == 'LGN':
   #dogNames = ['descrFits_s210304_sach_sach.npy'];
   #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
   dogMod = 1; # 1 (sach) or 2 (Tony)
-  #jointType = 7; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
-  #dogNames = ['descrFitsHPC_220531_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220531_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
-  jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
-  dogNames = ['descrFitsHPC_220531_phAdj_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220531_phAdj_sqrt_sach_JTsurrShape.npy'];
+  jointType = 7; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
+  dogNames = ['descrFitsHPC_220531_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220531_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
+  #jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
+  #dogNames = ['descrFitsHPC_220531_phAdj_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220531_phAdj_sqrt_sach_JTsurrShape.npy'];
 
   #dogNames = ['descrFitsHPC_220520_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220520_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
   #dogNames = ['descrFitsHPC_220228_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220225_sqrt_sach_JTsurrShape.npy'];

@@ -2212,11 +2212,12 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
            xc_curr = get_xc_from_slope(params[0], params[1], conVals[i]); # intercept, slope are first two args for get_xc_from_slope func
 
            curr_params = [params[start_ind], xc_curr, params[start_ind+1], params[2],
-                        params[start_ind+2], xc_curr, params[start_ind+3], params[3], params[4], params[5]];
+                        params[start_ind+2], 1, params[start_ind+3], params[3], params[4], params[5]];
            # also compute the high contrast parameters --> why? This will serve as reference for computing S at all contrasts
            ref_ind=6+(n_fits-1)*nParam;
-           ref_params = [params[ref_ind], xc_curr, params[ref_ind+1], params[2],
-                        params[ref_ind+2], xc_curr, params[ref_ind+3], params[3], params[4], params[5]];
+           xc_ref = get_xc_from_slope(params[0], params[1], conVals[-1]); # intercept, slope are first two args for get_xc_from_slope func
+           ref_params = [params[ref_ind], xc_ref, params[ref_ind+1], params[2],
+                        params[ref_ind+2], 1, params[ref_ind+3], params[3], params[4], params[5]]; # 22.06.01 --> note that we FIX xc2 = xc1
 
       if enforceMaxPenalty:
         max_data = np.max(curr_resps);
@@ -3011,7 +3012,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
              center_shape = get_xc_from_slope(params[0], params[1], allCons[con]);
              curr_params = [params[start_ind], center_shape, params[start_ind+1], surr1_rad,
-                            params[start_ind+2], center_shape, params[start_ind+3], surr2_rad, g, S];
+                            params[start_ind+2], 1, params[start_ind+3], surr2_rad, g, S];
        # -- then the responses, and overall contrast index
        resps_curr = allResps[con];
        sem_curr   = allRespsSem[con];
@@ -3941,7 +3942,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
          evalRatio = evalPsf[1]/evalPsf[0];
          dataMetrics['pSfModRat'][d] = [np.log2(evalRatio), np.log2(evalRatio)/logConRat];
      except: # then likely, no rvc/descr fits...
-       pass 
+       pass
      # and likewise for DoG
      try:
        _, psf_model, opt_params = dog_prefSfMod(dogFits[cell_ind], allCons=cons, disp=d, varThresh=varExplThresh, dog_model=dogMod)
@@ -3953,41 +3954,16 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
          evalRatio = evalPsf[1]/evalPsf[0];
          dataMetrics['dog_pSfModRat'][d] = [np.log2(evalRatio), np.log2(evalRatio)/logConRat];
      except: # then likely, no rvc/descr fits...
-       pass 
-
-     ''' Will likely deprecate/cut, as of 21.10.18
-     for cutInd, cutVal in enumerate([0.7, 0.75, eFrac]):
-        for (fitInd, currFit), whichMod in zip(enumerate([descrFits, dogFits]), [descrMod, dogMod]):
-           sfModRatCurr = [np.nan, np.nan]
-           try:
-              _, psf_model, opt_params = dog_prefSfMod(currFit[cell_ind], allCons=cons, disp=d, varThresh=varExplThresh, dog_model=whichMod, highCut=cutVal, base_sub=baseline_resp)
-              valInds = np.where(currFit[cell_ind]['varExpl'][d, :] > varExplThresh)[0];
-              if len(valInds) > 1:
-                 extrema = [cons[valInds[0]], cons[valInds[-1]]];
-                 logConRat = np.log2(extrema[1]/extrema[0]);
-                 evalPsf = psf_model(*opt_params, con=extrema);
-                 evalRatio = evalPsf[1]/evalPsf[0];
-                 sfModRatCurr = [np.log2(evalRatio), np.log2(evalRatio)/logConRat];
-           except: # then likely, no rvc/descr fits...
-              pass 
-           ### then, organize for the outputs
-           if cutInd == 0:
-             if fitInd == 0:
-                dataMetrics['sf70ModRat'][d] = np.copy(sfModRatCurr);
-             else:
-                dataMetrics['dog_sf70ModRat'][d] = np.copy(sfModRatCurr);
-           elif cutInd == 1:
-             if fitInd == 0:
-                dataMetrics['sf75ModRat'][d] = np.copy(sfModRatCurr);
-             else:
-                dataMetrics['dog_sf75ModRat'][d] = np.copy(sfModRatCurr);
-           elif cutInd == 2:
-             if fitInd == 0:
-                dataMetrics['sfEModRat'][d] = np.copy(sfModRatCurr);
-             else:
-                dataMetrics['dog_sfEModRat'][d] = np.copy(sfModRatCurr);
-     ''' 
-
+       pass
+     # NEW 22.06.02: get the slope if we have a slope model...
+     if jointType==7:
+        prms = dogFits[cell_ind]['paramList'][0];
+        dataMetrics['dog_mod_slope'] = prms[1]; # not negated here...
+        dataMetrics['dog_mod_intercept'] = prms[0];
+        prms = dogFits[cell_ind]['boot_paramList'];
+        dataMetrics['boot_dog_mod_slope'] = np.array([x[0][1] for x in prms]); # not negated here...
+        dataMetrics['boot_dog_mod_intercept'] = np.array([x[0][0] for x in prms]);
+        
      #######
      ## RVC stuff
      #######
@@ -4031,42 +4007,6 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                val = dataMetrics[curr_in][d,comb[1]] - dataMetrics[curr_in][d,comb[0]];
             dataMetrics[curr_out][d,comb[0], comb[1]] = [val, val/conChange];
 
-       # -- and boot versions
-       #rats = boot_sf70_values[d, comb[1]] / boot_sf70_values[d, comb[0]]; # distribution of ratios
-       #boot_sf70_mdRats[d,comb[0],comb[1]] = [np.nanmedian(np.log2(rat)), np.nanmedian(np.log2(rat))/conChange]
-       #boot_sf70_mnRats[d,comb[0],comb[1]] = [np.nanmean(np.log2(rat)), np.nanmean(np.log2(rat))/conChange]
-       #boot_sf70_stdRats[d,comb[0],comb[1]] = [np.nanstd(np.log2(rat)), np.nanstd(np.log2(rat))/conChange]
-
-       # Below are the deprecated computations
-       '''
-       # -- BW split, first lower, then upper 
-       for sideInd in [0,1]:
-         diff = bwHalf_split[d,comb[1],sideInd] - bwHalf_split[d,comb[0],sideInd]
-         bwHalfDiffs_split[d,comb[0],comb[1], sideInd, :] = [diff, diff/conChange];
-         diff_dog = dog_bwHalf_split[d,comb[1],sideInd] - dog_bwHalf_split[d,comb[0],sideInd]
-         bwHalfDiffs_split[d,comb[0],comb[1], sideInd, :] = [diff_dog, diff_dog/conChange];
-       # -- BW split, first lower, then upper 
-       for sideInd in [0,1]:
-         diff = bw34_split[d,comb[1],sideInd] - bw34_split[d,comb[0],sideInd]
-         bw34Diffs_split[d,comb[0],comb[1], sideInd, :] = [diff, diff/conChange];
-         diff_dog = dog_bw34_split[d,comb[1],sideInd] - dog_bw34_split[d,comb[0],sideInd]
-         dog_bw34Diffs_split[d,comb[0],comb[1], sideInd, :] = [diff_dog, diff_dog/conChange];
-       '''
-
-       '''
-       ## and sf75 and dog_sf75 ratios
-       rat = sf75[d, comb[1]] / sf75[d, comb[0]];
-       sf75Rats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
-       rat = dog_sf75[d, comb[1]] / dog_sf75[d, comb[0]];
-       dog_sf75Rats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
-
-       ## and sfE and dog_sfE ratios (reduction by 1/e)
-       rat = sfE[d, comb[1]] / sfE[d, comb[0]];
-       sfERats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
-       rat = dog_sfE[d, comb[1]] / dog_sfE[d, comb[0]];
-       dog_sfERats[d,comb[0],comb[1]] = [np.log2(rat), np.log2(rat)/conChange]
-       '''
-
      # then, as function of SF
      for comb in itertools.permutations(range(nSfs), 2):
        dataMetrics['c50Rats'][d,comb[0],comb[1]] = dataMetrics['c50'][d,comb[1]] / dataMetrics['c50'][d,comb[0]]
@@ -4090,10 +4030,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        inputs = ['bwHalfDiffs', 'bw34Diffs', 'pSfRats', 'sfVarDiffs', 'sfComRats', 'sf70Rats', 'dog_sf70Rats', 
                  'dog_charFreqRats', 'dog_bwHalfDiffs', 'dog_bw34Diffs', 'dog_pSfRats'];
        for ii, ins in enumerate(inputs): 
-          diffsAtThirdCon[d, ii] = dataMetrics[ins][d, relDescr_inds[d, 1], relDescr_inds[d, 0], rawInd];
 
-     #print('\tdiffsAtThirdCon pSf||sf70||dogSf70 ...  = (%.2f, %.2f, %.2f)' % (diffsAtThirdCon[d, 2], diffsAtThirdCon[d, 5], diffsAtThirdCon[d, 6]));
-     #print('\tmodRat pSf||sf70||dogSf70 ...  = (%.2f, %.2f, %.2f)' % (pSfModRat[0, 1], sf70ModRat[0, 1], dog_sf70ModRat[0, 1]));
      # End of optional (oldVersion) section
 
    # Now, we make sure that everything we need is in dataMetrics
@@ -4236,7 +4173,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
 
   for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, rvcMod in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods):
 
-    #if expDir != 'V1_BB/':
+    #if expDir == 'LGN/':
     #   continue;
 
     # get the current directory, load data list
@@ -4268,8 +4205,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       #  oh = perCell_summary(30);
       #  pdb.set_trace();
 
-      #oh = perCell_summary(37);
-      #pdb.set_trace();
+      #oh = perCell_summary(7);
 
       nCpu = mp.cpu_count();
       with mp.Pool(processes = nCpu) as pool:
