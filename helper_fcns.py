@@ -4011,28 +4011,6 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      for comb in itertools.permutations(range(nSfs), 2):
        dataMetrics['c50Rats'][d,comb[0],comb[1]] = dataMetrics['c50'][d,comb[1]] / dataMetrics['c50'][d,comb[0]]
 
-     # finally, just get the straight-from-data ratio/diff evaluated from highest to one-third-of-max contrast
-     hiConInd = np.argmax(cons[val_con_by_disp[d]]); # the highest contrast for this dispersion
-     hiConValue = cons[val_con_by_disp[d][hiConInd]];
-     # -- what index has the contrast closest to one-third of the max?
-     thirdConInd = np.argmin(np.square(cons[val_con_by_disp[d]] - (hiConValue/ 3)));
-     thirdConValue = cons[val_con_by_disp[d][thirdConInd]];
-     if np.abs(thirdConValue - hiConValue/3) < .1*hiConValue: # should be within 10% of the high contrast value to count...
-       relDescr_inds[d, 0] = val_con_by_disp[d][hiConInd]; # highest
-       relDescr_inds[d, 1] = val_con_by_disp[d][thirdConInd]; # one-third
-       for indAdd, metr in enumerate([dataMetrics['pSf'], dataMetrics['dog_pSf']]):
-         try:
-           valDescrFits = np.where(~np.isnan(metr[d, :]))[0]; # might be empty (i.e. no fits which passed varExpl_thresh/dog_varExpl_thresh)
-           lowInd, hiInd = valDescrFits[0], valDescrFits[-1]; # get the lowest/highest indicies with a still-valid descriptive fit (if cI invalid, then pSf[d,cI] will be nan)
-           relDescr_inds[d, 2+indAdd] = lowInd if cons[lowInd] < cons[hiInd] else hiInd;
-         except:
-           pass
-       inputs = ['bwHalfDiffs', 'bw34Diffs', 'pSfRats', 'sfVarDiffs', 'sfComRats', 'sf70Rats', 'dog_sf70Rats', 
-                 'dog_charFreqRats', 'dog_bwHalfDiffs', 'dog_bw34Diffs', 'dog_pSfRats'];
-       for ii, ins in enumerate(inputs): 
-
-     # End of optional (oldVersion) section
-
    # Now, we make sure that everything we need is in dataMetrics
    # --- as of 21.10.18, mostly everything is added directly above; however, we add the following here
    dataMetrics['relDescr_inds'] = relDescr_inds;
