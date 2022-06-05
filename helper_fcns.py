@@ -1419,7 +1419,7 @@ def get_all_fft(data, disp, expInd, cons=[], sfs=[], dir=-1, psth_binWidth=1e-3,
       _, rel_amp, full_fourier = spike_fft(psth_val, curr_tf, stimDur)
 
       if resample: # COULD make this as part of resample_array function (or separate function)...but for now, it lives here (21.09.13)
-        new_inds = numpy.random.randint(0, len(rel_amp), len(rel_amp));
+        new_inds = numpy.random.randint(0, len(rel_amp), len(rel_amp)); # this means we resample
         rel_amp, ph_rel_stim = rel_amp[new_inds], ph_rel_stim[new_inds]
         # must handle tf separately, to keep it as a list (rather than np array)
         curr_tf = [curr_tf[i] for i in new_inds];
@@ -4709,6 +4709,45 @@ def organize_adj_responses(data, rvcFits, expInd, vecF1=0):
      
   return adjResps;
 
+def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_disp, phAdv_model=None, resample=False, dir=1):
+   ''' Organize the responses in the usual way (i.e. [d,sf,con])
+         In the style of organize_resp, organize_adj_resp
+   '''
+   np = numpy;
+   if phAdv_model is None:
+      phAdv_model = get_phAdv_model();
+      
+   nDisps, nCons, nSfs = len(stimVals[0]), len(stimVals[1]), len(stimVals[2]);
+   means = np.nan * np.zeros((nDisps, nSfs, nCons));
+
+   for disp in range(nDisps):
+
+      allAmp, allPhi, _, allCompCon, allCompSf = get_all_fft(expStructure, disp, expInd, dir=dir, all_trials=1, resample=resample);
+      # get just the mean amp/phi and put into convenient lists
+      allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)
+      allAmpTrials = [[x[2] for x in sf] for sf in allAmp]; # trial-by-trial is third element 
+
+      allPhiMeans = [[x[0] for x in sf] for sf in allPhi]; # mean is in the first element; do that for each [mean, var] pair in each list (split by sf)
+      allPhiTrials = [[x[2] for x in sf] for sf in allPhi]; # trial-by-trial is third element 
+
+      adjMeans   = project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, stimVals[2]); # list of lists [sf][con]
+      # now, ready to add these adjMeans (again, phAmp corrected on the MEANS per condition)
+      # --- but, if mixture, need to sum across conds
+      if disp > 0: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)
+        adjSumResp  = [np.sum(x, 1) if x else [] for x in adjMeans];
+        # --- adjSemTr is [nSf x nValCon], i.e. s.e.m. per condition
+        # TODO 22.06.04 --> WILL NEED TO ADD ADJBYTRIAL if uncommenting the below
+        #adjSemTr    = [[sem(np.sum(hf.switch_inner_outer(x), 1)) for x in y] for y in adjByTrial];
+        #adjSemCompTr  = [[sem(hf.switch_inner_outer(x)) for x in y] for y in adjByTrial];
+
+      for sf,con in itertools.product(range(nSfs), range(len(val_con_by_disp[disp]))):
+         con_ind = val_con_by_disp[disp][con];
+         to_pass = adjMeans[sf][con].size >0 if disp==0 else len(allCompCon[sf])>0;
+         if to_pass: # otherwise it's blank; already pre-populated with NaN
+            means[disp,sf,con_ind] = adjMeans[sf][con] if disp==0 else adjSumResp[sf][con];
+
+   return means;
+
 def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, resample=False, cellNum=-1, cross_val=None):
     ''' organizes the responses by condition given spikes, experiment structure, and expInd
         mask will be None OR list of trials to consider (i.e. trials not in mask/where mask is false are ignored)
@@ -4780,7 +4819,6 @@ def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes 
       --- If we pass in rvcFits, we can optionally specify if it's a vecF1 fit (will need to access...
       --- -- the responses differently in that case)
   '''
-
   if overwriteSpikes is not None: # as of 19.05.02, used for fitting model recovery spikes
     return overwriteSpikes;
   if rvcFits is None:

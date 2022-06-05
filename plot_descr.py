@@ -96,6 +96,8 @@ save_loc = loc_base + expDir + 'figures/';
 fracSig = 1;
 #fracSig = 0 if expDir == 'LGN/' else 1; # we only enforce the "upper-half sigma as fraction of lower half" for V1 cells! 
 
+phAmpByMean=1;
+
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
@@ -119,6 +121,11 @@ else:
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
+
+if rvcAdjSigned==1 and phAmpByMean: # i.e. phAdv correction
+    phBase = 'phaseAdvanceFits%s_220531' % hpc_str
+    phAdvFits = hf.np_smart_load(data_loc + hf.phase_fit_name(phBase, dir=1));
+    all_opts = phAdvFits[cellNum-1]['params'];
 
 ##################
 ### Spatial frequency
@@ -177,7 +184,7 @@ if rvcAdj == 0:
   rvcFlag = '_f0';
   force_dc = True;
 else:
-  rvcFlag = '';
+  rvcFlag = '' if phAmpByMean==0 else '_phAmpMean';
   force_dc = False;
 if expDir == 'LGN/':
   force_f1 = True;
@@ -198,8 +205,10 @@ else:
 
 # now get the measured responses
 _, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
-
-respMean = respOrg;
+if rvcAdjSigned==1 and phAmpByMean:
+    respMean = hf.organize_phAdj_byMean(trialInf, expInd, all_opts, stimVals, val_con_by_disp);
+else:
+    respMean = respOrg;
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
 # compute SEM, too
 findNaN = np.isnan(respAll);
