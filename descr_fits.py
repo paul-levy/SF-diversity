@@ -19,7 +19,8 @@ else:
 
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
-dogName = 'descrFits%s_220531' % hpcSuff;
+#dogName = 'descrFits%s_220531' % hpcSuff;
+dogName = 'descrFits%s_220606' % hpcSuff;
 #dogName = 'descrFits%s_220520' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220531' % hpcSuff
@@ -661,7 +662,7 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1, flt32=True):
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success;
  
-def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3): # n_repeats was 100, before 21.09.01
+def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3, phAmpOnMean=False, phAdvName=phAdvName): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
@@ -677,6 +678,11 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       ### 3c. Reload the rvcFits; add the latest boot iter, if applicable
       ### 4. Save everything (and/or return the results)
       ###############
+
+      NOTE: 22.06.06 - if phAmpOnMean (and not vecF1; will only happen if LGN), then we correct each condition's response mean by projecting on the vector mean for that condition
+      ---------------- can only use with: no resampling; no cross-val but resampling; cross_val==2.0; i.e. we cannot, as of 22.06.06, use with 0<cross_val<1
+      ---------------- however, this means that resps_all (as passed into hf.dog_fit) will be done on phAdvByTrial responses (i.e. corrected trial-by-trial)
+      ---------------- resps_all is just used for var/mean calculations, etc, and has no real influence on the fit, so we're OK to only correct resps_mean
 
       For asMulti fits (i.e. when done in parallel) we do the following to reduce multiple loading of files/race conditions
       --- we'll pass in [cell_num, cellName] as cell_num [to avoid loading datalist]
@@ -815,6 +821,11 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       tr_subset_nll = np.copy(bestNLL);
       tr_subset_vExp = np.copy(varExpl);
 
+  if phAmpOnMean and phAdj: # should happen iff LGN data
+    phAdvFits = hf.np_smart_load(data_loc + hf.phase_fit_name(phAdvName, dir=dir));
+    all_opts = phAdvFits[cell_num-1]['params'];
+    respsPhAdv_mean_ref = hf.organize_phAdj_byMean(data, expInd, all_opts, stimVals, valConByDisp);
+
   print('# boots --> %03d' % nBoots);
   for boot_i in range(nBoots):
     if nBoots > 1:
@@ -831,9 +842,15 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       print('holding out con/sf indices %02d/%02d' % (con_ind, sf_ind));
       resps_all = np.copy(r_all_noresamp);
       resps_all[disp, val_sfs[sf_ind], valConByDisp[disp][con_ind]] = np.nan;
-      resps_mean = np.nanmean(resps_all, axis=-1);
-    else:
+      if phAmpOnMean:
+        resps_mean = np.copy(respsPhAdv_mean_ref);
+        resps_mean[disp, val_sfs[sf_ind], valConByDisp[disp][con_ind]] = np.nan;
+      else:
+        resps_mean = np.nanmean(resps_all, axis=-1);
+    else: # NOTE: As of 22.06.06, cannot do cross_val by trial with phAmpOnMean
       _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=resample, cellNum=cell_num, cross_val=cross_val_curr);
+      if cross_val is None and phAmpOnMean: # then we replace resps_mean with the corrected version
+        resps_mean = hf.organize_phAdj_byMean(data, expInd, all_opts, stimVals, valConByDisp, resample=resample);
 
     if cross_val is not None and resample:
       ########
@@ -843,13 +860,26 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       #########
       nan_val = -1e3;
       training = np.copy(resps_all);
-      training[np.isnan(training)] = nan_val;
       all_data = np.copy(r_all_noresamp);
+      test_data = np.nan * np.zeros_like(resps_all);
+      # the above needs to be split by case (i.e. is this phAmpOnMean or not)
+      training[np.isnan(training)] = nan_val;
       all_data[np.isnan(all_data)] = nan_val;
       heldout = np.abs(all_data - training) > 1e-6; # if the difference is g.t. this, it means they are different value
-      test_data = np.nan * np.zeros_like(resps_all);
       test_data[heldout] = all_data[heldout]; # then put the heldout values here
       print('boot %d' % boot_i);
+
+      # if the below are true, then we also need to 
+      if cross_val==2.0 and phAmpOnMean: # As of 22.06.06, iff we're doing cross-val by condition AND phAmpOnMean, then we'll compute test/train based on the 
+        training_phAmp = np.copy(resps_mean);
+        all_data_phAmp = np.copy(respsPhAdv_mean_ref);
+        test_data_phAmp = np.nan * np.zeros_like(resps_mean);
+        training_phAmp[np.isnan(training_phAmp)] = nan_val;
+        all_data_phAmp[np.isnan(all_data_phAmp)] = nan_val;
+        heldout = np.abs(all_data_phAmp - training_phAmp) > 1e-6; # if the difference is g.t. this, it means they are different value
+        test_data_phAmp[heldout] = all_data_phAmp[heldout]; # then put the heldout values here
+      else:
+        test_data_phAmp = None;
 
     resps_sem = sem(resps_all, axis=-1, nan_policy='omit');
     base_rate = hf.blankResp(cellStruct, expInd, spks_sum, spksAsRate=True)[0] if which_measure==0 else None;
@@ -868,7 +898,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
         
       if cross_val is not None and resample:
         # compute the loss, varExpl on the heldout (i.e. test) data
-        test_mn = np.nanmean(test_data, axis=-1);
+        test_mn = np.nanmean(test_data, axis=-1) if test_data_phAmp is None else test_data_phAmp;
         test_sem = sem(test_data, axis=-1, nan_policy='omit');
         # assumes not joint??
         test_nlls = np.nan*np.zeros_like(nll);
@@ -1121,6 +1151,7 @@ if __name__ == '__main__':
     print('Running cell %d in %s' % (cell_num, expName));
 
     jointMinCons = 2 if data_dir=='V1_orig/' else 3;
+    phAmpOnMean = 1 if data_dir=='LGN/' and ph_fits==1 else 0;
 
     # get the full data directory
     dataPath = basePath + data_dir + data_suff;
@@ -1217,7 +1248,7 @@ if __name__ == '__main__':
 
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
-          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons);
+          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons, phAmpOnMean=phAmpOnMean);
           dogFits = pool.map(descr_perCell, zip(range(start_cell, end_cell+1), dL['unitName'], dL['expType']));
           pool.close();
 
@@ -1253,7 +1284,7 @@ if __name__ == '__main__':
         np.save(dataPath + rvcNameFinal, rvcFitNPY)
     else: # if not multi (i.e. parallel...)
       # then, put what to run here...
-      if ph_fits == 1:
+      if ph_fits == 1 and disp==0:
         phase_advance_fit(cell_num, expInd=expInd, data_loc=dataPath, disp=disp, dir=dir);
       if rvc_fits == 1:
         rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, nBoots=nBoots);
@@ -1261,14 +1292,14 @@ if __name__ == '__main__':
         if nBoots > 1:
           n_repeats = 2 if joint>0 else 5; # fewer if repeat
         else:
-          n_repeats = 50 if joint>0 else 100; # was previously be 3, 15, then 7, 15
+          n_repeats = 15 if joint>0 else 20; # was previously be 3, 15, then 7, 15
 
         #import cProfile, re
         #cProfile.run('fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov)');
         if hf.is_mod_DoG(dog_model) and nBoots<10:
           sleep(hf.random_in_range((0, 20))[0]); # why? DoG fits run so quickly that successive load/save calls take place in an overlapping way and we lose the result of some calls
         dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
-        fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons);
+        fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons, phAmpOnMean=phAmpOnMean);
 
       if rvcF0_fits == 1:
         fit_RVC_f0(cell_num, data_loc=dataPath, rvcMod=rvc_model, nBoots=nBoots);

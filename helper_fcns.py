@@ -1575,12 +1575,12 @@ def phase_advance(amps, phis, cons, tfs, n_repeats=50, ampSem=None, phiVar=None)
 
      # now compute phase advance (in ms)
      curr_cons = cons[i];
-     curr_tfs = tfs[i][0];
+     curr_tfs = tfs[i][0] if tfs is not None else None;
      #curr_sfs = sfs[i]; # TODO: Think about using the spatial frequency in the phase_adv calculation - if [p] = s^2/cycles, then we have to multiply by cycles/deg?
      cycle_fraction = opt_params[1] * curr_ampMean[max_resp_ind] / 360; # slope*respAmpAtMaxCon --> phase shift (in degrees) from 0 to responseAtMaxCon
      # then, divide this by 360 to get fractions of a cycle
      #phase_adv = 1e3*opt_params[1]/curr_tfs[0]; # get just the first grating's TF...
-     phase_adv = 1e3*cycle_fraction/curr_tfs[0]; # get just the first grating's TF...
+     phase_adv = 1e3*cycle_fraction/curr_tfs[0] if curr_tfs is not None else np.nan; # get just the first grating's TF...
      # 1e3 to get into ms;
 
      all_phAdv.append(phase_adv);
@@ -4709,7 +4709,7 @@ def organize_adj_responses(data, rvcFits, expInd, vecF1=0):
      
   return adjResps;
 
-def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_disp, phAdv_model=None, resample=False, dir=1):
+def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_disp, phAdv_model=None, resample=False, dir=1, redo_phAdv=True):
    ''' Organize the responses in the usual way (i.e. [d,sf,con])
          In the style of organize_resp, organize_adj_resp
    '''
@@ -4725,10 +4725,19 @@ def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_d
       allAmp, allPhi, _, allCompCon, allCompSf = get_all_fft(expStructure, disp, expInd, dir=dir, all_trials=1, resample=resample);
       # get just the mean amp/phi and put into convenient lists
       allAmpMeans = [[x[0] for x in sf] for sf in allAmp]; # mean is in the first element; do that for each [mean, std] pair in each list (split by sf)
-      allAmpTrials = [[x[2] for x in sf] for sf in allAmp]; # trial-by-trial is third element 
-
       allPhiMeans = [[x[0] for x in sf] for sf in allPhi]; # mean is in the first element; do that for each [mean, var] pair in each list (split by sf)
-      allPhiTrials = [[x[2] for x in sf] for sf in allPhi]; # trial-by-trial is third element 
+
+      if resample and redo_phAdv and disp==0:
+         # then, we replicate (yes, bad...) a few lines from df.phaseAdvanceFit below
+         # why? this means we will project based on fits done to this resampled data
+         allCons = stimVals[1];
+         conVals = allCons[val_con_by_disp[disp]];
+         allCons = [conVals] * len(allAmp); # repeats list and nests
+         # get list of mean amp, mean phi, std. mean, var phi
+         # --- we can try to use this in fitting the phase-amplitude relationship...
+         oyvey = [[polar_vec_mean([allAmp[i_sf][i_con][2]], [allPhi[i_sf][i_con][2]]) for i_con in range(len(allPhi[i_sf]))] for i_sf in range(len(allAmp))];
+         phiVars = [[oyvey[x][y][3] for y in range(len(oyvey[x]))] for x in range(len(oyvey))];
+         all_opts = phase_advance(allAmp, allPhi, allCons, tfs=None, ampSem=None, phiVar=phiVars, n_repeats=5)[1];
 
       adjMeans   = project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, stimVals[2]); # list of lists [sf][con]
       # now, ready to add these adjMeans (again, phAmp corrected on the MEANS per condition)
