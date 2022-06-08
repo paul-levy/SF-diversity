@@ -20,7 +20,7 @@ else:
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #dogName = 'descrFits%s_220531' % hpcSuff;
-dogName = 'descrFits%s_220606' % hpcSuff;
+dogName = 'descrFits%s_220607' % hpcSuff;
 #dogName = 'descrFits%s_220520' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220531' % hpcSuff
@@ -909,7 +909,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
 
         # set up ref_params, ref_rc_val; will only be used IF applicable
         ref_params = prms[-1]; # high contrast condition
-        ref_rc_val = totPrm[2] if joint>0 else None;
+        ref_rc_val = totPrm[2] if joint>0 else None; # even then, only used for joint==5
         
         for ii, prms_curr in enumerate(prms):
           # we'll iterate over the parameters, which are fit for each contrast (the final dimension of test_mn)

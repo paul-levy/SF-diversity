@@ -2333,7 +2333,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
     # note: a cursory analysis shows that the interquartile range of ratios between c. freq::pSf is VERY approximately (1.25, 2.75)
     # --- but we'll bias towards slightly lower charFreq/high XC values to avoid excessively short distance between sub-units
     max_sf_index = np.argmax(resps_curr); # what sf index gives peak response?
-    mu_guess = valSfVals[max_sf_index];
+    mu_guess = np.maximum(0.1, valSfVals[max_sf_index]); # ensure that we don't guess zero sf!
     init_xc1 = 1./(np.pi*mu_guess*random_in_range((1.3, 2.2))[0]) # f_c = 1/(pi*xc) where f_c=pSf*ratio
     init_kc2 = random_in_range((-1.4, 0.8))[0]; # temporarily, as sigmoid rel. to kc1
     init_kS_rel1, init_kS_rel2 = random_in_range((-1.4, 0.8), size=2); # will be used as input to sigmoid
@@ -2356,7 +2356,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
   ############
   elif DoGmodel == 1 or DoGmodel == 4:
     max_sf_index = np.argmax(resps_curr); # what sf index gives peak response?
-    mu_guess = valSfVals[max_sf_index];
+    mu_guess = np.maximum(0.1, valSfVals[max_sf_index]); # ensure that we don't guess zero sf!
     init_radiusCent = 1./(np.pi*mu_guess*random_in_range((1.3, 2.2))[0]) # f_c = 1/(pi*xc) where f_c=pSf*ratio
     #init_radiusCent = random_in_range((0.02, 0.5))[0];
     if DoGmodel == 1:

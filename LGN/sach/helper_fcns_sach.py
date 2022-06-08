@@ -465,7 +465,7 @@ def blankResp(data, get_dc=0):
 
   return mu, std;
 
-def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, dir=1, cross_val=1):
+def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, dir=1, cross_val=1, redo_phAdv=True):
   ''' Given the dictionary containing all of the data, organize the data into the proper responses
   Specifically, we know that Sach's experiments varied contrast and spatial frequency
   Thus, we will organize responses along these dimensions [con, sf] OR [con][sf] (mean/arr, respectively)
@@ -492,41 +492,34 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, di
   f0arr = dict();
   f1arr = dict();
   f1arr_prePhCorr = dict();
+  f1phs = dict();
 
   to_sub = blankResp(data, get_dc=False)[0] if sub_f1_blank else 0;
 
-  if phAdjusted==1:
-    # phAdv_model is used to project the responses; all_opts is organized by SF (ascending)
-    phAdv_model, all_opts = df.phase_advance_fit(data, None, 'phAdv_dummy', dir=dir, to_save=0);
-    #phAdv_model, all_opts_neg = df.phase_advance_fit(data, None, 'phAdv_dummy', dir=-1, to_save=0);
-
   n_trials = data['f1arr'].shape[-1]; # nConds x nTrials
   cntr_sizes = np.unique(data['cntr_size']); # choose larger size
-  #pdb.set_trace();
-  val_size = np.where(data['cntr_size']==cntr_sizes[-1]); # why specifying size? Cell 33 has multiple sizes!!!
+  val_size = np.where(data['cntr_size']==cntr_sizes[-1])[0]; # why specifying size? Cell 33 has multiple sizes!!!
   if ~np.isnan(data['opac1'][0]):
     # then also make sure that the size takes into account when the opacity of the second grating is 0 (i.e. off)
-    val_size = np.where(np.logical_and(val_size, data['opac1'][val_size]==0))[-1];
+    val_size = np.where(np.logical_and(val_size, data['opac1'][val_size]==0))[-1][0];
   for con in range(len(all_cons)):
-    val_con = np.where(data['cont'][val_size] == all_cons[con]);
+    val_con = np.where(data['cont'][val_size] == all_cons[con])[0];
     f0arr[con] = dict();
     f1arr[con] = dict();
     f1arr_prePhCorr[con] = dict();
+    f1phs[con] = dict();
     for sf in range(len(all_sfs)):
-      val_sf = np.where(data['sf'][val_size][val_con] == all_sfs[sf]);
+      val_sf = np.where(data['sf'][val_size][val_con] == all_sfs[sf])[0];
       f0arr[con][sf] = np.nan * np.zeros((n_trials, ));
       f1arr[con][sf] = np.nan * np.zeros((n_trials, ));
+      f1phs[con][sf] = np.nan * np.zeros((n_trials, ));
       f1arr_prePhCorr[con][sf] = np.nan * np.zeros((n_trials, ));
       
       # Organize ALL trial -- we'll resample afterwards
       non_nan = nan_rm(data['f0arr'][val_size][val_con][val_sf]);
-      #if len(non_nan)>n_trials:
-      #  pdb.set_trace();
       f0arr[con][sf][0:len(non_nan)] = non_nan;
-      f1amps = nan_rm(data['f1arr'][val_size][val_con][val_sf] - to_sub)
-      f1phs = nan_rm(data['f1pharr'][val_size][val_con][val_sf]);
-      # compute the mean amp, mean ph for vecF1 corrections (apply all data to resample and nonresampled)
-      mean_amp, mean_ph,_,_ = polar_vec_mean([f1amps], [f1phs]);
+      f1amps_curr = nan_rm(data['f1arr'][val_size][val_con][val_sf] - to_sub)
+      f1phs_curr = nan_rm(data['f1pharr'][val_size][val_con][val_sf]);
 
       if cross_val is None:
         holdout_frac = 1;
@@ -536,59 +529,44 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, di
       new_inds = resample_array(resample, non_nan_inds, holdout_frac=holdout_frac);
       save_inds = new_inds if holdout_frac<1 else range(len(new_inds));
 
-      if phAdjusted==1:
-        f1arr[con][sf][save_inds] = project_resp([f1amps[new_inds]], [f1phs[new_inds]], phAdv_model, [all_opts[sf]], disp=0)[0];
-        f1arr_prePhCorr[con][sf][save_inds] = f1amps[new_inds];
-      elif phAdjusted==0:
-        f1arr[con][sf][save_inds] = np.multiply(f1amps[new_inds], np.cos(np.deg2rad(mean_ph) - np.deg2rad(f1phs[new_inds])));
-      elif phAdjusted==-1:
-        f1arr[con][sf][save_inds] = f1amps[new_inds];
+      # store the (potentially) resampled amplitudes, phases
+      f1arr_prePhCorr[con][sf][save_inds] = f1amps_curr[new_inds];
+      f1phs[con][sf][save_inds] = f1phs_curr[new_inds];
+      # and if it is resample, then we should update data
+      if resample and redo_phAdv and phAdjusted==1:
+        data['f1arr'][val_size[val_con[val_sf[0]]]][save_inds] = f1amps_curr[new_inds];
+        data['f1pharr'][val_size[val_con[val_sf[0]]]][save_inds] = f1phs_curr[new_inds];
       
-      ''' # LESS CONCISE, but also correct code is below
-      if resample: # we'll do it manually, since we want to keep f0/f1 resamplings aligned
-        non_nan = np.where(~np.isnan(data['f1arr'][val_con][val_sf]))[-1]; # we accidentally create a singleton 1st dim. with this indexing; ignore it
-        #new_inds = np.random.choice(non_nan, len(non_nan)); # by default, allow replacement
-        holdout_frac = cross_val if cross_val<=1 else None;
-        # we'll resample an array of indices (with replacement iff holdout_frac=1)
-        new_inds = resample_array(resample, non_nan, holdout_frac=holdout_frac);
-        # Now, if holdout_frac=1, then we dont care about trial order; otherwise, we're doing cross-val and we want to preserve the order of trials and we did NOT allow replacement when sampling (hence save_inds=new_inds)
-        save_inds = new_inds if holdout_frac<1 else range(len(new_inds));
-        f0arr[con][sf][save_inds]= data['f0arr'][val_con][val_sf][0][new_inds]; # internal [0] is again due to poor indexing
-        if phAdjusted==1:
-          f1arr[con][sf][save_inds] = project_resp([f1amps[new_inds]], [f1phs[new_inds]], phAdv_model, [all_opts[sf]], disp=0)[0];
-        elif phAdjusted==0:
-          f1arr[con][sf][save_inds] = np.multiply(f1amps[new_inds], np.cos(np.deg2rad(mean_ph) - np.deg2rad(f1phs[new_inds])));
-        elif phAdjusted==-1:
-          f1arr[con][sf][save_inds] = f1amps[new_inds];
-      else:
-        if phAdjusted==1:
-          f1arr[con][sf][0:len(non_nan)] = project_resp([f1amps], [f1phs], phAdv_model, [all_opts[sf]], disp=0)[0];
-          f1arr_prePhCorr[con][sf][0:len(non_nan)] = f1amps;
-        elif phAdjusted==0:
-          f1arr[con][sf][0:len(non_nan)] = np.multiply(f1amps, np.cos(np.deg2rad(mean_ph) - np.deg2rad(f1phs)));
-        elif phAdjusted==-1:
-          f1arr[con][sf][0:len(non_nan)] = f1amps;
-      '''
+  ### [end of loop over conditions] NOW, make the phAmp corrections, take means, etc
+  # -- phAdv_model is used to project the responses; all_opts is organized by SF (ascending)
+  phAdv_model, all_opts = df.phase_advance_fit(data, None, 'phAdv_dummy', dir=dir, to_save=0);
 
-      # take mean, since some conditions have repeats - just average them
-      # --- this applies regardless of phAdjustment, since the amplitudes would then be corrected
-      f0mean[con, sf] = np.nanmean(f0arr[con][sf]); #np.mean(data['f0'][val_con][val_sf]);
-      f0sem[con, sf] = sem(f0arr[con][sf], nan_policy='omit'); #np.mean(data['f0sem'][val_con][val_sf]);
-      f1mean[con, sf] = np.nanmean(f1arr[con][sf]); #np.mean(data['f1'][val_con][val_sf]);
-      # --- TEMPORARY?
-      mean_amp, mean_ph,_,_ = polar_vec_mean([f1amps], [f1phs]);
-      if phAdjusted==1:
-        f1mean_phCorrOnMeans[con, sf] = project_resp([mean_amp], [mean_ph], phAdv_model, [all_opts[sf]], disp=0)[0];
-      # --- end TEMPORARY?
-      #f1mean_prePhCorr[con, sf] = polar_vec_mean(f1amps, f1phs);
-      f1sem[con, sf] = sem(f1arr[con][sf], nan_policy='omit'); #np.mean(data['f1sem'][val_con][val_sf]);
+  # NOW, we go through by condition and store the (corrected, if applicable) answers
+  # compute the mean amp, mean ph for vecF1 corrections (apply all data to resample and nonresampled)
+  for con, sf in itertools.product(range(len(all_cons)), range(len(all_sfs))):
+    f1amp_curr = nan_rm(f1arr_prePhCorr[con][sf]);
+    f1ph_curr = nan_rm(f1phs[con][sf]);
+    mean_amp, mean_ph,_,_ = polar_vec_mean([f1amp_curr], [f1ph_curr]);
+
+    if phAdjusted==1:
+      f1arr[con][sf][range(len(f1amp_curr))] = project_resp([f1amp_curr], [f1ph_curr], phAdv_model, [all_opts[sf]], disp=0)[0];
+    elif phAdjusted==0:
+      f1arr[con][sf][range(len(f1amp_curr))] = np.multiply(f1amp_curr, np.cos(np.deg2rad(mean_ph) - np.deg2rad(f1ph_curr)));
+    elif phAdjusted==-1:
+      f1arr[con][sf][range(len(f1amp_curr))] = f1amp_curr;
+
+    # take mean, since some conditions have repeats - just average them
+    # --- this applies regardless of phAdjustment, since the amplitudes would then be corrected
+    f0mean[con, sf] = np.nanmean(f0arr[con][sf]); #np.mean(data['f0'][val_con][val_sf]);
+    f0sem[con, sf] = sem(f0arr[con][sf], nan_policy='omit'); #np.mean(data['f0sem'][val_con][val_sf]);
+    f1mean[con, sf] = np.nanmean(f1arr[con][sf]); #np.mean(data['f1'][val_con][val_sf]);
+    if phAdjusted==1: # instead of projecting individual responses, we project on the mean
+      f1mean_phCorrOnMeans[con, sf] = project_resp([mean_amp], [mean_ph], phAdv_model, [all_opts[sf]], disp=0)[0];
+    f1sem[con, sf] = sem(f1arr[con][sf], nan_policy='omit'); #np.mean(data['f1sem'][val_con][val_sf]);
 
   f0['mean'] = f0mean;
   f0['sem'] = f0sem;
-  #f1['mean'] = f1mean;
-  f1['mean'] = f1mean_phCorrOnMeans;
-  #f1['mean_phCorrOnMeans'] = f1mean_phCorrOnMeans;
-  #f1['mean_prePhCorr'] = f1mean_prePhCorr;
+  f1['mean'] = f1mean_phCorrOnMeans; # was previously f1mean...
   f1['sem'] = f1sem;
 
   return [f0, f1], [all_cons, all_sfs], [f0arr, f1arr]#; [f0arr, f1arr, f1arr_prePhCorr];

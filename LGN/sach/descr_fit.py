@@ -310,7 +310,9 @@ def fit_descr_DoG(cell_num, data_loc, dogBase, n_repeats = 15, loss_type = 3, Do
       f1arr = copy.copy(f1arr_ref);
       f1arr[con_ind, sf_ind] = np.nan;
     else:
-      to_unpack = hf.tabulateResponses(data, resample, phAdjusted=phAdj, dir=dir, cross_val=cross_val);
+      # we need to COPY data so as to not overwrite the original data through consecutive resampling
+      dt = copy.deepcopy(data);
+      to_unpack = hf.tabulateResponses(dt, resample, phAdjusted=phAdj, dir=dir, cross_val=cross_val);
       [_, f1] = to_unpack[0];
       [_, f1arr] = to_unpack[2];
       # unpack the dictionary of responses (nested --> f1arr[con][sf]) into conXsfXrespXrepeat
@@ -506,7 +508,7 @@ if __name__ == '__main__':
 
     rvcBase = 'rvcFits%s_220531' % HPC;
     phBase = 'phAdv%s_220531' % HPC;
-    dogBase = 'descrFits%s_s220531' % HPC;
+    dogBase = 'descrFits%s_s220607' % HPC;
     #rvcBase = 'rvcFits%s_220412' % HPC;
     #phBase = 'phAdv%s_220412' % HPC;
 
