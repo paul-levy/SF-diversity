@@ -134,7 +134,7 @@ if area == 'LGN':
   #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
   dogMod = 1; # 1 (sach) or 2 (Tony)
   jointType = 7; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
-  dogNames = ['descrFitsHPC_220531_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220531_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
+  dogNames = ['descrFitsHPC_220606_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220531_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
   #jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
   #dogNames = ['descrFitsHPC_220531_phAdj_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220531_phAdj_sqrt_sach_JTsurrShape.npy'];
 
@@ -145,8 +145,8 @@ if area == 'LGN':
   #dogNames = ['descrFits_191023_sach_sach.npy'];
   #descrNames = ['descrFits_200507_sqrt_flex.npy'];
 
-  rvcMods = [0,0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
-  rvcNames = ['rvcFitsHPC_220531_pos.npy', 'rvcFitsHPC_220531_pos.npy'];
+  rvcMods = [1,1]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
+  rvcNames = ['rvcFitsHPC_220531_NR_pos.npy', 'rvcFitsHPC_220531_NR_pos.npy'];
   #rvcNames = ['rvcFitsHPC_220506_vecF1.npy', 'rvcFitsHPC_220508_vecF1.npy'];
   #rvcNames = ['rvcFits_210914_pos.npy', 'rvcFitsHPC_220219_pos.npy'];
   #rvcNames = ['rvcFits_210914_pos.npy', 'rvcFits_211006_pos.npy'];
@@ -172,10 +172,10 @@ if area == 'LGN':
   #### these are now defaults in hf.jl_create - but here, nonetheless, for reference!
 
   # any parameters we need for analysis below?
-  #varExplThresh = 65; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  #dog_varExplThresh = 65; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  dog_varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  varExplThresh = 65; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  dog_varExplThresh = 65; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  #varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  #dog_varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
 
   sf_range = [0.01, 10]; # allowed values of 'mu' for fits - see descr_fit.py for details
 

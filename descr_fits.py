@@ -909,7 +909,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
 
         # set up ref_params, ref_rc_val; will only be used IF applicable
         ref_params = prms[-1]; # high contrast condition
-        ref_rc_val = totPrm[2];
+        ref_rc_val = totPrm[2] if joint>0 else None;
         
         for ii, prms_curr in enumerate(prms):
           # we'll iterate over the parameters, which are fit for each contrast (the final dimension of test_mn)
@@ -967,21 +967,6 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
             prefSf[boot_i, d, con] = pSf[con];
             charFreq[boot_i, d, con] = cFreq[con];
             success[boot_i, d, con] = succ[con];
-
-      # DO NOT update prevFits, since each one is handled per dispersion...
-      '''
-      if prevFits is not None: # then we need to update prevFits (this will only happen if "not resample", i.e. not bootstrapping)
-        print('a ha!');
-        pdb.set_trace();
-        prevFits['NLL'] = bestNLL, axis=0);
-        prevFits['params'] = np.squeeze(currParams, axis=0);
-        prevFits['varExpl'] = np.squeeze(varExpl, axis=0);
-        prevFits['prefSf'] = np.squeeze(prefSf, axis=0);
-        prevFits['charFreq'] = np.squeeze(charFreq, axis=0);
-        if joint>0:
-          prevFits['totalNLL'] = np.squeeze(totalNLL, axis=0);
-          prevFits['paramList'] = np.squeeze((paramList, axis=0);
-      '''
 
   ###### [END OF BOTH DISP AND BOOT LOOPS]
   # 4. Pack the results, depending on boot or not; then return and/or save, if needed
