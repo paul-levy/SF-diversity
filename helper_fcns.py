@@ -2833,7 +2833,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
             # the slope will be calculated on log contrast, and will start from the lowest contrast
             # -- i.e. xc = np.power(10, init+slope*log10(con))
             # to start, let's assume no slope, so the intercept should be equal to our xc guess
-            init_intercept, init_slope = random_in_range([-1.3, -0.6])[0], random_in_range([-0.1,0.2])[0]
+            init_intercept, init_slope = random_in_range([-1.3, -0.6])[0], random_in_range([-0.15,0.15])[0]
             #init_intercept, init_slope = np.log10(ref_init[1]), 0;
             allInitParams = [init_intercept, init_slope, ref_init[3]] if joint == 7 else [init_intercept, init_slope, ref_init[2]];
       else: # d-DoG-S models

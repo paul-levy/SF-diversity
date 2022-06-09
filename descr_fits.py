@@ -20,7 +20,7 @@ else:
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #dogName = 'descrFits%s_220531' % hpcSuff;
-dogName = 'descrFits%s_220607' % hpcSuff;
+dogName = 'descrFits%s_220610' % hpcSuff;
 #dogName = 'descrFits%s_220520' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220531' % hpcSuff
@@ -1224,10 +1224,15 @@ if __name__ == '__main__':
       if descr_fits == 1:
 
         if nBoots > 1:
-          n_repeats = 2 if joint>0 else 5; # fewer if repeat
+          if dog_model==1: # if if just DoG and not d-DoG-S
+            n_repeats = 5 if joint>0 else 7;
+          else:
+            n_repeats = 2 if joint>0 else 5;
         else:
-          #n_repeats = 50 if joint>0 else 100; # was previously be 3, 15, then 7, 15
-          n_repeats = 5 if joint>0 else 15; # was previously be 3, 15
+          if dog_model==1: # if if just DoG and not d-DoG-S
+            n_repeats = 25 if joint>0 else 50; # was previously be 3, 15, then 7, 15
+          else:
+            n_repeats = 5 if joint>0 else 15; # was previously be 3, 15
           
         print('descr fits! --> %03d boots, cross_val %.2f' % (nBoots, cross_val if cross_val is not None else -99));
 
@@ -1275,7 +1280,10 @@ if __name__ == '__main__':
         rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, nBoots=nBoots);
       if descr_fits == 1:
         if nBoots > 1:
-          n_repeats = 2 if joint>0 else 5; # fewer if repeat
+          if dog_model<3: # i.e. DoG, not d-DoG-S
+            n_repeats = 8 if joint>0 else 10;
+          else:
+            n_repeats = 2 if joint>0 else 5; # fewer if repeat
         else:
           n_repeats = 15 if joint>0 else 20; # was previously be 3, 15, then 7, 15
 

@@ -508,7 +508,7 @@ if __name__ == '__main__':
 
     rvcBase = 'rvcFits%s_220531' % HPC;
     phBase = 'phAdv%s_220531' % HPC;
-    dogBase = 'descrFits%s_s220606' % HPC;
+    dogBase = 'descrFits%s_s220609' % HPC;
     #rvcBase = 'rvcFits%s_220412' % HPC;
     #phBase = 'phAdv%s_220412' % HPC;
 
@@ -586,9 +586,15 @@ if __name__ == '__main__':
       if DoGmodel >= 0:
         print('DoG model is %d' % DoGmodel);
         if nBoots > 1:
-          n_repeats = 2 if joint>0 else 5; # fewer if repeat
+          if DoGmodel==1: # if if just DoG and not d-DoG-S
+            n_repeats = 5 if joint>0 else 7;
+          else:
+            n_repeats = 2 if joint>0 else 5;
         else:
-          n_repeats = 5 if joint>0 else 12; # was previously be 3, 15, then 7, 15
+          if DoGmodel==1: # if if just DoG and not d-DoG-S
+            n_repeats = 25 if joint>0 else 50; # was previously be 3, 15, then 7, 15
+          else:
+            n_repeats = 5 if joint>0 else 15; # was previously be 3, 15
 
         with mp.Pool(processes = nCpu) as pool:
           descr_perCell = partial(fit_descr_DoG, data_loc=data_loc, dogBase=dogBase, n_repeats=n_repeats, loss_type=loss_type, DoGmodel=DoGmodel, joint=joint, fracSig=fracSig, nBoots=nBoots, phAdj=phAdj, to_save=0, cross_val=cross_val);
