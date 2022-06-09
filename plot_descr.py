@@ -84,7 +84,11 @@ if len(sys.argv) > 10: # plot prediction to all stimuli from spatial rep. of d-D
 else:
   ddogs_pred = 1;
 if len(sys.argv) > 11:
-  forceLog = int(sys.argv[11]); # used for byDisp/allCons_... (sf plots)
+  plot_sem_on_log = int(sys.argv[11]);
+else:
+  plot_sem_on_log = 1; # plot the S.E.M. for log SF plots?
+if len(sys.argv) > 12:
+  forceLog = int(sys.argv[12]); # used for byDisp/allCons_... (sf plots)
 else:
   forceLog = 0;
 
@@ -104,7 +108,7 @@ expName = hf.get_datalist(expDir, force_full=1);
 hpc_str = 'HPC' if isHPC else '';
 if expDir == 'LGN/':# or expDir == 'altExp':
     #descrBase = 'descrFits%s_220511' % hpc_str;
-    descrBase = 'descrFits%s_220606' % hpc_str;
+    descrBase = 'descrFits%s_220609' % hpc_str;
 else:
     descrBase = 'descrFits%s_220531' % hpc_str;
     #descrBase = 'descrFits%s_220410' % hpc_str;
@@ -428,16 +432,22 @@ for d in range(nDisps):
             to_sub = np.array(0);
           plot_resp = plot_resp - to_sub;
 
-        curr_line, = dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], '-o', clip_on=False, \
+        if plot_sem_on_log:
+            sem_curr = respSem[d, v_sfs, v_cons[c]];
+            dispAx[d][0].errorbar(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], sem_curr[plot_resp>minToPlot], fmt='o', linestyle='-', clip_on=False, \
+                                       color=col, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
+            dispAx[d][1].errorbar(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], sem_curr[plot_resp>minToPlot], fmt='o', clip_on=False, \
+                                       color=col);
+        else:
+            dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], '-o', clip_on=False, \
                                        color=col, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
         if baseline_resp > 0:
             dispAx[d][0].axhline(baseline_resp, linestyle='--', color='k');
-        lines.append(curr_line);
  
         # plot descr fit [1]
         prms_curr = descrParams[d, v_cons[c]];
         descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
-        dispAx[d][1].plot(sfs_plot, descrResp-to_sub, color=col);
+        dispAx[d][1].plot(sfs_plot, descrResp-to_sub, color=col, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
 
     for i in range(len(dispCurr)):
       dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
@@ -464,8 +474,9 @@ for d in range(nDisps):
       dispAx[d][i].set_title('D%02d - sf tuning' % (d+1));
       dispAx[d][i].legend(fontsize='large'); 
 
+sem_str = '_sem' if plot_sem_on_log else '';
 saveName = "/allCons_%scell_%03d.pdf" % (logSuffix, cellNum)
-full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
+full_save = os.path.dirname(str(save_loc + 'byDisp%s%s/' % (rvcFlag, sem_str)));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);

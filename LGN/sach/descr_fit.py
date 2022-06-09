@@ -508,7 +508,7 @@ if __name__ == '__main__':
 
     rvcBase = 'rvcFits%s_220531' % HPC;
     phBase = 'phAdv%s_220531' % HPC;
-    dogBase = 'descrFits%s_s220607' % HPC;
+    dogBase = 'descrFits%s_s220606' % HPC;
     #rvcBase = 'rvcFits%s_220412' % HPC;
     #phBase = 'phAdv%s_220412' % HPC;
 

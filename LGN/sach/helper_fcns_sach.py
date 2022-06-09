@@ -501,7 +501,7 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, di
   val_size = np.where(data['cntr_size']==cntr_sizes[-1])[0]; # why specifying size? Cell 33 has multiple sizes!!!
   if ~np.isnan(data['opac1'][0]):
     # then also make sure that the size takes into account when the opacity of the second grating is 0 (i.e. off)
-    val_size = np.where(np.logical_and(val_size, data['opac1'][val_size]==0))[-1][0];
+    val_size = np.where(np.logical_and(val_size, data['opac1'][val_size]==0))[-1];
   for con in range(len(all_cons)):
     val_con = np.where(data['cont'][val_size] == all_cons[con])[0];
     f0arr[con] = dict();
