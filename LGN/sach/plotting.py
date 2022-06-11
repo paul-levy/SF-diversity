@@ -17,13 +17,29 @@ import sys
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
 from matplotlib import rcParams
-rcParams['font.size'] = 20;
-rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['lines.linewidth'] = 2.5;
-rcParams['axes.linewidth'] = 1.5;
-rcParams['lines.markersize'] = 5;
-rcParams['font.style'] = 'oblique';
+for i in range(2):
+    # must run twice for changes to take effect?
+    from matplotlib import rcParams, cm
+    rcParams['font.family'] = 'sans-serif'
+    # rcParams['font.sans-serif'] = ['Helvetica']
+    rcParams['font.style'] = 'oblique'
+    rcParams['font.size'] = 30;
+    rcParams['pdf.fonttype'] = 3 # should be 42, but there are kerning issues
+    rcParams['ps.fonttype'] = 3 # should be 42, but there are kerning issues
+    rcParams['lines.linewidth'] = 3;
+    rcParams['lines.markeredgewidth'] = 0; # remove edge??                                                                                                                               
+    rcParams['axes.linewidth'] = 3;
+    rcParams['lines.markersize'] = 12; # 8 is the default                                                                                                                                
+    rcParams['font.style'] = 'oblique';
+
+    rcParams['xtick.major.size'] = 25
+    rcParams['xtick.minor.size'] = 12
+    rcParams['ytick.major.size'] = 25
+    rcParams['ytick.minor.size'] = 12; # i.e. don't have minor ticks on y...                                                                                                              
+    rcParams['xtick.major.width'] = 2
+    rcParams['xtick.minor.width'] = 2
+    rcParams['ytick.major.width'] = 2
+    rcParams['ytick.minor.width'] = 2
 
 which_cell   = int(sys.argv[1]);
 sf_loss_type = int(sys.argv[2]);
@@ -32,7 +48,14 @@ rvcMod       = int(sys.argv[4]);
 joint        = int(sys.argv[5]);
 isHPC        = int(sys.argv[6]);
 phAdj        = int(sys.argv[7]);
-fromFile     = int(sys.argv[8]); 
+if len(sys.argv) > 8:
+  plot_sem_on_log = int(sys.argv[8]);
+else:
+  plot_sem_on_log = 1; # plot the S.E.M. for log SF plots?
+if len(sys.argv) > 9:
+  fromFile     = int(sys.argv[9]); 
+else:
+  fromFile = 0; # basically deprecated...
 
 loc_base = os.getcwd() + '/';
 
@@ -51,7 +74,7 @@ zSub = 0; # are we loading fits that were fit to responses adjusted s.t. the low
 ## NOTE: SF tuning curves with with zSub; RVCs are not, so we must subtract respAdj from the RVC curve to align with what we fit (i.e. the zSub'd data)
 #######
 HPC = 'HPC' if isHPC else '';
-fLname = 'descrFits%s_s220531' % HPC;
+fLname = 'descrFits%s_s220609' % HPC;
 #fLname = 'descrFits%s_s220520' % HPC;
 mod_str = hf.descrMod_name(sf_DoG_model);
 fLname_full = hf.descrFit_name(sf_loss_type, fLname, mod_str, joint=joint, phAdj=phAdj);
@@ -119,8 +142,17 @@ for c in reversed(range(nCons)):
     respAbBaseline = np.reshape(f1['mean'][c, val_sfs], (len(val_sfs), ));
     respVar = np.reshape(f1['sem'][c, val_sfs], (len(val_sfs), )); 
     abvBound = respAbBaseline>minResp_toPlot;
-    # DO NOT actually plot error bar on these...
-    ax[0].plot(all_sfs[val_sfs][abvBound], respAbBaseline[abvBound] - respAdj, '-o', clip_on=False, color=col, label='%d%%' % (int(100*np.round(all_cons[c], conDig))))
+    # DO NOT actually plot error bar on these...unless plot_sem_on_log (for publications)
+    if plot_sem_on_log:
+      # errbars should be (2,n_sfs)
+      high_err = respVar; # no problem with going to higher values
+      low_err = np.minimum(respVar, respAbBaseline-minResp_toPlot-1e-2); # i.e. don't allow us to make the err any lower than where the plot will cut-off (incl. negatives)
+      errs = np.vstack((low_err, high_err));
+      ax[0].errorbar(all_sfs[val_sfs][abvBound], respAbBaseline[abvBound] - respAdj, errs[:, abvBound], fmt='o', linestyle='-', clip_on=False, color=col, label='%d%%' % (int(100*np.round(all_cons[c], conDig))));
+      # AND add it to the model plot, too (without label, line)
+      ax[1].errorbar(all_sfs[val_sfs][abvBound], respAbBaseline[abvBound] - respAdj, errs[:, abvBound], fmt='o', clip_on=False, color=col);
+    else:
+      ax[0].plot(all_sfs[val_sfs][abvBound], respAbBaseline[abvBound] - respAdj, '-o', clip_on=False, color=col, label='%d%%' % (int(100*np.round(all_cons[c], conDig))))
  
     # then descriptive fit
     sfs_plot = np.geomspace(all_sfs[val_sfs[0]], all_sfs[val_sfs[-1]], 100);
@@ -133,7 +165,6 @@ for i in range(2):
   #ax[i].set_aspect('equal', 'box'); 
   ax[i].set_xlim((0.5*np.min(all_sfs[val_sfs]), 1.2*np.max(all_sfs[val_sfs])));
   ax[i].set_ylim((minResp_toPlot, 300)); # common y axis for ALL plots
-  #ax[i].set_ylim((5e-2, 1.5*maxResp));
 
   #ax.set_xscale('symlog', linthreshx=all_sfs[1]); # all_sfs[0] = 0, but all_sfs[0]>1
   ax[i].set_xscale('log');
@@ -152,8 +183,9 @@ for i in range(2):
 
 sns.despine(offset=10, trim=False); 
 
+sem_str = '_sem' if plot_sem_on_log else '';
 saveName = "/allCons_cell_%03d.pdf" % (which_cell)
-full_save = os.path.dirname(str(save_loc + 'sfTuning/'));
+full_save = os.path.dirname(str(save_loc + 'sfTuning%s/' % sem_str));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);

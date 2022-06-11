@@ -47,7 +47,6 @@ for i in range(2):
     rcParams['xtick.minor.size'] = 12
     rcParams['ytick.major.size'] = 25
     rcParams['ytick.minor.size'] = 12; # i.e. don't have minor ticks on y...                                                                                                              
-
     rcParams['xtick.major.width'] = 2
     rcParams['xtick.minor.width'] = 2
     rcParams['ytick.major.width'] = 2
@@ -434,9 +433,13 @@ for d in range(nDisps):
 
         if plot_sem_on_log:
             sem_curr = respSem[d, v_sfs, v_cons[c]];
-            dispAx[d][0].errorbar(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], sem_curr[plot_resp>minToPlot], fmt='o', linestyle='-', clip_on=False, \
+            # errbars should be (2,n_sfs)
+            high_err = sem_curr; # no problem with going to higher values
+            low_err = np.minimum(sem_curr, plot_resp-minToPlot-1e-2); # i.e. don't allow us to make the err any lower than where the plot will cut-off (incl. negatives)
+            errs = np.vstack((low_err, high_err));
+            dispAx[d][0].errorbar(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', linestyle='-', clip_on=True, \
                                        color=col, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
-            dispAx[d][1].errorbar(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], sem_curr[plot_resp>minToPlot], fmt='o', clip_on=False, \
+            dispAx[d][1].errorbar(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', clip_on=True, \
                                        color=col);
         else:
             dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], '-o', clip_on=False, \
@@ -447,7 +450,7 @@ for d in range(nDisps):
         # plot descr fit [1]
         prms_curr = descrParams[d, v_cons[c]];
         descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
-        dispAx[d][1].plot(sfs_plot, descrResp-to_sub, color=col, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
+        dispAx[d][1].plot(sfs_plot, descrResp-to_sub, color=col, clip_on=True, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
 
     for i in range(len(dispCurr)):
       dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
@@ -458,6 +461,7 @@ for d in range(nDisps):
         #dispAx[d][i].set_ylim((minToPlot, 1.5*maxResp));
         dispAx[d][i].set_ylim((5e-1, 300)); # common y axis for ALL plots
         logSuffix = 'log_';
+        dispAx[d][i].set_aspect('equal'); # if both axes are log, must make equal scales!
       else:
         dispAx[d][i].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
         logSuffix = '';

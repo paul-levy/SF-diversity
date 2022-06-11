@@ -3420,13 +3420,15 @@ def get_rvcResp(params, curr_cons, rvcMod):
 ##################################################################
 ##################################################################
 
-def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0):
+def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0, reducedSave=False):
 
    ''' - bootThresh (fraction of time for which a boot metric must be defined in order to be included in analysis)
    '''
 
    np = numpy;
    print('%s/%d' % (expDir, 1+cell_ind));
+
+   arrtype = np.float32; # float32, rather than float64
 
    ###########
    ### meta parameters      
@@ -3540,13 +3542,13 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    except: # but if it's not done, try to do those analyses here
      try:
        basic_names, basic_order = dataList['basicProgName'][cell_ind], dataList['basicProgOrder'];
-       basics_list = get_basic_tunings(basic_names, basic_order);
+       basics_list = get_basic_tunings(basic_names, basic_order, reducedSave=reducedSave);
      except:
        try:
          # we've already put the basics in the data structure... (i.e. post-sorting 2021 data)
          basic_names = ['','','','',''];
          basic_order = ['rf', 'sf', 'tf', 'rvc', 'ori']; # order doesn't matter if they are already loaded
-         basics_list = get_basic_tunings(basic_names, basic_order, preProc=cell)
+         basics_list = get_basic_tunings(basic_names, basic_order, preProc=cell, reducedSave=reducedSave)
        except:
          basics_list = None;
 
@@ -3620,16 +3622,18 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    # --- then fill for the above in a programmatc fashion
    for name, mods, size, boots in zip(metrs, metrs_which_mod, metrs_size, metrs_has_boot):
       for mod in mods:
+         #if reducedSave and mod=='':
+         #   continue; # i.e. don't bother with non-DoG for reduced save
          curr_key = '%s%s' % (mod, name);
          dataMetrics[curr_key] = np.nan * np.zeros(size);
          if boots is not None:
             for boot in boots:
                boot_key = 'boot_%s%s' % (curr_key, boot);
-               dataMetrics[boot_key] = np.nan * np.zeros(size);
+               dataMetrics[boot_key] = np.nan * np.zeros(size, dtype=arrtype);
 
    # bwHalf, bw34, pSf, sfVar, sfCom, sf70, dog_sf70, dog_charFreq,  dog_bwHalfDiffs, dog_bw34Diffs, dog_pSfRats
    # -- evaluated from data at 1:.33 contrast (only for single gratings)
-   diffsAtThirdCon = np.zeros((nDisps, 11, )) * np.nan;
+   diffsAtThirdCon = np.zeros((nDisps, 11, ), dtype=arrtype) * np.nan;
 
    # let's also keep a simple array for the index for full, one-third, and lowest valid contrast given descr. sf fit
    # -- why nDisps, 4? full -- one-third -- lowest (with descr.) -- lowest (with DoG)
@@ -3735,11 +3739,11 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    for mod, sz in zip(['', 'dog_'], [boots_size_descr, boots_size_dog]):
       for key in ['sf70', 'bwHalf', 'bw34', 'pSf']:
          curr_key = 'boot_%s%s_values' % (mod, key);
-         dataMetrics[curr_key] = np.zeros(sz) * np.nan;
+         dataMetrics[curr_key] = np.zeros(sz, dtype=arrtype) * np.nan;
    # and the "one-off"s, since they are different
-   dataMetrics['boot_dog_charFreq_values'] = np.zeros(boots_size_dog) * np.nan; # gain/radius/volume for center, then surround
-   dataMetrics['boot_dog_mech'] = np.zeros((nDisps, nCons, 6, nBoots_dog)) * np.nan; # gain/radius/volume for center, then surround
-   dataMetrics['c50Rats'] = np.nan * np.zeros((nDisps, nSfs, nSfs));
+   dataMetrics['boot_dog_charFreq_values'] = np.zeros(boots_size_dog, dtype=arrtype) * np.nan; # gain/radius/volume for center, then surround
+   dataMetrics['boot_dog_mech'] = np.zeros((nDisps, nCons, 6, nBoots_dog), dtype=arrtype) * np.nan; # gain/radius/volume for center, then surround
+   dataMetrics['c50Rats'] = np.nan * np.zeros((nDisps, nSfs, nSfs), dtype=arrtype);
 
    for d in range(nDisps):
      #######
@@ -3760,13 +3764,15 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        curr_resps = sfTuning[d, curr_sfInd, c];
        sf_gt0 = np.where(curr_sfs>0)[0]; # if we include a zero-SF condition, then everything goes to zero!
 
-       dataMetrics['sfCom'][d, c] = sf_com(curr_resps[sf_gt0], curr_sfs[sf_gt0])
-       dataMetrics['sfVar'][d, c] = sf_var(curr_resps[sf_gt0], curr_sfs[sf_gt0], dataMetrics['sfCom'][d, c]);
+       if True:
+       #if reducedSave==False:
+       #  dataMetrics['sfCom'][d, c] = sf_com(curr_resps[sf_gt0], curr_sfs[sf_gt0])
+       #  dataMetrics['sfVar'][d, c] = sf_var(curr_resps[sf_gt0], curr_sfs[sf_gt0], dataMetrics['sfCom'][d, c]);
 
-       # get the c.o.m. based on the restricted set of SFs, only
-       if cut_sf is not None:
-         cut_sfs, cut_resps = np.array(stimVals[2])[cut_sf], sfTuning[d, cut_sf, c];
-         dataMetrics['sfComCut'][d, c] = sf_com(cut_resps, cut_sfs)
+         # get the c.o.m. based on the restricted set of SFs, only
+         if cut_sf is not None:
+           cut_sfs, cut_resps = np.array(stimVals[2])[cut_sf], sfTuning[d, cut_sf, c];
+           dataMetrics['sfComCut'][d, c] = sf_com(cut_resps, cut_sfs)
 
        # first, DoG fit
        if cell_ind in dogFits:
@@ -3786,16 +3792,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
              # on data
              dataMetrics['dog_pSf'][d, c] = dogFits[cell_ind]['prefSf'][d, c]
              dataMetrics['dog_charFreq'][d, c] = dogFits[cell_ind]['charFreq'][d, c]
-             '''
-             if is_mod_DoG(dogMod):
-                dataMetrics['dog_charFreq'][d, c] = dogFits[cell_ind]['charFreq'][d, c]
-             else: # get center radius of central DoG
-                try:
-                   dataMetrics['dog_charFreq'][d, c] = 1./(np.pi*dogFits[cell_ind]['params'][d,c,1]); # this index is the center radius --> 1/f is charFreq
-                except Exception as e:
-                   print('----jl_perCell error [%s/%02d]: %s' % (expDir, cell_ind+1, e));
-                   pass;
-             '''
+
              # get the params and do bandwidth, high-freq. cut-off measures
              dog_params_curr = dogFits[cell_ind]['params'][d, c];
              for ky,height in zip(['dog_bwHalf', 'dog_bw34'], [0.5, 0.75]):
@@ -3837,12 +3834,6 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                   elif 'pSf' in metr or 'charFreq' in metr:
                      # --- must manually specify for pSf, since we call it "pSf" but fits have "prefSf"
                      dataMetrics[curr_key][d,c] = dogFits[cell_ind]['boot_%s' % metr][:, d, c] if 'charFreq' in metr else dogFits[cell_ind]['boot_prefSf'][:, d, c]
-                     '''
-                     if is_mod_DoG(dogMod):
-                        dataMetrics[curr_key][d,c] = dogFits[cell_ind]['boot_%s' % metr][:, d, c] if 'charFreq' in metr else dogFits[cell_ind]['boot_prefSf'][:, d, c]
-                     else: # d-DoG-S, as of 22.03.01, need to compute charFreq here from the center radius (index=1)
-                        dataMetrics[curr_key][d,c] = 1./(np.pi*boot_prms[:, d, c, 1]) if 'charFreq' in metr else dogFits[cell_ind]['boot_prefSf'][:, d, c]
-                     '''
                   elif 'bw' in metr:
                      height = 0.5 if 'Half' in metr else 0.75; # assumes it's either half or 3/4th height
                      dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=dogMod)[1] for boot_i in range(boot_prms.shape[0])]);
@@ -3851,7 +3842,6 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                      if 'bw' in metr and 'stdLog' in boot_metr:
                         continue; # don't compute log for bandwidth stuff
                      boot_key = 'boot_dog_%s%s' % (metr, boot_metr);
-                     #if n_nonNan >= bootThresh*boot_prms.shape[0]: # i.e. BW should be defined at least X% of the time!
                      try: # need the if/else to handle the case where two parantheses need closing
                         dataMetrics[boot_key][d,c] = eval('%sdataMetrics[curr_key][d,c]))' % comp) if 'stdLog' in boot_metr else eval('%sdataMetrics[curr_key][d,c])' % comp);
                      except Exception as e:
@@ -3866,7 +3856,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
            pass 
 
        # then, non-DoG descr fit
-       if cell_ind in descrFits:
+       if cell_ind in descrFits:# and reducedSave==False:
          try:
            varExpl = descrFits[cell_ind]['varExpl'][d, c];
            thresh_to_use = varExplThresh;
@@ -3919,7 +3909,6 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                      if 'bw' in metr and 'stdLog' in boot_metr:
                         continue; # don't compute log for bandwidth stuff
                      boot_key = 'boot_%s%s' % (metr, boot_metr);
-                     #if n_nonNan >= bootThresh*boot_prms.shape[0]: # i.e. BW should be defined at least X% of the time!
                      try: # need the if/else to handle the case where two parantheses need closing
                         dataMetrics[boot_key][d,c] = eval('%sdataMetrics[curr_key][d,c]))' % comp) if 'stdLog' in boot_metr else eval('%sdataMetrics[curr_key][d,c])' % comp);
                      except:
@@ -3988,28 +3977,31 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      ## Now, after going through all cons/sfs, compute ratios/differences
      # first, with contrast
      #if oldVersion: # only do these things if we want the "old" jointList --- currently (21.09) don't use them and they take up extra space in the structure
-     for comb in itertools.combinations(range(nCons), 2):
-       # first, in raw values [0] and per log2 contrast change [1] (i.e. log2(highCon/lowCon))
-       conChange = np.log2(cons[comb[1]]/cons[comb[0]]);
+     '''
+     if reducedSave==False: # i.e. only if we want to save everything
+       for comb in itertools.combinations(range(nCons), 2):
+         # first, in raw values [0] and per log2 contrast change [1] (i.e. log2(highCon/lowCon))
+         conChange = np.log2(cons[comb[1]]/cons[comb[0]]);
 
-       # NOTE: For pSf, we will log2 the ratio, such that a ratio of 0 
-       # reflects the prefSf remaining constant (i.e. log2(1/1)-->0)
-       outsAll = ['bwHalfDiffs', 'bw34Diffs', 'pSfRats', 'sf70Rats', 'dog_charFreqRats', 'sfVarDiffs', 'sfComRats']
-       modsAll = [mods_pfx, mods_pfx, mods_pfx, mods_pfx, no_pfx, no_pfx, no_pfx];
-       insAll = ['bwHalf', 'bw34', 'pSf', 'sf70', 'dog_charFreq', 'sfVar', 'sfCom'];
-       for outKey, currMods, inKey in zip(outsAll, modsAll, insAll):
-          for currMod in currMods:
-            curr_in = '%s%s' % (currMod, inKey);
-            curr_out = '%s%s' % (currMod, outKey);
-            if 'Rat' in outKey:
-               val = np.log2(dataMetrics[curr_in][d,comb[1]] / dataMetrics[curr_in][d,comb[0]]);
-            elif 'Diff' in outKey:
-               val = dataMetrics[curr_in][d,comb[1]] - dataMetrics[curr_in][d,comb[0]];
-            dataMetrics[curr_out][d,comb[0], comb[1]] = [val, val/conChange];
+         # NOTE: For pSf, we will log2 the ratio, such that a ratio of 0 
+         # reflects the prefSf remaining constant (i.e. log2(1/1)-->0)
+         outsAll = ['bwHalfDiffs', 'bw34Diffs', 'pSfRats', 'sf70Rats', 'dog_charFreqRats', 'sfVarDiffs', 'sfComRats']
+         modsAll = [mods_pfx, mods_pfx, mods_pfx, mods_pfx, no_pfx, no_pfx, no_pfx];
+         insAll = ['bwHalf', 'bw34', 'pSf', 'sf70', 'dog_charFreq', 'sfVar', 'sfCom'];
+         for outKey, currMods, inKey in zip(outsAll, modsAll, insAll):
+            for currMod in currMods:
+              curr_in = '%s%s' % (currMod, inKey);
+              curr_out = '%s%s' % (currMod, outKey);
+              if 'Rat' in outKey:
+                 val = np.log2(dataMetrics[curr_in][d,comb[1]] / dataMetrics[curr_in][d,comb[0]]);
+              elif 'Diff' in outKey:
+                 val = dataMetrics[curr_in][d,comb[1]] - dataMetrics[curr_in][d,comb[0]];
+              dataMetrics[curr_out][d,comb[0], comb[1]] = [val, val/conChange];
 
-     # then, as function of SF
-     for comb in itertools.permutations(range(nSfs), 2):
-       dataMetrics['c50Rats'][d,comb[0],comb[1]] = dataMetrics['c50'][d,comb[1]] / dataMetrics['c50'][d,comb[0]]
+       # then, as function of SF
+       for comb in itertools.permutations(range(nSfs), 2):
+         dataMetrics['c50Rats'][d,comb[0],comb[1]] = dataMetrics['c50'][d,comb[1]] / dataMetrics['c50'][d,comb[0]]
+     '''
 
    # Now, we make sure that everything we need is in dataMetrics
    # --- as of 21.10.18, mostly everything is added directly above; however, we add the following here
@@ -4122,7 +4114,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    return cellSummary;
 
 def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods,
-              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, jointType=0):
+              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, jointType=0, reducedSave=False):
   ''' create the "super structure" that we use to analyze data across multiple versions of the experiment
       TODO: update this to get proper spikes/tuning measures based on f1/f0 ratio (REQUIRES descrFits to be like rvcFits, i.e. fit F1 or F0 responses, accordingly)
       inputs:
@@ -4177,7 +4169,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     isBB = 1 if 'BB' in expDir else 0;
 
     if toPar:
-      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType)
+      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType, reducedSave=reducedSave)
 
       #if isBB:
       #  oh = perCell_summary(30);
@@ -5957,7 +5949,7 @@ def rvcTune(rvcVals, rvcResps, rvcResps_std, rvcMod=1):
 
 ####
 
-def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None):
+def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None, reducedSave=False):
   ''' wrapper function used to get the derived measures for the basic characterizations
       - basicPaths [the full path to each of the basic tuning program files (xml)]
       - basicProgNames [what order and name for the tunings]
@@ -6021,7 +6013,8 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None
         sf_dict['sfParams'] = sfParams;
         sf_dict['sfParamsDoG'] = sfParamsDoG;
         sf_dict['charFreq'] = dog_charFreq(sfParamsDoG, DoGmodel=1); # 1 is Sach, that's what is used in tfTune
-        sf_dict['sf_exp'] = sf;
+        if not reducedSave:
+           sf_dict['sf_exp'] = sf;
         basic_outputs['sf'] = sf_dict; # TODO: for now, we don't have SF basic tuning (redundant...but should add)
 
       if 'rv' in prog:
@@ -6066,7 +6059,8 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None
         rvc_dict['conGain'] = cg;
         rvc_dict['params'] = params;
         rvc_dict['rvcMod'] = rvcMod;
-        rvc_dict['rvc_exp'] = rv;
+        if not reducedSave:
+           rvc_dict['rvc_exp'] = rv;
 
         basic_outputs['rvc'] = rvc_dict;
 
@@ -6106,7 +6100,8 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None
         tf_dict['tfParams'] = tfParams;
         tf_dict['tfParamsDoG'] = tfParamsDoG;
         tf_dict['charFreq'] = dog_charFreq(tfParamsDoG, DoGmodel=1); # 1 is Sach, that's what is used in tfTune
-        tf_dict['tf_exp'] = tf;
+        if not reducedSave:
+           tf_dict['tf_exp'] = tf;
         basic_outputs['tf'] = tf_dict;
 
       if 'rf' in prog:
@@ -6146,9 +6141,10 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None
         rf_dict['gsf_model'] = mod['gsf']
         rf_dict['suprInd_model'] = mod['sInd']
         rf_dict['surrDiam_model'] = mod['surrDiam'];
-        rf_dict['to_plot'] = to_plot;
         rf_dict['params'] = opt_params;
-        rf_dict['rf_exp'] = rf;
+        if not reducedSave:
+           rf_dict['to_plot'] = to_plot; # this one takes up a lot of memory --> see sizeTune for details
+           rf_dict['rf_exp'] = rf;
         basic_outputs['rfsize'] = rf_dict;
 
       if 'or' in prog:
@@ -6187,7 +6183,8 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None
         ori_dict['bw'] = bw;
         ori_dict['pref'] = pref;
         ori_dict['params'] = params;
-        ori_dict['ori_exp'] = ori;
+        if not reducedSave:
+           ori_dict['ori_exp'] = ori;
         basic_outputs['ori'] = ori_dict
       
     except:

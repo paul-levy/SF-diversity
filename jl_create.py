@@ -134,7 +134,7 @@ if area == 'LGN':
   #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
   dogMod = 1; # 1 (sach) or 2 (Tony)
   jointType = 7; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
-  dogNames = ['descrFitsHPC_220609_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220609_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
+  dogNames = ['descrFitsHPC_220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220609_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
   #dogNames = ['descrFitsHPC_220606alt_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220606_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
   #jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
   #dogNames = ['descrFitsHPC_220606_phAdj_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220606_phAdj_sqrt_sach_JTsurrShape.npy'];
@@ -182,7 +182,7 @@ if area == 'LGN':
 
   # NOTE: the real code for creating the jointList has been moved to helper_fcns!
   # WARNING: This takes ~10 minutes (as of 09.06.19)
-  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType)
+  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType, reducedSave=True)
 
   from datetime import datetime
   suffix = datetime.today().strftime('%y%m%d')
