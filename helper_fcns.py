@@ -2712,12 +2712,13 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     ### otherwise, we're really going to fit here! [i.e. if joint==0]
     # --- NOTE: We never reach here if it's a joint fitting!
     save_all = []; # only used if debug=0
+    sfs_curr = valSfVals[valSfInds_curr];
 
     for n_try in range(n_repeats):
       ###########
       ### pick initial params
       ###########
-      init_params = dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, allBounds, no_surr=no_surr)
+      init_params = dog_init_params(resps_curr, base_rate, all_sfs, sfs_curr, DoGmodel, allBounds, no_surr=no_surr)
 
       # choose optimization method
       methodStr = 'L-BFGS-B'; # previously, alternated between L-BFGS-B and TNC (even/odd)
@@ -2727,9 +2728,9 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
          obj = lambda params: DoG_loss([*params[0:2], -np.inf, 1,
                                         *params[2:4], -np.inf, 1, 
                                         *params[4:]], 
-                                       resps_curr, valSfVals, resps_std=sem_curr, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1, vol_lam=vol_lam);
+                                       resps_curr, sfs_curr, resps_std=sem_curr, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1, vol_lam=vol_lam);
       else:
-         obj = lambda params: DoG_loss(params, resps_curr, valSfVals, resps_std=var_curr, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1, vol_lam=vol_lam);
+         obj = lambda params: DoG_loss(params, resps_curr, sfs_curr, resps_std=var_curr, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1, vol_lam=vol_lam);
       try:
         maxfun = 145000 if not is_mod_DoG(DoGmodel) else 145000; # default is 15000; d-dog-s model often needs more iters to finish
         wax = opt.minimize(obj, init_params, method=methodStr, bounds=allBounds, options={'maxfun': maxfun});
@@ -2757,7 +2758,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       if np.isnan(bestNLL[con]) or NLL < bestNLL[con]:
         bestNLL[con] = NLL;
         currParams[con, :] = params;
-        varExpl[con] = var_explained(resps_curr, params, valSfVals, DoGmodel, baseline=baseline);
+        varExpl[con] = var_explained(resps_curr, params, sfs_curr, DoGmodel, baseline=baseline);
         prefSf[con] = descr_prefSf(params, dog_model=DoGmodel, all_sfs=valSfVals, baseline=baseline);
         charFreq[con] = dog_charFreq(params, DoGmodel=DoGmodel);
         success[con] = wax['success'];
@@ -3764,15 +3765,12 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        curr_resps = sfTuning[d, curr_sfInd, c];
        sf_gt0 = np.where(curr_sfs>0)[0]; # if we include a zero-SF condition, then everything goes to zero!
 
-       if True:
-       #if reducedSave==False:
-       #  dataMetrics['sfCom'][d, c] = sf_com(curr_resps[sf_gt0], curr_sfs[sf_gt0])
-       #  dataMetrics['sfVar'][d, c] = sf_var(curr_resps[sf_gt0], curr_sfs[sf_gt0], dataMetrics['sfCom'][d, c]);
-
-         # get the c.o.m. based on the restricted set of SFs, only
-         if cut_sf is not None:
-           cut_sfs, cut_resps = np.array(stimVals[2])[cut_sf], sfTuning[d, cut_sf, c];
-           dataMetrics['sfComCut'][d, c] = sf_com(cut_resps, cut_sfs)
+       dataMetrics['sfCom'][d, c] = sf_com(curr_resps[sf_gt0], curr_sfs[sf_gt0])
+       dataMetrics['sfVar'][d, c] = sf_var(curr_resps[sf_gt0], curr_sfs[sf_gt0], dataMetrics['sfCom'][d, c]);
+       # get the c.o.m. based on the restricted set of SFs, only
+       if cut_sf is not None:
+          cut_sfs, cut_resps = np.array(stimVals[2])[cut_sf], sfTuning[d, cut_sf, c];
+          dataMetrics['sfComCut'][d, c] = sf_com(cut_resps, cut_sfs)
 
        # first, DoG fit
        if cell_ind in dogFits:
@@ -3856,7 +3854,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
            pass 
 
        # then, non-DoG descr fit
-       if cell_ind in descrFits:# and reducedSave==False:
+       if cell_ind in descrFits:
          try:
            varExpl = descrFits[cell_ind]['varExpl'][d, c];
            thresh_to_use = varExplThresh;
@@ -3977,8 +3975,6 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      ## Now, after going through all cons/sfs, compute ratios/differences
      # first, with contrast
      #if oldVersion: # only do these things if we want the "old" jointList --- currently (21.09) don't use them and they take up extra space in the structure
-     '''
-     if reducedSave==False: # i.e. only if we want to save everything
        for comb in itertools.combinations(range(nCons), 2):
          # first, in raw values [0] and per log2 contrast change [1] (i.e. log2(highCon/lowCon))
          conChange = np.log2(cons[comb[1]]/cons[comb[0]]);
@@ -4001,7 +3997,6 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        # then, as function of SF
        for comb in itertools.permutations(range(nSfs), 2):
          dataMetrics['c50Rats'][d,comb[0],comb[1]] = dataMetrics['c50'][d,comb[1]] / dataMetrics['c50'][d,comb[0]]
-     '''
 
    # Now, we make sure that everything we need is in dataMetrics
    # --- as of 21.10.18, mostly everything is added directly above; however, we add the following here
