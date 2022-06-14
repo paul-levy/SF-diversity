@@ -133,24 +133,22 @@ if area == 'LGN':
   #dogNames = ['descrFits_s210304_sach_sach.npy'];
   #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
   dogMod = 1; # 1 (sach) or 2 (Tony)
-  jointType = 7; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
-  dogNames = ['descrFitsHPC_220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
+  #jointType = 7; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
+  #dogNames = ['descrFitsHPC_220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
+  jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
+  dogNames = ['descrFitsHPC_220609_phAdj_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220609_phAdj_sqrt_sach_JTsurrShape.npy'];
+
   #dogNames = ['descrFitsHPC_220606alt_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220606_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
   #jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
   #dogNames = ['descrFitsHPC_220606_phAdj_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220606_phAdj_sqrt_sach_JTsurrShape.npy'];
 
-  #dogNames = ['descrFitsHPC_220520_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220520_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
-  #dogNames = ['descrFitsHPC_220228_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220225_sqrt_sach_JTsurrShape.npy'];
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
   descrNames = ['descrFits_211005_sqrt_flex.npy', 'descrFits_s211006_sach_flex.npy'];
-  #dogNames = ['descrFits_191023_sach_sach.npy'];
-  #descrNames = ['descrFits_200507_sqrt_flex.npy'];
 
   rvcMods = [0,0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
   rvcNames = ['rvcFitsHPC_220531_pos.npy', 'rvcFitsHPC_220531_pos.npy'];
   #rvcNames = ['rvcFitsHPC_220506_vecF1.npy', 'rvcFitsHPC_220508_vecF1.npy'];
   #rvcNames = ['rvcFits_210914_pos.npy', 'rvcFitsHPC_220219_pos.npy'];
-  #rvcNames = ['rvcFits_210914_pos.npy', 'rvcFits_211006_pos.npy'];
   #rvcMods = [0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
   #rvcNames = ['rvcFits_210304.npy']; 
   #rvcNames = ['rvcFits_191023_pos.npy']; 
@@ -189,4 +187,5 @@ if area == 'LGN':
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
-  np.save(base_dir + 'jointList_LGN_%s_vT%02d_dvT%02d' % (suffix, varExplThresh_str, dog_varExplThresh_str), jointList)
+  jt_str = '_jt2' if jointType==2 else ''; # 7 is now the default, and we won't make any others (besides jt=2, jt=7)
+  np.save(base_dir + 'jointList_LGN_%s_vT%02d_dvT%02d%s' % (suffix, varExplThresh_str, dog_varExplThresh_str, jt_str), jointList)

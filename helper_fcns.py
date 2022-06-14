@@ -2052,11 +2052,11 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=No
   #########
   if metric == 'gc': # i.e. center gain
     if DoGmodel == 1: # sach
-      gc= params[0];
+      gc = params[0]/(np.pi * np.square(dog_get_param(params, DoGmodel, 'rc', parker_hawken_equiv))) if parker_hawken_equiv else params[0];
     elif DoGmodel == 2: # tony
       fc = params[1];
       rc = np.divide(1, np.pi*fc);
-      gc= np.divide(params[0], np.pi*np.square(rc));
+      gc = np.divide(params[0], np.pi*np.square(rc));
     elif DoGmodel == 4: # sachVol
       # then it becomes gain*pi*radius^2
       gc = params[0]*np.pi*np.square(params[1]);
@@ -2066,7 +2066,7 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=No
       return gc / con_val;
   if metric == 'gs': # i.e. surround gain
     if DoGmodel == 1: # sach
-      gs = params[0]*params[2] if parker_hawken_equiv else params[2];
+      gs = params[0]*params[2]/(np.pi * np.square(dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv))) if parker_hawken_equiv else params[2];
     elif DoGmodel == 2: # tony
       fc = params[1];
       rs = np.divide(1, np.pi*fc*params[3]); # params[3] is the multiplier on fc to get fs
