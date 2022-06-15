@@ -18,8 +18,8 @@ else:
 
 expName = hf.get_datalist('V1_BB/', force_full=1);
 
-sfName = 'descrFits%s_220405' % hpcSuff;
-rvcName = 'rvcFits%s_220220' % hpcSuff;
+sfName = 'descrFits%s_220609' % hpcSuff;
+rvcName = 'rvcFits%s_220609' % hpcSuff;
 
 def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, toSave=1, fracSig=1, nBoots=0, n_repeats=25, jointSf=0):
   ''' Separate fits for DC, F1 
@@ -133,13 +133,15 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
       if measure == 0:
         baseline = np.nanmean(hf.resample_array(resample, expInfo['blank']['resps']));
         mask_only = respMatrixDC_onlyMask;
+        mask_only_all = None; # as of 22.06.15
         mask_base = respMatrixDC;
         fix_baseline = False
       elif measure == 1:
         baseline = 0;
         mask_only = respMatrixF1_onlyMask;
         # TODO::: VEC CORRECT BY TRIAL FIRST??? (INSTEAD OF JUST TAKING AMP)
-        mask_only_all = respMatrixF1_onlyMask_resample[0]; # only mean (ignore phase for now...)
+        #mask_only_all = respMatrixF1_onlyMask_resample[0]; # only mean (ignore phase for now...)
+        mask_only_all = None; # as of 22.06.15; ignore the above line
         mask_base = respMatrixF1_maskTf;
         fix_baseline = True;
       resp_str = hf_sf.get_resp_str(respMeasure=measure);
@@ -241,7 +243,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
           else:
             isolFits = None;
 
-          allCurr = np.expand_dims(np.transpose(wA, [1,0,2]), axis=0); 
+          allCurr = np.expand_dims(np.transpose(wA, [1,0,2]), axis=0) if wA is not None else None; 
           # -- by default, loss_type=2 (meaning sqrt loss); why expand dims and transpose? dog fits assumes the data is in [disp,sf,con] and we just have [con,sf]
           nll, prms, vExp, pSf, cFreq, totNLL, totPrm, success = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), allCurr, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig, n_repeats=n_repeats, isolFits=isolFits, joint=jointSf, ftol=ftol) # noDisp=1 means that we don't index dispersion when accessins prevFits
 

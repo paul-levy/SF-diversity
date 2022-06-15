@@ -84,15 +84,16 @@ if [ "$EXP_DIR" = "V1/" ]; then
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
     # -- responses derived from vecF1 corrections, if F1 responses
+    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 1 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # sach DoG
+    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S, sqrt loss
+
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 0 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV # flex gauss
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 0 4 $BOOT_REPS $JOINT 0 $MOD_RECOV # flex gauss, sach loss (to account for variability)
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 4 $BOOT_REPS $JOINT 0 $MOD_RECOV # d-DoG-S, sach loss (to account for variability)
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 4 $BOOT_REPS $JOINT 0 $MOD_RECOV # d-DoG-S, sach loss
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 5 4 $BOOT_REPS $JOINT 0 $MOD_RECOV # d-DoG-S Hawk, sachloss
-    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S, sqrt loss
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 5 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV # d-DoG-S HAWK, sqrt loss
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 2 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV # Tony DoG
-    #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 1 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV # sach DoG
   fi
 fi
 
@@ -104,12 +105,14 @@ if [ "$EXP_DIR" = "V1_orig/" ]; then
   wait
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
-    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 3 $LOSS $BOOT_REPS $JOINT # d-DoG-S
-    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 5 $LOSS $BOOT_REPS $JOINT # d-DoG-S - Hawk
-    #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 0 $LOSS $BOOT_REPS $JOINT # flex. gauss
+    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 3 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S
+    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 1 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # sach DoG
+
+    #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 5 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S - Hawk
+    #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 0 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # flex. gauss
     #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 0 4 $BOOT_REPS $JOINT  # flex. gauss, sach loss
-    #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 2 $LOSS $BOOT_REPS $JOINT # Tony DoG
-    #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 1 $LOSS $BOOT_REPS $JOINT # sach DoG
+    #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 2 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # Tony DoG
+    #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 1 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # sach DoG
   fi
 fi
 
@@ -120,13 +123,15 @@ if [ "$EXP_DIR" = "altExp/" ]; then
   fi
   wait
   if [[ $DESCR_FIT -eq 1 ]]; then
-    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 3 $LOSS $BOOT_REPS $JOINT # d-DoG-S
-    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 5 $LOSS $BOOT_REPS $JOINT # d-DoG-S - Hawk
+    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 3 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S
+    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 1 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # sach DoG
+
+    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 5 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S - Hawk
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
-    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 0 $LOSS $BOOT_REPS $JOINT # flex. gauss
-    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 0 4 $BOOT_REPS $JOINT # flex. gauss, sach loss
-    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 2 $LOSS $BOOT_REPS $JOINT # Tony DoG
-    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 1 $LOSS $BOOT_REPS $JOINT # sach DoG
+    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 0 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # flex. gauss
+    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 0 4 $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # flex. gauss, sach loss
+    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 2 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # Tony DoG
+    #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 1 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # sach DoG
 
   fi
 fi

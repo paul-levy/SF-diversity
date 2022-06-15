@@ -1074,7 +1074,7 @@ def adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3, 
         # finally, project the response as usual
         if np.any(np.isnan(phi_mean)): # hacky way of saying that there were no spikes! hence phi is undefined
           resp_proj = r_byTrial[val_trials, :]; # just set it equal to r value, which will be zero anyway
-          print('condition d/con/sf || %02d/%02d/%02d has (some?) nan phi; r values below');
+          print('condition d/con/sf || %02d/%02d/%02d has (some?) nan phi; r values below' % (d,con,sf));
           print(r_byTrial[val_trials, :]);
         else:
           resp_proj = np.multiply(r_byTrial[val_trials, :], np.cos(np.deg2rad(phi_mean) - np.deg2rad(phase_rel_stim)));
@@ -2432,18 +2432,19 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
   # unpack responses
   resps_mean, resps_all, resps_sem, base_rate = resps;
-  stim_dur = get_exp_params(expInd).stimDur;
-  var_all = np.nanvar(resps_all*stim_dur); # we take the variance across COUNTS!
-  var_to_mean = var_all/(stim_dur*np.nanmean(resps_all)); # but we divide out the stim_dur when calculating this...
-  print('mean||var_to_mean: %.2f||%.2f' % (np.nanmean(resps_all), var_to_mean));
   baseline = 0 if base_rate is None else base_rate; # what's the baseline to add 
   base_rate = base_rate if base_rate is not None else np.nanmin(resps_mean)
 
   # next, let's compute some measures about the responses
   if resps_all is not None:
+    stim_dur = get_exp_params(expInd).stimDur;
     max_resp = np.nanmax(resps_all);
+    var_all = np.nanvar(resps_all*stim_dur); # we take the variance across COUNTS!
+    var_to_mean = var_all/(stim_dur*np.nanmean(resps_all)); # but we divide out the stim_dur when calculating this...
+    print('mean||var_to_mean: %.2f||%.2f' % (np.nanmean(resps_all), var_to_mean));
   else: # we don't really need to pass in resps_all
     max_resp = np.nanmax(resps_mean);
+    var_to_mean = np.nan;
 
   # and set up initial arrays
   if prevFits is None or 'NLL' not in prevFits: # no existing fits, or not of correct format
@@ -2624,15 +2625,19 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       resps_curr = np.mean(resps_recov, axis=1);
       sem_curr   = sem(resps_recov, axis=1);
       var_curr   = np.var(resps_recov, axis=1);
+      resps_all_flat = []; valSfVals_tile = [];
     else:
       valSfInds_curr = np.where(~np.isnan(resps_mean[disp, valSfInds, con]))[0];
       resps_curr = resps_mean[disp, valSfInds[valSfInds_curr], con];
       sem_curr   = resps_sem[disp, valSfInds[valSfInds_curr], con];
-      var_curr = np.nanvar(resps_all[disp,valSfInds[valSfInds_curr],con], axis=1);
-      resps_all_curr = resps_all[disp, valSfInds[valSfInds_curr], con];
-      nn = ~np.isnan(resps_all_curr);
-      resps_all_flat = resps_all_curr[nn];
-      valSfVals_tile = np.repeat(valSfVals[valSfInds_curr], np.sum(nn,axis=1))
+      if resps_all is not None:
+         var_curr = np.nanvar(resps_all[disp,valSfInds[valSfInds_curr],con], axis=1);
+         resps_all_curr = resps_all[disp, valSfInds[valSfInds_curr], con];
+         nn = ~np.isnan(resps_all_curr);
+         resps_all_flat = resps_all_curr[nn];
+         valSfVals_tile = np.repeat(valSfVals[valSfInds_curr], np.sum(nn,axis=1))
+      else:
+         var_curr = np.nan; resps_all_flat = []; valSfVals_tile = [];
 
     ### prepare for the joint fitting, if that's what we've specified!
     if joint>0:

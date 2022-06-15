@@ -20,7 +20,7 @@ else:
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #dogName = 'descrFits%s_220531' % hpcSuff;
-dogName = 'descrFits%s_220610' % hpcSuff;
+dogName = 'descrFits%s_220609' % hpcSuff;
 #dogName = 'descrFits%s_220520' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220531' % hpcSuff

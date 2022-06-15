@@ -109,7 +109,8 @@ if expDir == 'LGN/':# or expDir == 'altExp':
     #descrBase = 'descrFits%s_220511' % hpc_str;
     descrBase = 'descrFits%s_220609' % hpc_str;
 else:
-    descrBase = 'descrFits%s_220531' % hpc_str;
+    descrBase = 'descrFits%s_220609' % hpc_str;
+    #descrBase = 'descrFits%s_220531' % hpc_str;
     #descrBase = 'descrFits%s_220410' % hpc_str;
 #descrBase = 'descrFits_220103';
 #descrBase = 'descrFits_211214';
@@ -400,7 +401,7 @@ fDisp = []; dispAx = [];
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
 
 minResp_toPlot = 1e-0;
-  
+
 for d in range(nDisps):
     
     v_cons = val_con_by_disp[d];
@@ -430,6 +431,10 @@ for d in range(nDisps):
           else:
             to_sub = np.array(0);
           plot_resp = plot_resp - to_sub;
+          baseline_resp_curr = 0; # don't plot the baseline, since we've subtracted off; and don't add to model resp
+        else:
+          to_sub = np.array(0);
+          baseline_resp_curr = baseline_resp;
 
         if plot_sem_on_log:
             sem_curr = respSem[d, v_sfs, v_cons[c]];
@@ -444,8 +449,8 @@ for d in range(nDisps):
         else:
             dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], '-o', clip_on=False, \
                                        color=col, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
-        if baseline_resp > 0:
-            dispAx[d][0].axhline(baseline_resp, linestyle='--', color='k');
+        if baseline_resp_curr > 0:
+            dispAx[d][0].axhline(baseline_resp_curr, linestyle='--', color='k');
  
         # plot descr fit [1]
         prms_curr = descrParams[d, v_cons[c]];
