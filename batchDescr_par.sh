@@ -65,6 +65,7 @@ MOD_RECOV=${6:-0}
 LOSS=${7:-2}
 CROSS_VAL=${8:--1}
 PH_ADJ=${9:-1} # used only for LGN
+DOGMOD=${10:-3} # used only for V1
 
 if [ "$EXP_DIR" = "V1/" ]; then
   # V1/ -- vec F1 adjustment with full dataset
@@ -84,8 +85,7 @@ if [ "$EXP_DIR" = "V1/" ]; then
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
     # -- responses derived from vecF1 corrections, if F1 responses
-    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 1 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # sach DoG
-    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 3 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S, sqrt loss
+    python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 $DOGMOD $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S or Sach
 
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 0 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV # flex gauss
     #python3.6 descr_fits.py -181 0 V1/ -1 0 0 1 1 0 4 $BOOT_REPS $JOINT 0 $MOD_RECOV # flex gauss, sach loss (to account for variability)
@@ -105,8 +105,7 @@ if [ "$EXP_DIR" = "V1_orig/" ]; then
   wait
   if [[ $DESCR_FIT -eq 1 ]]; then
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
-    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 3 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S
-    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 1 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # sach DoG
+    python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 $DOGMOD $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S or Sach
 
     #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 5 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S - Hawk
     #python3.6 descr_fits.py -159 0 V1_orig/ -1 0 0 1 1 0 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # flex. gauss
@@ -123,8 +122,7 @@ if [ "$EXP_DIR" = "altExp/" ]; then
   fi
   wait
   if [[ $DESCR_FIT -eq 1 ]]; then
-    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 3 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S
-    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 1 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # sach DoG
+    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 $DOGMOD $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S or Sach
 
     #python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 5 $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S - Hawk
     # then, just SF tuning (again, vec corr. for F1, not phase adjustment);
