@@ -18,8 +18,10 @@ else:
 
 expName = hf.get_datalist('V1_BB/', force_full=1);
 
-sfName = 'descrFits%s_220609' % hpcSuff;
-rvcName = 'rvcFits%s_220609' % hpcSuff;
+sfName = 'descrFits%s_220607' % hpcSuff;
+rvcName = 'rvcFits%s_220607' % hpcSuff;
+#sfName = 'descrFits%s_220609' % hpcSuff;
+#rvcName = 'rvcFits%s_220609' % hpcSuff;
 
 def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, toSave=1, fracSig=1, nBoots=0, n_repeats=25, jointSf=0):
   ''' Separate fits for DC, F1 
@@ -192,7 +194,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
         test_mask_base[heldout] = mask_base_ref[heldout]
         heldouts = [test_mask_only]; # update to include ...base IF below lines (which*) include both
       else:
-        heldouts = None
+        heldouts = [None];
         
       whichAll = [mask_only_all];
       whichResp = [mask_only]#, mask_base];
