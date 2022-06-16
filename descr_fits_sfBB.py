@@ -77,13 +77,16 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
 
   # Set up whether we will bootstrap straight away
   resample = False if nBoots <= 0 else True;
+  if cross_val is not None:
+    # we also set to True if cross_val is not None
+    resample = True;
   nBoots = 1 if nBoots <= 0 else nBoots;
   if nBoots>1:
     ftol = 5e-9;
     #ftol = 1e-6;
   else:
     ftol = 2.220446049250313e-09; # the default value, per scipy guide (scipy.optimize, for L-BFGS-B) 
-  
+    
   #########
   ### Get the responses - base only, mask+base [base F1], mask only (mask F1)
   ### _____ MAKE THIS A FUNCTION???
@@ -95,6 +98,11 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
   # 2dc. get the mask+base response (f1 at base TF)
   _, _, gt_respMatrixDC, _ = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, vecCorrectedF1=vecF1, onsetTransient=onsetCurr, returnByTr=1); # i.e. get the base response for F1
  
+  if cross_val == 2.0:
+    nBoots = np.multiply(*gt_respMatrixDC_onlyMask.shape[0:2], );
+    print('# boots is %03d' % nBoots);
+    resample = False; # then we DO NOT want to resample
+
   for boot_i in range(nBoots):
     ######
     # 3a. Ensure we have the right responses (incl. resampling, taking mean)
@@ -115,6 +123,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
       r_mean, _, r_sem, _ = hf.polar_vec_mean([hf.nan_rm(respMatrixF1_onlyMask_resample[conds + (slice(None), 0)])], [hf.nan_rm(respMatrixF1_onlyMask_resample[conds + (slice(None), 1)])], sem=1) # return s.e.m. rather than std (default)
       # - and we only care about the R value (after vec. avg.)
       respMatrixF1_onlyMask[conds] = [r_mean[0], r_sem[0]]; # r...[0] is to unpack (it's nested inside of an array, since polar_vec_mean is vectorized
+
     # - ii. F1, both (@ maskTF)
     respMatrixF1_maskTf_resample = hf_sf.resample_all_cond(resample, np.copy(gt_respMatrixF1_maskTf), axis=2);
     # --- however, polar_vec_mean must be computed by condition, to handle NaN (which might be unequal across conditions):
@@ -129,23 +138,62 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
     #  respMatrixF1_onlyMask = respMatrixF1_onlyMask[:,:,0,:]; # just take the "r" information (throw away the phi)
     #  respMatrixF1_maskTf = respMatrixF1_maskTf[:,:,0,:]; # just take the "r" information (throw away the phi)
 
+    if cross_val == 2.0:
+      n_sfs, n_cons = gt_respMatrixF1_maskTf.shape[0], gt_respMatrixF1_maskTf.shape[1];
+      con_ind, sf_ind = np.floor(np.divide(boot_i, n_sfs)).astype('int'), np.mod(boot_i, n_sfs).astype('int');
+      print('holding out con/sf indices %02d/%02d' % (con_ind, sf_ind));
+
     for measure in [0,1]:
       if measure == 0:
         baseline = np.nanmean(hf.resample_array(resample, expInfo['blank']['resps']));
-        mask_only = respMatrixDC_onlyMask;
+        if cross_val == 2.0:
+          # --- so, "nan" out that condition in all of the responses
+          mask_only_ref = np.copy(respMatrixDC_onlyMask);
+          mask_base_ref = np.copy(respMatrixDC);
+          # the above establish the reference values; below, we nan out the current condition
+          mask_only = np.copy(respMatrixDC_onlyMask);
+          mask_base = np.copy(respMatrixDC);
+          mask_only[sf_ind, con_ind] = np.nan;
+          mask_base[sf_ind, con_ind] = np.nan;
+        else:
+          mask_only = respMatrixDC_onlyMask;
+          mask_base = respMatrixDC;
         mask_only_all = None; # as of 22.06.15
-        mask_base = respMatrixDC;
         fix_baseline = False
       elif measure == 1:
         baseline = 0;
-        mask_only = respMatrixF1_onlyMask;
-        # TODO::: VEC CORRECT BY TRIAL FIRST??? (INSTEAD OF JUST TAKING AMP)
-        #mask_only_all = respMatrixF1_onlyMask_resample[0]; # only mean (ignore phase for now...)
+        if cross_val == 2.0:
+          # --- so, "nan" out that condition in all of the responses
+          mask_only_ref = np.copy(respMatrixF1_onlyMask);
+          mask_base_ref = np.copy(respMatrixF1_maskTf);
+          # the above establish the reference values; below, we nan out the current condition
+          mask_only = np.copy(respMatrixF1_onlyMask);
+          mask_base = np.copy(respMatrixF1_maskTf);
+          mask_only[sf_ind, con_ind] = np.nan;
+          mask_base[sf_ind, con_ind] = np.nan;
+        else:
+          mask_only = respMatrixF1_onlyMask;
+          mask_base = respMatrixF1_maskTf;
         mask_only_all = None; # as of 22.06.15; ignore the above line
-        mask_base = respMatrixF1_maskTf;
         fix_baseline = True;
       resp_str = hf_sf.get_resp_str(respMeasure=measure);
 
+      if cross_val is not None: # set up what is the test data!
+        nan_val = -1e3;
+        # make sure we nan out any existing NaN values in the reference data
+        mask_only_ref[np.isnan(mask_only_ref)] = nan_val
+        mask_base_ref[np.isnan(mask_base_ref)] = nan_val
+        # make sure we nan out any NaN values in the training data
+        mask_only_tr = np.copy(mask_only);
+        mask_base_tr = np.copy(mask_base);
+        mask_only_tr[np.isnan(mask_only_tr)] = nan_val;
+        mask_base_tr[np.isnan(mask_base_tr)] = nan_val;
+        heldout_mask_only = np.abs(mask_only_tr - mask_only_ref) > 1e-6 # if the idff. is g.t. this, it means they are different values
+        heldout_mask_base = np.abs(mask_base_tr - mask_base_ref) > 1e-6 # if the idff. is g.t. this, it means they are different values
+        heldouts = [heldout_mask_only]; # update to include ...base IF below lines (which*) include both
+      else:
+        heldouts = None
+        
       whichAll = [mask_only_all];
       whichResp = [mask_only]#, mask_base];
       whichKey = ['mask']#, 'both'];
@@ -222,7 +270,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
         stimVals = [[0], cons, sfs];
         valConByDisp = [np.arange(0,len(cons))]; # all cons are valid in sfBB experiment
 
-        for wR, wK, wA in zip(whichResp, whichKey, whichAll):
+        for wR, wK, wA, heldout in zip(whichResp, whichKey, whichAll, heldouts):
           if wK not in sfFits_curr_toSave[resp_str]:
             sfFits_curr_toSave[resp_str][wK] = dict();
 
@@ -247,30 +295,72 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
           # -- by default, loss_type=2 (meaning sqrt loss); why expand dims and transpose? dog fits assumes the data is in [disp,sf,con] and we just have [con,sf]
           nll, prms, vExp, pSf, cFreq, totNLL, totPrm, success = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), allCurr, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig, n_repeats=n_repeats, isolFits=isolFits, joint=jointSf, ftol=ftol) # noDisp=1 means that we don't index dispersion when accessins prevFits
 
-          if resample:
+          if resample or cross_val is not None:
             if boot_i == 0: # i.e. first time around
-              # - pre-allocate empty array of length nBoots (save time over appending each time around)
-              sfFits_curr_toSave[resp_str][wK]['boot_loss'] = np.empty((nBoots,) + nll.shape, dtype=np.float32);
-              sfFits_curr_toSave[resp_str][wK]['boot_params'] = np.empty((nBoots,) + prms.shape, dtype=np.float32);
-              sfFits_curr_toSave[resp_str][wK]['boot_varExpl'] = np.empty((nBoots,) + vExp.shape, dtype=np.float32);
-              sfFits_curr_toSave[resp_str][wK]['boot_prefSf'] = np.empty((nBoots,) + pSf.shape, dtype=np.float32);
-              sfFits_curr_toSave[resp_str][wK]['boot_charFreq'] = np.empty((nBoots,) + cFreq.shape, dtype=np.float32);
+              if cross_val is not None:
+                # first, pre-define empty lists for all of the needed results, if they are not yet defined
+                sfFits_curr_toSave['boot_NLL_cv_test'] = np.empty((nBoots,) + nll.shape, dtype=np.float32);
+                sfFits_curr_toSave['boot_vExp_cv_test'] = np.empty((nBoots,) + vExp.shape, dtype=np.float32);
+                sfFits_curr_toSave['boot_NLL_cv_train'] = np.empty((nBoots,) + nll.shape, dtype=np.float32);
+                sfFits_curr_toSave['boot_vExp_cv_train'] = np.empty((nBoots,) + vExp.shape, dtype=np.float32);
+                # --- these are all implicitly based on training data
+                sfFits_curr_toSave['boot_cv_params'] = np.empty((nBoots,) + prms.shape, dtype=np.float32);
+                sfFits_curr_toSave['boot_cv_prefSf'] = np.empty((nBoots,) + pSf.shape, dtype=np.float32);
+                sfFits_curr_toSave['boot_cv_charFreq'] =np.empty((nBoots,) + cFreq.shape, dtype=np.float32);
+              else: # otherwise, the things we put only if we didn't have cross-validation
+                # - pre-allocate empty array of length nBoots (save time over appending each time around)
+                sfFits_curr_toSave[resp_str][wK]['boot_loss'] = np.empty((nBoots,) + nll.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_params'] = np.empty((nBoots,) + prms.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_varExpl'] = np.empty((nBoots,) + vExp.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_prefSf'] = np.empty((nBoots,) + pSf.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_charFreq'] = np.empty((nBoots,) + cFreq.shape, dtype=np.float32);
+              # and the below apply whether or not we did cross-validation!
               if jointSf>=1:
                 sfFits_curr_toSave[resp_str][wK]['boot_totalNLL'] = np.empty((nBoots,) + totNLL.shape, dtype=np.float32);
                 sfFits_curr_toSave[resp_str][wK]['boot_paramList'] = np.empty((nBoots,) + totPrm.shape, dtype=np.float32);
                 sfFits_curr_toSave[resp_str][wK]['boot_success'] = np.empty((nBoots, ), dtype=np.bool_);
               else: # only if joint=0 will success be an array (and not just one value)
                 sfFits_curr_toSave[resp_str][wK]['boot_success'] = np.empty((nBoots, ) + success.shape, dtype=np.bool_);
+            
+            # then -- put in place (we reach here for all boot_i)
+            if cross_val is not None:
+              pdb.set_trace();
 
+              ### then, we need to compute test loss/vExp!
+              test_nlls = np.nan*np.zeros_like(nll);
+              test_vExps = np.nan*np.zeros_like(vExp);
+              # set up ref_params, ref_rc_val; will only be used IF applicable
+              ref_params = prms[-1]; # high contrast condition
+              ref_rc_val = totPrm[2] if joint>0 else None; # even then, only used for joint==5
 
-            # then -- put in place
-            sfFits_curr_toSave[resp_str][wK]['boot_loss'][boot_i] = nll;
-            sfFits_curr_toSave[resp_str][wK]['boot_params'][boot_i] = prms;
-            sfFits_curr_toSave[resp_str][wK]['boot_charFreq'][boot_i] = cFreq;
-            sfFits_curr_toSave[resp_str][wK]['boot_varExpl'][boot_i] = vExp
-            sfFits_curr_toSave[resp_str][wK]['boot_prefSf'][boot_i] = pSf;
+              for ii, prms_curr in enumerate(prms):
+                # we'll iterate over the parameters, which are fit for each contrast (the final dimension of test_mn)
+                if np.any(np.isnan(prms_curr)):
+                  continue;
+                non_nans = np.where(~np.isnan(heldout[:,:,0]))[0];
+                curr_sfs = stimVals[2][non_nans];
+                resps_curr = heldout[:, non_nans, 0];
+                test_nlls[ii] = hf.DoG_loss(prms_curr, resps_curr, curr_sfs, resps_std=None, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, joint=0, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val) # why not enforce max? b/c fewer resps means more varied range of max, don't want to wrongfully penalize
+                test_vExps[ii] = hf.var_explained(resps_curr, prms_curr, curr_sfs, DoGmodel, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val);
+
+              ### done with computing test loss, so save everything
+              sfFits_curr_toSave[resp_str][wK]['boot_NLL_cv_test'][boot_i] = 
+              sfFits_curr_toSave[resp_str][wK]['boot_vExp_cv_test'][boot_i] =
+              sfFits_curr_toSave[resp_str][wK]['boot_NLL_cv_train'][boot_i] = nll
+              sfFits_curr_toSave[resp_str][wK]['boot_vExp_cv_train'][boot_i] = vExp
+              # --- these are all implicitly based on training data
+              sfFits_curr_toSave[resp_str][wK]['boot_cv_params'][boot_i] = prms
+              sfFits_curr_toSave[resp_str][wK]['boot_cv_prefSf'][boot_i] = pSf
+              sfFits_curr_toSave[resp_str][wK]['boot_cv_charFreq'][boot_i] cFreq;
+            else:
+              sfFits_curr_toSave[resp_str][wK]['boot_loss'][boot_i] = nll;
+              sfFits_curr_toSave[resp_str][wK]['boot_params'][boot_i] = prms;
+              sfFits_curr_toSave[resp_str][wK]['boot_charFreq'][boot_i] = cFreq;
+              sfFits_curr_toSave[resp_str][wK]['boot_varExpl'][boot_i] = vExp
+              sfFits_curr_toSave[resp_str][wK]['boot_prefSf'][boot_i] = pSf;
+            # these apply regardless of c-v or not
             sfFits_curr_toSave[resp_str][wK]['boot_success'][boot_i] = success;
-            if jointSf>=1:
+            if jointSf>0:
               sfFits_curr_toSave[resp_str][wK]['boot_totalNLL'][boot_i] = totNLL;
               sfFits_curr_toSave[resp_str][wK]['boot_paramList'][boot_i] = totPrm;
           else: # otherwise, we'll only be here once
@@ -367,7 +457,15 @@ if __name__ == '__main__':
   loss_type  = int(sys.argv[6]); # default will be 2 (i.e. sqrt)
   nBoots     = int(sys.argv[7]);
   jointSf    = int(sys.argv[8]);
+  if len(sys.argv) > 9:
+    cross_val  = float(sys.argv[9]);
+    if cross_val <= 0:
+      cross_val = None;
+  else:
+    cross_val = None;
 
+  print('%d - %d - %d - %d - %d - %d - %d' % (fit_rvc, fit_sf, rvc_mod, sf_mod, loss_type, nBoots, jointSf));
+  print('rvc? %d -- sf? %d -- sfMod,joint %d,%d' % (fit_rvc, fit_sf, sf_mod, jointSf))
   fracSig = 1; # why fracSig =1? For V1 fits, we want to contrasin the upper-half sigma of the two-half gaussian as a fraction of the lower half
 
   if asMulti:
@@ -378,7 +476,7 @@ if __name__ == '__main__':
     # to avoid race conditions, load the previous fits beforehand; and the datalist
     rvcNameFinal = hf.rvc_fit_name(rvcName, rvc_mod, None, vecF1=1); # DEFAULT is vecF1 adjustment
     modStr = hf.descrMod_name(sf_mod);
-    sfNameFinal = hf.descrFit_name(loss_type, descrBase=sfName, modelName=modStr); # descrLoss order is lsq/sqrt/poiss/sach
+    sfNameFinal = hf.descrFit_name(loss_type, descrBase=sfName, modelName=modStr, joint=jointSf); # descrLoss order is lsq/sqrt/poiss/sach
 
     pass_rvc = hf.np_smart_load('%s%s%s' % (basePath, data_suff, rvcNameFinal)) if fit_rvc else None;
     pass_sf = hf.np_smart_load('%s%s%s' % (basePath, data_suff, sfNameFinal)) if fit_sf else None;
@@ -417,7 +515,7 @@ if __name__ == '__main__':
       # --- SF
       if fit_sf:
         modStr = hf.descrMod_name(sf_mod); # we pass this sf_mod argument on the command line
-        sfNameFinal = hf.descrFit_name(lossType=2, descrBase=sfName, modelName=modStr); # descrLoss order is lsq/sqrt/poiss/sach
+        sfNameFinal = hf.descrFit_name(lossType=2, descrBase=sfName, modelName=modStr, joint=jointSf); # descrLoss order is lsq/sqrt/poiss/sach
         if os.path.isfile(dataPath + sfNameFinal):
           print('reloading sfFits...');
           sfFits = hf.np_smart_load(dataPath + sfNameFinal);

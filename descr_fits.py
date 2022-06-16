@@ -870,7 +870,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       heldout = np.abs(all_data - training) > 1e-6; # if the difference is g.t. this, it means they are different value
       test_data[heldout] = all_data[heldout]; # then put the heldout values here
       print('boot %d' % boot_i);
-
+ 
       # if the below are true, then we also need to 
       if cross_val==2.0 and phAmpOnMean: # As of 22.06.06, iff we're doing cross-val by condition AND phAmpOnMean, then we'll compute test/train based on the 
         training_phAmp = np.copy(resps_mean);
@@ -1236,7 +1236,7 @@ if __name__ == '__main__':
           else:
             n_repeats = 5 if joint>0 else 15; # was previously be 3, 15
           
-        print('descr fits! --> %03d boots, cross_val %.2f' % (nBoots, cross_val if cross_val is not None else -99));
+        print('descr fits! --> joint %d, %03d boots, cross_val %.2f' % (joint, nBoots, cross_val if cross_val is not None else -99));
 
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits

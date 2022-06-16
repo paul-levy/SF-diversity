@@ -134,6 +134,17 @@ if [ "$EXP_DIR" = "altExp/" ]; then
   fi
 fi
 
+if [ "$EXP_DIR" = "V1_BB/" ]; then
+    # first, only RVC, no boot
+  if [[ $RVC_FIT -eq 1 ]]; then
+    python3.6 descr_fits_sfBB.py -147 $RVC_FIT 0 1 $DOGMOD $LOSS 0 $JOINT 0 # 47 cells, as of 21.08.23
+  fi    
+  if [[ $DESCR_FIT -eq 1 ]]; then
+    # then, no RVC, allow boot for SF
+    python3.6 descr_fits_sfBB.py -147 0 $DESCR_FIT 1 $DOGMOD $LOSS $BOOT_REPS $JOINT $CROSS_VAL # 47 cells, as of 21.08.23
+  fi    
+fi
+
 if [ "$EXP_DIR" = "LGN/" ]; then
   ## LGN - phase adjustment (will be done iff LGN/ 1; not if LGN/ 0 ) and F1 rvc
   if [[ $RVC_FIT -eq 1 ]]; then
