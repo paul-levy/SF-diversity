@@ -182,15 +182,15 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
         nan_val = -1e3;
         # make sure we nan out any existing NaN values in the reference data
         mask_only_ref[np.isnan(mask_only_ref)] = nan_val
-        mask_base_ref[np.isnan(mask_base_ref)] = nan_val
         # make sure we nan out any NaN values in the training data
         mask_only_tr = np.copy(mask_only);
-        mask_base_tr = np.copy(mask_base);
         mask_only_tr[np.isnan(mask_only_tr)] = nan_val;
-        mask_base_tr[np.isnan(mask_base_tr)] = nan_val;
-        heldout_mask_only = np.abs(mask_only_tr - mask_only_ref) > 1e-6 # if the idff. is g.t. this, it means they are different values
-        heldout_mask_base = np.abs(mask_base_tr - mask_base_ref) > 1e-6 # if the idff. is g.t. this, it means they are different values
-        heldouts = [heldout_mask_only]; # update to include ...base IF below lines (which*) include both
+        heldout = np.abs(mask_only_tr - mask_only_ref) > 1e-6 # if the idff. is g.t. this, it means they are different values
+        test_mask_only = np.nan * np.zeros_like(mask_only_tr);
+        test_mask_base = np.nan * np.zeros_like(mask_only_tr);
+        test_mask_only[heldout] = mask_only_ref[heldout]
+        test_mask_base[heldout] = mask_base_ref[heldout]
+        heldouts = [test_mask_only]; # update to include ...base IF below lines (which*) include both
       else:
         heldouts = None
         
@@ -283,7 +283,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
           # try to load isolated fits...
           if jointSf>0:
             try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
-              modStr  = hf.descrMod_name(DoGmodel);
+              modStr  = hf.descrMod_name(sfMod);
               ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0));
               isolFits = ref_fits[cell_num-1][resp_str][wK]['params'];
             except:
@@ -299,14 +299,14 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
             if boot_i == 0: # i.e. first time around
               if cross_val is not None:
                 # first, pre-define empty lists for all of the needed results, if they are not yet defined
-                sfFits_curr_toSave['boot_NLL_cv_test'] = np.empty((nBoots,) + nll.shape, dtype=np.float32);
-                sfFits_curr_toSave['boot_vExp_cv_test'] = np.empty((nBoots,) + vExp.shape, dtype=np.float32);
-                sfFits_curr_toSave['boot_NLL_cv_train'] = np.empty((nBoots,) + nll.shape, dtype=np.float32);
-                sfFits_curr_toSave['boot_vExp_cv_train'] = np.empty((nBoots,) + vExp.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_NLL_cv_test'] = np.empty((nBoots,) + nll.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_vExp_cv_test'] = np.empty((nBoots,) + vExp.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_NLL_cv_train'] = np.empty((nBoots,) + nll.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_vExp_cv_train'] = np.empty((nBoots,) + vExp.shape, dtype=np.float32);
                 # --- these are all implicitly based on training data
-                sfFits_curr_toSave['boot_cv_params'] = np.empty((nBoots,) + prms.shape, dtype=np.float32);
-                sfFits_curr_toSave['boot_cv_prefSf'] = np.empty((nBoots,) + pSf.shape, dtype=np.float32);
-                sfFits_curr_toSave['boot_cv_charFreq'] =np.empty((nBoots,) + cFreq.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_cv_params'] = np.empty((nBoots,) + prms.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_cv_prefSf'] = np.empty((nBoots,) + pSf.shape, dtype=np.float32);
+                sfFits_curr_toSave[resp_str][wK]['boot_cv_charFreq'] =np.empty((nBoots,) + cFreq.shape, dtype=np.float32);
               else: # otherwise, the things we put only if we didn't have cross-validation
                 # - pre-allocate empty array of length nBoots (save time over appending each time around)
                 sfFits_curr_toSave[resp_str][wK]['boot_loss'] = np.empty((nBoots,) + nll.shape, dtype=np.float32);
@@ -315,7 +315,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
                 sfFits_curr_toSave[resp_str][wK]['boot_prefSf'] = np.empty((nBoots,) + pSf.shape, dtype=np.float32);
                 sfFits_curr_toSave[resp_str][wK]['boot_charFreq'] = np.empty((nBoots,) + cFreq.shape, dtype=np.float32);
               # and the below apply whether or not we did cross-validation!
-              if jointSf>=1:
+              if jointSf>0:
                 sfFits_curr_toSave[resp_str][wK]['boot_totalNLL'] = np.empty((nBoots,) + totNLL.shape, dtype=np.float32);
                 sfFits_curr_toSave[resp_str][wK]['boot_paramList'] = np.empty((nBoots,) + totPrm.shape, dtype=np.float32);
                 sfFits_curr_toSave[resp_str][wK]['boot_success'] = np.empty((nBoots, ), dtype=np.bool_);
@@ -324,34 +324,32 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
             
             # then -- put in place (we reach here for all boot_i)
             if cross_val is not None:
-              pdb.set_trace();
-
               ### then, we need to compute test loss/vExp!
               test_nlls = np.nan*np.zeros_like(nll);
               test_vExps = np.nan*np.zeros_like(vExp);
               # set up ref_params, ref_rc_val; will only be used IF applicable
               ref_params = prms[-1]; # high contrast condition
-              ref_rc_val = totPrm[2] if joint>0 else None; # even then, only used for joint==5
+              ref_rc_val = totPrm[2] if jointSf>0 else None; # even then, only used for jointSf==5
 
               for ii, prms_curr in enumerate(prms):
                 # we'll iterate over the parameters, which are fit for each contrast (the final dimension of test_mn)
                 if np.any(np.isnan(prms_curr)):
                   continue;
-                non_nans = np.where(~np.isnan(heldout[:,:,0]))[0];
-                curr_sfs = stimVals[2][non_nans];
-                resps_curr = heldout[:, non_nans, 0];
-                test_nlls[ii] = hf.DoG_loss(prms_curr, resps_curr, curr_sfs, resps_std=None, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, joint=0, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val) # why not enforce max? b/c fewer resps means more varied range of max, don't want to wrongfully penalize
-                test_vExps[ii] = hf.var_explained(resps_curr, prms_curr, curr_sfs, DoGmodel, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val);
+                non_nans = np.where(~np.isnan(heldout[:,ii,0]))[0]; # check -- from the heldout data at contrast ii, which sfs are not NaN
+                curr_sfs = stimVals[2][non_nans]; # get those sf values
+                resps_curr = heldout[non_nans, ii, 0]; # and get those responses, to pass into DoG_loss
+                test_nlls[ii] = hf.DoG_loss(prms_curr, resps_curr, curr_sfs, resps_std=None, loss_type=loss_type, DoGmodel=sfMod, dir=dir, joint=0, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val) # why not enforce max? b/c fewer resps means more varied range of max, don't want to wrongfully penalize
+                test_vExps[ii] = hf.var_explained(resps_curr, prms_curr, curr_sfs, sfMod, baseline=baseline, ref_params=ref_params, ref_rc_val=ref_rc_val);
 
               ### done with computing test loss, so save everything
-              sfFits_curr_toSave[resp_str][wK]['boot_NLL_cv_test'][boot_i] = 
-              sfFits_curr_toSave[resp_str][wK]['boot_vExp_cv_test'][boot_i] =
+              sfFits_curr_toSave[resp_str][wK]['boot_NLL_cv_test'][boot_i] = test_nlls
+              sfFits_curr_toSave[resp_str][wK]['boot_vExp_cv_test'][boot_i] = test_vExps
               sfFits_curr_toSave[resp_str][wK]['boot_NLL_cv_train'][boot_i] = nll
               sfFits_curr_toSave[resp_str][wK]['boot_vExp_cv_train'][boot_i] = vExp
               # --- these are all implicitly based on training data
               sfFits_curr_toSave[resp_str][wK]['boot_cv_params'][boot_i] = prms
               sfFits_curr_toSave[resp_str][wK]['boot_cv_prefSf'][boot_i] = pSf
-              sfFits_curr_toSave[resp_str][wK]['boot_cv_charFreq'][boot_i] cFreq;
+              sfFits_curr_toSave[resp_str][wK]['boot_cv_charFreq'][boot_i] = cFreq;
             else:
               sfFits_curr_toSave[resp_str][wK]['boot_loss'][boot_i] = nll;
               sfFits_curr_toSave[resp_str][wK]['boot_params'][boot_i] = prms;
@@ -370,7 +368,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
             sfFits_curr_toSave[resp_str][wK]['prefSf'] = pSf.astype(np.float32);
             sfFits_curr_toSave[resp_str][wK]['charFreq'] = cFreq.astype(np.float32);
             sfFits_curr_toSave[resp_str][wK]['success'] = success#.astype(np.bool_);
-            if jointSf>=1:
+            if jointSf>0:
               sfFits_curr_toSave[resp_str][wK]['totalNLL'] = totNLL.astype(np.float32);
               sfFits_curr_toSave[resp_str][wK]['paramList'] = totPrm.astype(np.float32);
         ######## 
