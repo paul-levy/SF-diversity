@@ -135,8 +135,10 @@ if area == 'LGN':
   dogMod = 1; # 1 (sach) or 2 (Tony)
   #jointType = 7; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
   #dogNames = ['descrFitsHPC_220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
-  jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
-  dogNames = ['descrFitsHPC_220609_phAdj_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220609_phAdj_sqrt_sach_JTsurrShape.npy'];
+  #jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
+  #dogNames = ['descrFitsHPC_220609_phAdj_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220609_phAdj_sqrt_sach_JTsurrShape.npy'];
+  jointType = 0; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
+  dogNames = ['descrFitsHPC_220609_phAdj_sqrt_sach.npy', 'descrFitsHPC_s220609_phAdj_sqrt_sach.npy'];
 
   #dogNames = ['descrFitsHPC_220606alt_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220606_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
   #jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
@@ -171,10 +173,10 @@ if area == 'LGN':
   #### these are now defaults in hf.jl_create - but here, nonetheless, for reference!
 
   # any parameters we need for analysis below?
-  #varExplThresh = 65; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  #dog_varExplThresh = 65; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  dog_varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  varExplThresh = 65; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  dog_varExplThresh = 65; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  #varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  #dog_varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
 
   sf_range = [0.01, 10]; # allowed values of 'mu' for fits - see descr_fit.py for details
 
@@ -187,5 +189,5 @@ if area == 'LGN':
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
-  jt_str = '_jt2' if jointType==2 else ''; # 7 is now the default, and we won't make any others (besides jt=2, jt=7)
+  jt_str = '_jt%d' % jointType if jointType<7 else ''; # 7 is now the default
   np.save(base_dir + 'jointList_LGN_%s_vT%02d_dvT%02d%s' % (suffix, varExplThresh_str, dog_varExplThresh_str, jt_str), jointList)

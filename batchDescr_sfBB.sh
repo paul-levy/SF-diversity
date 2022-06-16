@@ -22,7 +22,7 @@ source activate pytorch-lcv
 
 FIT_RVC=$1
 FIT_SFS=$2
-SF_MOD=$3
+SF_MOD=${3:-1}
 BOOT_ITER=${4:-0}
 JOINT=${5:-0}
 
