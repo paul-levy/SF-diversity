@@ -32,7 +32,8 @@ if sys.argv[3] == 'LGN/':
   rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 else:
   phAdvName = 'phaseAdvanceFits%s_220609' % hpcSuff
-  rvcName_f1 = 'rvcFits%s_220609' % hpcSuff; # FOR V1
+  rvcName_f1 = 'rvcFitsHPC_220609'; # FOR V1
+  #rvcName_f1 = 'rvcFits%s_220609' % hpcSuff; # FOR V1
   #phAdvName = 'phaseAdvanceFits%s_210914' % hpcSuff
   #rvcName_f1 = 'rvcFits%s_210914' % hpcSuff; # FOR V1
   #phAdvName = 'phaseAdvanceFits%s_210914' % hpcSuff
@@ -310,7 +311,8 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
         adjByTrialCorr[blanks] = 0; # just set it to 0 if that component was blank during the trial
         adjByTrialSum = np.sum(adjByTrialCorr, axis=1);
         # get the mean resp organized by sfMix condition
-        adjMeans, adjByTrialSum = hf.organize_resp(adjByTrialSum, cellStruct, expInd, respsAsRate=False, resample=resample, cellNum=cell_num)[2:];
+        # NOTE: 22.06.22 --> note that respsAsRate=True, here --> why? if F1, it's already a rate, so we shouldn't divide out the stimDur when computing means
+        adjMeans, adjByTrialSum = hf.organize_resp(adjByTrialSum, cellStruct, expInd, respsAsRate=True, resample=resample, cellNum=cell_num)[2:];
         # will need to transpose, since axis orders get switched when mixing single # slice with array slice of dim, too
         adjMeans = np.transpose(adjMeans[disp,:,valConInds]);
         adjByTrialSum = np.transpose(adjByTrialSum[disp,:,valConInds,:], (1,0,2)); 
@@ -664,7 +666,7 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1, flt32=True):
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success;
  
-def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=1, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3, phAmpOnMean=False, phAdvName=phAdvName): # n_repeats was 100, before 21.09.01
+def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=0, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3, phAmpOnMean=False, phAdvName=phAdvName): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
@@ -843,7 +845,11 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       con_ind, sf_ind = np.floor(np.divide(boot_i, len(val_sfs))).astype('int'), np.mod(boot_i, len(val_sfs)).astype('int');
       print('holding out con/sf indices %02d/%02d' % (con_ind, sf_ind));
       resps_all = np.copy(r_all_noresamp);
-      resps_all[disp, val_sfs[sf_ind], valConByDisp[disp][con_ind]] = np.nan;
+      try:
+        resps_all[disp, val_sfs[sf_ind], valConByDisp[disp][con_ind]] = np.nan;
+      except:
+        print('Failure on con/sf %02d/%02d for cell %02d' % (con_ind, sf_ind, cell_num));
+        continue;
       if phAmpOnMean:
         resps_mean = np.copy(respsPhAdv_mean_ref);
         resps_mean[disp, val_sfs[sf_ind], valConByDisp[disp][con_ind]] = np.nan;
