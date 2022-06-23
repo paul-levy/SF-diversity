@@ -41,6 +41,7 @@ LOSS_TYPE=${3:-2}
 JOINT=${4:-0}
 HPC=${5:-0}
 SEM=${6:-0}
+PHADJ=${7:-1}
 
 # note: dog_mod=0 means flex; 1 means sach (DoG)
 
@@ -65,31 +66,25 @@ if [ "$EXP_DIR" = "LGN/" ]; then
   for run in {1..25}
   do 
     # mov RVC
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 0 1 $HPC 0 $SEM &
+    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 0 1 $HPC 0 $SEM &
     # N-R RVC
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 1 $HPC 0 $SEM &
-    # --- trying vec correction only
-    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 $SEM &
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 0 $SEM &
   done
   wait
   for run in {26..50}
   do 
     # mov RVC
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 0 1 $HPC 0 $SEM &
+    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 0 1 $HPC 0 $SEM &
     # N-R RVC
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 1 $HPC 0 $SEM &
-    # --- trying vec correction only
-    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 $SEM &
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 0 $SEM &
   done
   wait
   for run in {50..81}
   do 
     # mov RVC
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 0 1 $HPC 0 $SEM &
+    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 0 1 $HPC 0 $SEM &
     # N-R RVC
-    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT 1 1 1 $HPC 0 $SEM &
-    # --- trying vec correction only
-    #python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 $SEM &
+    python3.6 plot_descr.py $run LGN/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 0 $SEM &
   done
 fi
 if [ "$EXP_DIR" = "V1_orig/" ]; then

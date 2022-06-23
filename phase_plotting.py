@@ -31,12 +31,7 @@ rcParams['lines.markersize'] = 5;
 rcParams['font.style'] = 'oblique';
 rcParams['errorbar.capsize'] = 0;
 
-# at CNS
-loc_base = '/arc/2.2/p1/plevy/SF_diversity/sfDiv-OriModel/sfDiv-python/';
-# personal mac
-#loc_base = '/Users/paulgerald/work/sfDiversity/sfDiv-OriModel/sfDiv-python/';
-# prince cluster
-#loc_base = '/home/pl1465/SF_diversity/';
+loc_base = os.getcwd() + '/';
 
 expDir = sys.argv[3];
 phAdv_set_ylim = 1; # if 1, then we make the ylim [0,360] for phAdv-mean plot; otherwise, we don't specify the limit
@@ -58,12 +53,10 @@ save_loc = loc_base + expDir + saveDir;
 expName = hf.get_datalist(expDir);
 descrFit_f0 = None;
 #descrFit_f0 = 'descrFits_191023_sach_flex.npy';
-#phAdvName = 'phaseAdvanceFits_211028';
-#rvcName = 'rvcFits_211028';
-#phAdvName = 'phaseAdvanceFits_211108';
-#rvcName = 'rvcFits_211108';
-phAdvName = 'phaseAdvanceFits_220414pV';
-rvcName = 'rvcFits_220414pV';
+#phAdvName = 'phaseAdvanceFits_220414pV';
+#rvcName = 'rvcFits_220414pV';
+phAdvName = 'phaseAdvanceFitsHPC_220531';
+rvcName = 'rvcFitsHPC_220531';
 
 ######
 ## contents
@@ -420,7 +413,6 @@ def plot_phase_advance(which_cell, disp, sv_loc=save_loc, dir=-1, dp=dataPath, e
   saveName = "/cell_%03d_d%d_phaseAdv.pdf" % (which_cell, disp);
   save_loc = save_base + 'summary/';
   full_save = os.path.dirname(str(save_loc));
-  print('saving at: %s' % str(full_save + saveName));
   if not os.path.exists(full_save):
     os.makedirs(full_save)
   pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -453,7 +445,6 @@ def batch_phase_by_cond(cell_num, disp, cons=[], sfs=[], dir=-1, dp=dataPath, ex
 
   for c in cons:
     for s in sfs:
-      print('analyzing cell %d, dispersion %d, contrast %d, sf %d\n' % (cell_num, disp, c, s));
       phase_by_cond(cell_num, data, expInd, disp, c, s, dir=dir, date_suffix=date_suffix);  
 
 if __name__ == '__main__':

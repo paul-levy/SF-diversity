@@ -12,6 +12,7 @@ import matplotlib.cm as cm
 matplotlib.use('Agg') # to avoid GUI/cluster issues...
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
+from matplotlib.ticker import FuncFormatter
 import seaborn as sns
 sns.set(style='ticks')
 from scipy.stats import poisson, nbinom
@@ -34,7 +35,7 @@ for i in range(2):
     rcParams['font.family'] = 'sans-serif'
     # rcParams['font.sans-serif'] = ['Helvetica']
     rcParams['font.style'] = 'oblique'
-    rcParams['font.size'] = 30;
+    rcParams['font.size'] = 40;
     rcParams['pdf.fonttype'] = 3 # should be 42, but there are kerning issues
     rcParams['ps.fonttype'] = 3 # should be 42, but there are kerning issues
     rcParams['lines.linewidth'] = 3;
@@ -55,13 +56,19 @@ for i in range(2):
 majWidth = 4;
 minWidth = 4;
 lblSize = 40;
+y_lblpad = 6;
+x_lblpad = 8;
+subplot_title = False; # have subplot title? Not really necessary for pub. figures
+
+specify_ticks = True; # specify the SF ticks (x-axis for SF plots?)
 
 peakFrac = 0.75; # plot fall of to peakFrac of peak, rather than peak or charFreq
-inclLegend = 0;
 
 plotMetrCorr = 0; # plot the corr. b/t sf70 and charFreq [1] or rc [2] for each condition?
 plt_sf_as_rvc = 1;
 comm_S_calc = 1;
+plt_sfMix_dDoGs = False; # Plot d-DoG-S for sfMix only conditions?
+plt_joint = False; # plot joint?
 
 cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
@@ -89,7 +96,7 @@ else:
 if len(sys.argv) > 12:
   forceLog = int(sys.argv[12]); # used for byDisp/allCons_... (sf plots)
 else:
-  forceLog = 0;
+  forceLog = 1;
 
 loc_base = os.getcwd() + '/';
 
@@ -105,7 +112,7 @@ phAmpByMean=1;
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
-if expDir == 'LGN/':# or expDir == 'altExp':
+if expDir == 'LGN/':
     #descrBase = 'descrFits%s_220511' % hpc_str;
     descrBase = 'descrFits%s_220609' % hpc_str;
 else:
@@ -119,9 +126,9 @@ else:
 if expDir == 'LGN/':
   rvcBase = 'rvcFits%s_220531' % hpc_str;
   #rvcBase = 'rvcFits%s_220511' % hpc_str;
-  #rvcBase = 'rvcFits%s_220414pV' % hpc_str;
 else:
-  rvcBase = 'rvcFits%s_210914' % ''#hpc_str; # if V1?
+  rvcBase = 'rvcFits%s_220609' % hpc_str; # if V1?
+  #rvcBase = 'rvcFits%s_210914' % ''#hpc_str; # if V1?
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
@@ -169,7 +176,7 @@ if rvcAdj == 1:
   dir = 1 if rvcAdjSigned==1 else None # we dont' have pos/neg phase if vecF1
   rvcFits = hf.np_smart_load(data_loc + hf.rvc_fit_name(rvcBase, modNum=rvcMod, dir=dir, vecF1=vecF1)); # i.e. positive
   force_baseline = False; # plotting baseline will depend on F1/F0 designation
-if rvcAdj == 0:
+elif rvcAdj == 0:
   vecF1 = None
   rvcFits = hf.np_smart_load(data_loc + rvcBase + '_f0_NR.npy');
   force_baseline = True;
@@ -201,6 +208,7 @@ rvcBase = '%s%s' % (rvcBase, rvcFlag);
 
 # NOTE: We pass in the rvcFits where rvcBase[name] goes, and use -1 in rvcMod to indicate that we've already loaded the fits
 spikes_rate, which_measure = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcFits, rvcMod=-1, descrFitName_f0 = fLname, baseline_sub=False, force_dc=force_dc, force_f1=force_f1, return_measure=True, vecF1=vecF1);
+pdb.set_trace();
 # let's also get the baseline
 if force_baseline or (f1f0rat < 1 and expDir != 'LGN/'): # i.e. if we're in LGN, DON'T get baseline, even if f1f0 < 1 (shouldn't happen)
   baseline_resp = hf.blankResp(trialInf, expInd, spikes=spikes_rate, spksAsRate=True)[0];
@@ -317,6 +325,7 @@ for d in range(nDisps):
           except:
             pass; # why might this not work? If we only fit disp=0!
 
+        # we should always have this title; the right-side plot title will be optional
         dispAx[d][c_plt_ind, 0].set_title('D%02d: contrast: %d%%' % (d+1, 100*all_cons[v_cons[c]]));
 
         ### right side of plots - BASELINE SUBTRACTED IF COMPLEX CELL
@@ -330,7 +339,7 @@ for d in range(nDisps):
             to_sub = np.array(0);
           resps_curr = respMean[d, v_sfs, v_cons[c]] - to_sub;
           abvThresh = [resps_curr>minResp_toPlot];
-          var_curr = respVar[d, v_sfs, v_cons[c]][abvThresh];
+          var_curr = respVar[d, v_sfs, v_cons[c]][tuple(abvThresh)];
           dispAx[d][c_plt_ind, 1].errorbar(all_sfs[v_sfs][abvThresh], resps_curr[abvThresh], var_curr, 
                 fmt='o', color=currClr, clip_on=False, markersize=9, label=dataTxt);
 
@@ -356,7 +365,8 @@ for d in range(nDisps):
             #if char_freq != np.nan:
             #  dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k', label='char. freq', clip_on=False);
 
-          dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % descrFits[cellNum-1]['varExpl'][d, v_cons[c]], fontsize='medium');
+          if subplot_title:
+              dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % descrFits[cellNum-1]['varExpl'][d, v_cons[c]], fontsize='medium');
           dispAx[d][c_plt_ind, 1].set_xscale('log');
           dispAx[d][c_plt_ind, 1].set_yscale('log'); # double log
           dispAx[d][c_plt_ind, 1].set_ylim((minResp_toPlot, 1.5*maxResp));
@@ -371,7 +381,22 @@ for d in range(nDisps):
         
           dispAx[d][c_plt_ind, i].set_xscale('log');
           if c_plt_ind == len(v_cons)-1:
-            dispAx[d][c_plt_ind, i].set_xlabel('sf (c/deg)'); 
+            dispAx[d][c_plt_ind, i].set_xlabel('Spatial frequency (c/deg)', labelpad=x_lblpad); 
+
+          for jj, axis in enumerate([dispAx[d][c_plt_ind,i].xaxis, dispAx[d][c_plt_ind,i].yaxis]):
+            axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+            if jj == 0 and specify_ticks: # i.e. x-axis
+              core_ticks = np.array([1]);
+              pltd_sfs = all_sfs[v_sfs];
+              if np.min(pltd_sfs)<=0.3:
+                  core_ticks = np.hstack((0.3, core_ticks, 3));
+              else:
+                  core_ticks = np.hstack((0.5, core_ticks, 5));
+              if np.max(pltd_sfs)>=7:
+                  core_ticks = np.hstack((core_ticks, 10));
+              axis.set_ticks(core_ticks)
+            elif jj == 1: # y axis, make sure we also show the ticks, even though the axes are shared
+              axis.set_tick_params(labelleft=True); 
 
 	  # Set ticks out, remove top/right axis, put ticks only on bottom/left
           #dispAx[d][c_plt_ind, i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
@@ -379,7 +404,7 @@ for d in range(nDisps):
           sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
 
         dispAx[d][c_plt_ind, 0].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
-        dispAx[d][c_plt_ind, 0].set_ylabel('resp (sps)');
+        dispAx[d][c_plt_ind, 0].set_ylabel('Response (spikes/s)', labelpad=y_lblpad);
 
     fCurr.suptitle('%s #%d (f1f0: %.2f)' % (cellType, cellNum, f1f0rat));
     fCurr.subplots_adjust(wspace=0.1, top=0.95);
@@ -447,7 +472,7 @@ for d in range(nDisps):
             dispAx[d][1].errorbar(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', clip_on=True, \
                                        color=col);
         else:
-            dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], '-o', clip_on=False, \
+            dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], '-o', clip_on=True, \
                                        color=col, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
         if baseline_resp_curr > 0:
             dispAx[d][0].axhline(baseline_resp_curr, linestyle='--', color='k');
@@ -464,24 +489,45 @@ for d in range(nDisps):
       if expDir == 'LGN/' or forceLog == 1: # we want double-log if it's the LGN!
         dispAx[d][i].set_yscale('log');
         #dispAx[d][i].set_ylim((minToPlot, 1.5*maxResp));
-        dispAx[d][i].set_ylim((5e-1, 300)); # common y axis for ALL plots
+        if not specify_ticks or maxResp>90:
+            dispAx[d][i].set_ylim((5e-1, 300)); # common y axis for ALL plots
+        else:
+            dispAx[d][i].set_ylim((5e-1, 110));
         logSuffix = 'log_';
         dispAx[d][i].set_aspect('equal'); # if both axes are log, must make equal scales!
       else:
         dispAx[d][i].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
         logSuffix = '';
 
-      dispAx[d][i].set_xlabel('sf (c/deg)'); 
+      dispAx[d][i].set_xlabel('Spatial frequency (c/deg)', labelpad=x_lblpad); 
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
       #dispAx[d][i].tick_params(labelsize=15, width=2, length=16, direction='out');
       #dispAx[d][i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
       sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
 
-      lbl_str = '' if i==0 else 'above baseline ';
-      dispAx[d][i].set_ylabel('resp %s(sps)' % lbl_str);
-      dispAx[d][i].set_title('D%02d - sf tuning' % (d+1));
-      dispAx[d][i].legend(fontsize='large'); 
+      for jj, axis in enumerate([dispAx[d][i].xaxis, dispAx[d][i].yaxis]):
+          axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+          if jj == 0 and specify_ticks: # i.e. x-axis
+            core_ticks = np.array([1]);
+            pltd_sfs = all_sfs[v_sfs];
+            if np.min(pltd_sfs)<=0.3:
+                core_ticks = np.hstack((0.3, core_ticks, 3));
+            else:
+                core_ticks = np.hstack((0.5, core_ticks, 5));
+            if np.max(pltd_sfs)>=7:
+                core_ticks = np.hstack((core_ticks, 10));
+            axis.set_ticks(core_ticks)
+          elif jj == 1: # y axis, make sure we also show the ticks, even though the axes are shared
+            axis.set_tick_params(labelleft=True); 
+
+      #lbl_str = '' if i==0 else 'above baseline ';
+      lbl_str = '';
+      dispAx[d][i].set_ylabel('Response %s(spikes/s)' % lbl_str, labelpad=y_lblpad);
+      if subplot_title:
+          dispAx[d][i].set_title('D%02d - sf tuning' % (d+1));
+      if i==0: # only put legend on left-side plot
+          dispAx[d][i].legend(fontsize='x-small'); 
 
 sem_str = '_sem' if plot_sem_on_log else '';
 saveName = "/allCons_%scell_%03d.pdf" % (logSuffix, cellNum)
@@ -515,7 +561,8 @@ for d in range(nDisps):
 
     for c in reversed(range(n_v_cons)):
         c_plt_ind = n_v_cons - c - 1;
-        sfMixAx[c_plt_ind, d].set_title('con: %s%%' % str(int(100*(np.round(all_cons[v_cons[c]], 2)))));
+        if subplot_title:
+            sfMixAx[c_plt_ind, d].set_title('con: %s%%' % str(int(100*(np.round(all_cons[v_cons[c]], 2)))));
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);
         
         sfVals = all_sfs[v_sfs];
@@ -558,9 +605,9 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].set_xscale('log');
         if d == 0:
           if c_plt_ind == 0:
-            sfMixAx[c_plt_ind, d].set_ylabel('resp (sps)');
+            sfMixAx[c_plt_ind, d].set_ylabel('Response (spikes/s)');
           if c_plt_ind == mixCons-1:
-            sfMixAx[c_plt_ind, d].set_xlabel('sf (c/deg)');
+            sfMixAx[c_plt_ind, d].set_xlabel('Spatial frequency (c/deg)', labelpad=x_lblpad);
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         #sfMixAx[c_plt_ind, d].tick_params(labelsize=15, width=1, length=8, direction='out');
@@ -609,7 +656,6 @@ for d in range(nDisps):
         row_ind = int(sf/n_cols);
         col_ind = np.mod(sf, n_cols);
         sf_ind = v_sf_inds[sf];
-       	plt_x = d; 
         if n_cols > 1:
           plt_y = (row_ind, col_ind);
         else: # pyplot makes it (n_rows, ) if n_cols == 1
@@ -629,7 +675,12 @@ for d in range(nDisps):
             to_sub = np.array(0);
           resp_curr = resp_curr - to_sub;
 
-        rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons][resp_curr>minResp_toPlot], resp_curr[resp_curr>minResp_toPlot], var_curr[resp_curr>minResp_toPlot], fmt='o', linestyle='-', clip_on=False, label='data', markersize=9, color=dataClr);
+        if forceLog==1: # then we need to be careful in ensuring that the errorbars do not go below what is OK
+          # errbars should be (2, nCons)
+          high_err = var_curr; # no problem with going to higher values
+          low_err = np.minimum(var_curr, resp_curr-minResp_toPlot-1e-2); # i.e. don't allow us to make the err any lower than where the plot will cut-off (incl. negatives)
+          errs = np.vstack((low_err, high_err));
+        rvcCurr[plt_y].errorbar(100*all_cons[v_cons][resp_curr>minResp_toPlot], resp_curr[resp_curr>minResp_toPlot], errs[:, resp_curr>minResp_toPlot], fmt='o', linestyle='-', clip_on=False, label='data', markersize=9, color=dataClr);
 
  	# RVC descr model - TODO: Fix this discrepancy between f0 and f1 rvc structure? make both like descrFits?
         # NOTE: changing split of accessing rvcFits based on rvcAdj
@@ -647,42 +698,45 @@ for d in range(nDisps):
            rvcResps = rvcResps - to_sub;
         val_inds = np.where(rvcResps>minResp_toPlot)[0];
 
-        rvcAx[plt_x][plt_y].plot(cons_plot[val_inds], rvcResps[val_inds], color=modClr, \
-          alpha=0.7, clip_on=False, label=modTxt);
-        rvcAx[plt_x][plt_y].plot(c50, 1.5*minResp_toPlot, 'v', label='c50', color=modClr, clip_on=False);
+        rvcCurr[plt_y].plot(100*cons_plot[val_inds], rvcResps[val_inds], color=modClr, alpha=0.7, clip_on=False, label=modTxt);
+        if c50>0: # just to make sure that we don't plot anything odd...
+          rvcCurr[plt_y].plot(100*c50, 1.5*minResp_toPlot, 'v', label='c50', color=modClr, clip_on=False);
         # now, let's also plot the baseline, if complex cell
         if baseline_resp > 0 and forceLog != 1: # i.e. complex cell (baseline_resp is not None) previously
-          rvcAx[plt_x][plt_y].axhline(baseline_resp, color='k', linestyle='dashed');
+          rvcCurr[plt_y].axhline(baseline_resp, color='k', linestyle='dashed');
 
-        rvcAx[plt_x][plt_y].set_xscale('log', basex=10); # was previously symlog, linthreshx=0.01
+        rvcCurr[plt_y].set_xscale('log');
         if col_ind == 0:
-          rvcAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
-          rvcAx[plt_x][plt_y].set_ylabel('response (spikes/s)', fontsize='medium');
-          rvcAx[plt_x][plt_y].legend();
+          rvcCurr[plt_y].set_xlabel('Contrast', fontsize='medium', labelpad=x_lblpad);
+          rvcCurr[plt_y].set_ylabel('Response (spikes/s)', fontsize='medium', labelpad=y_lblpad);
+          rvcCurr[plt_y].legend();
 
         # set axis limits...
-        rvcAx[plt_x][plt_y].set_xlim([0.01, 1]);
+        rvcCurr[plt_y].set_xlim([1, 100]);
         if forceLog == 1:
-          rvcAx[plt_x][plt_y].set_ylim((minResp_toPlot, 1.25*maxResp));
-          rvcAx[plt_x][plt_y].set_yscale('log'); # double log
-          rvcAx[plt_x][plt_y].set_aspect('equal'); 
+          #rvcCurr[plt_y].set_ylim((minResp_toPlot, 1.25*maxResp));
+          rvcCurr[plt_y].set_yscale('log'); # double log
+          rvcCurr[plt_y].set_aspect('equal'); 
      
         try:
           curr_varExpl = rvcFits[d]['varExpl'][sf_ind] if rvcAdj else rvcFits['varExpl'][d, sf_ind];
         except:
           curr_varExpl = np.nan;
-        rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f [vE=%.2f%%]' % (d+1, all_sfs[sf_ind], curr_varExpl), fontsize='large');
+        if subplot_title:
+            rvcCurr[plt_y].set_title('D%d: sf: %.3f [vE=%.2f%%]' % (d+1, all_sfs[sf_ind], curr_varExpl), fontsize='large');
         if rvcMod == 0:
           try:
             cg = rvcFits[d]['conGain'][sf_ind] if rvcAdj else rvcFits['conGain'][d, sf_ind];
-            rvcAx[plt_x][plt_y].text(0, 0.95, 'conGain=%.1f' % cg, transform=rvcAx[plt_x][plt_y].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='top');
+            rvcCurr[plt_y].text(0.05, 0.95, 'conGain=%.1f' % cg, transform=rvcCurr[plt_y].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='top');
           except:
              pass; # not essential...
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
-        sns.despine(ax = rvcAx[plt_x][plt_y], offset = 10, trim=False);
-        #rvcAx[plt_x][plt_y].tick_params(labelsize=lblSize, width=majWidth, direction='out');
-        #rvcAx[plt_x][plt_y].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
+        sns.despine(ax = rvcCurr[plt_y], offset = 10, trim=False);
+        #rvcCurr[plt_y].tick_params(labelsize=lblSize, width=majWidth, direction='out');
+        #rvcCurr[plt_y].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
+        for jj, axis in enumerate([rvcCurr[plt_y].xaxis, rvcCurr[plt_y].yaxis]):
+          axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
 
     fCurr.tight_layout(rect=[0, 0.03, 1, 0.95])
 
@@ -700,11 +754,13 @@ pdfSv.close()
 
 crfAx = []; fCRF = [];
 
+conMult = 100; # con [0,1] or [0,100]?
+
 for d in range(nDisps):
     
     nrow, ncol = 1, 2+plt_sf_as_rvc;
 
-    fCurr, crfCurr = plt.subplots(nrow, ncol, figsize=(ncol*17.5, nrow*20), sharex=False, sharey='row');
+    fCurr, crfCurr = plt.subplots(nrow, ncol, figsize=(ncol*17.5, nrow*20))#, sharey='row');#sharey='row');
     fCRF.append(fCurr)
     crfAx.append(crfCurr);
 
@@ -714,14 +770,13 @@ for d in range(nDisps):
     n_v_sfs = len(v_sf_inds);
 
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
-    minResp_plot = 1e-0;
+    minResp_plot = 1;
     ref_params = descrParams[d, np.where(v_cons)[0][-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
     try:
         ref_rc_val = ref_params[2] if joint>0 else None;
     except:
         print('cell %d --> bad ref_rc_val?' % cellNum);
 
-    lines_log = [];
     for sf in range(n_v_sfs):
         sf_ind = v_sf_inds[sf];
         v_cons = ~np.isnan(respMean[d, sf_ind, :]);
@@ -738,10 +793,10 @@ for d in range(nDisps):
             to_sub = np.array(0);
           plot_resp = plot_resp - to_sub;
 
-        line_curr, = crfAx[d][0].plot(all_cons[v_cons][plot_resp>minResp_plot], plot_resp[plot_resp>minResp_plot], '-o', color=col, \
+        crfAx[d][0].plot(conMult*all_cons[v_cons][plot_resp>minResp_plot], plot_resp[plot_resp>minResp_plot], '-o', color=col, \
                                       clip_on=False, markersize=9, label=con_str);
-        lines_log.append(line_curr);
-        crfAx[d][0].set_title('D%d: RVC data' % (d+1));
+        if subplot_title:
+            crfAx[d][0].set_title('D%d: RVC data' % (d+1));
 
         # now RVC model [1]
         if rvcAdj == 1:
@@ -754,20 +809,22 @@ for d in range(nDisps):
           rvcResps = hf.naka_rushton(cons_plot, prms_curr)
 
         rvcRespsAdj = rvcResps-to_sub;
-        crfAx[d][1].plot(cons_plot[rvcRespsAdj>minResp_plot], rvcRespsAdj[rvcRespsAdj>minResp_plot], color=col, \
+        crfAx[d][1].plot(conMult*cons_plot[rvcRespsAdj>minResp_plot], rvcRespsAdj[rvcRespsAdj>minResp_plot], color=col, \
                          clip_on=False, label = con_str);
-        crfAx[d][1].set_title('D%d: RVC fits' % (d+1));
+        if subplot_title:
+          crfAx[d][1].set_title('D%d: RVC fits' % (d+1));
 
         # OPTIONAL, plot RVCs as inferred from SF tuning fits - from 22.01.19 onwards
         if plt_sf_as_rvc:
             cons = all_cons[v_cons];
             try:
-                resps_curr = np.array([hf.get_descrResp(descrParams[d, vc], all_sfs[sf_ind], descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val) for vc in np.where(v_cons)[0]]) - to_sub;
-                crfAx[d][2].plot(all_cons[v_cons], resps_curr, color=col, \
+              resps_curr = np.array([hf.get_descrResp(descrParams[d, vc], all_sfs[sf_ind], descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val) for vc in np.where(v_cons)[0]]) - to_sub;
+              crfAx[d][2].plot(conMult*all_cons[v_cons][resps_curr>minResp_plot], resps_curr[resps_curr>minResp_plot], color=col, \
                          clip_on=False, linestyle='--', marker='o');
+              if subplot_title:
                 crfAx[d][2].set_title('D%d: RVC from SF fit' % (d+1));
             except:
-                pass # this is not essential...
+              pass # this is not essential...
             
 
     for i in range(len(crfCurr)):
@@ -776,22 +833,33 @@ for d in range(nDisps):
         crfAx[d][i].set_xscale('log');
         crfAx[d][i].set_yscale('log');
         crfAx[d][i].set_ylim((minResp_plot, 1.5*maxResp));
+        if conMult==1:
+          crfAx[d][i].set_xlim([0.01, 1]);
+        elif conMult==100:
+          crfAx[d][i].set_xlim([.8, 110]);
         crfAx[d][i].set_aspect('equal');
         #crfAx[d][i].set_ylim((minResp_plot, 300)); # common y axis for ALL plots
         logSuffix = 'log_';
       else:
-        crfAx[d][i].set_xlim([-0.1, 1]);
+        if conMult==1:
+          crfAx[d][i].set_xlim([-0.1, 1]);
+        elif conMult==100:
+          crfAx[d][i].set_xlim([-10, 100]);
         crfAx[d][i].set_ylim([-0.1*maxResp, 1.1*maxResp]);
         logSuffix = '';
-      crfAx[d][i].set_xlabel('contrast');
+      
+      crfAx[d][i].set_xlabel('Contrast', labelpad=x_lblpad);
+      for jj, axis in enumerate([crfAx[d][i].xaxis, crfAx[d][i].yaxis]):
+        axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+        if jj==1: # i.e. y axis, make sure we have tick labels, here, too
+          axis.set_tick_params(labelleft=True); 
 
-      # Set ticks out, remove top/right axis, put ticks only on bottom/left
-      #crfAx[d][i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
-      #crfAx[d][i].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
       sns.despine(ax = crfAx[d][i], offset=10, trim=False);
 
-      crfAx[d][i].set_ylabel('resp above baseline (sps)');
+      crfAx[d][i].set_ylabel('Response (spikes/s)', labelpad=y_lblpad);
       crfAx[d][i].legend();
+
+      fCurr.tight_layout(rect=[0, 0.03, 1, 0.95])
 
 saveName = "/allSfs_%scell_%03d.pdf" % (logSuffix, cellNum)
 full_save = os.path.dirname(str(save_loc + 'CRF%s%s/' % (rvcSuff, rvcFlag)));
@@ -799,8 +867,8 @@ if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
 for f in fCRF:
-    pdfSv.savefig(f)
-    plt.close(f)
+  pdfSv.savefig(f)
+  plt.close(f)
 pdfSv.close()
 
 ####################################
@@ -1018,97 +1086,99 @@ pdfSv.close()
 ##### joint tuning plots ###########
 ####################################
 
-fDisp = []; dispAx = [];
-# NOTE: for now, only plotting single gratings
-for d in range(1): #nDisps
+if plt_joint:
 
-  nr, nc = 1, 3; # 3 for: data, pred-from-rvc, pred-from-sfs
-  f, ax = plt.subplots(nrows=nr, ncols=nc, figsize=(nc*25, nr*20))
-  fDisp.append(f); dispAx.append(ax);
-    
-  ### "zeroth", get the stimulus values and labels
-  val_cons = val_con_by_disp[d];
-  val_sfs = hf.get_valid_sfs(expData, d, val_cons[d], expInd, stimVals, validByStimVal); # just take any contrast
+  fDisp = []; dispAx = [];
+  # NOTE: for now, only plotting single gratings
+  for d in range(1): #nDisps
 
-  xlabels = ['%.2f' % x for x in all_sfs[val_sfs]]
-  ylabels = ['%.2f' % x for x in all_cons[val_cons]]
+    nr, nc = 1, 3; # 3 for: data, pred-from-rvc, pred-from-sfs
+    f, ax = plt.subplots(nrows=nr, ncols=nc, figsize=(nc*25, nr*20))
+    fDisp.append(f); dispAx.append(ax);
 
-  #########
-  ### first, get the data and model predictions
-  #########
-  ## first, the data
-  #   [X, Y] is X: increasing CON ||| Y: increasing SF
-  #   "fancy" indexing (must turn dispersion into array for this to work)
-  #   note that we also transpose so that SF will be on the x, contrast on the y
-  curr_resps = respOrg[np.ix_([d], val_sfs, val_cons)].squeeze().transpose();
-  ## now, RVC model - here, each set of parameters is for a given SF
-  rvcCurr = rvcFits[d]['params'] if rvcAdj == 1 else rvcFits['params'][d, :,:];
+    ### "zeroth", get the stimulus values and labels
+    val_cons = val_con_by_disp[d];
+    val_sfs = hf.get_valid_sfs(expData, d, val_cons[d], expInd, stimVals, validByStimVal); # just take any contrast
 
-  con_steps = 100;
-  plt_cons = np.geomspace(all_cons[val_cons][0], all_cons[val_cons][-1], con_steps);
-  rvcResps = np.zeros((con_steps, len(val_sfs)));
-#     rvcResps = np.zeros_like(curr_resps);
-  for s_itr, s in enumerate(val_sfs):
-    curr_params = rvcCurr[s];
-    curr_cons = plt_cons;
-    if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
-      rsp = hf.naka_rushton(curr_cons, curr_params)
-    elif rvcMod == 0: # i.e. movshon form
-      rvc_mov = hf.get_rvc_model()
-      rsp = rvc_mov(*curr_params, curr_cons);
-    rvcResps[range(len(curr_cons)), s_itr] = rsp;
-  ## finally, descriptive SF model - here, each set of parameters is for a given contrast
-  descrCurr = descrParams[d];
-  sf_steps = 100;
-  plt_sfs = np.geomspace(all_sfs[0], all_sfs[-1], sf_steps);
-  descrResps = np.zeros((len(val_cons), sf_steps));
-  ref_params = descrParams[d, val_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
-  ref_rc_val = ref_params[2] if joint>0 else None;
+    xlabels = ['%.2f' % x for x in all_sfs[val_sfs]]
+    ylabels = ['%.2f' % x for x in all_cons[val_cons]]
 
-  for c_itr, c in enumerate(val_cons):
-    curr_params = descrCurr[c];
-    curr_sfs = plt_sfs;
-    descrResps[c_itr, range(len(curr_sfs))] = hf.get_descrResp(curr_params, curr_sfs, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
+    #########
+    ### first, get the data and model predictions
+    #########
+    ## first, the data
+    #   [X, Y] is X: increasing CON ||| Y: increasing SF
+    #   "fancy" indexing (must turn dispersion into array for this to work)
+    #   note that we also transpose so that SF will be on the x, contrast on the y
+    curr_resps = respOrg[np.ix_([d], val_sfs, val_cons)].squeeze().transpose();
+    ## now, RVC model - here, each set of parameters is for a given SF
+    rvcCurr = rvcFits[d]['params'] if rvcAdj == 1 else rvcFits['params'][d, :,:];
 
-  ovr_min = np.minimum(np.min(curr_resps), np.minimum(np.min(rvcResps), np.min(descrResps)))
-  ovr_max = np.maximum(np.max(curr_resps), np.maximum(np.max(rvcResps), np.max(descrResps)))
+    con_steps = 100;
+    plt_cons = np.geomspace(all_cons[val_cons][0], all_cons[val_cons][-1], con_steps);
+    rvcResps = np.zeros((con_steps, len(val_sfs)));
+  #     rvcResps = np.zeros_like(curr_resps);
+    for s_itr, s in enumerate(val_sfs):
+      curr_params = rvcCurr[s];
+      curr_cons = plt_cons;
+      if rvcMod == 1 or rvcMod == 2: # naka-rushton/peirce
+        rsp = hf.naka_rushton(curr_cons, curr_params)
+      elif rvcMod == 0: # i.e. movshon form
+        rvc_mov = hf.get_rvc_model()
+        rsp = rvc_mov(*curr_params, curr_cons);
+      rvcResps[range(len(curr_cons)), s_itr] = rsp;
+    ## finally, descriptive SF model - here, each set of parameters is for a given contrast
+    descrCurr = descrParams[d];
+    sf_steps = 100;
+    plt_sfs = np.geomspace(all_sfs[0], all_sfs[-1], sf_steps);
+    descrResps = np.zeros((len(val_cons), sf_steps));
+    ref_params = descrParams[d, val_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+    ref_rc_val = ref_params[2] if joint>0 else None;
 
-  #########
-  ### now, plot!
-  #########
-  # first, data
-  sns.heatmap(curr_resps, vmin=ovr_min, vmax=ovr_max, xticklabels=xlabels, yticklabels=ylabels, cmap=cm.gray, ax=ax[0])
-  ax[0].set_title('data')
-  # then, from RVC model
-  sns.heatmap(rvcResps, vmin=ovr_min, vmax=ovr_max, xticklabels=xlabels, cmap=cm.gray, ax=ax[1])
-  ax[1].set_yticks(ticks=[])
-  ax[1].set_title('rvc model')
-  # then, from descr model
-  ### third, plot predictions as given from the descriptive fits
-  sns.heatmap(descrResps, vmin=ovr_min, vmax=ovr_max, yticklabels=ylabels, cmap=cm.gray, ax=ax[2])
-  ax[2].set_xticks(ticks=[])
-  ax[2].set_title('sf model')
-  ### fourth, hacky hacky: matmul the two model matrices together
-#     ooh = ovr_max*np.matmul(np.divide(rvcResps, np.max(rvcResps.flatten())), np.divide(descrResps, np.max(descrResps.flatten())))
-#     sns.heatmap(ooh, vmin=ovr_min, vmax=ovr_max, yticklabels=ylabels, cmap=cm.gray, ax=ax[3])
-#     ax[3].set_xticks(ticks=[]); ax[3].set_yticks(ticks=[])
-#     ax[3].set_title('mult?')
+    for c_itr, c in enumerate(val_cons):
+      curr_params = descrCurr[c];
+      curr_sfs = plt_sfs;
+      descrResps[c_itr, range(len(curr_sfs))] = hf.get_descrResp(curr_params, curr_sfs, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
 
-  ### finally, just set some labels
-  f.suptitle('Cell #%d [%s]: Joint tuning w/SF and contrast [disp %d]' % (cellNum, cellType, d+1))
-  for i in range(nc):
-    ax[i].set_xlabel('sf (c/deg)');
-    ax[i].set_ylabel('con (%)')
+    ovr_min = np.minimum(np.min(curr_resps), np.minimum(np.min(rvcResps), np.min(descrResps)))
+    ovr_max = np.maximum(np.max(curr_resps), np.maximum(np.max(rvcResps), np.max(descrResps)))
 
-saveName = "/cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'joint%s/' % rvcFlag));
-if not os.path.exists(full_save):
-  os.makedirs(full_save);
-pdfSv = pltSave.PdfPages(full_save + saveName);
-for f in fDisp:
-    pdfSv.savefig(f)
-    plt.close(f)
-pdfSv.close();
+    #########
+    ### now, plot!
+    #########
+    # first, data
+    sns.heatmap(curr_resps, vmin=ovr_min, vmax=ovr_max, xticklabels=xlabels, yticklabels=ylabels, cmap=cm.gray, ax=ax[0])
+    ax[0].set_title('data')
+    # then, from RVC model
+    sns.heatmap(rvcResps, vmin=ovr_min, vmax=ovr_max, xticklabels=xlabels, cmap=cm.gray, ax=ax[1])
+    ax[1].set_yticks(ticks=[])
+    ax[1].set_title('rvc model')
+    # then, from descr model
+    ### third, plot predictions as given from the descriptive fits
+    sns.heatmap(descrResps, vmin=ovr_min, vmax=ovr_max, yticklabels=ylabels, cmap=cm.gray, ax=ax[2])
+    ax[2].set_xticks(ticks=[])
+    ax[2].set_title('sf model')
+    ### fourth, hacky hacky: matmul the two model matrices together
+  #     ooh = ovr_max*np.matmul(np.divide(rvcResps, np.max(rvcResps.flatten())), np.divide(descrResps, np.max(descrResps.flatten())))
+  #     sns.heatmap(ooh, vmin=ovr_min, vmax=ovr_max, yticklabels=ylabels, cmap=cm.gray, ax=ax[3])
+  #     ax[3].set_xticks(ticks=[]); ax[3].set_yticks(ticks=[])
+  #     ax[3].set_title('mult?')
+
+    ### finally, just set some labels
+    f.suptitle('Cell #%d [%s]: Joint tuning w/SF and contrast [disp %d]' % (cellNum, cellType, d+1))
+    for i in range(nc):
+      ax[i].set_xlabel('Spatial frequency (c/deg)');
+      ax[i].set_ylabel('con (%)', labelpad=y_lblpad)
+
+  saveName = "/cell_%03d.pdf" % (cellNum)
+  full_save = os.path.dirname(str(save_loc + 'joint%s/' % rvcFlag));
+  if not os.path.exists(full_save):
+    os.makedirs(full_save);
+  pdfSv = pltSave.PdfPages(full_save + saveName);
+  for f in fDisp:
+      pdfSv.savefig(f)
+      plt.close(f)
+  pdfSv.close();
 
 # #### If we have boots, plot the correlation between sf70 and char. freq [only 0 disp, for now; 21.10.23]
 
@@ -1160,7 +1230,7 @@ if plotMetrCorr>0 and check_boot and (descrMod == 3 or descrMod == 1): # i.e. Do
           if col_ind == 0:
               if row_ind == n_rows-1: # only on the last row do we make the sf70 label
                   dispAx[d][row_ind, col_ind].set_xlabel(r'$sf_{70}$')
-              dispAx[d][row_ind, col_ind].set_ylabel(r'%s' % ylabel);
+              dispAx[d][row_ind, col_ind].set_ylabel(r'%s' % ylabel, labelpad=y_lblpad);
 
           mdn_gainRat = np.nanmedian(curr_fits['boot_params'][:,d,v_cons[c],2]) # this is the gs param, which is already relative to gc
           mdn_radRat = np.nanmedian(ratio_rs)
@@ -1188,7 +1258,7 @@ if plotMetrCorr>0 and check_boot and (descrMod == 3 or descrMod == 1): # i.e. Do
 
 # #### Plot d-DoG-S model in space, just sfMix contrasts
 
-if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
+if descrMod == 3 or descrMod == 5 and plt_sfMix_dDoGs: # i.e. d-DoG-s
 
   isMult = True if descrMod == 3 else False; # which parameterization of the d-DoG-S is it?
 
@@ -1230,10 +1300,10 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
 
           if d == 0:
             if c_plt_ind == 0:
-              sfMixAx[c_plt_ind, d].set_ylabel('sensitivity');
+              sfMixAx[c_plt_ind, d].set_ylabel('Sensitivity');
               #sfMixAx[c_plt_ind, d].legend(fontsize='x-small');
             if c_plt_ind == mixCons-1:
-              sfMixAx[c_plt_ind, d].set_xlabel('dva');
+              sfMixAx[c_plt_ind, d].set_xlabel('d.v.a.');
 
           # Add parameters! (in ax-transformed coords, (0,0) is bottom left, (1,1) is top right
           prms_curr_trans = hf.parker_hawken_transform(np.copy(prms_curr), space_in_arcmin=True, isMult=isMult, ref_params=ref_params);
@@ -1316,10 +1386,10 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
           dispAx[d][row_ind, col_ind].plot(samps, df2, 'b--')#, label='f2');
 
           if c_plt_ind == 0:
-            dispAx[d][row_ind, col_ind].set_ylabel('sensitivity');
+            dispAx[d][row_ind, col_ind].set_ylabel('Sensitivity');
             #dispAx[d][row_ind, col_ind].legend(fontsize='x-small');
           if c_plt_ind == mixCons-1:
-            dispAx[d][row_ind, col_ind].set_xlabel('dva');
+            dispAx[d][row_ind, col_ind].set_xlabel('d.v.a.');
 
           # Add parameters! (in ax-transformed coords, (0,0) is bottom left, (1,1) is top right
           prms_curr_trans = hf.parker_hawken_transform(np.copy(prms_curr), space_in_arcmin=True, isMult=isMult, ref_params=ref_params);
@@ -1330,6 +1400,7 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
           dispAx[d][row_ind, col_ind].text(0, 0.16, r"""ctr: $k_c/k_s/x_c/x_s$=%.0f/%.0f/%.2f'/%.2f'""" % (kc1,ks1,xc1,xs1), transform=dispAx[d][row_ind, col_ind].transAxes, horizontalalignment='left', fontsize='x-small');
           dispAx[d][row_ind, col_ind].text(0, 0.08, r"""sd: $k_c/k_s/x_c/x_s$=%.0f/%.0f/%.2f'/%.2f'""" % (kc2,ks2,xc2,xs2), transform=dispAx[d][row_ind, col_ind].transAxes, horizontalalignment='left', fontsize='x-small');
           dispAx[d][row_ind, col_ind].text(0, 0, r"""$g/S$=%.2f/%.2f'""" % (g,S), transform=dispAx[d][row_ind, col_ind].transAxes, horizontalalignment='left', fontsize='x-small');
+          sns.despine(offset=10, ax=dispAx[d][row_ind, col_ind]);
 
       fCurr.suptitle('%s #%d (f1f0: %.2f)' % (cellType, cellNum, f1f0rat));
 

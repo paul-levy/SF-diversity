@@ -308,7 +308,7 @@ for c in reversed(range(n_v_cons)):
 
       dispAx[c_plt_ind, i].set_xscale('log');
       if c_plt_ind == len(maskCon)-1:
-        dispAx[c_plt_ind, i].set_xlabel('sf (c/deg)'); 
+        dispAx[c_plt_ind, i].set_xlabel('Spatial frequency (c/deg)'); 
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
       #dispAx[c_plt_ind, i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
@@ -316,7 +316,7 @@ for c in reversed(range(n_v_cons)):
       sns.despine(ax=dispAx[c_plt_ind, i], offset=10, trim=False); 
 
     dispAx[c_plt_ind, 0].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
-    dispAx[c_plt_ind, 0].set_ylabel('resp (sps)');
+    dispAx[c_plt_ind, 0].set_ylabel('Response (spikes/s)');
 
 fDisp.suptitle('%s #%d (f1f0: %.2f)' % (cellType, cellNum, f1f0_rat));
 fDisp.subplots_adjust(wspace=0.1, top=0.95);
@@ -380,15 +380,15 @@ for i in range(len(dispAx)):
     dispAx[i].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
     logSuffix = '';
 
-  dispAx[i].set_xlabel('sf (c/deg)'); 
+  dispAx[i].set_xlabel('Spatial frequency (c/deg)'); 
 
   # Set ticks out, remove top/right axis, put ticks only on bottom/left
   #dispAx[i].tick_params(labelsize=15, width=2, length=16, direction='out');
   #dispAx[i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
   sns.despine(ax=dispAx[i], offset=10, trim=False); 
 
-  lbl_str = '' if i==0 else 'above baseline ';
-  dispAx[i].set_ylabel('resp %s(sps)' % lbl_str);
+  lbl_str = '';# if i==0 else 'above baseline ';
+  dispAx[i].set_ylabel('Response %s(spikes/s)' % lbl_str);
   dispAx[i].set_title('sf tuning');
   dispAx[i].legend(fontsize='large'); 
 
@@ -463,8 +463,8 @@ for sf in range(n_v_sfs):
 
     rvcAx[plt_y].set_xscale('log', basex=10); # was previously symlog, linthreshx=0.01
     if col_ind == 0:
-      rvcAx[plt_y].set_xlabel('contrast', fontsize='medium');
-      rvcAx[plt_y].set_ylabel('response (spikes/s)', fontsize='medium');
+      rvcAx[plt_y].set_xlabel('Contrast', fontsize='medium');
+      rvcAx[plt_y].set_ylabel('Response (spikes/s)', fontsize='medium');
       rvcAx[plt_y].legend();
 
     # set axis limits...
@@ -575,14 +575,15 @@ for i in range(len(crfAx)):
     crfAx[i].set_xlim([-0.1, 1]);
     crfAx[i].set_ylim([-0.1*maxResp, 1.1*maxResp]);
     logSuffix = '';
-  crfAx[i].set_xlabel('contrast');
+  crfAx[i].set_xlabel('Contrast');
 
   # Set ticks out, remove top/right axis, put ticks only on bottom/left
   #crfAx[i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
   #crfAx[i].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
   sns.despine(ax = crfAx[i], offset=10, trim=False);
 
-  crfAx[i].set_ylabel('resp above baseline (sps)');
+  #crfAx[i].set_ylabel('resp above baseline (sps)');
+  crfAx[i].set_ylabel('Response (spikes/s)');
   crfAx[i].legend();
 
 saveName = "/allSfs_%scell_%03d.pdf" % (logSuffix, cellNum)
@@ -639,7 +640,7 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
         dispAx[row_ind, col_ind].set_ylabel('sensitivity');
         #dispAx[row_ind, col_ind].legend(fontsize='x-small');
       if c_plt_ind == n_v_cons-1:
-        dispAx[row_ind, col_ind].set_xlabel('dva');
+        dispAx[row_ind, col_ind].set_xlabel('d.v.a.');
 
       # Add parameters! (in ax-transformed coords, (0,0) is bottom left, (1,1) is top right
       prms_curr_trans = hf.parker_hawken_transform(np.copy(prms_curr), space_in_arcmin=True, isMult=isMult, ref_params=ref_params);

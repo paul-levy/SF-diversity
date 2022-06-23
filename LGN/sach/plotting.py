@@ -6,6 +6,7 @@ import matplotlib
 matplotlib.use('Agg') # to avoid GUI/cluster issues...
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
+from matplotlib.ticker import FuncFormatter
 import seaborn as sns
 sns.set(style='ticks')
 import helper_fcns_sach as hf
@@ -23,7 +24,7 @@ for i in range(2):
     rcParams['font.family'] = 'sans-serif'
     # rcParams['font.sans-serif'] = ['Helvetica']
     rcParams['font.style'] = 'oblique'
-    rcParams['font.size'] = 30;
+    rcParams['font.size'] = 40;
     rcParams['pdf.fonttype'] = 3 # should be 42, but there are kerning issues
     rcParams['ps.fonttype'] = 3 # should be 42, but there are kerning issues
     rcParams['lines.linewidth'] = 3;
@@ -41,6 +42,10 @@ for i in range(2):
     rcParams['ytick.major.width'] = 2
     rcParams['ytick.minor.width'] = 2
 
+y_lblpad = 6;
+x_lblpad = 8;
+specify_ticks = 1;
+
 which_cell   = int(sys.argv[1]);
 sf_loss_type = int(sys.argv[2]);
 sf_DoG_model = int(sys.argv[3]);
@@ -53,7 +58,11 @@ if len(sys.argv) > 8:
 else:
   plot_sem_on_log = 1; # plot the S.E.M. for log SF plots?
 if len(sys.argv) > 9:
-  fromFile     = int(sys.argv[9]); 
+  plot_zFreq = int(sys.argv[9]);
+else:
+  plot_zFreq = 1; # plot the zero frequency?
+if len(sys.argv) > 10:
+  fromFile     = int(sys.argv[10]); 
 else:
   fromFile = 0; # basically deprecated...
 
@@ -136,7 +145,16 @@ lines = [];
 for c in reversed(range(nCons)):
 
     # summary plot (just data) first
-    val_sfs = np.where(all_sfs>0)[0]; # there is one SF which is zero; ignore this one
+    if plot_zFreq: 
+        # we want to plot zero frequency, but need to keep axes equal
+        # --- so, we'll pretend that the zero frequency is just a slightly lower, non-zero frequency
+        val_sfs = range(len(all_sfs)); # get all indices
+        curr_sfs = np.maximum(np.min(all_sfs[all_sfs>0])/2, all_sfs[val_sfs]);
+    else:
+        val_sfs = np.where(all_sfs>0); # do not plot the zero sf condition
+        curr_sfs = all_sfs;
+    sfs_plot = np.geomspace(curr_sfs[val_sfs[0]], curr_sfs[val_sfs[-1]], 100);
+
     # plot data
     col = [(nCons-c-1)/float(nCons), (nCons-c-1)/float(nCons), (nCons-c-1)/float(nCons)];
     respAbBaseline = np.reshape(f1['mean'][c, val_sfs], (len(val_sfs), ));
@@ -148,38 +166,54 @@ for c in reversed(range(nCons)):
       high_err = respVar; # no problem with going to higher values
       low_err = np.minimum(respVar, respAbBaseline-minResp_toPlot-1e-2); # i.e. don't allow us to make the err any lower than where the plot will cut-off (incl. negatives)
       errs = np.vstack((low_err, high_err));
-      ax[0].errorbar(all_sfs[val_sfs][abvBound], respAbBaseline[abvBound] - respAdj, errs[:, abvBound], fmt='o', linestyle='-', clip_on=False, color=col, label='%d%%' % (int(100*np.round(all_cons[c], conDig))));
+      ax[0].errorbar(curr_sfs[val_sfs][abvBound], respAbBaseline[abvBound] - respAdj, errs[:, abvBound], fmt='o', linestyle='-', clip_on=False, color=col, label='%d%%' % (int(100*np.round(all_cons[c], conDig))));
       # AND add it to the model plot, too (without label, line)
-      ax[1].errorbar(all_sfs[val_sfs][abvBound], respAbBaseline[abvBound] - respAdj, errs[:, abvBound], fmt='o', clip_on=False, color=col);
+      ax[1].errorbar(curr_sfs[val_sfs][abvBound], respAbBaseline[abvBound] - respAdj, errs[:, abvBound], fmt='o', clip_on=False, color=col);
     else:
-      ax[0].plot(all_sfs[val_sfs][abvBound], respAbBaseline[abvBound] - respAdj, '-o', clip_on=False, color=col, label='%d%%' % (int(100*np.round(all_cons[c], conDig))))
+      ax[0].plot(curr_sfs[val_sfs][abvBound], respAbBaseline[abvBound] - respAdj, '-o', clip_on=False, color=col, label='%d%%' % (int(100*np.round(all_cons[c], conDig))))
  
     # then descriptive fit
-    sfs_plot = np.geomspace(all_sfs[val_sfs[0]], all_sfs[val_sfs[-1]], 100);
+    sfs_plot = np.geomspace(curr_sfs[val_sfs[0]], curr_sfs[val_sfs[-1]], 100);
     prms_curr = descrFits['params'][c];
     descrResp = hf.get_descrResp(prms_curr, sfs_plot, sf_DoG_model);
     abvZero = descrResp>minResp_toPlot;
     ax[1].plot(sfs_plot[abvZero], descrResp[abvZero], '-', clip_on=False, color=col); #, label=str(np.round(all_cons[c], conDig)))
 
 for i in range(2):
-  #ax[i].set_aspect('equal', 'box'); 
-  ax[i].set_xlim((0.5*np.min(all_sfs[val_sfs]), 1.2*np.max(all_sfs[val_sfs])));
-  ax[i].set_ylim((minResp_toPlot, 300)); # common y axis for ALL plots
+  ax[i].set_xlim((0.5*np.min(curr_sfs[val_sfs]), 1.2*np.max(curr_sfs[val_sfs])));
+  if not specify_ticks or maxResp>90:
+    ax[i].set_ylim((minResp_toPlot, 300)); # common y axis for ALL plots
+  else:
+    ax[i].set_ylim((minResp_toPlot, 110));
 
-  #ax.set_xscale('symlog', linthreshx=all_sfs[1]); # all_sfs[0] = 0, but all_sfs[0]>1
   ax[i].set_xscale('log');
   ax[i].set_yscale('log');
   ax[i].set_aspect('equal'); # if both axes are log, must make equal scales!
-  ax[i].set_xlabel('sf (c/deg)'); 
+  ax[i].set_xlabel('Spatial frequency (c/deg)'); 
 
-  # Set ticks out, remove top/right axis, put ticks only on bottom/left
-  #ax[i].tick_params(labelsize=15, width=2, length=16, direction='out');
-  #ax[i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
-
+  ax[i].set_ylabel('Response (spikes/s)', labelpad=y_lblpad);
   if i == 0:
-    ax[i].set_ylabel('resp above baseline (sps)');
     ax[i].set_title('SF tuning - %s #%d' % (cellStruct['cellType'], which_cell));
     ax[i].legend();
+
+  for jj, axis in enumerate([ax[i].xaxis, ax[i].yaxis]):
+      axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x if x>=0.1 else '%.2f' % x)) # this will make everything in non-scientific notation!
+      if jj == 0 and specify_ticks: # i.e. x-axis
+          core_ticks = np.array([1]); # always include 1 c/deg
+          pltd_sfs = curr_sfs[val_sfs];
+          if np.min(pltd_sfs)<=0.3:
+            core_ticks = np.hstack((0.3, core_ticks, 3));
+            if np.min(pltd_sfs)<=0.15:
+              core_ticks = np.hstack((0.1, core_ticks));
+              if np.min(pltd_sfs)<=0.05:
+                core_ticks = np.hstack((0.03, core_ticks));
+          else:
+            core_ticks = np.hstack((0.5, core_ticks, 5));
+          if np.max(pltd_sfs)>=7:
+            core_ticks = np.hstack((core_ticks, 10));
+          axis.set_ticks(core_ticks);
+      elif jj == 1: # y axis, make sure we also show the ticks, even though the axes are shared
+        axis.set_tick_params(labelleft=True); 
 
 sns.despine(offset=10, trim=False); 
 
@@ -198,20 +232,27 @@ pdfSv.close()
 #########
 
 ### TODO: make log, too...
-fSfs, sfsAx = plt.subplots(nCons, 2, figsize=(2*10, 8*nCons), sharey=False);
+fSfs, sfsAx = plt.subplots(nCons, 2, figsize=(2*10, 12*nCons), sharey=False);
 
-val_sfs = np.where(all_sfs>0); # do not plot the zero sf condition
-sfs_plot = np.logspace(np.log10(np.min(all_sfs[val_sfs])), np.log10(np.max(all_sfs[val_sfs])), 51);
+if plot_zFreq: 
+    # we want to plot zero frequency, but need to keep axes equal
+    # --- so, we'll pretend that the zero frequency is just a slightly lower, non-zero frequency
+    val_sfs = range(len(all_sfs)); # get all indices
+    curr_sfs = np.maximum(np.min(all_sfs[all_sfs>0])/2, all_sfs[val_sfs]);
+else:
+    val_sfs = np.where(all_sfs>0); # do not plot the zero sf condition
+    curr_sfs = all_sfs;
+sfs_plot = np.geomspace(curr_sfs[val_sfs[0]], curr_sfs[val_sfs[-1]], 100);
 
 minResp_toPlot = 5e-1;
 
 for c in reversed(range(nCons)):
     c_plt_ind = nCons - c - 1;
    
-    curr_resps = f1['mean'][c, val_sfs][0]; # additional layer of array to unwrap
-    curr_sem = f1['sem'][c, val_sfs][0];
+    curr_resps = f1['mean'][c, val_sfs];
+    curr_sem = f1['sem'][c, val_sfs];
     v_sfs = ~np.isnan(curr_resps);
-    data_sfs = all_sfs[val_sfs][v_sfs]
+    data_sfs = curr_sfs[val_sfs][v_sfs]
 
     curr_resps_adj = np.array(curr_resps[v_sfs]-respAdj);
     abvThresh = [curr_resps_adj > minResp_toPlot];
@@ -252,17 +293,19 @@ for c in reversed(range(nCons)):
         varExpl = hf.var_expl_direct(curr_resps[v_sfs], mod_resps);
       else:
         varExpl = descrFits['varExpl'][c];
-      sfsAx[c_plt_ind, i].set_title('SF tuning: contrast: %.3f%%, %.1f%% varExpl' % (all_cons[c], varExpl));
+      if i == 0:
+        sfsAx[c_plt_ind, i].set_title('con: %.1f%%, %.1f%% vExp' % (100*all_cons[c], varExpl));
+      #sfsAx[c_plt_ind, i].set_title('SF tuning: contrast: %.3f%%, %.1f%% varExpl' % (all_cons[c], varExpl));
 
       # Set ticks out, remove top/right axis, put ticks only on bottom/left
       #sfsAx[c_plt_ind, i].tick_params(labelsize=15, width=1, length=8, direction='out');
       #sfsAx[c_plt_ind, i].tick_params(width=1, length=4, which='minor', direction='out'); # minor ticks, too...	
       sns.despine(ax=sfsAx[c_plt_ind, i], offset=10, trim=False); 
 
-      yAxStr = 'response ';
+      yAxStr = 'Response ';
       if i == 0 and c_plt_ind == (nCons-1):
-        sfsAx[c_plt_ind, i].set_xlabel('spatial frequency (c/deg)'); 
-        sfsAx[c_plt_ind, i].set_ylabel(str(yAxStr + '(spikes/s)'));
+        sfsAx[c_plt_ind, i].set_xlabel('Spatial frequency (c/deg)', labelpad=x_lblpad); 
+        sfsAx[c_plt_ind, i].set_ylabel(str(yAxStr + '(spikes/s)'), labelpad=y_lblpad);
 
       if i == 0: # linear...
         sfsAx[c_plt_ind, i].set_ylim((0, 1.5*maxResp));
@@ -271,6 +314,20 @@ for c in reversed(range(nCons)):
         sfsAx[c_plt_ind, i].set_ylim((minResp_toPlot, 300));
         sfsAx[c_plt_ind, i].set_aspect('equal'); # if both axes are log, must make equal scales!
 
+      for jj, axis in enumerate([sfsAx[c_plt_ind, i].xaxis, sfsAx[c_plt_ind, i].yaxis]):
+          axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+          if jj == 0 and specify_ticks: # i.e. x-axis
+              core_ticks = np.array([1]); # always include 1 c/deg
+              pltd_sfs = data_sfs;
+              if np.min(pltd_sfs)<=0.3:
+                  core_ticks = np.hstack((0.3, core_ticks, 3));
+              else:
+                  core_ticks = np.hstack((0.5, core_ticks, 5));
+              if np.max(pltd_sfs)>=7:
+                  core_ticks = np.hstack((core_ticks, 10));
+              axis.set_ticks(core_ticks)
+          elif jj == 1: # y axis, make sure we also show the ticks, even though the axes are shared
+              axis.set_tick_params(labelleft=True); 
 
 saveName = "/cell_%03d.pdf" % (which_cell)
 full_save = os.path.dirname(str(save_loc + 'sfTuning/'));
@@ -320,8 +377,8 @@ for sf in range(n_v_sfs):
     if col_ind == 0:
       ax[plt_y].set_xlim([0.01, 1]);
       if row_ind == (n_rows-1): # i.e. only at the last one
-        ax[plt_y].set_xlabel('contrast', fontsize='medium');
-        ax[plt_y].set_ylabel('response (spikes/s)', fontsize='medium');
+        ax[plt_y].set_xlabel('Contrast', fontsize='medium', labelpad=x_lblpad);
+        ax[plt_y].set_ylabel('Response (spikes/s)', fontsize='medium', labelpad=y_lblpad);
       ax[plt_y].legend();
     varExpl_curr = rvcFits['varExpl'][sf];
 
@@ -382,12 +439,12 @@ for i in range(2):
   ax[i].set_xscale('log');
   ax[i].set_yscale('log');
   ax[i].set_aspect('equal');
-  ax[i].set_xlabel('con (%)'); 
+  ax[i].set_xlabel('Contrast (%)', labelpad=x_lblpad); 
 
   # Set ticks out, remove top/right axis, put ticks only on bottom/left
   #ax[i].tick_params(labelsize=15, width=2, length=16, direction='out');
   #ax[i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
-  ax[i].set_ylabel('resp (sps)');
+  ax[i].set_ylabel('Response (spikes/s)', labelpad=y_lblpad);
   ax[i].set_title('RVC - %s #%d' % (cellStruct['cellType'], which_cell));
   ax[i].legend();
 

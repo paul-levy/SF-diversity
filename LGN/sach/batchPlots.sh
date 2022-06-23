@@ -22,10 +22,11 @@ JOINT=${4:-0}
 HPC=${5:-0}
 PHADJ=${6:-0}
 SEM=${7:-0}
+ZFREQ=${8:-1}
 
 for run in {1..34}
 do
-  python3.6 plotting.py $run $DOG_LOSS $DOG_MOD $RVC_MOD $JOINT $HPC $PHADJ $SEM 0 &
+  python3.6 plotting.py $run $DOG_LOSS $DOG_MOD $RVC_MOD $JOINT $HPC $PHADJ $SEM $ZFREQ 0 &
 done
 
  
