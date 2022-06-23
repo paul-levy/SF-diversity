@@ -212,6 +212,8 @@ def nan_rm(x):
    return x[~numpy.isnan(x)];
 
 def sigmoid(x):
+  if x<-100:
+    return 0; # avoid overflow
   return 1.0 / (1 + numpy.exp(-x));
 
 def arcmin_to_deg(x, reverse=False):
@@ -1287,7 +1289,8 @@ def fold_psth(spikeTimes, stimTf, stimPh, n_cycles, n_bins, dir=-1):
 
     stimPeriod = np.divide(1.0, stimTf); # divide by 1.0 so that stimPeriod is a float (and not just an int!)
     _, ph0 = first_ph0(stimPh, stimTf, dir);
-    folded = np.mod(spikeTimes-ph0[0], np.multiply(n_cycles, stimPeriod[0])); # center the spikes relative to the 0 phase of the stim
+    folded = np.mod(spikeTimes+dir*ph0[0], np.multiply(n_cycles, stimPeriod[0])); # center the spikes relative to the 0 phase of the stim
+    #folded = np.mod(spikeTimes-ph0[0], np.multiply(n_cycles, stimPeriod[0])); # center the spikes relative to the 0 phase of the stim
     bin_edges = np.linspace(0, n_cycles*stimPeriod[0], 1+n_cycles*n_bins);
     psth_fold = np.histogram(folded, bin_edges, normed=False)[0];
     psth_norm = np.divide(psth_fold, np.max(psth_fold));
