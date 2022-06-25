@@ -38,7 +38,8 @@ else:
   #rvcName_f1 = 'rvcFits%s_210914' % hpcSuff; # FOR V1
   #phAdvName = 'phaseAdvanceFits%s_210914' % hpcSuff
   #rvcName_f1 = 'rvcFits%s_210914' % hpcSuff; # FOR V1
-  rvcName_f0 = 'rvcFits_210914_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+  rvcName_f0 = 'rvcFits%s_220609_f0' % hpcSuff; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+  #rvcName_f0 = 'rvcFits_210914_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 
 '''
 modelRecov = 0; # 
@@ -509,7 +510,7 @@ def fit_RVC_f0(cell_num, data_loc, n_repeats=25, fLname = rvcName_f0, dLname=exp
 
   # load cell information
   if not isinstance(cell_num, int):
-    cell_num, cellName = cell_num;
+    cell_num, cellName, overwriteExpName = cell_num;
   else:
     dataList = hf.np_smart_load(data_loc + dLname);
     assert dataList!=[], "data file not found!"
@@ -1267,7 +1268,7 @@ if __name__ == '__main__':
       if rvcF0_fits == 1:
         with mp.Pool(processes = nCpu) as pool:
           rvc_perCell = partial(fit_RVC_f0, data_loc=dataPath, rvcMod=rvc_model, to_save=0, returnDict=1, nBoots=nBoots);
-          rvcFits = pool.map(rvc_perCell, zip(range(start_cell, end_cell+1), dL['unitName']));
+          rvcFits = pool.map(rvc_perCell, zip(range(start_cell, end_cell+1), dL['unitName'], dL['expType']));
           pool.close();
 
         ### do the saving HERE!
