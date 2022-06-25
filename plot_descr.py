@@ -58,8 +58,8 @@ minWidth = 4;
 lblSize = 40;
 y_lblpad = 6;
 x_lblpad = 8;
-subplot_title = False; # have subplot title? Not really necessary for pub. figures
 
+subplot_title = False; # have subplot title? Not really necessary for pub. figures
 specify_ticks = True; # specify the SF ticks (x-axis for SF plots?)
 
 peakFrac = 0.75; # plot fall of to peakFrac of peak, rather than peak or charFreq
@@ -118,11 +118,6 @@ if expDir == 'LGN/':
 else:
     descrBase = 'descrFits%s_220609' % hpc_str;
     #descrBase = 'descrFits%s_220531' % hpc_str;
-    #descrBase = 'descrFits%s_220410' % hpc_str;
-#descrBase = 'descrFits_220103';
-#descrBase = 'descrFits_211214';
-#descrBase = 'descrFits_191023'; # for V1, V1_orig, LGN
-#descrBase = 'descrFits_200507'; # for altExp
 if expDir == 'LGN/':
   rvcBase = 'rvcFits%s_220531' % hpc_str;
   #rvcBase = 'rvcFits%s_220511' % hpc_str;
@@ -208,7 +203,6 @@ rvcBase = '%s%s' % (rvcBase, rvcFlag);
 
 # NOTE: We pass in the rvcFits where rvcBase[name] goes, and use -1 in rvcMod to indicate that we've already loaded the fits
 spikes_rate, which_measure = hf.get_adjusted_spikerate(trialInf, cellNum, expInd, data_loc, rvcFits, rvcMod=-1, descrFitName_f0 = fLname, baseline_sub=False, force_dc=force_dc, force_f1=force_f1, return_measure=True, vecF1=vecF1);
-pdb.set_trace();
 # let's also get the baseline
 if force_baseline or (f1f0rat < 1 and expDir != 'LGN/'): # i.e. if we're in LGN, DON'T get baseline, even if f1f0 < 1 (shouldn't happen)
   baseline_resp = hf.blankResp(trialInf, expInd, spikes=spikes_rate, spksAsRate=True)[0];
@@ -432,7 +426,7 @@ for d in range(nDisps):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(1, 2, figsize=(35, 20), sharey=True, sharex=True);
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(35, 20), sharey=True);
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
 

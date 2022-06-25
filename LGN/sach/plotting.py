@@ -44,7 +44,9 @@ for i in range(2):
 
 y_lblpad = 6;
 x_lblpad = 8;
-specify_ticks = 1;
+lblSize = 40;
+
+specify_ticks = True; # specify the SF ticks (x-axis for SF plots?)
 
 which_cell   = int(sys.argv[1]);
 sf_loss_type = int(sys.argv[2]);
@@ -137,7 +139,7 @@ if zSub == 1:
 else:
   respAdj = np.array([0]);
 
-f, ax = plt.subplots(1, 2, figsize=(35, 20), sharey=True);
+f, ax = plt.subplots(1, 2, figsize=(35, 20))#, sharey=True);
 
 minResp_toPlot = 5e-1; 
 
@@ -194,7 +196,7 @@ for i in range(2):
   ax[i].set_ylabel('Response (spikes/s)', labelpad=y_lblpad);
   if i == 0:
     ax[i].set_title('SF tuning - %s #%d' % (cellStruct['cellType'], which_cell));
-    ax[i].legend();
+    ax[i].legend(fontsize='x-small');
 
   for jj, axis in enumerate([ax[i].xaxis, ax[i].yaxis]):
       axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x if x>=0.1 else '%.2f' % x)) # this will make everything in non-scientific notation!
@@ -232,7 +234,7 @@ pdfSv.close()
 #########
 
 ### TODO: make log, too...
-fSfs, sfsAx = plt.subplots(nCons, 2, figsize=(2*10, 12*nCons), sharey=False);
+fSfs, sfsAx = plt.subplots(nCons, 2, figsize=(2*10, 12*nCons))#, sharey=False);
 
 if plot_zFreq: 
     # we want to plot zero frequency, but need to keep axes equal
@@ -407,7 +409,7 @@ n_v_sfs = len(all_sfs);
 
 maxResp = np.max(np.max(f1['mean']));
 ymin = 1e-1
-f, ax = plt.subplots(1, 2, figsize=(35, 20), sharex=True, sharey='row');
+f, ax = plt.subplots(1, 2, figsize=(35, 20))#, sharex=True, sharey='row');
 
 lines = [];
 for sf in reversed(range(n_v_sfs)):

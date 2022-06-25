@@ -24,7 +24,15 @@ PHADJ=${6:-0}
 SEM=${7:-0}
 ZFREQ=${8:-1}
 
-for run in {1..34}
+for run in {1..10}
+do
+  python3.6 plotting.py $run $DOG_LOSS $DOG_MOD $RVC_MOD $JOINT $HPC $PHADJ $SEM $ZFREQ 0 &
+done
+for run in {11..22}
+do
+  python3.6 plotting.py $run $DOG_LOSS $DOG_MOD $RVC_MOD $JOINT $HPC $PHADJ $SEM $ZFREQ 0 &
+done
+for run in {23..34}
 do
   python3.6 plotting.py $run $DOG_LOSS $DOG_MOD $RVC_MOD $JOINT $HPC $PHADJ $SEM $ZFREQ 0 &
 done
