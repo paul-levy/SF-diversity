@@ -42,9 +42,10 @@ if len(sys.argv) > 4:
 else:
   forceSimple = None;
 
-basic_suffix = '_210721';
+basic_suffix = '_220629'; #'_210721';
 
-rvcName = 'rvcFits_210721'; #'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
+rvcName = 'rvcFits_220531' if expDir=='LGN/' else 'rvcFits_220609';
+#rvcName = 'rvcFits_210721'; #'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
 #rvcName = 'rvcFits_210524'; #'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
 rvcMod = 1; # naka rushton (1); 
 rvcAdj = -1;
@@ -280,7 +281,7 @@ if sf is not None:
   ax[1, 1].errorbar(sfvals, sfresps, sfstderr, fmt='o', color='k', clip_on=False);
   # model
   plt_sfs = np.geomspace(sfvals[0], sfvals[-1], 100);
-  mod_resp = hf.flexible_Gauss(sf['sfParams'], plt_sfs)
+  mod_resp = hf.flexible_Gauss_np(sf['sfParams'], plt_sfs)
   ax[1, 1].plot(sf['charFreq'], 0, 'kv', label='char freq (%.1f cpd)' % sf['charFreq'], clip_on=False)
   ax[1, 1].semilogx(plt_sfs, mod_resp, 'k-')
   ax[1, 1].set_title('SF: Peak %.1f cyc/deg, bw %.1f oct' % (sf['sfPref'], sf['sfBW_oct']))
@@ -306,7 +307,7 @@ if tf is not None:
   ax[1, 0].errorbar(tfvals, mean, stderr, fmt='o', color='k', clip_on=False);
   # model
   plt_tfs = np.geomspace(tfvals[0], tfvals[-1], 100);
-  mod_resp = hf.flexible_Gauss(tf['tfParams'], plt_tfs)
+  mod_resp = hf.flexible_Gauss_np(tf['tfParams'], plt_tfs)
   ax[1, 0].plot(tf['charFreq'], 0, 'kv', label='char freq (%.1f Hz)' % tf['charFreq'], clip_on=False)
   ax[1, 0].semilogx(plt_tfs, mod_resp, 'k-')
   ax[1, 0].set_title('TF: Peak %.1f Hz, bw %.1f oct' % (tf['tfPref'], tf['tfBW_oct']))

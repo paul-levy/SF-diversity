@@ -7,6 +7,7 @@ import matplotlib.cm as cm
 matplotlib.use('Agg') # to avoid GUI/cluster issues...
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
+from matplotlib.ticker import FuncFormatter
 import seaborn as sns
 sns.set(style='ticks')
 
@@ -54,6 +55,7 @@ inclLegend = 0;
 
 plt_sf_as_rvc = 1;
 comm_S_calc = 1;
+conMult=100; # make cons [0,1] or [0,100]?
 
 cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
@@ -93,17 +95,17 @@ phAdj = np.abs(phAdj);
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
-descrBase = 'descrFits%s_220410' % hpc_str;
-#descrBase = 'descrFits%s_220323' % hpc_str;
+descrBase = 'descrFits%s_220609' % hpc_str;
+#descrBase = 'descrFits%s_220410' % hpc_str;
 ### RVCFITS
-rvcBase = 'rvcFits%s_220220' % hpc_str;
+rvcBase = 'rvcFits%s_220609' % hpc_str;
 
 ##################
 ### Spatial frequency
 ##################
 
 modStr  = hf.descrMod_name(descrMod)
-fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint, phAdj=1 if rvcAdj==1 else None);
+fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint, phAdj=1 if phAdjSigned==1 else None);
 descrFits = hf.np_smart_load(data_loc + fLname);
 pause_tm = 2.0*np.random.rand();
 time.sleep(pause_tm);
@@ -310,9 +312,9 @@ for c in reversed(range(n_v_cons)):
       if c_plt_ind == len(maskCon)-1:
         dispAx[c_plt_ind, i].set_xlabel('Spatial frequency (c/deg)'); 
 
-      # Set ticks out, remove top/right axis, put ticks only on bottom/left
-      #dispAx[c_plt_ind, i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
-      #dispAx[c_plt_ind, i].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...	
+      for jj, axis in enumerate([dispAx[c_plt_ind,i].xaxis, dispAx[c_plt_ind,i].yaxis]):
+        axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+
       sns.despine(ax=dispAx[c_plt_ind, i], offset=10, trim=False); 
 
     dispAx[c_plt_ind, 0].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
@@ -382,15 +384,17 @@ for i in range(len(dispAx)):
 
   dispAx[i].set_xlabel('Spatial frequency (c/deg)'); 
 
-  # Set ticks out, remove top/right axis, put ticks only on bottom/left
-  #dispAx[i].tick_params(labelsize=15, width=2, length=16, direction='out');
-  #dispAx[i].tick_params(width=2, length=8, which='minor', direction='out'); # minor ticks, too...
+  for jj, axis in enumerate([dispAx[i].xaxis, dispAx[i].yaxis]):
+      axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+
   sns.despine(ax=dispAx[i], offset=10, trim=False); 
 
   lbl_str = '';# if i==0 else 'above baseline ';
   dispAx[i].set_ylabel('Response %s(spikes/s)' % lbl_str);
   dispAx[i].set_title('sf tuning');
   dispAx[i].legend(fontsize='large'); 
+
+
 
 saveName = "/allCons_%scell_%03d.pdf" % (logSuffix, cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp/'));
@@ -413,7 +417,7 @@ cons_plot = np.geomspace(np.minimum(0.01, maskCon), np.max(maskCon), 100); # go 
 n_v_sfs = len(maskSf);
 n_rows = int(np.ceil(n_v_sfs/np.floor(np.sqrt(n_v_sfs)))); # make this close to a rectangle/square in arrangement (cycling through sfs)
 n_cols = int(np.ceil(n_v_sfs/n_rows));
-fRVC, rvcAx = plt.subplots(n_rows, n_cols, figsize=(n_cols*12, n_rows*12), sharey=True);
+fRVC, rvcAx = plt.subplots(n_rows, n_cols, figsize=(n_cols*12, n_rows*12))#, sharey=True);
 
 fRVC.suptitle('%s #%d [%s] (f1f0 %.2f)' % (cellType, cellNum, unitNm, f1f0_rat));
 
@@ -440,7 +444,7 @@ for sf in range(n_v_sfs):
         to_sub = np.array(0);
       resp_curr = resp_curr - to_sub;
 
-    rvcAx[plt_y].errorbar(maskCon[resp_curr>minResp_toPlot], resp_curr[resp_curr>minResp_toPlot], var_curr[resp_curr>minResp_toPlot], fmt='o', linestyle='-', clip_on=False, label='data', markersize=9, color=dataClr);
+    rvcAx[plt_y].errorbar(conMult*maskCon[resp_curr>minResp_toPlot], resp_curr[resp_curr>minResp_toPlot], var_curr[resp_curr>minResp_toPlot], fmt='o', linestyle='-', clip_on=False, label='data', markersize=9, color=dataClr);
 
     # RVC descr model - TODO: Fix this discrepancy between f0 and f1 rvc structure? make both like descrFits?
     prms_curr = rvcFits['params'][sf_ind];
@@ -454,9 +458,9 @@ for sf in range(n_v_sfs):
        rvcResps = rvcResps - to_sub;
     val_inds = np.where(rvcResps>minResp_toPlot)[0];
 
-    rvcAx[plt_y].plot(cons_plot[val_inds], rvcResps[val_inds], color=modClr, \
+    rvcAx[plt_y].plot(conMult*cons_plot[val_inds], rvcResps[val_inds], color=modClr, \
       alpha=0.7, clip_on=False, label=modTxt);
-    rvcAx[plt_y].plot(c50, 1.5*minResp_toPlot, 'v', label='c50', color=modClr, clip_on=False);
+    rvcAx[plt_y].plot(conMult*c50, 1.5*minResp_toPlot, 'v', label='c50', color=modClr, clip_on=False);
     # now, let's also plot the baseline, if complex cell
     if baseline_resp > 0 and forceLog != 1: # i.e. complex cell (baseline_resp is not None) previously
       rvcAx[plt_y].axhline(baseline_resp, color='k', linestyle='dashed');
@@ -468,7 +472,7 @@ for sf in range(n_v_sfs):
       rvcAx[plt_y].legend();
 
     # set axis limits...
-    rvcAx[plt_y].set_xlim([0.01, 1]);
+    rvcAx[plt_y].set_xlim([conMult*0.01, conMult*1]);
     if forceLog == 1:
       rvcAx[plt_y].set_ylim((minResp_toPlot, 1.25*maxResp));
       rvcAx[plt_y].set_yscale('log'); # double log
@@ -486,10 +490,10 @@ for sf in range(n_v_sfs):
       except:
          pass; # not essential...
 
-    # Set ticks out, remove top/right axis, put ticks only on bottom/left
+    for jj, axis in enumerate([rvcAx[plt_y].xaxis, rvcAx[plt_y].yaxis]):
+        axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+
     sns.despine(ax = rvcAx[plt_y], offset = 10, trim=False);
-    #rvcAx[plt_y].tick_params(labelsize=lblSize, width=majWidth, direction='out');
-    #rvcAx[plt_y].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
 
 fRVC.tight_layout(rect=[0, 0.03, 1, 0.95])
 
@@ -506,7 +510,7 @@ pdfSv.close()
 
 nrow, ncol = 1, 2+plt_sf_as_rvc;
 
-fCRF, crfAx = plt.subplots(nrow, ncol, figsize=(ncol*17.5, nrow*20), sharex=False, sharey='row');
+fCRF, crfAx = plt.subplots(nrow, ncol, figsize=(ncol*17.5, nrow*20))#, sharex=False, sharey='row');
 
 fCRF.suptitle('%s #%d [%s] (f1f0 %.2f)' % (cellType, cellNum, unitNm, f1f0_rat));
 
@@ -533,7 +537,7 @@ for sf in range(n_v_sfs):
         to_sub = np.array(0);
       plot_resp = plot_resp - to_sub;
 
-    line_curr, = crfAx[0].plot(v_cons[plot_resp>minResp_plot], plot_resp[plot_resp>minResp_plot], '-o', color=col, \
+    line_curr, = crfAx[0].plot(conMult*maskCon[v_cons][plot_resp>minResp_plot], plot_resp[plot_resp>minResp_plot], '-o', color=col, \
                                   clip_on=False, markersize=9, label=con_str);
     lines_log.append(line_curr);
     crfAx[0].set_title('RVC data');
@@ -546,7 +550,7 @@ for sf in range(n_v_sfs):
       rvcResps = hf.naka_rushton(cons_plot, prms_curr)
 
     rvcRespsAdj = rvcResps-to_sub;
-    crfAx[1].plot(cons_plot[rvcRespsAdj>minResp_plot], rvcRespsAdj[rvcRespsAdj>minResp_plot], color=col, \
+    crfAx[1].plot(conMult*cons_plot[rvcRespsAdj>minResp_plot], rvcRespsAdj[rvcRespsAdj>minResp_plot], color=col, \
                      clip_on=False, label = con_str);
     crfAx[1].set_title('D: RVC fits');
 
@@ -555,7 +559,7 @@ for sf in range(n_v_sfs):
         cons = maskCon;
         try:
             resps_curr = np.array([hf.get_descrResp(descrParams[vc], maskSf[sf_ind], descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params) for vc in np.where(maskCon)[0]]) - to_sub;
-            crfAx[2].plot(maskCon, resps_curr, color=col, \
+            crfAx[2].plot(conMult*maskCon[resps_curr>minResp_plot], resps_curr[resps_curr>minResp_plot], color=col, \
                      clip_on=False, linestyle='--', marker='o');
             crfAx[2].set_title('D: RVC from SF fit');
         except:
@@ -568,18 +572,19 @@ for i in range(len(crfAx)):
     crfAx[i].set_xscale('log');
     crfAx[i].set_yscale('log');
     crfAx[i].set_ylim((minResp_plot, 1.5*maxResp));
+    crfAx[i].set_xlim((conMult*np.min(cons_plot), conMult*np.max(cons_plot)));
     crfAx[i].set_aspect('equal');
     #crfAx[i].set_ylim((minResp_plot, 300)); # common y axis for ALL plots
     logSuffix = 'log_';
   else:
-    crfAx[i].set_xlim([-0.1, 1]);
+    crfAx[i].set_xlim([-conMult*0.1, conMult*1]);
     crfAx[i].set_ylim([-0.1*maxResp, 1.1*maxResp]);
     logSuffix = '';
   crfAx[i].set_xlabel('Contrast');
 
-  # Set ticks out, remove top/right axis, put ticks only on bottom/left
-  #crfAx[i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
-  #crfAx[i].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
+  for jj, axis in enumerate([crfAx[i].xaxis, crfAx[i].yaxis]):
+    axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+
   sns.despine(ax = crfAx[i], offset=10, trim=False);
 
   #crfAx[i].set_ylabel('resp above baseline (sps)');
@@ -658,7 +663,10 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
   full_save = os.path.dirname(str(save_loc + 'byDisp_ddogs/'));
   if not os.path.exists(full_save):
     os.makedirs(full_save);
-  pdfSv = pltSave.PdfPages(full_save + saveName);
-  pdfSv.savefig(fDisp)
-  plt.close(fDisp)
-  pdfSv.close();
+  try:
+    pdfSv = pltSave.PdfPages(full_save + saveName);
+    pdfSv.savefig(fDisp)
+    plt.close(fDisp)
+    pdfSv.close();
+  except:
+    pdb.set_trace();

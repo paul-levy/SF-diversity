@@ -33,16 +33,16 @@ for i in range(2):
     # must run twice for changes to take effect?
     from matplotlib import rcParams, cm
     rcParams['font.family'] = 'sans-serif'
-    # rcParams['font.sans-serif'] = ['Helvetica']
+    rcParams['font.sans-serif'] = ['Helvetica', 'sans-serif', 'Arial', 'Verdana'] + rcParams['font.sans-serif']
+    rcParams['text.color'] = 'black'
     rcParams['font.style'] = 'oblique'
     rcParams['font.size'] = 40;
-    rcParams['pdf.fonttype'] = 3 # should be 42, but there are kerning issues
-    rcParams['ps.fonttype'] = 3 # should be 42, but there are kerning issues
+    rcParams['pdf.fonttype'] = 42
+    rcParams['ps.fonttype'] = 42
     rcParams['lines.linewidth'] = 3;
     rcParams['lines.markeredgewidth'] = 0; # remove edge??                                                                                                                               
     rcParams['axes.linewidth'] = 3;
-    rcParams['lines.markersize'] = 12; # 8 is the default                                                                                                                                
-    rcParams['font.style'] = 'oblique';
+    rcParams['lines.markersize'] = 12; # 8 is the default                                                                             
 
     rcParams['xtick.major.size'] = 25
     rcParams['xtick.minor.size'] = 12
@@ -53,8 +53,6 @@ for i in range(2):
     rcParams['ytick.major.width'] = 2
     rcParams['ytick.minor.width'] = 2
 
-majWidth = 4;
-minWidth = 4;
 lblSize = 40;
 y_lblpad = 6;
 x_lblpad = 8;
@@ -393,8 +391,6 @@ for d in range(nDisps):
               axis.set_tick_params(labelleft=True); 
 
 	  # Set ticks out, remove top/right axis, put ticks only on bottom/left
-          #dispAx[d][c_plt_ind, i].tick_params(labelsize=lblSize, width=majWidth, direction='out');
-          #dispAx[d][c_plt_ind, i].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...	
           sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
 
         dispAx[d][c_plt_ind, 0].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
@@ -426,14 +422,14 @@ for d in range(nDisps):
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
     
-    fCurr, dispCurr = plt.subplots(1, 2, figsize=(35, 20), sharey=True);
+    fCurr, dispCurr = plt.subplots(1, 2, figsize=(35, 20));
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
 
     fCurr.suptitle('%s #%d (f1f0 %.2f)' % (cellType, cellNum, f1f0rat));
 
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));  
-    minToPlot = 5e-1;
+    minToPlot = 1; #5e-1;
     ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
     ref_rc_val = ref_params[2] if joint>0 else None;
 
@@ -474,7 +470,8 @@ for d in range(nDisps):
         # plot descr fit [1]
         prms_curr = descrParams[d, v_cons[c]];
         descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
-        dispAx[d][1].plot(sfs_plot, descrResp-to_sub, color=col, clip_on=True, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
+        plt_resp = descrResp-to_sub;
+        dispAx[d][1].plot(sfs_plot[plt_resp>minToPlot], plt_resp[plt_resp>minToPlot], color=col, clip_on=True, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
 
     for i in range(len(dispCurr)):
       dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
@@ -484,9 +481,9 @@ for d in range(nDisps):
         dispAx[d][i].set_yscale('log');
         #dispAx[d][i].set_ylim((minToPlot, 1.5*maxResp));
         if not specify_ticks or maxResp>90:
-            dispAx[d][i].set_ylim((5e-1, 300)); # common y axis for ALL plots
+            dispAx[d][i].set_ylim((minToPlot, 300)); # common y axis for ALL plots
         else:
-            dispAx[d][i].set_ylim((5e-1, 110));
+            dispAx[d][i].set_ylim((minToPlot, 110));
         logSuffix = 'log_';
         dispAx[d][i].set_aspect('equal'); # if both axes are log, must make equal scales!
       else:
@@ -727,8 +724,6 @@ for d in range(nDisps):
 
 	# Set ticks out, remove top/right axis, put ticks only on bottom/left
         sns.despine(ax = rvcCurr[plt_y], offset = 10, trim=False);
-        #rvcCurr[plt_y].tick_params(labelsize=lblSize, width=majWidth, direction='out');
-        #rvcCurr[plt_y].tick_params(width=minWidth, which='minor', direction='out'); # minor ticks, too...
         for jj, axis in enumerate([rvcCurr[plt_y].xaxis, rvcCurr[plt_y].yaxis]):
           axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
 

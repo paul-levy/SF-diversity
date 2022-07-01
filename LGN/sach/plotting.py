@@ -25,18 +25,17 @@ for i in range(2):
     # rcParams['font.sans-serif'] = ['Helvetica']
     rcParams['font.style'] = 'oblique'
     rcParams['font.size'] = 40;
-    rcParams['pdf.fonttype'] = 3 # should be 42, but there are kerning issues
-    rcParams['ps.fonttype'] = 3 # should be 42, but there are kerning issues
+    rcParams['pdf.fonttype'] = 42
+    rcParams['ps.fonttype'] = 42
     rcParams['lines.linewidth'] = 3;
-    rcParams['lines.markeredgewidth'] = 0; # remove edge??                                                                                                                               
+    rcParams['lines.markeredgewidth'] = 0; # remove edge??
     rcParams['axes.linewidth'] = 3;
-    rcParams['lines.markersize'] = 12; # 8 is the default                                                                                                                                
-    rcParams['font.style'] = 'oblique';
+    rcParams['lines.markersize'] = 12; # 8 is the default
 
     rcParams['xtick.major.size'] = 25
     rcParams['xtick.minor.size'] = 12
     rcParams['ytick.major.size'] = 25
-    rcParams['ytick.minor.size'] = 12; # i.e. don't have minor ticks on y...                                                                                                              
+    rcParams['ytick.minor.size'] = 12; # i.e. don't have minor ticks on y...
     rcParams['xtick.major.width'] = 2
     rcParams['xtick.minor.width'] = 2
     rcParams['ytick.major.width'] = 2
@@ -141,7 +140,8 @@ else:
 
 f, ax = plt.subplots(1, 2, figsize=(35, 20))#, sharey=True);
 
-minResp_toPlot = 5e-1; 
+minResp_toPlot = 1; 
+#minResp_toPlot = 5e-1; 
 
 lines = [];
 for c in reversed(range(nCons)):
@@ -151,7 +151,7 @@ for c in reversed(range(nCons)):
         # we want to plot zero frequency, but need to keep axes equal
         # --- so, we'll pretend that the zero frequency is just a slightly lower, non-zero frequency
         val_sfs = range(len(all_sfs)); # get all indices
-        curr_sfs = np.maximum(np.min(all_sfs[all_sfs>0])/2, all_sfs[val_sfs]);
+        curr_sfs = np.maximum(1e-2, all_sfs[val_sfs]);
     else:
         val_sfs = np.where(all_sfs>0); # do not plot the zero sf condition
         curr_sfs = all_sfs;
@@ -240,7 +240,8 @@ if plot_zFreq:
     # we want to plot zero frequency, but need to keep axes equal
     # --- so, we'll pretend that the zero frequency is just a slightly lower, non-zero frequency
     val_sfs = range(len(all_sfs)); # get all indices
-    curr_sfs = np.maximum(np.min(all_sfs[all_sfs>0])/2, all_sfs[val_sfs]);
+    curr_sfs = np.maximum(1e-2, all_sfs[val_sfs]);
+    #curr_sfs = np.maximum(np.min(all_sfs[all_sfs>0])/2, all_sfs[val_sfs]);
 else:
     val_sfs = np.where(all_sfs>0); # do not plot the zero sf condition
     curr_sfs = all_sfs;
