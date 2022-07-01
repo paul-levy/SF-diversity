@@ -2846,7 +2846,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       ref_resps = allResps[-1]; ref_sfs = allSfs[-1];
       if isolParams[-1] == [] or n_try>0: # give one shot with the isolParams initialization, then move on
          ref_init = dog_init_params(ref_resps, base_rate, all_sfs, ref_sfs, DoGmodel, bounds=refBounds);
-         if joint==2 and DoGmodel==3: # i.e. give one shot where we initialize straight from there, otherwise we know the typical range of the surr. radius joint params
+         if DoGmodel==3: # i.e. give one shot where we initialize straight from there, otherwise we know the typical range of the surr. radius joint params
             ### The following procedure/values for generating initial guesses of the joint parameters (surr ratio for DoGs 1 and 2, spacing constant) come from the analysis in ch1_suppl.ipynb::ddogs::"Smarter initialization"
             # -- in short, after taking the log2 of the final parameters and comparing the distr. to the initial guesses, we can do a lot better!
             # ---- in log2 space, the radius values are roughly exponential; we'll also use a transformed exponential for the spacing constant, though it's really bi-modal...
@@ -2874,9 +2874,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
          elif joint == 7 or joint == 8: # center radius offset and slope fixed; surround radius fixed [7] or surr. gain fixed [8];
             # the slope will be calculated on log contrast, and will start from the lowest contrast
             # -- i.e. xc = np.power(10, init+slope*log10(con))
-            # to start, let's assume no slope, so the intercept should be equal to our xc guess
-            init_intercept, init_slope = random_in_range([-1.3, -0.6])[0], random_in_range([-0.15,0.15])[0]
-            #init_intercept, init_slope = np.log10(ref_init[1]), 0;
+            init_slope = random_in_range([-0.15,0.15])[0]
+            # now, work backwards to infer the initial intercept, given the slope and ref_init[1] (xc)
+            # --- note: assumes base10 for slope model and 100% contrast as the reference...
+            init_intercept = np.log10(ref_init[1]) - init_slope*np.log10(100);
             allInitParams = [init_intercept, init_slope, ref_init[3]] if joint == 7 else [init_intercept, init_slope, ref_init[2]];
       else: # d-DoG-S models
          if joint==1 or (no_surr and joint==2):
@@ -2886,7 +2887,10 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
          elif joint==3: # need to initialize surround gain and surround radius (we'll take from the central DoG
             allInitParams = [ref_init[2], ref_init[3], *ref_init[-2:]] # surround gain and radius
          elif joint==7 or joint==8 or joint==9: # like DoG joint==7 on top of d-DoG-S joint == 2
-            init_intercept, init_slope = random_in_range([-1.3, -0.6])[0], random_in_range([-0.1,0.2])[0];
+            init_slope = random_in_range([-0.2,0.1])[0];
+            # now, work backwards to infer the initial intercept, given the slope and ref_init[1] (xc)
+            # --- note: assumes base10 for slope model and 100% contrast as the reference...
+            init_intercept = np.log10(ref_init[1]) - init_slope*np.log10(100);
             if joint == 7: # besides slope, intercept: surround radius for both DoGs are joint, as are g,S
                allInitParams = [init_intercept, init_slope, ref_init[3], ref_init[7], *ref_init[-2:]]; 
             elif joint == 8: # only one surround ratio
@@ -2895,20 +2899,30 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
                allInitParams = [init_intercept, init_slope, ref_init[3], ref_init[4], *ref_init[-2:]]; 
 
       # now, we cycle through all responses and add the per-contrast parameters
-      for resps_curr, sfs_curr, stds_curr, curr_init, resps_curr_tr, sfs_curr_tr in zip(allResps, allSfs, allRespsSem, isolParams, allRespsTr, allSfsTr):
+      for resps_curr, sfs_curr, stds_curr, curr_init, resps_curr_tr, sfs_curr_tr, cons_curr in zip(allResps, allSfs, allRespsSem, isolParams, allRespsTr, allSfsTr, allCons):
         if resps_curr.size == 0:
            continue;
         if curr_init == [] or n_try>0:
            curr_init = dog_init_params(resps_curr, base_rate, all_sfs, sfs_curr, DoGmodel, bounds=refBounds);
-           if joint==2 and DoGmodel==3: # we'll initialize by fitting d-DoG-S separately with all joint parameters fixed...
-              obj_isol = lambda params: DoG_loss(np.array([*params[0:3], allInitParams[0], *params[3:], *allInitParams[1:4]]), resps_curr, sfs_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, resps_std=stds_curr, var_to_mean=var_to_mean, gain_reg=gain_reg, joint=joint, baseline=baseline, enforceMaxPenalty=1, vol_lam=vol_lam);
-              bounds_isol = allBounds[4:10]; # skip the 4 joint parameters; same for all contrasts
-              wax_isol = opt.minimize(obj_isol, np.array([*curr_init[0:3], *curr_init[4:7]]), method='L-BFGS-B', bounds=bounds_isol);
-              ci = np.copy(ref_init);
-              ci[0:3] = wax_isol['x'][0:3];
-              ci[4:7] = wax_isol['x'][3:];
-              print('success in interim fit? %d [vExp=%.2f]' % (wax_isol['success'], var_explained(resps_curr, ci, sfs_curr, dog_model=DoGmodel, baseline=baseline)));
-              curr_init = clean_sigmoid_params(ci, dogMod=DoGmodel);
+           if DoGmodel==3: # we'll initialize by fitting d-DoG-S separately with all joint parameters fixed...
+              if joint == 2:
+                 obj_isol = lambda params: DoG_loss(np.array([*params[0:3], allInitParams[0], *params[3:], *allInitParams[1:4]]), resps_curr, sfs_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, resps_std=stds_curr, var_to_mean=var_to_mean, gain_reg=gain_reg, joint=joint, baseline=baseline, vol_lam=vol_lam);
+                 bounds_isol = allBounds[4:10]; # skip the 4 joint parameters; same for all contrasts
+                 wax_isol = opt.minimize(obj_isol, np.array([*curr_init[0:3], *curr_init[4:7]]), method='L-BFGS-B', bounds=bounds_isol);
+                 ci = np.copy(ref_init);
+                 ci[0:3] = wax_isol['x'][0:3];
+                 ci[4:7] = wax_isol['x'][3:];
+                 print('success in interim fit? %d [vExp=%.2f]' % (wax_isol['success'], var_explained(resps_curr, ci, sfs_curr, dog_model=DoGmodel, baseline=baseline)));
+              if joint == 9:
+                 init_xc = get_xc_from_slope(allInitParams[0], allInitParams[1], cons_curr);
+                 obj_isol = lambda params: DoG_loss(np.array([params[0], init_xc, params[1], allInitParams[2], allInitParams[3], 1, params[1], allInitParams[2], allInitParams[4], allInitParams[5]]), resps_curr, sfs_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, resps_std=stds_curr, var_to_mean=var_to_mean, gain_reg=gain_reg, joint=0, baseline=baseline, vol_lam=vol_lam);
+                 bounds_isol = (kc1_bound, surr1_gain_bound);
+                 wax_isol = opt.minimize(obj_isol, np.array([curr_init[0], curr_init[2]]), method='L-BFGS-B', bounds=bounds_isol);
+                 ci = np.copy(ref_init);
+                 ci[0] = wax_isol['x'][0];
+                 ci[2] = wax_isol['x'][1];
+                 print('success in interim fit? %d [vExp=%.2f]' % (wax_isol['success'], var_explained(resps_curr, ci, sfs_curr, dog_model=DoGmodel, baseline=baseline)));
+           curr_init = clean_sigmoid_params(ci, dogMod=DoGmodel);
         else: # first attempt --> initialize from the isolated fits
            vE = var_explained(resps_curr, curr_init, sfs_curr, dog_model=DoGmodel, baseline=baseline);
            print('...init from isolParams (varExpl=%.2f)' % vE);
