@@ -8,7 +8,6 @@ import itertools
 
 area = sys.argv[1];
 
-
 if area == 'V1':
 
   ########################
@@ -17,10 +16,10 @@ if area == 'V1':
 
   # expDirs (and expNames must always be of the right length, i.e. specify for each expt dir 
   ## V1 version
-  #expDirs = ['V1/']
-  #expNames = ['dataList_210721.npy']
-  expDirs = ['V1_orig/', 'altExp/', 'V1/', 'V1_BB/']
-  expNames = ['dataList.npy', 'dataList.npy', 'dataList_210721.npy', 'dataList_210721.npy']
+  expDirs = ['altExp/', 'V1/']#, 'V1_BB/']
+  expNames = ['dataList.npy', 'dataList_210721.npy']#, 'dataList_210721.npy']
+  #expDirs = ['V1_orig/', 'altExp/', 'V1/', 'V1_BB/']
+  #expNames = ['dataList.npy', 'dataList.npy', 'dataList_210721.npy', 'dataList_210721.npy']
 
   nExpts = len(expDirs);
 
@@ -39,22 +38,30 @@ if area == 'V1':
   ####
   # descrFits - loss type determined by comparison (choose best; see modCompare.ipynb::Descriptive Fits)
   ####
-  dogMod = 3; # 1 (sach), 2 (Tony), 3 (d-DoG-S), 4 (N/A), 5 (d-DoG-S Hawk)
-  jointType = 2; # 0/1/2 --> none/[g,S]/[*, surr1_rad, surr2_rad]
-  dogNames = ['descrFitsHPC_220323_sqrt_ddogs_JTflankSurrShape.npy', 'descrFitsHPC_220323_sqrt_ddogs_JTflankSurrShape.npy', 'descrFitsHPC_220323_sqrt_ddogs_JTflankSurrShape.npy', 'descrFitsHPC_220323_sqrt_ddogs_JTflankSurrShape.npy'];
-  #dogNames = ['descrFitsHPC_220322_sqrt_ddogs_JTflankSurrShape.npy', 'descrFitsHPC_220322_sqrt_ddogs_JTflankSurrShape.npy', 'descrFitsHPC_220322_sqrt_ddogs_JTflankSurrShape.npy', 'descrFitsHPC_220322_sqrt_ddogs_JTflankSurrShape.npy'];
-  #dogNames = ['descrFits_210914_sqrt_tony.npy', 'descrFits_210914_sqrt_tony.npy', 'descrFits_210914_sqrt_tony.npy', 'descrFits_210721_sqrt_tony.npy'];
-  #dogNames = ['descrFits_210503_sqrt_tony.npy', 'descrFits_210503_sqrt_tony.npy', 'descrFits_210503_sqrt_tony.npy'];
-  #dogNames = ['descrFits_210304_sqrt_sach.npy', 'descrFits_210304_sqrt_sach.npy', 'descrFits_210304_sqrt_sach.npy'];
+  dogMod = 1; # 1 (sach), 2 (Tony), 3 (d-DoG-S), 4 (N/A), 5 (d-DoG-S Hawk)
+  #jointType = 0; # 0/1/2 --> none/[g,S]/[*, surr1_rad, surr2_rad]
+  #dogNames = ['descrFitsHPC_220609_sqrt_sach.npy'];
+  jointType = 7;
+  dogNames = ['descrFitsHPC_220609_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
+
+  #dogMod = 3; # 1 (sach), 2 (Tony), 3 (d-DoG-S), 4 (N/A), 5 (d-DoG-S Hawk)
+  #jointType = 0; # 0/1/2 --> none/[g,S]/[*, surr1_rad, surr2_rad]
+  #dogNames = ['descrFitsHPC_220609_sqrt_ddogs.npy'];
+  #jointType = 7;
+  #dogNames = ['descrFitsHPC_220609_sqrt_ddogs_JTflankSurrShapeCtrRaSlope.npy'];
+  #jointType = 9; # TRY below -- might not work? because of data/which boot was done :( 
+  #dogNames = ['descrFitsHPC_220607_sqrt_ddogs_JTflankCopyCtrRaSlope.npy']
+
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
-  descrNames = ['descrFits_210914_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210916_sqrt_flex.npy'];
+  descrNames = ['descrFits_210914_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210916_sqrt_flex.npy'];
   #descrNames = ['descrFits_190503_sqrt_flex.npy', 'descrFits_190503_sqrt_flex.npy', 'descrFits_191023_sqrt_flex.npy'];
 
   #rvcNames = ['rvcFits_210914_vecF1_NR.npy'];
-  #rvcMods = [1];
-  rvcNames = ['rvcFits_210914_f0_NR.npy', 'rvcFits_210914_f0_NR.npy', 'rvcFits_210914_vecF1_NR.npy', 'rvcFits_210916_vecF1_NR.npy'];
+  rvcMods = [1];
+  rvcNames = ['rvcFitsHPC_220609_f0_NR.npy', 'rvcFitsHPC_220609_vecF1_NR.npy'] #, 'V1_BB/structures/rvcFitsHPC_220609_vecF1_NR.npy']
+  #rvcNames = ['rvcFits_210914_f0_NR.npy', 'rvcFits_210914_f0_NR.npy', 'rvcFits_210914_vecF1_NR.npy', 'rvcFits_210916_vecF1_NR.npy'];
   #rvcNames = ['rvcFits_191023_f0_NR.npy', 'rvcFits_191023_f0_NR.npy', 'rvcFits_191023_NR_pos.npy'];
-  rvcMods = [1,1,1,1]; # 0-mov; 1-Nakarushton; 2-Peirce
+  #rvcMods = [1,1,1,1]; # 0-mov; 1-Nakarushton; 2-Peirce
   # rvcNames   = ['rvcFits_f0.npy'];
   # pack to easily tile
   expt = [expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods];
@@ -98,7 +105,7 @@ if area == 'V1':
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
-  np.save(base_dir + 'jointList_V1_%s_vT%02d_dvT%02d' % (suffix, varExplThresh_str, dog_varExplThresh_str), jointList)
+  np.save(base_dir + 'jointList_V1_%s_vT%02d_dvT%02d_m%dj%d_noBB' % (suffix, varExplThresh_str, dog_varExplThresh_str, dogMod, jointType), jointList)
 
 ########################
 #### END V1
@@ -133,12 +140,12 @@ if area == 'LGN':
   #dogNames = ['descrFits_s210304_sach_sach.npy'];
   #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
   dogMod = 1; # 1 (sach) or 2 (Tony)
-  #jointType = 7; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
-  #dogNames = ['descrFitsHPC_220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
+  jointType = 7; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
+  dogNames = ['descrFitsHPC_220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
   #jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
   #dogNames = ['descrFitsHPC_220609_phAdj_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220609_phAdj_sqrt_sach_JTsurrShape.npy'];
-  jointType = 0; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
-  dogNames = ['descrFitsHPC_220609_phAdj_sqrt_sach.npy', 'descrFitsHPC_s220609_phAdj_sqrt_sach.npy'];
+  #jointType = 0; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
+  #dogNames = ['descrFitsHPC_220609_phAdj_sqrt_sach.npy', 'descrFitsHPC_s220609_phAdj_sqrt_sach.npy'];
 
   #dogNames = ['descrFitsHPC_220606alt_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220606_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
   #jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
@@ -173,10 +180,10 @@ if area == 'LGN':
   #### these are now defaults in hf.jl_create - but here, nonetheless, for reference!
 
   # any parameters we need for analysis below?
-  varExplThresh = 65; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  dog_varExplThresh = 65; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  #varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  #dog_varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  #varExplThresh = 65; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  #dog_varExplThresh = 65; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  dog_varExplThresh = -np.Inf#60; # i.e. only include if the fit explains >X (e.g. 75)% variance
 
   sf_range = [0.01, 10]; # allowed values of 'mu' for fits - see descr_fit.py for details
 

@@ -2885,7 +2885,6 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
             allInitParams = [ref_init[3], ref_init[7], *ref_init[-2:]]; # surround radius, in addition to g, S
          elif joint==3: # need to initialize surround gain and surround radius (we'll take from the central DoG
             allInitParams = [ref_init[2], ref_init[3], *ref_init[-2:]] # surround gain and radius
-            #allInitParams = [ref_init[6], ref_init[7], *ref_init[-2:]] # g,S (i.e. the final two parameters
          elif joint==7 or joint==8 or joint==9: # like DoG joint==7 on top of d-DoG-S joint == 2
             init_intercept, init_slope = random_in_range([-1.3, -0.6])[0], random_in_range([-0.1,0.2])[0];
             if joint == 7: # besides slope, intercept: surround radius for both DoGs are joint, as are g,S
@@ -3779,10 +3778,10 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    if isBB: # then we have to 1) unpack the DC OR F1; 2) get just the mask response; 3) also expand
       try:
         dogFits[cell_ind] = expand_sach(dogFits[cell_ind][respKey]['mask']);
-        descrFits[cell_ind] = expand_sach(descrFits[cell_ind][respKey]['mask']);
         rvcFits[cell_ind] = expand_sach(rvcFits[cell_ind][respKey]['mask']);
+        descrFits[cell_ind] = expand_sach(descrFits[cell_ind][respKey]['mask']);
       except:
-        print('****Cell ind %d****' % cell_ind);
+        print('****one of DoG, RVC, descr expand failed: sfBB, cell ind %d****' % cell_ind);
 
    # the last values to set-up -- done here so that we properly access sfBB
    try:
@@ -3886,7 +3885,10 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                  boot_prms = np.transpose(boot_prms, axes=(1,0,2,3)); # i.e. flip 1st and 2nd axes
                # ---- zeroth, mechanism
                if not is_mod_DoG(dogMod): # i.e. it's a d-DoG-S
-                  dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, 0:4]), 1, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]); #dogMod 1, since they're param. like Sach
+                  try:
+                     dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, 0:4]), 1, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]); #dogMod 1, since they're param. like Sach
+                  except:
+                     pass;
                else:
                   dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, :]), dogMod, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]);
                # then, in order: sf70, pSf, charFreq
@@ -4012,7 +4014,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      except: # then likely, no rvc/descr fits...
        pass
      # NEW 22.06.02: get the slope if we have a slope model...
-     if jointType==7:
+     if jointType>=7: # 7,8, and 9 joints (whether DoG or d-DoG-S) have the first two parameters specifying the slope of center radius
         prms = dogFits[cell_ind]['paramList'][0];
         dataMetrics['dog_mod_slope'] = prms[1]; # not negated here...
         dataMetrics['dog_mod_intercept'] = prms[0];
@@ -4238,8 +4240,6 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       #if isBB:
       #  oh = perCell_summary(30);
       #  pdb.set_trace();
-
-      #oh = perCell_summary(7);
 
       nCpu = mp.cpu_count();
       with mp.Pool(processes = nCpu) as pool:
@@ -6013,7 +6013,7 @@ def rvcTune(rvcVals, rvcResps, rvcResps_std, rvcMod=1):
 
 ####
 
-def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None, reducedSave=False):
+def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None, reducedSave=False, forceOneChannel=True):
   ''' wrapper function used to get the derived measures for the basic characterizations
       - basicPaths [the full path to each of the basic tuning program files (xml)]
       - basicProgNames [what order and name for the tunings]
@@ -6055,7 +6055,7 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None
           except:
             pass;
         if sfLoaded == 0: # if it wasn't or couldn't be loaded already, run this:
-          sf = rbc.readSf11(curr_name, prog_curr);
+          sf = rbc.readSf11(curr_name, prog_curr, forceOneChannel=forceOneChannel);
         if sf['f1f0_rat'] == []:
           f1f0 = -1; # ensure it's complex...
         else:
@@ -6090,7 +6090,7 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None
            except:
               pass
         if rvcLoaded == 0:
-          rv = rbc.readRVC(curr_name, prog_curr);
+          rv = rbc.readRVC(curr_name, prog_curr, forceOneChannel=forceOneChannel);
         if 'LGN' in curr_name:
           rvcMod = 0; # this is the model we use for LGN RVCs
         else:
@@ -6137,7 +6137,7 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None
            except:
               pass
         if tfLoaded == 0:
-          tf = rbc.readTf11(curr_name, prog_curr);
+          tf = rbc.readTf11(curr_name, prog_curr, forceOneChannel=forceOneChannel);
    
         if sf_resp_ind is None:
           if tf['f1f0_rat'] == []:
@@ -6177,7 +6177,7 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None
            except:
               pass
         if rfLoaded == 0:
-          rf = rbc.readRFsize10(curr_name, prog_curr);
+          rf = rbc.readRFsize10(curr_name, prog_curr, forceOneChannel=forceOneChannel);
         if sf_resp_ind is None:
           if rf['f1f0_rat'] == []:
             f1f0 = -1; # ensure it's complex...
@@ -6220,7 +6220,7 @@ def get_basic_tunings(basicPaths, basicProgNames, forceSimple=None, preProc=None
            except:
               pass
         if oriLoaded == 0:
-          ori = rbc.readOri16(curr_name, prog_curr);
+          ori = rbc.readOri16(curr_name, prog_curr, forceOneChannel=forceOneChannel);
         if sf_resp_ind is None:
           if ori['f1f0_rat'] == []:
             f1f0 = -1; # ensure it's complex...

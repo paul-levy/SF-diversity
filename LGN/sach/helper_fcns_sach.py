@@ -474,7 +474,6 @@ def tabulateResponses(data, resample=False, sub_f1_blank=False, phAdjusted=1, di
           if phAdjusted=-1, then we do the (dumb, non-vector) scalar average
   ----  : We discovered on 22.04.07 that Sach's mean F1 phase/amplitude were not done using proper vector math (i.e. he simply took the mean of the amplitudes)
   ----  : So, we not only do the proper vector math but also apply the phase-amplitude relationship correction that we apply for my own LGN data
-  - NOTE (ONLY APPLIED PRE-PHASE CORRECTION): Sach's data has marked offset, even on F1 -- if sub_f1_blank is True, we'll subtract that off
   '''
   all_cons = np.unique(data['cont']);
   all_cons = all_cons[all_cons>0];
