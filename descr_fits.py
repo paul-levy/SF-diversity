@@ -1235,7 +1235,7 @@ if __name__ == '__main__':
           if dog_model==1: # if if just DoG and not d-DoG-S
             n_repeats = 5 if joint>0 else 7;
           else:
-            n_repeats = 2 if joint>0 else 5;
+            n_repeats = 5 if joint>0 else 7;
         else:
           if dog_model==1: # if if just DoG and not d-DoG-S
             n_repeats = 25 if joint>0 else 50; # was previously be 3, 15, then 7, 15

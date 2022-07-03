@@ -2911,8 +2911,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
                  wax_isol = opt.minimize(obj_isol, np.array([*curr_init[0:3], *curr_init[4:7]]), method='L-BFGS-B', bounds=bounds_isol);
                  ci = np.copy(ref_init);
                  ci[0:3] = wax_isol['x'][0:3];
+                 ci[3] = allInitParams[0];
                  ci[4:7] = wax_isol['x'][3:];
-                 print('success in interim fit? %d [vExp=%.2f]' % (wax_isol['success'], var_explained(resps_curr, ci, sfs_curr, dog_model=DoGmodel, baseline=baseline)));
+                 ci[7:] = allInitParams[1:4]
+                 vExp_curr = var_explained(resps_curr, ci, sfs_curr, dog_model=DoGmodel, baseline=baseline);
+                 print('success in interim fit? %d [vExp=%.2f]' % (wax_isol['success'], vExp_curr));
               if joint == 9:
                  init_xc = get_xc_from_slope(allInitParams[0], allInitParams[1], cons_curr);
                  obj_isol = lambda params: DoG_loss(np.array([params[0], init_xc, params[1], allInitParams[2], allInitParams[3], 1, params[1], allInitParams[2], allInitParams[4], allInitParams[5]]), resps_curr, sfs_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, resps_std=stds_curr, var_to_mean=var_to_mean, gain_reg=gain_reg, joint=0, baseline=baseline, vol_lam=vol_lam);
@@ -2921,7 +2924,19 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
                  ci = np.copy(ref_init);
                  ci[0] = wax_isol['x'][0];
                  ci[2] = wax_isol['x'][1];
-                 print('success in interim fit? %d [vExp=%.2f]' % (wax_isol['success'], var_explained(resps_curr, ci, sfs_curr, dog_model=DoGmodel, baseline=baseline)));
+                 ci[1] = init_xc;
+                 ci[3] = allInitParams[2];
+                 ci[4] = allInitParams[3];
+                 ci[5] = 1;
+                 ci[6] = ci[2];
+                 ci[7] = allInitParams[2];
+                 ci[8:] = allInitParams[4:6];
+                 vExp_curr = var_explained(resps_curr, ci, sfs_curr, dog_model=DoGmodel, baseline=baseline);
+                 if vExp_curr<-1e2:
+                    rOO = get_descrResp([curr_init[0], init_xc, curr_init[2], allInitParams[2], allInitParams[3], 1, params[1], allInitParams[2], allInitParams[3], allInitParams[5]], sfs_curr, DoGmodel, baseline=baseline)
+                    rNN = get_descrResp([ci[0], init_xc, ci[2], allInitParams[2], allInitParams[3], 1, params[1], allInitParams[2], allInitParams[3], allInitParams[5]], sfs_curr, DoGmodel, baseline=baseline)
+                    pdb.set_trace();
+                 print('success in interim fit? %d [vExp=%.2f]' % (wax_isol['success'], vExp_curr));
            curr_init = clean_sigmoid_params(ci, dogMod=DoGmodel);
         else: # first attempt --> initialize from the isolated fits
            vE = var_explained(resps_curr, curr_init, sfs_curr, dog_model=DoGmodel, baseline=baseline);

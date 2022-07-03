@@ -114,7 +114,7 @@ if expDir == 'LGN/':
     #descrBase = 'descrFits%s_220511' % hpc_str;
     descrBase = 'descrFits%s_220609' % hpc_str;
 else:
-    descrBase = 'descrFits%s_220609' % hpc_str;
+    descrBase = 'descrFits%s_220631' % hpc_str;
     #descrBase = 'descrFits%s_220531' % hpc_str;
 if expDir == 'LGN/':
   rvcBase = 'rvcFits%s_220531' % hpc_str;
