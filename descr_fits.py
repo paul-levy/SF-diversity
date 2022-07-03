@@ -20,7 +20,7 @@ else:
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #dogName = 'descrFits%s_220531' % hpcSuff;
-dogName = 'descrFits%s_220631' % hpcSuff;
+dogName = 'descrFits%s_220702' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220531' % hpcSuff
   rvcName_f1 = 'rvcFits%s_220531' % hpcSuff;
@@ -1235,14 +1235,15 @@ if __name__ == '__main__':
           if dog_model==1: # if if just DoG and not d-DoG-S
             n_repeats = 5 if joint>0 else 7;
           else:
-            n_repeats = 5 if joint>0 else 7;
+            n_repeats = 3 if joint>0 else 5;
         else:
           if dog_model==1: # if if just DoG and not d-DoG-S
             n_repeats = 25 if joint>0 else 50; # was previously be 3, 15, then 7, 15
           else:
-            n_repeats = 5 if joint>0 else 15; # was previously be 3, 15
+            n_repeats = 12 if joint>0 else 15; # was previously be 3, 15
+            #n_repeats = 20 if joint>0 else 15; # was previously be 3, 15
           
-        print('descr fits! --> joint %d, %03d boots, cross_val %.2f' % (joint, nBoots, cross_val if cross_val is not None else -99));
+        print('descr fits! --> mod %d, joint %d, %03d boots, cross_val %.2f' % (dog_model, joint, nBoots, cross_val if cross_val is not None else -99));
 
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits

@@ -2467,7 +2467,6 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     max_resp = np.nanmax(resps_all);
     var_all = np.nanvar(resps_all*stim_dur); # we take the variance across COUNTS!
     var_to_mean = var_all/(stim_dur*np.nanmean(resps_all)); # but we divide out the stim_dur when calculating this...
-    print('mean||var_to_mean: %.2f||%.2f' % (np.nanmean(resps_all), var_to_mean));
   else: # we don't really need to pass in resps_all
     max_resp = np.nanmax(resps_mean);
     var_to_mean = np.nan;
@@ -2855,6 +2854,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
             ref_init[3] = np.clip(np.power(2, expon_distr.rvs(loc=0,scale=0.84)), 1, 8); # simply draw from an exponential distr.
             ref_init[7] = np.clip(np.power(2, expon_distr.rvs(loc=0,scale=1.54)), 1, 8); # as above, but a longer tail
             ref_init[-1] = np.clip(np.sign(np.random.rand()-0.5)*np.power(2, 1.5-expon_distr.rvs(loc=0,scale=.8)), -3.5, 3.5); # here, we make a distribution the rises from -1 and beyond towards a peak at 2; then randomly choose a sign so that we have peaks at +/-2 (in log2, so 4 after np.power(x,2))
+            ref_init = clean_sigmoid_params(ref_init, dogMod=DoGmodel);
       else: # first attempt --> initialize from the isolated fits
          ref_init = clean_sigmoid_params(isolParams[-1], dogMod=DoGmodel); # initialize the joint parameters on the basis of the above
          print('initializing from isolated fits');
@@ -2905,17 +2905,16 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         if curr_init == [] or n_try>0:
            curr_init = dog_init_params(resps_curr, base_rate, all_sfs, sfs_curr, DoGmodel, bounds=refBounds);
            if DoGmodel==3: # we'll initialize by fitting d-DoG-S separately with all joint parameters fixed...
+              curr_init = clean_sigmoid_params(curr_init, dogMod=DoGmodel);
               if joint == 2:
                  obj_isol = lambda params: DoG_loss(np.array([*params[0:3], allInitParams[0], *params[3:], *allInitParams[1:4]]), resps_curr, sfs_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, resps_std=stds_curr, var_to_mean=var_to_mean, gain_reg=gain_reg, joint=joint, baseline=baseline, vol_lam=vol_lam);
                  bounds_isol = allBounds[4:10]; # skip the 4 joint parameters; same for all contrasts
                  wax_isol = opt.minimize(obj_isol, np.array([*curr_init[0:3], *curr_init[4:7]]), method='L-BFGS-B', bounds=bounds_isol);
                  ci = np.copy(ref_init);
                  ci[0:3] = wax_isol['x'][0:3];
-                 ci[3] = allInitParams[0];
                  ci[4:7] = wax_isol['x'][3:];
-                 ci[7:] = allInitParams[1:4]
-                 vExp_curr = var_explained(resps_curr, ci, sfs_curr, dog_model=DoGmodel, baseline=baseline);
-                 print('success in interim fit? %d [vExp=%.2f]' % (wax_isol['success'], vExp_curr));
+                 print('success in interim fit? %d [vExp=%.2f]' % (wax_isol['success'], var_explained(resps_curr, ci, sfs_curr, dog_model=DoGmodel, baseline=baseline)));
+                 curr_init = clean_sigmoid_params(ci, dogMod=DoGmodel);
               if joint == 9:
                  init_xc = get_xc_from_slope(allInitParams[0], allInitParams[1], cons_curr);
                  obj_isol = lambda params: DoG_loss(np.array([params[0], init_xc, params[1], allInitParams[2], allInitParams[3], 1, params[1], allInitParams[2], allInitParams[4], allInitParams[5]]), resps_curr, sfs_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, resps_std=stds_curr, var_to_mean=var_to_mean, gain_reg=gain_reg, joint=0, baseline=baseline, vol_lam=vol_lam);
@@ -2924,20 +2923,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
                  ci = np.copy(ref_init);
                  ci[0] = wax_isol['x'][0];
                  ci[2] = wax_isol['x'][1];
-                 ci[1] = init_xc;
-                 ci[3] = allInitParams[2];
-                 ci[4] = allInitParams[3];
-                 ci[5] = 1;
-                 ci[6] = ci[2];
-                 ci[7] = allInitParams[2];
-                 ci[8:] = allInitParams[4:6];
-                 vExp_curr = var_explained(resps_curr, ci, sfs_curr, dog_model=DoGmodel, baseline=baseline);
-                 if vExp_curr<-1e2:
-                    rOO = get_descrResp([curr_init[0], init_xc, curr_init[2], allInitParams[2], allInitParams[3], 1, params[1], allInitParams[2], allInitParams[3], allInitParams[5]], sfs_curr, DoGmodel, baseline=baseline)
-                    rNN = get_descrResp([ci[0], init_xc, ci[2], allInitParams[2], allInitParams[3], 1, params[1], allInitParams[2], allInitParams[3], allInitParams[5]], sfs_curr, DoGmodel, baseline=baseline)
-                    pdb.set_trace();
-                 print('success in interim fit? %d [vExp=%.2f]' % (wax_isol['success'], vExp_curr));
-           curr_init = clean_sigmoid_params(ci, dogMod=DoGmodel);
+                 print('success in interim fit? %d [vExp=%.2f]' % (wax_isol['success'], var_explained(resps_curr, ci, sfs_curr, dog_model=DoGmodel, baseline=baseline)));
+                 curr_init = clean_sigmoid_params(ci, dogMod=DoGmodel);
         else: # first attempt --> initialize from the isolated fits
            vE = var_explained(resps_curr, curr_init, sfs_curr, dog_model=DoGmodel, baseline=baseline);
            print('...init from isolParams (varExpl=%.2f)' % vE);
@@ -3810,7 +3797,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
         rvcFits[cell_ind] = expand_sach(rvcFits[cell_ind][respKey]['mask']);
         descrFits[cell_ind] = expand_sach(descrFits[cell_ind][respKey]['mask']);
       except:
-        print('****one of DoG, RVC, descr expand failed: sfBB, cell ind %d****' % cell_ind);
+        print('****Cell ind %d****' % cell_ind);
 
    # the last values to set-up -- done here so that we properly access sfBB
    try:
@@ -4042,7 +4029,6 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
          dataMetrics['dog_pSfModRat'][d] = [np.log2(evalRatio), np.log2(evalRatio)/logConRat];
      except: # then likely, no rvc/descr fits...
        pass
-     # NEW 22.06.02: get the slope if we have a slope model...
      if jointType>=7: # 7,8, and 9 joints (whether DoG or d-DoG-S) have the first two parameters specifying the slope of center radius
         prms = dogFits[cell_ind]['paramList'][0];
         dataMetrics['dog_mod_slope'] = prms[1]; # not negated here...

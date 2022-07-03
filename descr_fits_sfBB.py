@@ -18,7 +18,7 @@ else:
 
 expName = hf.get_datalist('V1_BB/', force_full=1);
 
-sfName = 'descrFits%s_220609' % hpcSuff;
+sfName = 'descrFits%s_220702' % hpcSuff;
 rvcName = 'rvcFits%s_220607' % hpcSuff;
 #sfName = 'descrFits%s_220609' % hpcSuff;
 #rvcName = 'rvcFits%s_220609' % hpcSuff;
@@ -486,11 +486,9 @@ if __name__ == '__main__':
     #make_descr_fits((10, dataList['unitName'][10]), fit_rvc=pass_rvc, fit_sf=pass_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig)
 
     if nBoots > 1:
-      n_repeats = 2 if jointSf>0 else 5; # fewer if repeat
+      n_repeats = 3 if jointSf>0 else 5; # fewer if repeat
     else:
-      #n_repeats = 50 if jointSf>0 else 12; # was previously be 3, 15, then 7, 15
-      #n_repeats = 10 if jointSf>0 else 12; # was previously be 3, 15, then 7, 15
-      n_repeats = 5 if jointSf>0 else 12; # was previously be 3, 15, then 7, 15
+      n_repeats = 12 if jointSf>0 else 15; # was previously be 3, 15, then 7, 15
 
     with mp.Pool(processes = nCpu) as pool:
       # if we're doing as parallel, do NOT save
