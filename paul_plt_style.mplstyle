@@ -2,10 +2,9 @@
 # If you edit this, you must replace the file at: plevy/anaconda3/lib/python3.6/site-packages/matplotlib/mpl-data/stylelib
 
 ### Lines
-lines.markeredgewidth: 1     # the line width around the marker symbol
 lines.linewidth      : 3
-lines.markeredgewidth: 0 # remove edge??
-lines.markersize     : 12; # 8 is the default; in points
+lines.markeredgewidth: 0  # remove edge??
+lines.markersize     : 12 # 8 is the default; in points
 
 patch.force_edgecolor: True
 patch.edgecolor      : white
@@ -15,13 +14,12 @@ text.usetex          : False
 
 font.family          : serif
 font.serif           : Palatino Linotype
-font.size            : 16.0
 
-font.family          : sans-serif
-font.sans-serif      : ['Helvetica', 'sans-serif', 'Arial', 'Verdana'] + 'font.sans-serif'
+#font.family          : sans-serif
+#font.sans-serif      : ['Helvetica', 'sans-serif', 'Arial', 'Verdana'] + 'font.sans-serif'
 text.color           : black
 font.style           : oblique
-font.size            : 40;
+font.size            : 40
 pdf.fonttype         : 42
 ps.fonttype          : 42
 
@@ -39,7 +37,7 @@ ytick.labelsize      : medium # fontsize of the tick labels
 xtick.major.size     : 25
 xtick.minor.size     : 12
 ytick.major.size     : 25
-ytick.minor.size     : 12; # i.e. don't have minor ticks on y...
+ytick.minor.size     : 12 # i.e. don't have minor ticks on y...
 xtick.major.width    : 2
 xtick.minor.width    : 2
 ytick.major.width    : 2
@@ -52,7 +50,7 @@ axes.spines.top      : False
 axes.spines.right    : False
 axes.titlesize       : medium   # fontsize of the axes title
 axes.labelsize       : medium  # fontsize of the x any y labels
-axes.linewidth       : 3;
+axes.linewidth       : 3
 
 ### FIGURE
 figure.frameon       : False
