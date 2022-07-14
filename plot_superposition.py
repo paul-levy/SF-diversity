@@ -30,6 +30,7 @@ f1_expCutoff = 2; # if 1, then altExp will be allowed to have F1 analyzed; if 2,
 
 which_cell = int(sys.argv[1]);
 expDir    = sys.argv[2];
+
 if len(sys.argv) > 3:
   use_mod_resp = int(sys.argv[3]); # if mod_resp is 2, then we are using pytorch model
 else:
@@ -47,7 +48,7 @@ if len(sys.argv) > 6:
   useHPCfit = int(sys.argv[6]);
 else:
   useHPCfit = 1; # default is using the HPC fit
-
+hpc_str = 'HPC' if useHPCfit else '';
 if len(sys.argv) > 7:
   conType = int(sys.argv[7]);
 else:
@@ -56,7 +57,7 @@ else:
 if len(sys.argv) > 8:
   lgnFrontEnd = int(sys.argv[8]);
 else:
-  lgnFrontEnd = None; # default is using the HPC fit
+  lgnFrontEnd = None;
 
 if use_mod_resp == 2:
   rvcAdj   = -1; # this means vec corrected F1, not phase adjustment F1...
@@ -73,13 +74,14 @@ else:
   loc_str = '';
 
 #rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
-rvcName = 'rvcFits_210304';
+#rvcName = 'rvcFits_210304';
+rvcName = 'rvcFits%s_220531' % hpc_str if expDir=='LGN/' else 'rvcFits%s_220609' % hpc_str
 rvcFits = None; # pre-define this as None; will be overwritten if available/needed
 if expDir == 'altExp/': # we don't adjust responses there...
   rvcName = None;
-dFits_base = 'descrFits_210304';
+dFits_base = 'descrFits%s_220609' % hpc_str if expDir=='LGN/' else 'descrFits%s_220631' % hpc_str
+#dFits_base = 'descrFits_210304';
 #dFits_base = 'descrFits_191023';
-dMod_num, dLoss_num = 0, 2; # see hf.descrFit_name/descrMod_name/etc for details
 if use_mod_resp == 1:
   rvcName = None; # Use NONE if getting model responses, only
   if excType == 1:
@@ -134,25 +136,29 @@ rcParams['font.size'] = 20;
 # load everything
 ############
 dataListNm = hf.get_datalist(expDir, force_full=force_full);
-#if expDir == 'V1/':
-#  dataListNm = 'dataList.npy';
-#else:
-#  dataListNm = 'dataList_glx.npy';
 descrFits_f0 = None;
-if expDir == 'V1/' or expDir == 'altExp/':
-  rvcMod = 1; # i.e. Naka-rushton (1)
-  rvcDir = None; # None if we're doing vec-corrected
-  vecF1 = 1;
-elif expDir == 'LGN/':
+dLoss_num = 2; # see hf.descrFit_name/descrMod_name/etc for details
+if expDir == 'LGN/':
   rvcMod = 0; 
+  dMod_num = 1;
+  rvcDir = 1;
+  vecF1 = -1;
+else:
+  rvcMod = 1; # i.e. Naka-rushton (1)
+  dMod_num = 3; # d-dog-s
+  rvcDir = None; # None if we're doing vec-corrected
+  if expDir == 'altExp/':
+    vecF1 = 0;
+  else:
+    vecF1 = 1;
 
 dFits_mod = hf.descrMod_name(dMod_num)
-descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, modelName=dFits_mod);
+descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, modelName=dFits_mod, phAdj=1 if vecF1==-1 else None);
 
 ## now, let it run
 dataPath = basePath + expDir + 'structures/'
 save_loc = basePath + expDir + 'figures/'
-save_locSuper = save_loc + 'superposition_210331/'
+save_locSuper = save_loc + 'superposition_220713/'
 if use_mod_resp == 1:
   save_locSuper = save_locSuper + '%s/' % fitBase
 
@@ -196,7 +202,14 @@ try:
   basic_names, basic_order = dataList['basicProgName'][which_cell-1], dataList['basicProgOrder']
   basics = hf.get_basic_tunings(basic_names, basic_order);
 except:
-  basics = None;
+  try:
+    # we've already put the basics in the data structure... (i.e. post-sorting 2021 data)
+    basic_names = ['','','','',''];
+    basic_order = ['rf', 'sf', 'tf', 'rvc', 'ori']; # order doesn't matter if they are already loaded
+    basics = hf.get_basic_tunings(basic_names, basic_order, preProc=S, reducedSave=True)
+  except:
+    basics = None;
+
 ### TEMPORARY: save the "basics" in curr_suppr; should live on its own, though; TODO
 curr_suppr['basics'] = basics;
 

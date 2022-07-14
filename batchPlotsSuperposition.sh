@@ -20,57 +20,45 @@ source activate pytorch-lcv
 
 EXP_DIR=$1
 
-for run in {1..8}
-do
-  #python3.6 plot_superposition.py $run altExp/ & # with data
-  #python3.6 plot_superposition.py $run V1/ & # with data
-  #python3.6 plot_superposition.py $run LGN/ & # with data
-  # DATA
-  python3.6 plot_superposition.py $run $EXP_DIR 0 5 2 1 1 1 &
-  # Weighted model (5)
-  python3.6 plot_superposition.py $run $EXP_DIR 2 5 2 1 1 1 &
-  # Flat model
-  python3.6 plot_superposition.py $run $EXP_DIR 2 1 2 1 1 1 &
+if [ "$EXP_DIR" = "altExp/" ]; then
+  for run in {1..8}
+  do
+    python3.6 plot_superposition.py $run altExp/ & # with data
+  done
+fi
 
-done
+if [ "$EXP_DIR" = "LGN/" ]; then
+  for run in {1..25}
+  do
+    python3.6 plot_superposition.py $run LGN/ & # with data
+  done
+  wait
+  for run in {26..50}
+  do
+    python3.6 plot_superposition.py $run LGN/ & # with data
+  done
+  wait
+  for run in {51..81}
+  do
+    python3.6 plot_superposition.py $run LGN/ & # with data
+  done
+fi
 
-#python3.6 plot_superposition.py 1 LGN/
-#python3.6 plot_superposition.py 2 LGN/
-#python3.6 plot_superposition.py 5 LGN/
-#python3.6 plot_superposition.py 6 LGN/
-#python3.6 plot_superposition.py 10 LGN/
-#python3.6 plot_superposition.py 15 LGN/
-#python3.6 plot_superposition.py 17 LGN/
-#python3.6 plot_superposition.py 19 LGN/
-#python3.6 plot_superposition.py 21 LGN/
-#python3.6 plot_superposition.py 24 LGN/
-#python3.6 plot_superposition.py 26 LGN/
-#python3.6 plot_superposition.py 28 LGN/
-#python3.6 plot_superposition.py 30 LGN/
-#python3.6 plot_superposition.py 31 LGN/
-#python3.6 plot_superposition.py 32 LGN/
-#python3.6 plot_superposition.py 41 LGN/
-#python3.6 plot_superposition.py 42 LGN/
-#python3.6 plot_superposition.py 43 LGN/
-#python3.6 plot_superposition.py 45 LGN/
-#python3.6 plot_superposition.py 51 LGN/
-#python3.6 plot_superposition.py 53 LGN/
-#python3.6 plot_superposition.py 54 LGN/
-#python3.6 plot_superposition.py 70 LGN/
-
-#python3.6 plot_superposition.py 48 LGN/
-#python3.6 plot_superposition.py 53 LGN/
-#python3.6 plot_superposition.py 54 LGN/
-
-#python3.6 plot_superposition.py 5 V1/ 
-#python3.6 plot_superposition.py 7 V1/ 
-#python3.6 plot_superposition.py 11 V1/ 
-#python3.6 plot_superposition.py 23 V1/ 
-#python3.6 plot_superposition.py 39 V1/ 
-#python3.6 plot_superposition.py 42 V1/ 
-#python3.6 plot_superposition.py 46 V1/ 
-#python3.6 plot_superposition.py 47 V1/ 
-#python3.6 plot_superposition.py 52 V1/ 
-#python3.6 plot_superposition.py 54 V1/ 
+if [ "$EXP_DIR" = "V1/" ]; then
+  for run in {1..25}
+  do
+    python3.6 plot_superposition.py $run V1/ & # with data
+  done
+  wait
+  for run in {26..50}
+  do
+    python3.6 plot_superposition.py $run V1/ & # with data
+  done
+  wait
+  for run in {51..81}
+  do
+    python3.6 plot_superposition.py $run V1/ & # with data
+  done
+fi
 
 # leave a blank line at the end
