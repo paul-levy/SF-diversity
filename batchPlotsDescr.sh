@@ -42,23 +42,24 @@ JOINT=${4:-0}
 HPC=${5:-0}
 SEM=${6:-0}
 PHADJ=${7:-1}
+FORCE_METR=${8:-0}
 
 # note: dog_mod=0 means flex; 1 means sach (DoG)
 
 if [ "$EXP_DIR" = "V1/" ]; then
   for run in {1..30}
   do 
-    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 1 $SEM &
+    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 1 $SEM &
   done
   wait
   for run in {31..60}
   do 
-    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 1 $SEM &
+    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 1 $SEM &
   done
   wait
   for run in {61..81}
   do 
-    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 1 $SEM &
+    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 1 $SEM &
   done
   wait
 fi
@@ -112,12 +113,13 @@ fi
 if [ "$EXP_DIR" = "V1_BB/" ]; then
   for run in {1..23}
   do 
-    python3.6 plot_descr_sfBB.py $run V1_BB/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 1 &
+    python3.6 plot_descr_sfBB.py $run V1_BB/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 1 $FORCE_METR & # 0 1 is force log...
+    #python3.6 plot_descr_sfBB.py $run V1_BB/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 0 $FORCE_METR &
   done
   wait
   for run in {24..47}
   do 
-    python3.6 plot_descr_sfBB.py $run V1_BB/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 1 &
+    python3.6 plot_descr_sfBB.py $run V1_BB/ $DOG_MOD $LOSS_TYPE $JOINT -1 1 1 $HPC 0 1 $FORCE_METR &
   done
  fi
 

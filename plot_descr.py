@@ -28,30 +28,6 @@ warnings.filterwarnings('once');
 import pdb
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
-from matplotlib import rcParams
-for i in range(2):
-    # must run twice for changes to take effect?
-    from matplotlib import rcParams, cm
-    rcParams['font.family'] = 'sans-serif'
-    rcParams['font.sans-serif'] = ['Helvetica', 'sans-serif', 'Arial', 'Verdana'] + rcParams['font.sans-serif']
-    rcParams['text.color'] = 'black'
-    rcParams['font.style'] = 'oblique'
-    rcParams['font.size'] = 40;
-    rcParams['pdf.fonttype'] = 42
-    rcParams['ps.fonttype'] = 42
-    rcParams['lines.linewidth'] = 3;
-    rcParams['lines.markeredgewidth'] = 0; # remove edge??                                                                                                                               
-    rcParams['axes.linewidth'] = 3;
-    rcParams['lines.markersize'] = 12; # 8 is the default                                                                             
-
-    rcParams['xtick.major.size'] = 25
-    rcParams['xtick.minor.size'] = 12
-    rcParams['ytick.major.size'] = 25
-    rcParams['ytick.minor.size'] = 12; # i.e. don't have minor ticks on y...                                                                                                              
-    rcParams['xtick.major.width'] = 2
-    rcParams['xtick.minor.width'] = 2
-    rcParams['ytick.major.width'] = 2
-    rcParams['ytick.minor.width'] = 2
 
 lblSize = 40;
 y_lblpad = 6;
@@ -59,6 +35,7 @@ x_lblpad = 8;
 
 subplot_title = False; # have subplot title? Not really necessary for pub. figures
 specify_ticks = True; # specify the SF ticks (x-axis for SF plots?)
+old_refprm = False; # how to we pass in ref_params?
 
 peakFrac = 0.75; # plot fall of to peakFrac of peak, rather than peak or charFreq
 
@@ -67,6 +44,7 @@ plt_sf_as_rvc = 1;
 comm_S_calc = 1;
 plt_sfMix_dDoGs = False; # Plot d-DoG-S for sfMix only conditions?
 plt_joint = False; # plot joint?
+phAmpByMean=1;
 
 cellNum   = int(sys.argv[1]);
 expDir    = sys.argv[2]; 
@@ -104,8 +82,6 @@ save_loc = loc_base + expDir + 'figures/';
 fracSig = 1;
 #fracSig = 0 if expDir == 'LGN/' else 1; # we only enforce the "upper-half sigma as fraction of lower half" for V1 cells! 
 
-phAmpByMean=1;
-
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
@@ -114,20 +90,21 @@ if expDir == 'LGN/':
     #descrBase = 'descrFits%s_220511' % hpc_str;
     descrBase = 'descrFits%s_220609' % hpc_str;
 else:
-    descrBase = 'descrFits%s_220631' % hpc_str;
+    descrBase = 'descrFits%s_220715' % hpc_str;
     #descrBase = 'descrFits%s_220531' % hpc_str;
 if expDir == 'LGN/':
   rvcBase = 'rvcFits%s_220531' % hpc_str;
   #rvcBase = 'rvcFits%s_220511' % hpc_str;
 else:
-  rvcBase = 'rvcFits%s_220609' % hpc_str; # if V1?
-  #rvcBase = 'rvcFits%s_210914' % ''#hpc_str; # if V1?
+  #rvcBase = 'rvcFits%s_220609' % hpc_str; # if V1?
+  rvcBase = 'rvcFits%s_220714' % hpc_str;
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
 
 if rvcAdjSigned==1 and phAmpByMean: # i.e. phAdv correction
-    phBase = 'phaseAdvanceFits%s_220531' % hpc_str
+    phBase = 'phaseAdvanceFits%s_220531' % (hpc_str) if expDir=='LGN/' else 'phaseAdvanceFits%s_220609' % (hpc_str)
+    print(phBase);
     phAdvFits = hf.np_smart_load(data_loc + hf.phase_fit_name(phBase, dir=1));
     all_opts = phAdvFits[cellNum-1]['params'];
 
@@ -176,7 +153,6 @@ elif rvcAdj == 0:
 rvcFits = rvcFits[cellNum-1];
 expData  = hf.np_smart_load(str(data_loc + cellName + '_sfm.npy'));
 trialInf = expData['sfm']['exp']['trial'];
-
 descrParams = descrFits[cellNum-1]['params'];
 f1f0rat = hf.compute_f1f0(trialInf, cellNum, expInd, data_loc, descrFitName_f0=fLname)[0];
 
@@ -209,7 +185,7 @@ else:
 
 # now get the measured responses
 _, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
-if rvcAdjSigned==1 and phAmpByMean:
+if rvcAdjSigned==1 and phAmpByMean and (force_f1 or f1f0rat>1):
     respMean = hf.organize_phAdj_byMean(trialInf, expInd, all_opts, stimVals, val_con_by_disp);
 else:
     respMean = respOrg;
@@ -268,8 +244,12 @@ for d in range(nDisps):
     minResp = np.min(np.min(respMean[d, ~np.isnan(respMean[d, :, :])]));
     maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
     
-    ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
-    ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
+    if old_refprm:
+      ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+      ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
+    else:
+      ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+      ref_rc_val = None;
 
     for c in reversed(range(n_v_cons)):
         c_plt_ind = len(v_cons) - c - 1;
@@ -312,8 +292,8 @@ for d in range(nDisps):
             dispAx[d][c_plt_ind, 0].text(0.05, 0.075, '%d,%.2f' % (*prms_curr[0:2], ), transform=dispAx[d][c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
             dispAx[d][c_plt_ind, 0].text(0.05, 0.025, '%.2f,%.2f' % (*prms_curr[2:], ), transform=dispAx[d][c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
             for ii in range(2):
-              dispAx[d][c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
-              #dispAx[d][c_plt_ind, ii].plot(char_freq, 1, linestyle='None', marker='v', label='$f_c$', color=currClr, alpha=1); # plot at y=1
+              #dispAx[d][c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
+              dispAx[d][c_plt_ind, ii].plot(char_freq, 1, linestyle='None', marker='v', label='$f_c$', color=currClr, alpha=1); # plot at y=1
           except:
             pass; # why might this not work? If we only fit disp=0!
 
@@ -357,8 +337,8 @@ for d in range(nDisps):
             #if char_freq != np.nan:
             #  dispAx[d][c_plt_ind, 1].plot(char_freq, 1, 'v', color='k', label='char. freq', clip_on=False);
 
-          if subplot_title:
-              dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % descrFits[cellNum-1]['varExpl'][d, v_cons[c]], fontsize='medium');
+          #if subplot_title: # previously had set_title controlled by subplot_title, but we want varExpl there!
+          dispAx[d][c_plt_ind, 1].set_title('log-log: %.1f%% varExpl' % descrFits[cellNum-1]['varExpl'][d, v_cons[c]], fontsize='medium');
           dispAx[d][c_plt_ind, 1].set_xscale('log');
           dispAx[d][c_plt_ind, 1].set_yscale('log'); # double log
           dispAx[d][c_plt_ind, 1].set_ylim((minResp_toPlot, 1.5*maxResp));
@@ -430,8 +410,15 @@ for d in range(nDisps):
 
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));  
     minToPlot = 1; #5e-1;
-    ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
-    ref_rc_val = ref_params[2] if joint>0 else None;
+    #ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+    #ref_rc_val = ref_params[2] if joint>0 else None;
+    if old_refprm:
+      ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+      ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
+    else:
+      ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+      ref_rc_val = None;
+
 
     lines = [];
     for c in reversed(range(n_v_cons)):
@@ -547,8 +534,15 @@ for d in range(nDisps):
     v_cons = v_cons[np.arange(np.maximum(0, n_v_cons -mixCons), n_v_cons)]; # max(1, .) for when there are fewer contrasts than 4
     n_v_cons = len(v_cons);
     
-    ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
-    ref_rc_val = ref_params[2] if joint>0 else None;
+    #ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+    #ref_rc_val = ref_params[2] if joint>0 else None;
+    if old_refprm:
+      ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+      ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
+    else:
+      ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+      ref_rc_val = None;
+
 
     for c in reversed(range(n_v_cons)):
         c_plt_ind = n_v_cons - c - 1;
@@ -760,11 +754,18 @@ for d in range(nDisps):
 
     maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
     minResp_plot = 1;
-    ref_params = descrParams[d, np.where(v_cons)[0][-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
-    try:
-        ref_rc_val = ref_params[2] if joint>0 else None;
-    except:
-        print('cell %d --> bad ref_rc_val?' % cellNum);
+    #ref_params = descrParams[d, np.where(v_cons)[0][-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+    #try:
+    #    ref_rc_val = ref_params[2] if joint>0 else None;
+    #except:
+    #    print('cell %d --> bad ref_rc_val?' % cellNum);
+    if old_refprm:
+      ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+      ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
+    else:
+      ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+      ref_rc_val = None;
+
 
     for sf in range(n_v_sfs):
         sf_ind = v_sf_inds[sf];
@@ -1121,8 +1122,15 @@ if plt_joint:
     sf_steps = 100;
     plt_sfs = np.geomspace(all_sfs[0], all_sfs[-1], sf_steps);
     descrResps = np.zeros((len(val_cons), sf_steps));
-    ref_params = descrParams[d, val_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
-    ref_rc_val = ref_params[2] if joint>0 else None;
+    #ref_params = descrParams[d, val_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+    #ref_rc_val = ref_params[2] if joint>0 else None;
+    if old_refprm:
+      ref_params = descrParams[d, val_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+      ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
+    else:
+      ref_params = np.array([np.nanmin(descrParams[d, val_cons, 1]), 1]) if joint>0 else None;
+      ref_rc_val = None;
+
 
     for c_itr, c in enumerate(val_cons):
       curr_params = descrCurr[c];
@@ -1263,10 +1271,19 @@ if descrMod == 3 or descrMod == 5 and plt_sfMix_dDoGs: # i.e. d-DoG-s
       v_cons = v_cons[np.arange(np.maximum(0, n_v_cons -mixCons), n_v_cons)]; # max(1, .) for when there are fewer contrasts than 4
       n_v_cons = len(v_cons);
 
+      '''
       if comm_S_calc and joint>0: # this only applies when doing joint-across-con fits
           ref_params = descrParams[d, v_cons[-1]];
       else:
           ref_params = None;
+      '''
+      if old_refprm:
+        ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+        ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
+      else:
+        ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+        ref_rc_val = None;
+
 
       for c in reversed(range(n_v_cons)):
           c_plt_ind = n_v_cons - c - 1;
@@ -1347,10 +1364,19 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
       minResp = np.min(np.min(respMean[d, ~np.isnan(respMean[d, :, :])]));
       maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
 
+      '''
       if comm_S_calc and joint>0: # this only applies when doing joint-across-con fits
           ref_params = descrParams[d, v_cons[-1]];
       else:
           ref_params = None;
+      '''
+      if old_refprm:
+        ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+        ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
+      else:
+        ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+        ref_rc_val = None;
+
 
       for c in reversed(range(n_v_cons)):
           row_ind = int((n_v_cons-c-1)/n_cols);

@@ -20,35 +20,12 @@ warnings.filterwarnings('once');
 import pdb
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
-from matplotlib import rcParams
-for i in range(2):
-    # must run twice for changes to take effect?
-    from matplotlib import rcParams, cm
-    rcParams['font.family'] = 'sans-serif'
-    # rcParams['font.sans-serif'] = ['Helvetica']
-    rcParams['font.style'] = 'oblique'
-    rcParams['font.size'] = 30;
-    rcParams['pdf.fonttype'] = 3 # should be 42, but there are kerning issues
-    rcParams['ps.fonttype'] = 3 # should be 42, but there are kerning issues
-    rcParams['lines.linewidth'] = 3;
-    rcParams['lines.markeredgewidth'] = 0; # remove edge??                                                                                                                               
-    rcParams['axes.linewidth'] = 3;
-    rcParams['lines.markersize'] = 12; # 8 is the default                                                                                                                                
-    rcParams['font.style'] = 'oblique';
-
-    rcParams['xtick.major.size'] = 25
-    rcParams['xtick.minor.size'] = 12
-    rcParams['ytick.major.size'] = 25
-    rcParams['ytick.minor.size'] = 12; # i.e. don't have minor ticks on y...                                                                                                              
-
-    rcParams['xtick.major.width'] = 2
-    rcParams['xtick.minor.width'] = 2
-    rcParams['ytick.major.width'] = 2
-    rcParams['ytick.minor.width'] = 2
 
 majWidth = 4;
 minWidth = 4;
 lblSize = 40;
+
+old_refprm = False;
 
 peakFrac = 0.75; # plot fall of to peakFrac of peak, rather than peak or charFreq
 inclLegend = 0;
@@ -80,6 +57,10 @@ if len(sys.argv) > 11:
   forceLog = int(sys.argv[11]); # used for byDisp/allCons_... (sf plots)
 else:
   forceLog = 0;
+if len(sys.argv) > 12:
+  forceMetr = int(sys.argv[12]); # +1/-1 means force F1/DC; 0 is base on metric
+else:
+  forceMetr = 0; 
 
 loc_base = os.getcwd() + '/';
 
@@ -95,7 +76,7 @@ phAdj = np.abs(phAdj);
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
-descrBase = 'descrFits%s_220609' % hpc_str;
+descrBase = 'descrFits%s_220707vEs' % hpc_str;
 #descrBase = 'descrFits%s_220410' % hpc_str;
 ### RVCFITS
 rvcBase = 'rvcFits%s_220609' % hpc_str;
@@ -140,12 +121,22 @@ cell = hf.np_smart_load('%s%s_sfBB.npy' % (data_loc, unitNm));
 expInfo = cell[expName]
 byTrial = expInfo['trial'];
 f1f0_rat = hf_sf.compute_f1f0(expInfo)[0];
+#f1f0_rat_all = hf_sf.compute_f1f0(expInfo, vecF1=1);
+#f1f0_rat_all_noVec = hf_sf.compute_f1f0(expInfo, vecF1=0);
+#pdb.set_trace();
 maskSf, maskCon = expInfo['maskSF'], expInfo['maskCon'];
 
 if f1f0_rat >= 1:
     respMeasure = 1; # i.e. simple
 else:
     respMeasure = 0;
+save_resp_str = '';
+if forceMetr == 1:
+    respMeasure = 1; # f1
+    save_resp_str = '_f1';
+elif forceMetr == -1:
+    respMeasure = 0; # dc
+    save_resp_str = '_dc';
 respStr = 'f1' if respMeasure==1 else 'dc';
 # --- get the right descrFits, rvcFits
 df_curr = descrFits[cellNum-1][respStr]['mask'];
@@ -210,7 +201,16 @@ fDisp, dispAx = plt.subplots(n_v_cons, 2, figsize=(2*10, n_v_cons*12), sharey=Fa
 
 minResp = np.min(np.min(respMean[~np.isnan(respMean[:, :])]));
 maxResp = np.max(np.max(respMean[~np.isnan(respMean[:, :])]));
-ref_params = descrParams[-1] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+if old_refprm:
+    ref_params = descrParams[-1] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+else:
+    all_xc = hf.nan_rm(descrParams[:,1]); # xc
+    ref_params = [np.nanmin(all_xc), 1]; # xc1, xc2 multiplier (i.e. xc2=xc1*xc2multi)
+#if joint>0:
+#    tot_prms = df_curr['paramList'];
+#    ref_params = descrParams[-1] if tot_prms[1]<0 else descrParams[0];
+#else:
+#    ref_params = None
 
 for c in reversed(range(n_v_cons)):
     c_plt_ind = len(maskCon) - c - 1;
@@ -258,7 +258,7 @@ for c in reversed(range(n_v_cons)):
       except:
         pass; # why might this not work? If we only fit disp=0!
 
-    dispAx[c_plt_ind, 0].set_title('contrast: %d%%' % (100*maskCon[c]));
+    dispAx[c_plt_ind, 0].set_title('contrast: %d%%' % (np.round(100*maskCon[c])));
 
     minResp_toPlot = 1e-0;
     ## plot everything again on log-log coordinates...
@@ -324,7 +324,7 @@ fDisp.suptitle('%s #%d (f1f0: %.2f)' % (cellType, cellNum, f1f0_rat));
 fDisp.subplots_adjust(wspace=0.1, top=0.95);
 
 saveName = "/cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'byDisp/'));
+full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % save_resp_str));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -342,7 +342,7 @@ fDisp.suptitle('%s #%d [%s] (f1f0 %.2f)' % (cellType, cellNum, unitNm, f1f0_rat)
 
 maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));  
 minToPlot = 5e-1;
-ref_params = descrParams[-1] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+#ref_params = descrParams[-1] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
 
 lines = [];
 for c in reversed(range(n_v_cons)):
@@ -392,12 +392,10 @@ for i in range(len(dispAx)):
   lbl_str = '';# if i==0 else 'above baseline ';
   dispAx[i].set_ylabel('Response %s(spikes/s)' % lbl_str);
   dispAx[i].set_title('sf tuning');
-  dispAx[i].legend(fontsize='large'); 
-
-
+  dispAx[i].legend(fontsize='x-small');
 
 saveName = "/allCons_%scell_%03d.pdf" % (logSuffix, cellNum)
-full_save = os.path.dirname(str(save_loc + 'byDisp/'));
+full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % save_resp_str));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -469,7 +467,7 @@ for sf in range(n_v_sfs):
     if col_ind == 0:
       rvcAx[plt_y].set_xlabel('Contrast', fontsize='medium');
       rvcAx[plt_y].set_ylabel('Response (spikes/s)', fontsize='medium');
-      rvcAx[plt_y].legend();
+      rvcAx[plt_y].legend(fontsize='x-small');
 
     # set axis limits...
     rvcAx[plt_y].set_xlim([conMult*0.01, conMult*1]);
@@ -498,7 +496,7 @@ for sf in range(n_v_sfs):
 fRVC.tight_layout(rect=[0, 0.03, 1, 0.95])
 
 saveName = "/cell_%03d.pdf" % (cellNum)
-full_save = os.path.dirname(str(save_loc + 'CRF/'));
+full_save = os.path.dirname(str(save_loc + 'CRF%s/' % save_resp_str));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -518,7 +516,7 @@ n_v_sfs = len(maskSf);
 
 maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
 minResp_plot = 1e-0;
-ref_params = descrParams[-1] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+#ref_params = descrParams[-1] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
 
 lines_log = [];
 for sf in range(n_v_sfs):
@@ -589,10 +587,10 @@ for i in range(len(crfAx)):
 
   #crfAx[i].set_ylabel('resp above baseline (sps)');
   crfAx[i].set_ylabel('Response (spikes/s)');
-  crfAx[i].legend();
+  crfAx[i].legend(fontsize='x-small');
 
 saveName = "/allSfs_%scell_%03d.pdf" % (logSuffix, cellNum)
-full_save = os.path.dirname(str(save_loc + 'CRF/'));
+full_save = os.path.dirname(str(save_loc + 'CRF%s/' % save_resp_str));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -617,10 +615,10 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
   minResp = np.min(np.min(respMean[~np.isnan(respMean[:, :])]));
   maxResp = np.max(np.max(respMean[~np.isnan(respMean[:, :])]));
 
-  if comm_S_calc and joint>0: # this only applies when doing joint-across-con fits
-      ref_params = descrParams[-1];
-  else:
-      ref_params = None;
+  #if comm_S_calc and joint>0: # this only applies when doing joint-across-con fits
+  #    ref_params = descrParams[-1] if tot_prms[1]<0 else descrParams[0];
+  #else:
+  #    ref_params = None;
 
   for c in reversed(range(n_v_cons)):
       row_ind = int((n_v_cons-c-1)/n_cols);
@@ -660,7 +658,7 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
   fDisp.suptitle('%s #%d [%s] (f1f0: %.2f)' % (cellType, cellNum, unitNm, f1f0_rat));
 
   saveName = "/cell_%03d.pdf" % (cellNum)
-  full_save = os.path.dirname(str(save_loc + 'byDisp_ddogs/'));
+  full_save = os.path.dirname(str(save_loc + 'byDisp_ddogs%s/' % save_resp_str));
   if not os.path.exists(full_save):
     os.makedirs(full_save);
   try:
