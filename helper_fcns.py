@@ -1,3 +1,4 @@
+
 import math, numpy, random
 from scipy.stats import norm, mode, poisson, nbinom, sem
 from scipy.stats.mstats import gmean as geomean
@@ -53,6 +54,7 @@ import warnings
 # angle_xy
 # flatten_list
 # switch_inner_outer
+# set_size        - set the size of plots for publications/LaTeX
 
 ### II. fourier, and repsonse-phase adjustment
 
@@ -187,22 +189,23 @@ import warnings
 def np_smart_load(file_path, encoding_str='latin1', allow_pickle=True):
    # added allow_pickle=True to handle different numpy version in pytorch env. compared to lcv-python env.
 
+   np = numpy;
    if not os.path.isfile(file_path):
      return [];
    loaded = [];
    nTry = 10;
    while(nTry > 0):
      try:
-         loaded = numpy.load(file_path, encoding=encoding_str, allow_pickle=True).item();
+         loaded = np.load(file_path, encoding=encoding_str, allow_pickle=True).item();
          break;
      except IOError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-        sleep_time = random_in_range([.3, 8])[0];
+        sleep_time = np.random.exponential(scale=1.5);
         sleep(sleep_time); # i.e. wait for 10 seconds
      except EOFError: # this happens, I believe, because of parallelization when running on the cluster; cannot properly open file, so let's wait and then try again
-        sleep_time = random_in_range([.3, 8])[0];
+        sleep_time = np.random.exponential(scale=1.5);
         sleep(sleep_time); # i.e. wait for 10 seconds
      except: # pickling error???
-        sleep_time = random_in_range([.3, 8])[0];
+        sleep_time = np.random.exponential(scale=1.5); #random_in_range([.3, 8])[0];
         sleep(sleep_time); # i.e. wait for 10 seconds
      nTry -= 1 #don't try indefinitely!
 
@@ -726,6 +729,8 @@ def descrJoint_name(joint=0, modelName=None):
         jStr = '_JTflankCopyCtrRaSlope'; # the flank DoG will just be a copy of the central DoG, variable ratio by contrast
   elif joint==9:
      jStr = '_JTflankFixedCopyCtrRaSlope'; # the flank DoG will just be a copy of the central DoG, fixed strength across contrast
+  elif joint==10:
+     jStr = '_JTflankShiftCopyCtrRaSlope'; # the flank DoG will just be a copy of the central DoG, fixed strength across contrast
 
   return jStr;
 
@@ -806,6 +811,41 @@ def switch_inner_outer(x, asnp = False):
   else:
     switch_inner_outer = lambda arr: [[x[i] for x in arr] for i in range(len(arr[0]))];
   return switch_inner_outer(x);
+
+def set_size(width, fraction=1, subplots=(1, 1), extra_height=1):
+    """Set figure dimensions to avoid scaling in LaTeX.
+    --- from https://jwalton.info/Embed-Publication-Matplotlib-Latex/
+
+    Parameters
+    ----------
+    width: float or string
+            Document width in points, or string of predined document type
+    fraction: float, optional
+            Fraction of the width which you wish the figure to occupy
+    subplots: array-like, optional
+            The number of rows and columns of subplots.
+    Returns
+    -------
+    fig_dim: tuple
+            Dimensions of figure in inches
+    """
+    width_pt = width
+
+    # Width of figure (in pts)
+    fig_width_pt = width_pt * fraction
+    # Convert from pt to inches
+    inches_per_pt = 1 / 72; #72.27
+
+    # Golden ratio to set aesthetic figure height
+    # https://disq.us/p/2940ij3
+    golden_ratio = (5**.5 - 1) / 2
+
+    # Figure width in inches
+    fig_width_in = fig_width_pt * inches_per_pt
+    # Figure height in inches
+    fig_height_in = extra_height * fig_width_in * golden_ratio * (subplots[0] / subplots[1])
+
+    return (fig_width_in, fig_height_in);
 
 ##################################################################
 ##################################################################
@@ -2214,7 +2254,7 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
            ref_ind=4+(n_fits-1)*nParam;
            ref_params = [*params[ref_ind:ref_ind+2], params[0], params[1],
                          *params[ref_ind+2:ref_ind+4], params[0], params[1], params[2], params[3]];
-        elif joint==7 or joint==8 or joint==9: # center radii from slope; surr[1&2]_rad AND g, S are constant
+        elif joint==7 or joint==8 or joint==9 or joint==10: # center radii from slope; surr[1&2]_rad AND g, S are constant
            xc_curr = get_xc_from_slope(params[0], params[1], conVals[i]); # intercept, slope are first two args for get_xc_from_slope func
            xc_ref = get_xc_from_slope(params[0], params[1], conVals[-1]); # intercept, slope are first two args for get_xc_from_slope func
            if joint == 7:
@@ -2244,6 +2284,15 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
               ref_ind=6+(n_fits-1)*nParam;
               ref_params = [params[ref_ind], xc_ref, params[ref_ind+1], params[2],
                         params[3], 1, params[ref_ind+1], params[2], params[4], params[5]]; # 22.06.01 --> note that we FIX xc2 = xc1
+           elif joint == 10: # as in 9, but we allow xc2 to be some multiple (g.t.) of xc1
+              nParam = nParams_descrMod(DoGmodel)-8; # as in joint==8, but flanking DoG will always have the same relative strength across contrast
+              start_ind=7+i*nParam; # one additional fixed parameter
+              curr_params = [params[start_ind], xc_curr, params[start_ind+1], params[2],
+                             params[3], params[4], params[start_ind+1], params[2], params[5], params[6]];
+              # also compute the high contrast parameters --> why? This will serve as reference for computing S at all contrasts
+              ref_ind=7+(n_fits-1)*nParam;
+              ref_params = [params[ref_ind], xc_ref, params[ref_ind+1], params[2],
+                            params[3], params[4], params[ref_ind+1], params[2], params[5], params[6]]; # 22.06.01 --> note that we FIX xc2 = xc1
 
       if enforceMaxPenalty:
         max_data = np.max(curr_resps);
@@ -2574,6 +2623,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
     # -- first, some general bounds that we can apply as needed for different parameters
     gtMult_bound = (1, None); # (1, None) multiplier limit when we want param >= mult*orig_param [greaterThan-->gt] ||| was previously (1, 7) --> then (1,5) --> then (1, 15)
+    #mult_bound_xc = (1, 2);
     mult_bound_xc = (1, 1.00001);
     sigmoid_bound = (None, None); # params that are input to sigmoids are unbounded - since sigmoid is bounded [0,1]
     noSurr_radBound = (0.01, 0.010001); # gain will be 0 if we are turning off surround; this will be just a small range of radius values to stop the optimization from exploring this parameter space
@@ -2602,7 +2652,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
             allBounds = (surr1_rad_bound, surr2_rad_bound, g_bound, S_bound);
       elif joint == 3: # g, S constant; surround gain and radius are same for both DoG [no support for no_surr, as of 22.01.12]
          allBounds = (surr1_gain_bound, surr1_rad_bound, g_bound, S_bound);
-      elif joint == 7 or joint == 8 or joint == 9: # xc from slope; and as in == 2
+      elif joint == 7 or joint == 8 or joint == 9 or joint == 10: # xc from slope; and as in == 2
          bound_xc_slope = (-1, 1); # 220505 fits inbounded; 220519 fits bounded (-1,1)
          bound_xc_inter = (None, None); #bound_radiusCent; # intercept - shouldn't start outside the bounds we choose for radiusCent
          if joint == 7:
@@ -2611,6 +2661,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
             allBounds = (bound_xc_inter, bound_xc_slope, surr1_rad_bound, g_bound, S_bound);
          elif joint == 9:
             allBounds = (bound_xc_inter, bound_xc_slope, surr1_rad_bound, kc2_bound, g_bound, S_bound);
+         elif joint == 10:
+            allBounds = (bound_xc_inter, bound_xc_slope, surr1_rad_bound, kc2_bound, xc2_bound, g_bound, S_bound);
       # continue to add more joint conditions later on
       # But, let's also get some reference bounds so that we are not out of the range
       if no_surr:
@@ -2744,7 +2796,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
         elif joint == 8: # akin to jt=7, but no separate surr2_gain_bound
            allBounds = (*allBounds, kc1_bound, surr1_gain_bound, 
                                     kc2_bound);
-        elif joint == 9: # akin to jt=8, but no separate kc2_bound
+        elif joint == 9 or joint == 10: # akin to jt=8, but no separate kc2_bound
            allBounds = (*allBounds, kc1_bound, surr1_gain_bound);
 
       continue;
@@ -2886,7 +2938,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
             allInitParams = [ref_init[3], ref_init[7], *ref_init[-2:]]; # surround radius, in addition to g, S
          elif joint==3: # need to initialize surround gain and surround radius (we'll take from the central DoG
             allInitParams = [ref_init[2], ref_init[3], *ref_init[-2:]] # surround gain and radius
-         elif joint==7 or joint==8 or joint==9: # like DoG joint==7 on top of d-DoG-S joint == 2
+         elif joint==7 or joint==8 or joint==9 or joint==10: # like DoG joint==7 on top of d-DoG-S joint == 2
             init_slope = random_in_range([-0.2,0.1])[0];
             # now, work backwards to infer the initial intercept, given the slope and ref_init[1] (xc)
             # --- note: assumes base10 for slope model and 100% contrast as the reference...
@@ -2897,6 +2949,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
                allInitParams = [init_intercept, init_slope, ref_init[3], *ref_init[-2:]];
             elif joint == 9: # as joint==8, but also with flank overall gain fixed across contrast
                allInitParams = [init_intercept, init_slope, ref_init[3], ref_init[4], *ref_init[-2:]]; 
+            elif joint == 10: # as joint==8, but also with flank overall gain fixed across contrast
+               allInitParams = [init_intercept, init_slope, ref_init[3], ref_init[4], hf.random_in_range((1.2,1.7))[0], *ref_init[-2:]]; # TEMPORARY ATTEMPT (hf.random_in_range(()))
 
       # now, we cycle through all responses and add the per-contrast parameters
       for resps_curr, sfs_curr, stds_curr, curr_init, resps_curr_tr, sfs_curr_tr, cons_curr in zip(allResps, allSfs, allRespsSem, isolParams, allRespsTr, allSfsTr, allCons):
@@ -2915,7 +2969,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
                  ci[4:7] = wax_isol['x'][3:];
                  print('success in interim fit? %d [vExp=%.2f]' % (wax_isol['success'], var_explained(resps_curr, ci, sfs_curr, dog_model=DoGmodel, baseline=baseline)));
                  curr_init = clean_sigmoid_params(ci, dogMod=DoGmodel);
-              if joint == 9:
+              if joint == 9 or joint == 10:
                  init_xc = get_xc_from_slope(allInitParams[0], allInitParams[1], cons_curr);
                  obj_isol = lambda params: DoG_loss(np.array([params[0], init_xc, params[1], allInitParams[2], allInitParams[3], 1, params[1], allInitParams[2], allInitParams[4], allInitParams[5]]), resps_curr, sfs_curr, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, resps_std=stds_curr, var_to_mean=var_to_mean, gain_reg=gain_reg, joint=0, baseline=baseline, vol_lam=vol_lam);
                  bounds_isol = (kc1_bound, surr1_gain_bound);
@@ -2959,7 +3013,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
               allInitParams = [*allInitParams, curr_init[0], curr_init[2], curr_init[4], curr_init[6]]; # we add gain parameters for each DoG mechanism (all radii are handled jointly)
            elif joint == 8: # don't need to add center radii, since that's taken care of by slope model
               allInitParams = [*allInitParams, curr_init[0], curr_init[2], curr_init[4]]; # no need to add separate flank surround gain (same as central surround gain)
-           elif joint == 9: # don't need to add center radii, since that's taken care of by slope model
+           elif joint == 9 or joint == 10: # don't need to add center radii, since that's taken care of by slope model
               allInitParams = [*allInitParams, curr_init[0], curr_init[2]]; # no need to add separate flank gains (flank surround is same as central surround; flank center gain is jointly fit)
               
       # previously, we choose optimization method (L-BFGS-B for even, TNC for odd) --- we now just choose the former
@@ -3013,7 +3067,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       elif joint == 3:
         surr_gain, surr_rad = params[0], params[1];
         g, S = params[2:4];
-      elif joint == 7 or joint == 8 or joint == 9:
+      elif joint == 7 or joint == 8 or joint == 9 or joint == 10:
         xc_inter, xc_slope = params[0:2];
         surr1_rad = params[2];
         if joint == 7 or joint == 9:
@@ -3024,7 +3078,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
            g, S = params[4:6];
         elif joint == 8:
            g, S = params[3:5];
-        
+        elif joint == 10:
+           flankGain = params[3];
+           xc2_ratio = params[4];
+           g, S = params[5:7];
+
     for con in reversed(range(len(allResps))):
        if allResps[con].size == 0:
           continue;
@@ -3079,7 +3137,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
              start_ind = 4+con*nParam_perCond; # but we still start at +4 because the surround params are used twice
              curr_params = [*params[start_ind:start_ind+2], surr_gain, surr_rad,
                             *params[start_ind+2:start_ind+4], surr_gain, surr_rad, g, S];
-          elif joint == 7 or joint == 8 or joint == 9: # need to determine center radii (both central and flank DoGs) from slope
+          elif joint == 7 or joint == 8 or joint == 9 or joint == 10: # need to determine center radii (both central and flank DoGs) from slope
              center_shape = get_xc_from_slope(params[0], params[1], allCons[con]);
 
              if joint == 7:
@@ -3097,6 +3155,11 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
                 start_ind = 6+con*nParam_perCond;
                 curr_params = [params[start_ind], center_shape, params[start_ind+1], surr1_rad,
                             flankGain, 1, params[start_ind+1], surr1_rad, g, S];
+             elif joint == 10: # as in joint == 9, but xc2=mult*xc1
+                nParam_perCond = nParam-8;
+                start_ind = 7+con*nParam_perCond;
+                curr_params = [params[start_ind], center_shape, params[start_ind+1], surr1_rad,
+                            flankGain, xc2_ratio, params[start_ind+1], surr1_rad, g, S];
 
        # -- then the responses, and overall contrast index
        resps_curr = allResps[con];
@@ -3291,7 +3354,10 @@ def parker_hawken_transform(params, twoDim=False, space_in_arcmin=False, isMult=
        if ref_params is None:
           S = numpy.minimum(xc1, xc2) + sigmoid(Spr) * 1 * numpy.maximum(xc1, xc2); # 220120 ;i.e. must be between [min(xc1, xc2), xc1+xc2]
        else:
-          ref_xc1, ref_xc2 = ref_params[1], ref_params[1]*ref_params[5];
+          if len(ref_params) > 2:
+             ref_xc1, ref_xc2 = ref_params[1], ref_params[1]*ref_params[5];
+          else:
+             ref_xc1, ref_xc2 = ref_params[0], ref_params[0]*ref_params[1];
           S = numpy.minimum(ref_xc1, ref_xc2) + sigmoid(Spr) * 1 * numpy.maximum(ref_xc1, ref_xc2); # 220121a--; temporarily sigmoid()*2*(max)
           # ^^ i.e. must be between [min(xc1, xc2), xc1+xc2]
     else:
@@ -4029,14 +4095,23 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
          dataMetrics['dog_pSfModRat'][d] = [np.log2(evalRatio), np.log2(evalRatio)/logConRat];
      except: # then likely, no rvc/descr fits...
        pass
+
      if jointType>=7: # 7,8, and 9 joints (whether DoG or d-DoG-S) have the first two parameters specifying the slope of center radius
-        prms = dogFits[cell_ind]['paramList'][0];
-        dataMetrics['dog_mod_slope'] = prms[1]; # not negated here...
-        dataMetrics['dog_mod_intercept'] = prms[0];
-        prms = dogFits[cell_ind]['boot_paramList'];
-        dataMetrics['boot_dog_mod_slope'] = np.array([x[0][1] for x in prms]); # not negated here...
-        dataMetrics['boot_dog_mod_intercept'] = np.array([x[0][0] for x in prms]);
-        
+        dataMetrics['dog_mod_slope'] = np.nan;
+        dataMetrics['dog_mod_intercept'] = np.nan;
+        dataMetrics['boot_dog_mod_slope'] = None;
+        dataMetrics['boot_dog_mod_intercept'] = None;
+        # pre-populate above so that if we fail (e.g. boots are not there) the values are there
+        try:
+           prms = dogFits[cell_ind]['paramList'][0];
+           dataMetrics['dog_mod_slope'] = prms[1]; # not negated here...
+           dataMetrics['dog_mod_intercept'] = prms[0];
+           prms = dogFits[cell_ind]['boot_paramList'];
+           dataMetrics['boot_dog_mod_slope'] = np.array([x[0][1] for x in prms]); # not negated here...
+           dataMetrics['boot_dog_mod_intercept'] = np.array([x[0][0] for x in prms]);
+        except:
+           pass;
+
      #######
      ## RVC stuff
      #######
@@ -4267,8 +4342,12 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     else:
       for cell_ind in range(nCells):
 
+        #import cProfile
+        #oyvey = cProfile.runctx('jl_perCell(cell_ind, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType, reducedSave=reducedSave)', {'jl_perCell': jl_perCell, 'cell_ind': 1, 'dataList': dataList, 'descrFits': descrFits, 'dogFits': dogFits, 'rvcFits': rvcFits, 'expDir': expDir, 'data_loc': data_loc, 'dL_nm': dL_nm, 'fLW_nm': fLW_nm, 'fLF_nm': fLF_nm, 'dF_nm': dF_nm, 'dog_nm': dog_nm, 'rv_nm': rv_nm, 'superAnalysis': superAnalysis, 'conDig': conDig, 'sf_range': sf_range, 'rawInd': rawInd, 'muLoc': muLoc, 'varExplThresh': varExplThresh, 'dog_varExplThresh': dog_varExplThresh, 'descrMod': descrMod, 'dogMod': dogMod, 'isSach': isSach, 'rvcMod': rvcMod, 'isBB': isBB, 'jointType': jointType, 'reducedSave': reducedSave}, {});
+
         print('%s/%d' % (expDir, 1+cell_ind));
-        cellSummary = jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplTresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod)
+        cellSummary = jl_perCell(cell_ind, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType, reducedSave=reducedSave);
+        #cellSummary = jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplTresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod)
         jointList.append(cellSummary);
 
   if toPar:

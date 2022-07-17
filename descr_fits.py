@@ -20,7 +20,7 @@ else:
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #dogName = 'descrFits%s_220531' % hpcSuff;
-dogName = 'descrFits%s_220702' % hpcSuff;
+dogName = 'descrFits%s_220707vEs' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220531' % hpcSuff
   rvcName_f1 = 'rvcFits%s_220531' % hpcSuff;
@@ -31,7 +31,7 @@ if sys.argv[3] == 'LGN/':
   rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 else:
   phAdvName = 'phaseAdvanceFits%s_220609' % hpcSuff
-  rvcName_f1 = 'rvcFitsHPC_220609'; # FOR V1
+  rvcName_f1 = 'rvcFitsHPC_220609' % hpcSuff;
   #rvcName_f1 = 'rvcFits%s_220609' % hpcSuff; # FOR V1
   #phAdvName = 'phaseAdvanceFits%s_210914' % hpcSuff
   #rvcName_f1 = 'rvcFits%s_210914' % hpcSuff; # FOR V1
@@ -733,19 +733,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
       modStr  = hf.descrMod_name(DoGmodel);
       ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0, phAdj=phAdj));
-      ref_varExpl = None; # as of 22.01.14, no longer restricting which conditions are fit jointly
-      #ref_varExpl = ref_fits[cell_num-1]['varExpl'][0]; # reference varExpl for single gratings
+      #ref_varExpl = None; # as of 22.01.14, no longer restricting which conditions are fit jointly
+      ref_varExpl = ref_fits[cell_num-1]['varExpl'][0]; # reference varExpl for single gratings
       isolFits = ref_fits[cell_num-1];
-      # below block is commented out --> no longer try to initialize joint=N from joint=N-1 (always just get non-joint fits)
-      '''
-      try: 
-        # try to get joint==1 fits, it joint==2; otherwise, and in all other cases, single grats
-        # why? seems that going from jt=0 --> jt=1, we get fits to converge
-        ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=joint-1));
-        isolFits = ref_fits[cell_num-1];
-      except:
-        pass; # we've already specified isolFits, if that doesn't work
-      '''
       print('properly loaded isol fits');
     except:
       ref_varExpl = None;
@@ -1091,7 +1081,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     return prevFits_toSave;
 
 ### Fin: Run the stuff!
-
+ 
 if __name__ == '__main__':
 
     if len(sys.argv) < 11:

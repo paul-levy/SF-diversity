@@ -115,7 +115,7 @@ def resample_all_cond(resample, array, axis=-1):
 
 ### ORGANIZING RESPONSES ###
 
-def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecCorrectedF1=0, onsetTransient=None):
+def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecCorrectedF1=1, onsetTransient=None):
   ''' returns the distribution of responses, mean/s.e.m. and unique sfXcon for each base stimulus in the sfBB_* series
       -- dc_resp; f1_base --> use to overwrite the spikes in expInfo (e.g. model responses)
       ---- if passing in the above, should also include val_trials (list of valid trial indices), since
@@ -199,7 +199,7 @@ def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecC
   return [baseResp_dc, baseResp_f1], [baseSummary_dc, baseSummary_f1], unique_pairs;
 
 
-def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=0, onsetTransient=None, resample=False):
+def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=1, onsetTransient=None, resample=False):
   ''' return the DC, F1 matrices [mean, s.e.m.] for responses to the mask only in the sfBB_* series 
       For programs (e.g. sfBB_varSF) with multiple base conditions, the order returned here is guaranteed
       to be the same as the unique base conditions given in get_baseOnly_resp
@@ -435,7 +435,7 @@ def get_vec_avg_response(expInfo, val_trials, dir=-1, psth_binWidth=1e-3, stimDu
 
   return [r_mean, phi_mean, r_sem, phi_var], [resp_amp, phase_rel_stim], rel_amps, phase_rel_stim, stimPhs, resp_phase;
 
-def compute_f1f0(trial_inf):
+def compute_f1f0(trial_inf, vecF1=1):
   ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio
       This will be used to determine simple versus complex
   '''
@@ -447,10 +447,13 @@ def compute_f1f0(trial_inf):
   # i.e. F1 might be greater than F0 AND have a different than F0 - in the case, we ought to evalaute at the peak F1 frequency
   ######
   ## first, get F0 responses (mask only)
-  f0_counts, f1_rates, f0_all, f1_rates_all = get_mask_resp(trial_inf, withBase=0, maskF1=1, returnByTr=1);
+  f0_counts, f1_rates, f0_all, f1_rates_all = get_mask_resp(trial_inf, withBase=0, maskF1=1, returnByTr=1, vecCorrectedF1=vecF1);
   f0_blank = trial_inf['blank']['mean'];
   f0_rates = np.divide(f0_counts - f0_blank, stimDur);
   f0_rates_all = np.divide(f0_all - f0_blank, stimDur);
+  if vecF1:
+    f1_rates = f1_rates[..., 0]; # throw away the phase information
+    f1_rates_all = f1_rates_all[..., 0]; # throw away the phase information
 
   # get prefSfEst
   all_rates = [f0_rates, f1_rates]
