@@ -490,7 +490,7 @@ def compute_f1f0(trial_inf, vecCorrectedF1=1):
   f0_blank = trial_inf['blank']['mean'];
   f0_rates = np.divide(f0_counts - f0_blank, stimDur);
   f0_rates_all = np.divide(f0_all - f0_blank, stimDur);
-  if vecF1:
+  if vecCorrectedF1:
     f1_rates = f1_rates[..., 0]; # throw away the phase information
     f1_rates_all = f1_rates_all[..., 0]; # throw away the phase information
     

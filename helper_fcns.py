@@ -1577,8 +1577,8 @@ def phase_advance(amps, phis, cons, tfs, n_repeats=50, ampSem=None, phiVar=None)
    '''
    np = numpy;
 
-   get_mean = lambda y: [x[0] for x in y]; # for curr_phis and curr_amps, loc [0] is the mean, [1] is variance measure
-   get_var = lambda y: [x[1] for x in y]; # for curr_phis and curr_amps, loc [0] is the mean, [1] is variance measure
+   get_mean = lambda y: np.array([x[0] for x in y]); # for curr_phis and curr_amps, loc [0] is the mean, [1] is variance measure
+   get_var = lambda y: np.array([x[1] for x in y]); # for curr_phis and curr_amps, loc [0] is the mean, [1] is variance measure
 
    phAdv_model = get_phAdv_model()
    all_opts = []; all_loss = []; all_phAdv = [];
@@ -1591,8 +1591,12 @@ def phase_advance(amps, phis, cons, tfs, n_repeats=50, ampSem=None, phiVar=None)
      curr_ampMean = get_mean(curr_amps);
      curr_phis = phis[i]; # phase for ...
      curr_phiMean = get_mean(curr_phis);
+     val_resps = np.array(~np.isnan(curr_phiMean));
+     curr_phiMean = curr_phiMean[val_resps];
+     curr_ampMean = curr_ampMean[val_resps];
      if phiVar is not None:
-        obj = lambda params: np.sum(np.square(abs_angle_diff(curr_phiMean, phAdv_model(params[0], params[1], curr_ampMean))) / flatten_list(np.sqrt(phiVar[i])));
+        curr_phiVar = np.array(flatten_list(np.sqrt(phiVar[i])))[val_resps]
+        obj = lambda params: np.sum(np.square(abs_angle_diff(curr_phiMean, phAdv_model(params[0], params[1], curr_ampMean))) / curr_phiVar);
      else:
         obj = lambda params: np.sum(np.square(abs_angle_diff(curr_phiMean, phAdv_model(params[0], params[1], curr_ampMean))));
      # just least squares...
