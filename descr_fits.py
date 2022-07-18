@@ -20,7 +20,7 @@ else:
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #dogName = 'descrFits%s_220531' % hpcSuff;
-dogName = 'descrFits%s_220707vEs' % hpcSuff;
+dogName = 'descrFits%s_220716vE' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220531' % hpcSuff
   rvcName_f1 = 'rvcFits%s_220531' % hpcSuff;
@@ -30,9 +30,10 @@ if sys.argv[3] == 'LGN/':
   #rvcName_f1 = 'rvcFits_211108'; # FOR LGN
   rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 else:
-  phAdvName = 'phaseAdvanceFits%s_220609' % hpcSuff
-  rvcName_f1 = 'rvcFitsHPC_220609' % hpcSuff;
-  #rvcName_f1 = 'rvcFits%s_220609' % hpcSuff; # FOR V1
+  phAdvName = 'phaseAdvanceFits%s_220714' % hpcSuff
+  #phAdvName = 'phaseAdvanceFits%s_220609' % hpcSuff
+  #rvcName_f1 = 'rvcFits%s_220609' % hpcSuff;
+  rvcName_f1 = 'rvcFits%s_220714' % hpcSuff;
   #phAdvName = 'phaseAdvanceFits%s_210914' % hpcSuff
   #rvcName_f1 = 'rvcFits%s_210914' % hpcSuff; # FOR V1
   #phAdvName = 'phaseAdvanceFits%s_210914' % hpcSuff
@@ -345,10 +346,11 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
         print('OH NO: CELL %d' % cell_num);
         print('###########');
       '''
-
-      varExpl = [hf.var_explained(hf.nan_rm(np.array(dat)), hf.nan_rm(hf.get_rvcResp(prms, valCons, rvcMod)), None) if dat != [] else np.nan for dat, prms in zip(currResp, all_opts)];
-      #print(all_loss)
-      #print(varExpl);
+      try:
+        varExpl = [hf.var_explained(hf.nan_rm(np.array(dat)), hf.nan_rm(hf.get_rvcResp(prms, valCons, rvcMod)), None) if dat != [] else np.nan for dat, prms in zip(currResp, all_opts)];
+      except:
+        varExpl = [np.nan];
+        pass;
 
     ######
     # 3b-ii. complex cell
@@ -388,7 +390,11 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
       # to ensure correct mapping of response to contrast, let's add "0" to the front of the list of contrasts
       consRepeat = [np.hstack((0, allCons[curr_cons]))] * len(adjMeans);
       rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr, mod=rvcMod, prevFits=rvcFits_curr, n_repeats=n_repeats);
-      varExpl = [hf.var_explained(hf.nan_rm(np.array(dat)), hf.nan_rm(hf.get_rvcResp(prms, np.hstack((0, allCons[curr_cons])), rvcMod)), None) for dat, prms in zip(adjMeans, all_opts)];
+      try:
+        varExpl = [hf.var_explained(hf.nan_rm(np.array(dat)), hf.nan_rm(hf.get_rvcResp(prms, np.hstack((0, allCons[curr_cons])), rvcMod)), None) for dat, prms in zip(adjMeans, all_opts)];
+      except:
+        varExpl = [np.nan];
+        pass;
       # adjByTrial = spikerate;
       adjSemCompTr = []; # we're getting f0 - therefore cannot get individual component responses!
 
@@ -419,7 +425,6 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
       boot_adjByTrialCorr.append(adjByTrialCorr);
       boot_adjSemTr.append(adjSemTr);
       boot_adjSemCompTr.append(adjSemCompTr);
-
 
   ######
   # 4. Save everything
@@ -666,7 +671,7 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1, flt32=True):
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success;
  
-def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=0, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3, phAmpOnMean=False, phAdvName=phAdvName): # n_repeats was 100, before 21.09.01
+def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=0, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3, phAmpOnMean=False, phAdvName=phAdvName, resp_thresh=(-1e5,0), sfModRef=1, veThresh=60): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
@@ -734,7 +739,11 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       modStr  = hf.descrMod_name(DoGmodel);
       ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=modStr, joint=0, phAdj=phAdj));
       #ref_varExpl = None; # as of 22.01.14, no longer restricting which conditions are fit jointly
-      ref_varExpl = ref_fits[cell_num-1]['varExpl'][0]; # reference varExpl for single gratings
+      if DoGmodel==sfModRef: # we've already loaded fits whose varExp we want as ref.
+        ref_varExpl = ref_fits[cell_num-1]['varExpl'][0]; # reference varExpl for single gratings
+      else:
+        vExp_ref_fits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=hf.descrMod_name(sfModRef), joint=0, phAdj=phAdj));
+        ref_varExpl = vExp_ref_fits[cell_num-1]['varExpl'][0];
       isolFits = ref_fits[cell_num-1];
       print('properly loaded isol fits');
     except:
@@ -890,10 +899,10 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     for d in range(1): #nDisps): # works for all disps
       # a separate fitting call for each dispersion
       if debug:
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits, ftol=ftol)
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits, ftol=ftol, resp_thresh=resp_thresh, veThresh=veThresh)
       else:
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits, ftol=ftol)
-        
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits, ftol=ftol, resp_thresh=resp_thresh, veThresh=veThresh)
+
       if cross_val is not None and resample:
         # compute the loss, varExpl on the heldout (i.e. test) data
         test_mn = np.nanmean(test_data, axis=-1) if test_data_phAmp is None else test_data_phAmp;
@@ -906,8 +915,19 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
           tr_subset_vExps = np.nan*np.zeros_like(vExp);
 
         # set up ref_params, ref_rc_val; will only be used IF applicable
-        ref_params = prms[-1]; # high contrast condition
-        ref_rc_val = totPrm[2] if joint>0 else None; # even then, only used for joint==5
+        ref_params = None; ref_rc_val = None;
+        try:
+          if DoGmodel==3:
+            try:
+              all_xc = prms[d,:,1]; # xc values
+              ref_params = [np.nanmin(all_xc), 1];
+            except:
+              pass;
+          else:
+            ref_params = prms[-1]; # high contrast condition
+            ref_rc_val = totPrm[2] if joint>0 else None; # even then, only used for joint==5
+        except:
+          ref_params = None; ref_rc_val = None;
         
         for ii, prms_curr in enumerate(prms):
           # we'll iterate over the parameters, which are fit for each contrast (the final dimension of test_mn)
@@ -1081,7 +1101,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     return prevFits_toSave;
 
 ### Fin: Run the stuff!
- 
+
 if __name__ == '__main__':
 
     if len(sys.argv) < 11:
@@ -1135,7 +1155,12 @@ if __name__ == '__main__':
 
     jointMinCons = 2 if data_dir=='V1_orig/' else 3;
     phAmpOnMean = 1 if data_dir=='LGN/' and ph_fits==1 else 0;
-
+    sfModRef = 1 if data_dir=='LGN/' else 1; # which model to use as reference for inclusion
+    
+    resp_thresh = (-1e5,0); #(5,2); # at least 2 responses must be g.t.e. 5 spks/s (22.07.05 addition/try)
+    #veThresh = -np.Inf; # allow all...
+    veThresh = 60; 
+    
     # get the full data directory
     dataPath = basePath + data_dir + data_suff;
     # get the expInd
@@ -1211,7 +1236,7 @@ if __name__ == '__main__':
           rvcFitNPY = hf.np_smart_load(dataPath + rvcNameFinal);
         else:
           rvcFitNPY = dict();
-          
+
         for iii, rvcFit in enumerate(rvcFits):
           if iii not in rvcFitNPY:
             rvcFitNPY[iii] = dict(); # create the key
@@ -1230,14 +1255,14 @@ if __name__ == '__main__':
           if dog_model==1: # if if just DoG and not d-DoG-S
             n_repeats = 25 if joint>0 else 50; # was previously be 3, 15, then 7, 15
           else:
-            n_repeats = 12 if joint>0 else 15; # was previously be 3, 15
-            #n_repeats = 20 if joint>0 else 15; # was previously be 3, 15
+            #n_repeats = 12 if joint>0 else 15; # was previously be 3, 15
+            n_repeats = 20 if joint>0 else 15; # was previously be 3, 15
           
         print('descr fits! --> mod %d, joint %d, %03d boots, cross_val %.2f' % (dog_model, joint, nBoots, cross_val if cross_val is not None else -99));
 
         with mp.Pool(processes = nCpu) as pool:
           dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
-          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons, phAmpOnMean=phAmpOnMean);
+          descr_perCell = partial(fit_descr_DoG, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, to_save=0, returnDict=1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons, phAmpOnMean=phAmpOnMean, resp_thresh=resp_thresh, sfModRef=sfModRef, veThresh=veThresh);
           dogFits = pool.map(descr_perCell, zip(range(start_cell, end_cell+1), dL['unitName'], dL['expType']));
           pool.close();
 
@@ -1284,14 +1309,15 @@ if __name__ == '__main__':
           else:
             n_repeats = 2 if joint>0 else 5; # fewer if repeat
         else:
-          n_repeats = 15 if joint>0 else 20; # was previously be 3, 15, then 7, 15
+          #n_repeats = 15 if joint>0 else 20; # was previously be 3, 15, then 7, 15
+          n_repeats = 3 if joint>0 else 20; # was previously be 3, 15, then 7, 15
 
         #import cProfile, re
         #cProfile.run('fit_descr_DoG(cell_num, data_loc=dataPath, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov)');
         if hf.is_mod_DoG(dog_model) and nBoots<10:
           sleep(hf.random_in_range((0, 20))[0]); # why? DoG fits run so quickly that successive load/save calls take place in an overlapping way and we lose the result of some calls
         dir = dir if vecF1 == 0 else None # so that we get the correct rvcFits
-        fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons, phAmpOnMean=phAmpOnMean);
+        fit_descr_DoG(cell_num, data_loc=dataPath, n_repeats=n_repeats, gain_reg=gainReg, dir=dir, DoGmodel=dog_model, loss_type=loss_type, rvcMod=rvc_model, joint=joint, vecF1=vecF1, force_dc=force_dc, force_f1=force_f1, fracSig=fracSig, nBoots=nBoots, cross_val=cross_val, vol_lam=vol_lam, modRecov=modRecov, jointMinCons=jointMinCons, phAmpOnMean=phAmpOnMean, resp_thresh=resp_thresh, sfModRef=sfModRef, veThresh=veThresh);
 
       if rvcF0_fits == 1:
         fit_RVC_f0(cell_num, data_loc=dataPath, rvcMod=rvc_model, nBoots=nBoots);

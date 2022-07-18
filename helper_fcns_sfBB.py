@@ -17,6 +17,7 @@ import pdb
 # get_baseOnly_resp - get the response to the base stimulus ONLY
 # get_mask_resp - get the response to the mask OR mask+base at either the base or mask TF
 # adjust_f1_byTrial - to the vector math adjustment on each trial
+# phase_advance_core
 
 ### Anaylsis ###
 # --- Computing F1 response (including phase), computing F1::F0 ratio, etc
@@ -199,7 +200,7 @@ def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecC
   return [baseResp_dc, baseResp_f1], [baseSummary_dc, baseSummary_f1], unique_pairs;
 
 
-def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=1, onsetTransient=None, resample=False):
+def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=1, onsetTransient=None, resample=False, phAdvCorr=True):
   ''' return the DC, F1 matrices [mean, s.e.m.] for responses to the mask only in the sfBB_* series 
       For programs (e.g. sfBB_varSF) with multiple base conditions, the order returned here is guaranteed
       to be the same as the unique base conditions given in get_baseOnly_resp
@@ -247,7 +248,7 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
   elif withBase == 1:
     # first, the logical which gives mask+base trials
     baseMatch = np.logical_and(byTrial['maskOn'], byTrial['baseOn']);
-    _, _, baseConds = get_baseOnly_resp(expInfo);
+    _, _, baseConds = get_baseOnly_resp(expInfo, vecCorrectedF1=vecCorrectedF1);
     nBase = len(baseConds);
 
   maskResp_dc = []; maskResp_f1 = [];
@@ -321,6 +322,18 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
               respMatrixF1all[mcI, msI, 0:nTr] = currF1;
               respMatrixF1[mcI, msI, :] = [np.mean(currF1), sem(currF1)]
 
+    # Now, here (after organizing all of the responses by con x sf), we can apply any vecF1 correction, if applicable
+    if phAdvCorr and vecCorrectedF1:
+      #respMatrixF1_adj = np.copy(respMatrixF1[:,:,0,0]);
+      opt_params, phAdv_model = phase_advance_fit_core(respMatrixF1[:,:,0], respMatrixF1[:,:,1], maskCon, maskSf);
+      for msI, mS in enumerate(maskSf):
+        curr_params = opt_params[msI]; # the phAdv model applies per-SF
+        for mcI, mC in enumerate(maskCon):
+          curr_r, curr_phi = respMatrixF1[mcI, msI, :, 0]
+          refPhi = phAdv_model(*curr_params, curr_r);
+          new_r = np.multiply(curr_r, np.cos(np.deg2rad(refPhi)-np.deg2rad(curr_phi)));
+          respMatrixF1[mcI, msI,0,0] = new_r;
+               
     maskResp_dc.append(respMatrixDC); maskResp_f1.append(respMatrixF1);
     maskResp_dcAll.append(respMatrixDCall); maskResp_f1All.append(respMatrixF1all);
 
@@ -339,6 +352,7 @@ def adjust_f1_byTrial(expInfo, onsetTransient=None):
   ''' Correct the F1 ampltiudes for each trial (in order) by:
       - Projecting the full, i.e. (r, phi) FT vector onto the (vector) mean phase
         across all trials of a given condition
+      NOTE: As of 22.07.17, only used in model_responses_pytorch (since descr_fits done on condition averages, not trials)
       Return: adjMask, adjBase (each an (nTr, ) vector)
   '''
   dir = -1;
@@ -382,9 +396,31 @@ def adjust_f1_byTrial(expInfo, onsetTransient=None):
 
   return updMask, updBase;
 
+def phase_advance_fit_core(allAmps, allPhis, maskCons, maskSfs):
+  ''' For the Bauman+Bonds experiment, we can only make the phase-amplitude adjustment for mask F1 responses
+      - So, this function will take the F1 responses directly [con X sf] and fit the phAmp relationship per SF
+  '''
+
+  # allAmp will be [nSf] list of responses, per contrast, each [mean, std]
+  # allPhi will be [nSf] ... each [mean, var]
+  allAmp = []; allPhi = []; allCons = []; allPhiVar = [];
+  for i_sf, _ in enumerate(maskSfs):
+    curr_amp = []; curr_phi = []; curr_tf = []; curr_phiVar = [];
+    for i_con, con_val in enumerate(maskCons):
+      curr_amp.append([allAmps[i_con, i_sf, 0], allAmps[i_con, i_sf, 1]]);
+      curr_phi.append([allPhis[i_con, i_sf, 0], allPhis[i_con, i_sf, 1]]);
+      curr_phiVar.append([allPhis[i_con, i_sf, 1]]);
+    allAmp.append(curr_amp);
+    allPhi.append(curr_phi);
+    allCons.append(maskCons);
+    allPhiVar.append(curr_phiVar);
+  phAdv_model, all_opts, all_phAdv, all_loss = hf.phase_advance(allAmp, allPhi, allCons, tfs=None, phiVar=allPhiVar);
+
+  return all_opts, phAdv_model;
+
 ### ANALYSIS ###
 
-def get_vec_avg_response(expInfo, val_trials, dir=-1, psth_binWidth=1e-3, stimDur=1, onsetTransient=None):
+def get_vec_avg_response(expInfo, val_trials, dir=1, psth_binWidth=1e-3, stimDur=1, onsetTransient=None, refPhi=None):
   ''' Return [r_mean, phi_mean, r_std, phi_var], [resp_amp, phase_rel_stim], rel_amps, phase_rel_stim, stimPhs, resp_phase
       -- Note that the above values are at mask/base TF, respectively (i.e. not DC)
 
@@ -432,10 +468,13 @@ def get_vec_avg_response(expInfo, val_trials, dir=-1, psth_binWidth=1e-3, stimDu
 
   phase_rel_stim = np.mod(np.multiply(dir, np.add(resp_phase, stimPhs)), 360);
   r_mean, phi_mean, r_sem, phi_var = hf.polar_vec_mean(np.transpose(resp_amp), np.transpose(phase_rel_stim), sem=1) # return s.e.m. rather than std (default)
+  if refPhi is not None:
+    # then do the phase projection here! TODO: CHECK IF PHI_MEAN/refPhi in deg or rad
+    r_mean = np.multiply(r_mean, np.cos(np.deg2rad(refPhi)-np.deg2rad(phi_mean)));
 
   return [r_mean, phi_mean, r_sem, phi_var], [resp_amp, phase_rel_stim], rel_amps, phase_rel_stim, stimPhs, resp_phase;
 
-def compute_f1f0(trial_inf, vecF1=1):
+def compute_f1f0(trial_inf, vecCorrectedF1=1):
   ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio
       This will be used to determine simple versus complex
   '''
@@ -447,14 +486,14 @@ def compute_f1f0(trial_inf, vecF1=1):
   # i.e. F1 might be greater than F0 AND have a different than F0 - in the case, we ought to evalaute at the peak F1 frequency
   ######
   ## first, get F0 responses (mask only)
-  f0_counts, f1_rates, f0_all, f1_rates_all = get_mask_resp(trial_inf, withBase=0, maskF1=1, returnByTr=1, vecCorrectedF1=vecF1);
+  f0_counts, f1_rates, f0_all, f1_rates_all = get_mask_resp(trial_inf, withBase=0, maskF1=1, returnByTr=1, vecCorrectedF1=vecCorrectedF1);
   f0_blank = trial_inf['blank']['mean'];
   f0_rates = np.divide(f0_counts - f0_blank, stimDur);
   f0_rates_all = np.divide(f0_all - f0_blank, stimDur);
   if vecF1:
     f1_rates = f1_rates[..., 0]; # throw away the phase information
     f1_rates_all = f1_rates_all[..., 0]; # throw away the phase information
-
+    
   # get prefSfEst
   all_rates = [f0_rates, f1_rates]
   prefSfEst_ind = np.array([np.argmax(resps[-1, :, 0]) for resps in all_rates]); # get peak resp for f0 and f1
