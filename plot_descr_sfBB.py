@@ -76,7 +76,7 @@ phAdj = np.abs(phAdj);
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
-descrBase = 'descrFits%s_220707vEs' % hpc_str;
+descrBase = 'descrFits%s_220718' % hpc_str;
 #descrBase = 'descrFits%s_220410' % hpc_str;
 ### RVCFITS
 rvcBase = 'rvcFits%s_220609' % hpc_str;

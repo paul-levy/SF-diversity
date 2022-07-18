@@ -50,13 +50,15 @@ else:
 dataPath = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + saveDir;
 
-expName = hf.get_datalist(expDir);
+expName = hf.get_datalist(expDir, force_full=1);
 descrFit_f0 = None;
 #descrFit_f0 = 'descrFits_191023_sach_flex.npy';
 #phAdvName = 'phaseAdvanceFits_220414pV';
 #rvcName = 'rvcFits_220414pV';
-phAdvName = 'phaseAdvanceFitsHPC_220531';
-rvcName = 'rvcFitsHPC_220531';
+phAdvName = 'phaseAdvanceFitsHPC_220714';
+rvcName = 'rvcFitsHPC_220714';
+#phAdvName = 'phaseAdvanceFitsHPC_220531';
+#rvcName = 'rvcFitsHPC_220531';
 
 ######
 ## contents
@@ -166,8 +168,6 @@ def phase_by_cond(which_cell, data, expInd, disp, con, sf, sv_loc=save_loc, dir=
     ax.plot([0, np.radians(avg_ph)], [0, avg_r], color='k', linestyle='--', clip_on=False);
     ax.set_ylim(polar_ylim);
     ax.set_title('Stimulus-accounted');
-
-    #pdb.set_trace();
 
   ### MIXTURE STIMULI
   elif disp>0:
