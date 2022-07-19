@@ -1250,7 +1250,9 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
       # just compute readily 
       phi_true = np.array([phAdv_model(phAdv_params[i][0], phAdv_params[i][1], x) for x in amp[i]]);
       proj = np.array([np.multiply(amp[i][j], np.cos(np.deg2rad(phi_resp[i][j])-np.deg2rad(phi_true[j]))) for j in range(len(amp[i]))]);
-      #proj = np.multiply(amp[i], np.cos(np.deg2rad(phi_resp[i])-np.deg2rad(phi_true)))
+      if np.any(np.isnan(proj)):
+         nan_inds = np.where(np.isnan(proj));
+         proj[nan_inds] = 0; # why? We'll only end up with NaN if phi_resp is Nan, which only happens when the response is 0 (i.e. no spikes...)
       all_proj.append(proj);
       
     elif disp > 0: # then we'll need to use the allCompSf to get the right phase advance fit for each component
