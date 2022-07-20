@@ -324,7 +324,6 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
 
     # Now, here (after organizing all of the responses by con x sf), we can apply any vecF1 correction, if applicable
     if phAdvCorr and vecCorrectedF1:
-      #respMatrixF1_adj = np.copy(respMatrixF1[:,:,0,0]);
       opt_params, phAdv_model = phase_advance_fit_core(respMatrixF1[:,:,0], respMatrixF1[:,:,1], maskCon, maskSf);
       for msI, mS in enumerate(maskSf):
         curr_params = opt_params[msI]; # the phAdv model applies per-SF

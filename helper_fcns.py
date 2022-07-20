@@ -2639,7 +2639,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     noSurr_radBound = (0.01, 0.010001); # gain will be 0 if we are turning off surround; this will be just a small range of radius values to stop the optimization from exploring this parameter space
     noSurr_gainBound = (-9999.00001, -9999); # sigmoid of this value will be basically 0
     # -- then, the central gaussian
-    kc1_bound = (0, None);
+    kc1_bound = (0, 1.5*max_max_resp);
+    #kc1_bound = (0, None);
     xc1_bound = (0.01, 0.5); # values from Hawk; he also uses upper bound of 0.15
     surr1_gain_bound = sigmoid_bound; #(-1.73, 1.1); # through sigmoid translates to (0.15, 0.75), bounds per Hawk; previously was sigmoid_bound
     surr1_rad_bound =  gtMult_bound if DoGmodel==3 else (xc1_bound[1]+0.2, 4); # per Hawk; #gtMult_bound if multiplicative surround
@@ -2649,7 +2650,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     surr2_gain_bound = surr1_gain_bound; # note that surr_gain_bound is LESS restrictive than Hawk
     surr2_rad_bound = gtMult_bound if DoGmodel==3 else (xc2_bound[1]+0.2, surr1_rad_bound[1]); # per Hawk
     # -- finally, the g & S parameters
-    g_bound = (-9999.00001, -9999); # sigmoid of this value will be basically 0
+    g_bound = (-9999.00001, -9999); # sigmoid of this value will be basically 0, i.e. forced odd symmetry
+    #g_bound = (0,0.000001); # fixed to be even-sym
     S_bound = sigmoid_bound if DoGmodel==3 else (0.1/8, 1.5*xc1_bound[1]); # was previously 0.1/6 (as compromise between {4,8} for {low,high} SF, per Hawk
 
     if joint>0: # for d-DoG-S model, the joint values mean the following
@@ -2942,7 +2944,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
          elif joint == 7 or joint == 8: # center radius offset and slope fixed; surround radius fixed [7] or surr. gain fixed [8];
             # the slope will be calculated on log contrast, and will start from the lowest contrast
             # -- i.e. xc = np.power(10, init+slope*log10(con))
-            init_slope = random_in_range([-0.15,0.15])[0]
+            init_slope = random_in_range([-0.20,0.15])[0]
             # now, work backwards to infer the initial intercept, given the slope and ref_init[1] (xc)
             # --- note: assumes base10 for slope model and 100% contrast as the reference...
             init_intercept = np.log10(ref_init[1]) - init_slope*np.log10(100);

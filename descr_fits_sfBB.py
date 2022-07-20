@@ -19,12 +19,12 @@ else:
 
 expName = hf.get_datalist('V1_BB/', force_full=1);
 
-sfName = 'descrFits%s_220714' % hpcSuff;
-rvcName = 'rvcFits%s_220714' % hpcSuff;
+sfName = 'descrFits%s_220720vEs' % hpcSuff;
+rvcName = 'rvcFits%s_220718' % hpcSuff;
 #sfName = 'descrFits%s_220609' % hpcSuff;
 #rvcName = 'rvcFits%s_220609' % hpcSuff;
 
-def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, toSave=1, fracSig=1, nBoots=0, n_repeats=25, jointSf=0, resp_thresh=(-1e5,0), veThresh=-1e5, sfModRef=1):
+def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, toSave=1, fracSig=1, nBoots=0, n_repeats=25, jointSf=0, resp_thresh=(-1e5,0), veThresh=-1e5, sfModRef=1, phAdvCorr=True):
   ''' Separate fits for DC, F1 
       -- for DC: [maskOnly, mask+base]
       -- for F1: [maskOnly, mask+base {@mask TF}] 
@@ -95,11 +95,11 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
   ### _____ MAKE THIS A FUNCTION???
   #########
   # 1. Get the mask only response (f1 at mask TF)
-  _, _, gt_respMatrixDC_onlyMask, gt_respMatrixF1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, vecCorrectedF1=vecF1, onsetTransient=onsetCurr, returnByTr=1); # i.e. get the maskONLY response
+  _, _, gt_respMatrixDC_onlyMask, gt_respMatrixF1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, vecCorrectedF1=vecF1, onsetTransient=onsetCurr, returnByTr=1, phAdvCorr=phAdvCorr); # i.e. get the maskONLY response
   # 2f1. get the mask+base response (but f1 at mask TF)
-  _, _, _, gt_respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, vecCorrectedF1=vecF1, onsetTransient=onsetCurr, returnByTr=1); # i.e. get the maskONLY response
+  _, _, _, gt_respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, vecCorrectedF1=vecF1, onsetTransient=onsetCurr, returnByTr=1, phAdvCorr=phAdvCorr); # i.e. get the maskONLY response
   # 2dc. get the mask+base response (f1 at base TF)
-  _, _, gt_respMatrixDC, _ = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, vecCorrectedF1=vecF1, onsetTransient=onsetCurr, returnByTr=1); # i.e. get the base response for F1
+  _, _, gt_respMatrixDC, _ = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, vecCorrectedF1=vecF1, onsetTransient=onsetCurr, returnByTr=1, phAdvCorr=phAdvCorr); # i.e. get the base response for F1
  
   if cross_val == 2.0:
     nBoots = np.multiply(*gt_respMatrixDC_onlyMask.shape[0:2], );
@@ -122,24 +122,43 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
     respMatrixF1_onlyMask_resample = hf_sf.resample_all_cond(resample, np.copy(gt_respMatrixF1_onlyMask), axis=2);
     # --- however, polar_vec_mean must be computed by condition, to handle NaN (which might be unequal across conditions):
     respMatrixF1_onlyMask = np.empty(respMatrixF1_onlyMask_resample.shape[0:2] + respMatrixF1_onlyMask_resample.shape[3:]);
+    respMatrixF1_onlyMask_phi = np.copy(respMatrixF1_onlyMask);
     for conds in itertools.product(*[range(x) for x in respMatrixF1_onlyMask_resample.shape[0:2]]):
-      r_mean, _, r_sem, _ = hf.polar_vec_mean([hf.nan_rm(respMatrixF1_onlyMask_resample[conds + (slice(None), 0)])], [hf.nan_rm(respMatrixF1_onlyMask_resample[conds + (slice(None), 1)])], sem=1) # return s.e.m. rather than std (default)
+      r_mean, phi_mean, r_sem, phi_sem = hf.polar_vec_mean([hf.nan_rm(respMatrixF1_onlyMask_resample[conds + (slice(None), 0)])], [hf.nan_rm(respMatrixF1_onlyMask_resample[conds + (slice(None), 1)])], sem=1) # return s.e.m. rather than std (default)
       # - and we only care about the R value (after vec. avg.)
-      respMatrixF1_onlyMask[conds] = [r_mean[0], r_sem[0]]; # r...[0] is to unpack (it's nested inside of an array, since polar_vec_mean is vectorized
-
+      respMatrixF1_onlyMask[conds] = [r_mean[0], r_sem[0]]; # r...[0] to unpack (it's nested inside array, since f is vectorized
+      respMatrixF1_onlyMask_phi[conds] = [phi_mean[0], phi_sem[0]];
+    if phAdvCorr and vecF1:
+      maskCon, maskSf = expInfo['maskCon'], expInfo['maskSF'];
+      opt_params, phAdv_model = hf_sf.phase_advance_fit_core(respMatrixF1_onlyMask, respMatrixF1_onlyMask_phi, maskCon, maskSf);
+      for msI, mS in enumerate(maskSf):
+        curr_params = opt_params[msI]; # the phAdv model applies per-SF
+        for mcI, mC in enumerate(maskCon):
+          curr_r, curr_phi = respMatrixF1_onlyMask[mcI, msI, 0], respMatrixF1_onlyMask_phi[mcI, msI, 0];
+          refPhi = phAdv_model(*curr_params, curr_r);
+          new_r = np.multiply(curr_r, np.cos(np.deg2rad(refPhi)-np.deg2rad(curr_phi)));
+          respMatrixF1_onlyMask[mcI, msI, 0] = new_r;
+      
     # - ii. F1, both (@ maskTF)
     respMatrixF1_maskTf_resample = hf_sf.resample_all_cond(resample, np.copy(gt_respMatrixF1_maskTf), axis=2);
     # --- however, polar_vec_mean must be computed by condition, to handle NaN (which might be unequal across conditions):
     respMatrixF1_maskTf = np.empty(respMatrixF1_maskTf_resample.shape[0:2] + respMatrixF1_maskTf_resample.shape[3:]);
+    respMatrixF1_maskTf_phi = np.copy(respMatrixF1_maskTf);
     for conds in itertools.product(*[range(x) for x in respMatrixF1_maskTf_resample.shape[0:2]]):
-      r_mean, _, r_sem, _ = hf.polar_vec_mean([hf.nan_rm(respMatrixF1_maskTf_resample[conds + (slice(None), 0)])], [hf.nan_rm(respMatrixF1_maskTf_resample[conds + (slice(None), 1)])], sem=1) # return s.e.m. rather than std (default)
+      r_mean, phi_mean, r_sem, phi_var = hf.polar_vec_mean([hf.nan_rm(respMatrixF1_maskTf_resample[conds + (slice(None), 0)])], [hf.nan_rm(respMatrixF1_maskTf_resample[conds + (slice(None), 1)])], sem=1) # return s.e.m. rather than std (default)
       # - and we only care about the R value (after vec. avg.)
-      respMatrixF1_maskTf[conds] = [r_mean[0], r_sem[0]]; # r...[0] is to unpack (it's nested inside of an array, since polar_vec_mean is vectorized
-
-    # -- if vecF1, let's just take the "r" elements, not the phi information
-    #if vecF1 and not resample:
-    #  respMatrixF1_onlyMask = respMatrixF1_onlyMask[:,:,0,:]; # just take the "r" information (throw away the phi)
-    #  respMatrixF1_maskTf = respMatrixF1_maskTf[:,:,0,:]; # just take the "r" information (throw away the phi)
+      respMatrixF1_maskTf[conds] = [r_mean[0], r_sem[0]]; # r...[0] is to unpack (it's nested inside array, since func is vectorized
+      respMatrixF1_maskTf_phi[conds] = [phi_mean[0], phi_sem[0]];
+    if phAdvCorr and vecF1:
+      maskCon, maskSf = expInfo['maskCon'], expInfo['maskSF'];
+      opt_params, phAdv_model = hf_sf.phase_advance_fit_core(respMatrixF1_maskTf, respMatrixF1_maskTf_phi, maskCon, maskSf);
+      for msI, mS in enumerate(maskSf):
+        curr_params = opt_params[msI]; # the phAdv model applies per-SF
+        for mcI, mC in enumerate(maskCon):
+          curr_r, curr_phi = respMatrixF1_maskTf[mcI, msI, 0], respMatrixF1_maskTf_phi[mcI, msI, 0];
+          refPhi = phAdv_model(*curr_params, curr_r);
+          new_r = np.multiply(curr_r, np.cos(np.deg2rad(refPhi)-np.deg2rad(curr_phi)));
+          respMatrixF1_maskTf[mcI, msI, 0] = new_r;
 
     if cross_val == 2.0:
       n_sfs, n_cons = gt_respMatrixF1_maskTf.shape[0], gt_respMatrixF1_maskTf.shape[1];
@@ -520,7 +539,7 @@ if __name__ == '__main__':
     if nBoots > 1:
       n_repeats = 3 if jointSf>0 else 5; # fewer if repeat
     else:
-      n_repeats = 12 if jointSf>0 else 15; # was previously be 3, 15, then 7, 15
+      n_repeats = 20 if jointSf>0 else 15; # was previously be 3, 15, then 7, 15
 
     with mp.Pool(processes = nCpu) as pool:
       # if we're doing as parallel, do NOT save

@@ -30,10 +30,10 @@ if sys.argv[3] == 'LGN/':
   #rvcName_f1 = 'rvcFits_211108'; # FOR LGN
   rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 else:
-  phAdvName = 'phaseAdvanceFits%s_220714' % hpcSuff
+  phAdvName = 'phaseAdvanceFits%s_220718' % hpcSuff
+  rvcName_f1 = 'rvcFits%s_220718' % hpcSuff;
   #phAdvName = 'phaseAdvanceFits%s_220609' % hpcSuff
   #rvcName_f1 = 'rvcFits%s_220609' % hpcSuff;
-  rvcName_f1 = 'rvcFits%s_220714' % hpcSuff;
   #phAdvName = 'phaseAdvanceFits%s_210914' % hpcSuff
   #rvcName_f1 = 'rvcFits%s_210914' % hpcSuff; # FOR V1
   #phAdvName = 'phaseAdvanceFits%s_210914' % hpcSuff
