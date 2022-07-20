@@ -76,10 +76,11 @@ phAdj = np.abs(phAdj);
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
-descrBase = 'descrFits%s_220718' % hpc_str;
+descrBase = 'descrFits%s_220720vEs' % hpc_str;
 #descrBase = 'descrFits%s_220410' % hpc_str;
 ### RVCFITS
-rvcBase = 'rvcFits%s_220609' % hpc_str;
+rvcBase = 'rvcFits%s_220718' % hpc_str;
+#rvcBase = 'rvcFits%s_220609' % hpc_str;
 
 ##################
 ### Spatial frequency
@@ -237,26 +238,19 @@ for c in reversed(range(n_v_cons)):
     if pred_org is not None:
         dispAx[c_plt_ind, 0].plot(sfVals, baseline_resp + pred_org[v_sfs, c], color=currClr, linestyle='--', clip_on=False, label='pred');
 
-    ## if flexGauss plot peak & frac of peak
-    frac_freq = hf.sf_highCut(prms_curr, descrMod, frac=peakFrac, sfRange=(0.1, 15), baseline_sub=baseline_resp);
-    if not hf.is_mod_DoG(descrMod): # i.e. non DoG models
-      #ctr = hf.sf_com(resps, sfVals);
-      pSf = hf.descr_prefSf(prms_curr, dog_model=descrMod, all_sfs=maskSf);
-      for ii in range(2):
-        dispAx[c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
-        #dispAx[c_plt_ind, ii].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=currClr, alpha=1); # plot at y=1
-    ## otherwise, let's plot the char freq. and frac of peak
-    elif hf.is_mod_DoG(descrMod): # (single) DoG models
-      char_freq = hf.dog_charFreq(prms_curr, descrMod);
-      # if it's a DoG, let's also put the parameters in text (left side only)
-      try:
+    #frac_freq = hf.sf_highCut(prms_curr, descrMod, frac=peakFrac, sfRange=(0.1, 15), baseline_sub=baseline_resp);
+    #pSf = hf.descr_prefSf(prms_curr, dog_model=descrMod, all_sfs=maskSf);
+    #dispAx[c_plt_ind, ii].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=currClr, alpha=1); # plot at y=1
+    # if it's a DoG, let's also put the parameters in text (left side only)
+    try:
+      if hf.is_mod_DoG(descrMod):
         dispAx[c_plt_ind, 0].text(0.05, 0.075, '%d,%.2f' % (*prms_curr[0:2], ), transform=dispAx[c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
         dispAx[c_plt_ind, 0].text(0.05, 0.025, '%.2f,%.2f' % (*prms_curr[2:], ), transform=dispAx[c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
-        for ii in range(2):
-          dispAx[c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
-          #dispAx[c_plt_ind, ii].plot(char_freq, 1, linestyle='None', marker='v', label='$f_c$', color=currClr, alpha=1); # plot at y=1
-      except:
-        pass; # why might this not work? If we only fit disp=0!
+      char_freq = hf.dog_charFreq(prms_curr, descrMod);
+      #dispAx[c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
+      dispAx[c_plt_ind, 0].plot(char_freq, 1, linestyle='None', marker='v', label='$f_c$', color=currClr, alpha=1); # plot at y=1
+    except:
+      pass; # why might this not work? If we only fit disp=0!
 
     dispAx[c_plt_ind, 0].set_title('contrast: %d%%' % (np.round(100*maskCon[c])));
 

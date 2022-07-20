@@ -90,14 +90,14 @@ if expDir == 'LGN/':
     #descrBase = 'descrFits%s_220511' % hpc_str;
     descrBase = 'descrFits%s_220609' % hpc_str;
 else:
-    descrBase = 'descrFits%s_220715' % hpc_str;
+    descrBase = 'descrFits%s_220720vEs' % hpc_str;
     #descrBase = 'descrFits%s_220531' % hpc_str;
 if expDir == 'LGN/':
   rvcBase = 'rvcFits%s_220531' % hpc_str;
   #rvcBase = 'rvcFits%s_220511' % hpc_str;
 else:
   #rvcBase = 'rvcFits%s_220609' % hpc_str; # if V1?
-  rvcBase = 'rvcFits%s_220714' % hpc_str;
+  rvcBase = 'rvcFits%s_220718' % hpc_str;
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
