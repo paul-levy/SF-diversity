@@ -186,7 +186,10 @@ else:
 # now get the measured responses
 _, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
 if rvcAdjSigned==1 and phAmpByMean and (force_f1 or f1f0rat>1):
+  try:
     respMean = hf.organize_phAdj_byMean(trialInf, expInd, all_opts, stimVals, val_con_by_disp);
+  except: # why would it fail? Only when there isn't a trial for each condition - in which case, these are disregarded cells...
+    respMean = respOrg;
 else:
     respMean = respOrg;
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
