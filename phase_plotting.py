@@ -55,8 +55,8 @@ descrFit_f0 = None;
 #descrFit_f0 = 'descrFits_191023_sach_flex.npy';
 #phAdvName = 'phaseAdvanceFits_220414pV';
 #rvcName = 'rvcFits_220414pV';
-phAdvName = 'phaseAdvanceFitsHPC_220714';
-rvcName = 'rvcFitsHPC_220714';
+phAdvName = 'phaseAdvanceFitsHPC_220718';
+rvcName = 'rvcFitsHPC_220718';
 #phAdvName = 'phaseAdvanceFitsHPC_220531';
 #rvcName = 'rvcFitsHPC_220531';
 

@@ -16,12 +16,12 @@ if area == 'V1':
 
   # expDirs (and expNames must always be of the right length, i.e. specify for each expt dir 
   ## V1 version
-  expDirs = ['V1/']
-  expNames = ['dataList_210721.npy']
+  #expDirs = ['V1/']
+  #expNames = ['dataList_210721.npy']
   #expDirs = ['altExp/', 'V1/']
   #expNames = ['dataList.npy', 'dataList_210721.npy']
-  #expDirs = ['altExp/', 'V1/', 'V1_BB/']
-  #expNames = ['dataList.npy', 'dataList_210721.npy', 'dataList_210721.npy']
+  expDirs = ['altExp/', 'V1/', 'V1_BB/']
+  expNames = ['dataList.npy', 'dataList_210721.npy', 'dataList_210721.npy']
   #expDirs = ['V1_orig/', 'altExp/', 'V1/', 'V1_BB/']
   #expNames = ['dataList.npy', 'dataList.npy', 'dataList_210721.npy', 'dataList_210721.npy']
 
@@ -46,7 +46,7 @@ if area == 'V1':
   #jointType = 0; # 0/1/2 --> none/[g,S]/[*, surr1_rad, surr2_rad]
   #dogNames = ['descrFitsHPC_220609_sqrt_sach.npy'];
   #jointType = 7;
-  #dogNames = ['descrFitsHPC_220715_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
+  #dogNames = ['descrFitsHPC_220718vEs_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
   #dogNames = ['descrFitsHPC_220609_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
 
   dogMod = 3; # 1 (sach), 2 (Tony), 3 (d-DoG-S), 4 (N/A), 5 (d-DoG-S Hawk)
@@ -55,7 +55,8 @@ if area == 'V1':
   #jointType = 7;
   #dogNames = ['descrFitsHPC_220609_sqrt_ddogs_JTflankSurrShapeCtrRaSlope.npy'];
   jointType = 9;
-  dogNames = ['descrFitsHPC_220716_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
+  dogNames = ['descrFitsHPC_220720vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220720vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220720vEs_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
+  #dogNames = ['descrFitsHPC_220720vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
   #dogNames = ['descrFitsHPC_220707vEs_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
 
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
@@ -107,12 +108,12 @@ if area == 'V1':
   jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType)
 
   from datetime import datetime
-  suffix = datetime.today().strftime('%y%m%d')
-  #suffix = '210504'
+  #suffix = datetime.today().strftime('%y%m%d')
+  suffix = '220720vEs'
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
-  np.save(base_dir + 'jointList_V1_%salt_vT%02d_dvT%02d_m%dj%d_onlyV1' % (suffix, varExplThresh_str, dog_varExplThresh_str, dogMod, jointType), jointList)
+  np.save(base_dir + 'jointList_V1a_%s_vT%02d_dvT%02d_m%dj%d' % (suffix, varExplThresh_str, dog_varExplThresh_str, dogMod, jointType), jointList)
 
 ########################
 #### END V1
