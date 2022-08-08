@@ -20,7 +20,7 @@ else:
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #dogName = 'descrFits%s_220531' % hpcSuff;
-dogName = 'descrFits%s_220720vEs' % hpcSuff;
+dogName = 'descrFits%s_220807vEs' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220531' % hpcSuff
   rvcName_f1 = 'rvcFits%s_220531' % hpcSuff;
@@ -688,7 +688,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       ### 4. Save everything (and/or return the results)
       ###############
 
-      NOTE: 22.06.06 - if phAmpOnMean (and not vecF1; will only happen if LGN), then we correct each condition's response mean by projecting on the vector mean for that condition
+      NOTE: 22.06.06 - if phAmpOnMean (and not vecF1), then we correct each condition's response mean by projecting on the vector mean for that condition
       ---------------- can only use with: no resampling; no cross-val but resampling; cross_val==2.0; i.e. we cannot, as of 22.06.06, use with 0<cross_val<1
       ---------------- however, this means that resps_all (as passed into hf.dog_fit) will be done on phAdvByTrial responses (i.e. corrected trial-by-trial)
       ---------------- resps_all is just used for var/mean calculations, etc, and has no real influence on the fit, so we're OK to only correct resps_mean
@@ -796,7 +796,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
   # -- we'll ask which response measure is returned (DC or F1) so that we can pass in None for base_rate if it's F1 (will become 0)
   # ---- NOTE: We pass in rvcMod=-1 so that we know we're passing in the already loaded rvcFit for that cell
   spks, which_measure = hf.get_adjusted_spikerate(data, cell_num, expInd, data_loc, rvcName=rvcFits, rvcMod=-1, baseline_sub=False, force_dc=force_dc, force_f1=force_f1, return_measure=1, vecF1=vecF1);
-
+  # now
+  phAmpOnMean = phAmpOnMean and which_measure; # make sure that we only do phAmpOnMean IFF we're using F1 responses...
+  
   # Note that if rvcFits is not None, then spks will be rates already
   # ensure the spikes array is a vector of overall response, not split by component 
   spks_sum = np.array([np.sum(x) for x in spks]);
@@ -824,11 +826,15 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       tr_subset_nll = np.copy(bestNLL);
       tr_subset_vExp = np.copy(varExpl);
 
-  if phAmpOnMean and phAdj: # should happen iff LGN data
+  if phAmpOnMean and phAdj: # only apply this if F1...
     phAdvFits = hf.np_smart_load(data_loc + hf.phase_fit_name(phAdvName, dir=dir));
     all_opts = phAdvFits[cell_num-1]['params'];
-    respsPhAdv_mean_ref = hf.organize_phAdj_byMean(data, expInd, all_opts, stimVals, valConByDisp);
-
+    try:
+      respsPhAdv_mean_ref = hf.organize_phAdj_byMean(data, expInd, all_opts, stimVals, valConByDisp);
+    except:
+      respsPhAdv_mean_ref = None;
+      pass; # this will fail IFF there isn't a trial for each condition - these cells are ignored in the analysis, anyway; in those cases, just give non-phAdj responses so that we don't fail
+    
   print('# boots --> %03d' % nBoots);
   for boot_i in range(nBoots):
     if nBoots > 1:
@@ -849,7 +855,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       except:
         print('Failure on con/sf %02d/%02d for cell %02d' % (con_ind, sf_ind, cell_num));
         continue;
-      if phAmpOnMean:
+      if phAmpOnMean and respsPhAdv_mean_ref is not None:
         resps_mean = np.copy(respsPhAdv_mean_ref);
         resps_mean[disp, val_sfs[sf_ind], valConByDisp[disp][con_ind]] = np.nan;
       else:
@@ -857,7 +863,10 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     else: # NOTE: As of 22.06.06, cannot do cross_val by trial with phAmpOnMean
       _, _, resps_mean, resps_all = hf.organize_resp(spks_sum, cellStruct, expInd, respsAsRate=True, resample=resample, cellNum=cell_num, cross_val=cross_val_curr);
       if cross_val is None and phAmpOnMean: # then we replace resps_mean with the corrected version
-        resps_mean = hf.organize_phAdj_byMean(data, expInd, all_opts, stimVals, valConByDisp, resample=resample);
+        try:
+          resps_mean = hf.organize_phAdj_byMean(data, expInd, all_opts, stimVals, valConByDisp, resample=resample);
+        except:
+          pass; # this will fail IFF there isn't a trial for each condition - these cells are ignored in the analysis, anyway
 
     if cross_val is not None and resample:
       ########
@@ -877,7 +886,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
       print('boot %d' % boot_i);
  
       # if the below are true, then we also need to 
-      if cross_val==2.0 and phAmpOnMean: # As of 22.06.06, iff we're doing cross-val by condition AND phAmpOnMean, then we'll compute test/train based on the 
+      if cross_val==2.0 and phAmpOnMean and respsPhAdv_mean_ref is not None: # As of 22.06.06, iff we're doing cross-val by condition AND phAmpOnMean, then we'll compute test/train based on the 
         training_phAmp = np.copy(resps_mean);
         all_data_phAmp = np.copy(respsPhAdv_mean_ref);
         test_data_phAmp = np.nan * np.zeros_like(resps_mean);
@@ -1154,7 +1163,8 @@ if __name__ == '__main__':
     print('Running cell %d in %s' % (cell_num, expName));
 
     jointMinCons = 2 if data_dir=='V1_orig/' else 3;
-    phAmpOnMean = 1 if data_dir=='LGN/' and ph_fits==1 else 0;
+    phAmpOnMean = 1 if ph_fits==1 else 0;
+    #phAmpOnMean = 1 if data_dir=='LGN/' and ph_fits==1 else 0;
     sfModRef = 1 if data_dir=='LGN/' else 1; # which model to use as reference for inclusion
     
     resp_thresh = (-1e5,0); #(5,2); # at least 2 responses must be g.t.e. 5 spks/s (22.07.05 addition/try)

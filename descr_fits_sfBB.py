@@ -19,7 +19,8 @@ else:
 
 expName = hf.get_datalist('V1_BB/', force_full=1);
 
-sfName = 'descrFits%s_220720vEs' % hpcSuff;
+sfName = 'descrFits%s_220807vEs' % hpcSuff;
+#sfName = 'descrFits%s_220801vEs' % hpcSuff;
 rvcName = 'rvcFits%s_220718' % hpcSuff;
 #sfName = 'descrFits%s_220609' % hpcSuff;
 #rvcName = 'rvcFits%s_220609' % hpcSuff;
@@ -273,6 +274,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
             rvcFits_curr_toSave[resp_str][wK]['conGain'] = all_conGains;
             rvcFits_curr_toSave[resp_str][wK]['adjMeans'] = adjMeans
             rvcFits_curr_toSave[resp_str][wK]['varExpl'] = varExpl;
+
         ######## 
         # END of rvc fit (for this measure, boot iteration)
         ######## 

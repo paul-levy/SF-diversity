@@ -2478,6 +2478,7 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
     except: # we end up here if bounds is somehow not equal in # of entries to init_params
       pass; # not ideal, but the parent function should handle failures of initialization by trying again, anyway
 
+
   return init_params
 
 def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, valConByDisp, n_repeats=100, joint=0, gain_reg=0, ref_varExpl=None, veThresh=60, prevFits=None, baseline_DoG=True, fracSig=1, noDisp=0, debug=0, vol_lam=0, modRecov=False, ftol=2.220446049250313e-09, jointMinCons=2, no_surr=False, isolFits=None, flt32=True, resp_thresh=(-1e5,0)):
@@ -2633,8 +2634,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
     # -- first, some general bounds that we can apply as needed for different parameters
     gtMult_bound = (1, None); # (1, None) multiplier limit when we want param >= mult*orig_param [greaterThan-->gt] ||| was previously (1, 7) --> then (1,5) --> then (1, 15)
-    #mult_bound_xc = (1, 2);
-    mult_bound_xc = (1, 1.00001);
+    mult_bound_xc = (1, 2);
+    #mult_bound_xc = (1, 1.00001);
     sigmoid_bound = (None, None); # params that are input to sigmoids are unbounded - since sigmoid is bounded [0,1]
     noSurr_radBound = (0.01, 0.010001); # gain will be 0 if we are turning off surround; this will be just a small range of radius values to stop the optimization from exploring this parameter space
     noSurr_gainBound = (-9999.00001, -9999); # sigmoid of this value will be basically 0
@@ -2864,7 +2865,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
       if debug:
         save_all.append([wax, init_params]);
-        
+
       if np.isnan(bestNLL[con]) or NLL < bestNLL[con]:
         bestNLL[con] = NLL;
         currParams[con, :] = params;

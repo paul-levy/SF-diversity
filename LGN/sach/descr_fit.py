@@ -222,7 +222,7 @@ def fit_descr_empties(nCons, nParam, joint=0, nBoots=1):
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success;
 
-def fit_descr_DoG(cell_num, data_loc, dogBase, n_repeats = 15, loss_type = 3, DoGmodel = 1, joint=0, fracSig=0, nBoots=0, forceOverwrite=False, phAdj=1, to_save=1, cross_val=None):
+def fit_descr_DoG(cell_num, data_loc, dogBase, n_repeats = 15, loss_type = 3, DoGmodel = 1, joint=0, fracSig=0, nBoots=0, forceOverwrite=False, phAdj=1, to_save=1, cross_val=None, veThresh=-np.nan):
 
   # Set up whether we will bootstrap straight away
   resample = False if nBoots <= 0 else True;
@@ -335,7 +335,7 @@ def fit_descr_DoG(cell_num, data_loc, dogBase, n_repeats = 15, loss_type = 3, Do
       test_data[heldout] = all_data[heldout]; # then put the heldout values here
 
     # now, we fit!
-    nll, prms, vExp, pSf, cFreq, totNLL, totPrm, succ = hf.dog_fit(f1, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=joint, ref_varExpl=ref_varExpl, fracSig=fracSig, jointMinCons=0);
+    nll, prms, vExp, pSf, cFreq, totNLL, totPrm, succ = hf.dog_fit(f1, all_cons, all_sfs, DoGmodel, loss_type, n_repeats, joint=joint, ref_varExpl=ref_varExpl, fracSig=fracSig, jointMinCons=0, veThresh=veThresh);
     ref_rc_val = None if joint==0 else totPrm[2];
 
     if resample:
@@ -508,10 +508,12 @@ if __name__ == '__main__':
 
     rvcBase = 'rvcFits%s_220531' % HPC;
     phBase = 'phAdv%s_220531' % HPC;
-    dogBase = 'descrFits%s_s220702_vE' % HPC;
+    dogBase = 'descrFits%s_s220730vE' % HPC;
     #rvcBase = 'rvcFits%s_220412' % HPC;
     #phBase = 'phAdv%s_220412' % HPC;
 
+    veThresh = 60;
+    
     fracSig = 0; # should be unconstrained, per Tony (21.05.19) for LGN fits
 
     print('Running cell ' + sys.argv[1] + '...');
@@ -597,7 +599,7 @@ if __name__ == '__main__':
             n_repeats = 5 if joint>0 else 15; # was previously be 3, 15
 
         with mp.Pool(processes = nCpu) as pool:
-          descr_perCell = partial(fit_descr_DoG, data_loc=data_loc, dogBase=dogBase, n_repeats=n_repeats, loss_type=loss_type, DoGmodel=DoGmodel, joint=joint, fracSig=fracSig, nBoots=nBoots, phAdj=phAdj, to_save=0, cross_val=cross_val);
+          descr_perCell = partial(fit_descr_DoG, data_loc=data_loc, dogBase=dogBase, n_repeats=n_repeats, loss_type=loss_type, DoGmodel=DoGmodel, joint=joint, fracSig=fracSig, nBoots=nBoots, phAdj=phAdj, to_save=0, cross_val=cross_val, veThresh=veThresh);
           dogFits = pool.map(descr_perCell, range(start_cell, end_cell+1));
           pool.close();
 
@@ -625,5 +627,5 @@ if __name__ == '__main__':
         else:
           n_repeats = 5 if joint>0 else 12; # was previously be 3, 15, then 7, 15
 
-        fit_descr_DoG(cellNum, data_loc, dogBase, n_repeats, loss_type, DoGmodel, joint, fracSig=fracSig, nBoots=nBoots, phAdj=phAdj, cross_val=cross_val);
+        fit_descr_DoG(cellNum, data_loc, dogBase, n_repeats, loss_type, DoGmodel, joint, fracSig=fracSig, nBoots=nBoots, phAdj=phAdj, cross_val=cross_val, veThresh=veThresh);
 
