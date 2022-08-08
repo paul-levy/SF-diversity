@@ -54,11 +54,15 @@ if len(sys.argv) > 10: # plot prediction to all stimuli from spatial rep. of d-D
 else:
   ddogs_pred = 1;
 if len(sys.argv) > 11:
-  forceLog = int(sys.argv[11]); # used for byDisp/allCons_... (sf plots)
+  plot_sem_on_log = int(sys.argv[11]);
+else:
+  plot_sem_on_log = 1; # plot the S.E.M. for log SF plots?
+if len(sys.argv) > 12:
+  forceLog = int(sys.argv[12]); # used for byDisp/allCons_... (sf plots)
 else:
   forceLog = 0;
-if len(sys.argv) > 12:
-  forceMetr = int(sys.argv[12]); # +1/-1 means force F1/DC; 0 is base on metric
+if len(sys.argv) > 13:
+  forceMetr = int(sys.argv[13]); # +1/-1 means force F1/DC; 0 is base on metric
 else:
   forceMetr = 0; 
 
@@ -362,6 +366,14 @@ for c in reversed(range(n_v_cons)):
     prms_curr = descrParams[c];
     descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params);
     dispAx[1].plot(sfs_plot, descrResp-to_sub, color=col);
+    if plot_sem_on_log:
+      sem_curr = respVar[v_sfs, c];
+      # errbars should be (2,n_sfs)
+      high_err = sem_curr; # no problem with going to higher values
+      low_err = np.minimum(sem_curr, plot_resp-minToPlot-1e-2); # i.e. don't allow us to make the err any lower than where the plot will cut-off (incl. negatives)
+      errs = np.vstack((low_err, high_err));
+      dispAx[1].errorbar(maskSf[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', clip_on=True, color=col);
+
 
 for i in range(len(dispAx)):
   dispAx[i].set_xlim((0.5*min(maskSf), 1.2*max(maskSf)));
@@ -388,8 +400,9 @@ for i in range(len(dispAx)):
   dispAx[i].set_title('sf tuning');
   dispAx[i].legend(fontsize='x-small');
 
+sem_str = '_sem' if plot_sem_on_log else '';
 saveName = "/allCons_%scell_%03d.pdf" % (logSuffix, cellNum)
-full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % save_resp_str));
+full_save = os.path.dirname(str(save_loc + 'byDisp%s%s/' % (save_resp_str, sem_str)));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);

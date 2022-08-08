@@ -87,17 +87,22 @@ expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
 if expDir == 'LGN/':
-    #descrBase = 'descrFits%s_220511' % hpc_str;
-    descrBase = 'descrFits%s_220609' % hpc_str;
+    descrBase = 'descrFits%s_220702vE' % hpc_str;
+    #descrBase = 'descrFits%s_220609' % hpc_str;
 else:
-    descrBase = 'descrFits%s_220720vEs' % hpc_str;
-    #descrBase = 'descrFits%s_220531' % hpc_str;
+  if expDir == 'altExp/':
+    descrBase = 'descrFits%s_220707vEs' % hpc_str;
+  else:
+    descrBase = 'descrFits%s_220721vEs' % hpc_str;
+  #descrBase = 'descrFits%s_220531' % hpc_str;
 if expDir == 'LGN/':
   rvcBase = 'rvcFits%s_220531' % hpc_str;
   #rvcBase = 'rvcFits%s_220511' % hpc_str;
 else:
-  #rvcBase = 'rvcFits%s_220609' % hpc_str; # if V1?
-  rvcBase = 'rvcFits%s_220718' % hpc_str;
+  if expDir == 'altExp/':
+    rvcBase = 'rvcFits%s_220609' % hpc_str;
+  else:
+    rvcBase = 'rvcFits%s_220718' % hpc_str;
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
@@ -447,10 +452,8 @@ for d in range(nDisps):
             high_err = sem_curr; # no problem with going to higher values
             low_err = np.minimum(sem_curr, plot_resp-minToPlot-1e-2); # i.e. don't allow us to make the err any lower than where the plot will cut-off (incl. negatives)
             errs = np.vstack((low_err, high_err));
-            dispAx[d][0].errorbar(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', linestyle='-', clip_on=True, \
-                                       color=col, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
-            dispAx[d][1].errorbar(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', clip_on=True, \
-                                       color=col);
+            dispAx[d][0].errorbar(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', linestyle='-', clip_on=True, color=col, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
+            dispAx[d][1].errorbar(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', clip_on=True, color=col);
         else:
             dispAx[d][0].plot(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], '-o', clip_on=True, \
                                        color=col, label='%s%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
