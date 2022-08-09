@@ -15,6 +15,8 @@ import time
 
 import helper_fcns as hf
 import model_responses as mod_resp
+sys.path.insert(0, 'LGN/sach/');
+import helper_fcns_sach as hfs
 
 import warnings
 warnings.filterwarnings('once');
@@ -46,41 +48,51 @@ import pdb
 
 '''
 
-#def get_resps_sach():
+def prepare_sfs_plot_sach(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, old_refprm):
+  # helper function called in plot_sfs
 
-#def get_resps():
-
-def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvcAdj, phBase=None, descrLoss=2, rvcMod=1, phAmpByMean=1, respVar=1, plot_sem_on_log=1, disp=0, forceLog=1, subplot_title=False, specify_ticks=True, old_refprm=False, fracSig=1, incl_legend=False, nrow=2, subset_cons=None):
-  
-  x_lblpad=6; y_lblpad=8;
-
-  loc_base = os.getcwd() + '/';
-
-  data_loc = loc_base + expDir + 'structures/';
-  save_loc = loc_base + expDir + 'figures/';
-
-  ##################
-  ### Spatial frequency
-  ##################
-  rvcAdjSigned = rvcAdj;
-  rvcAdj = np.abs(rvcAdj);
-
-  modStr  = hf.descrMod_name(descrMod)
-  fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint, phAdj=1 if rvcAdjSigned==1 else None);
   descrFits = hf.np_smart_load(data_loc + fLname);
-  # set the save directory to save_loc, then create the save directory if needed
-  subDir = fLname.replace('Fits', '').replace('.npy', '');
-  save_loc = str(save_loc + subDir + '/');
+  descrFits = descrFits[cellNum-1]; # just get this cell
+  descrParams = descrFits['params'];
 
-  if not os.path.exists(save_loc):
-    os.makedirs(save_loc);
+  if rvcAdj == 1:
+    vecF1 = 1 if rvcAdjSigned==-1 else 0
+    dir = 1 if rvcAdjSigned==1 else None # we dont' have pos/neg phase if vecF1
+    phAdj = 1;
+  elif rvcAdj == 0: # we'll never reach here...Sach is LGN data, always do rvcAdj/phAdj
+    vecF1 = None
+    dir = None;
+    phAdj = 0;
 
-  if 'sach' in expDir:
-    expName = 'sachData.npy';
-    isSach = True;
-  else:
-    expName = hf.get_datalist(expDir, force_full=1);
-    isSach = False;
+  rvcFits = hf.np_smart_load(data_loc + hf.rvc_fit_name(rvcBase, rvcMod, vecF1=vecF1, dir=dir));
+  rvcFits = rvcFits[cellNum-1];
+
+  allData = hf.np_smart_load(data_loc + 'sachData.npy');
+  cellStruct = allData[cellNum-1];
+  data = cellStruct['data'];
+
+  resps, stimVals, _ = hfs.tabulateResponses(data, phAdjusted=phAdj);
+  # all responses on log ordinate (y axis) should be baseline subtracted
+
+  all_cons = stimVals[0];
+  all_sfs = stimVals[1];
+  n_v_cons = len(all_cons);
+  v_cons = all_cons; # for sach, all cons are valid cons (no mixtures means no different total contrast values)
+
+  # Unpack responses
+  f1 = resps[1]; # power at fundamental freq. of stimulus
+  respMean, respSem = f1['mean'], f1['sem'];
+  baseline_resp = 0; # these are F1 responses!
+
+  ref_params = None; # only applies for d-DoG-S fits (don't use on Sach data)
+  ref_rc_val = None; # only applied for DoG, joint=5 (not used as of 22.08.08)
+
+  return respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val;
+
+def prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, disp, old_refprm):
+  # helper function called in plot_sfs
+
+  expName = hf.get_datalist(expDir, force_full=1);
   dataList = hf.np_smart_load(data_loc + expName);
 
   cellName = dataList['unitName'][cellNum-1];
@@ -91,6 +103,8 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
   expInd   = hf.get_exp_ind(data_loc, cellName, overwriteExpName)[0];
   if expInd <= 2: # if expInd <= 2, then there cannot be rvcAdj, anyway!
     rvcAdj = 0; # then we'll load just below!
+
+  descrFits = hf.np_smart_load(data_loc + fLname);
 
   if rvcAdj == 1:
     vecF1 = 1 if rvcAdjSigned==-1 else 0
@@ -166,17 +180,9 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
   nSfs = len(all_sfs);
   nDisps = len(all_disps);
 
-  # ### Plots
-  sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
-
-  minResp_toPlot = 1e-0;
   v_cons = val_con_by_disp[disp];
   n_v_cons = len(v_cons);
 
-  maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));  
-  minToPlot = 1; #5e-1;
-  #ref_params = descrParams[disp, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
-  #ref_rc_val = ref_params[2] if joint>0 else None;
   if old_refprm:
     ref_params = descrParams[disp, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
     ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
@@ -184,9 +190,53 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
     ref_params = np.array([np.nanmin(descrParams[disp, v_cons, 1]), 1]) if joint>0 else None;
     ref_rc_val = None;
 
-  lines = [];
+  return respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val;
 
-  # decide which contrasts we'll plot...
+def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvcAdj, phBase=None, descrLoss=2, rvcMod=1, phAmpByMean=1, respVar=1, plot_sem_on_log=1, disp=0, forceLog=1, subplot_title=False, specify_ticks=True, old_refprm=False, fracSig=1, incl_legend=False, nrow=2, subset_cons=None, minToPlot = 1):
+
+  # Set up, load some files
+  x_lblpad=6; y_lblpad=8;
+
+  loc_base = os.getcwd() + '/';
+
+  data_loc = loc_base + expDir + 'structures/';
+  save_loc = loc_base + expDir + 'figures/';
+
+  isSach = True if 'sach' in expDir else False;
+  isBB = True if 'BB' in expDir else False;
+
+  rvcAdjSigned = rvcAdj;
+  rvcAdj = np.abs(rvcAdj);
+
+  modStr  = hf.descrMod_name(descrMod)
+  fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint, phAdj=1 if rvcAdjSigned==1 else None);
+  # set the save directory to save_loc, then create the save directory if needed
+  subDir = fLname.replace('Fits', '').replace('.npy', '');
+  save_loc = str(save_loc + subDir + '/');
+
+  if not os.path.exists(save_loc):
+    os.makedirs(save_loc);
+
+  # call the necessary function
+  if not isSach and not isBB: # this works for altExp, V1, V1_orig, LGN
+    respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val = prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, disp, old_refprm);
+  else:
+    if isSach:
+      respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val = prepare_sfs_plot_sach(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, old_refprm);
+    else: # only here if isBB
+      # TODO: not written as of 22.08.08
+      pass;
+
+  # Getting ready to plot
+  if all_sfs[0]==0:
+    hasZfreq = True;
+    #sfs_plot = np.hstack((np.linspace(0,all_sfs[1],10), np.logspace(np.log10(all_sfs[1]), np.log10(all_sfs[-1]), 100)));
+    sfs_plot = np.logspace(np.log10(all_sfs[1]), np.log10(all_sfs[-1]), 100);
+  else:
+    hasZfreq = False;
+    sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
+  maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)]))); 
+  # -- decide which contrasts we'll plot...
   if subset_cons is not None:
     if len(subset_cons)==2: # then it's start index, how many to skip
       to_plot = np.arange(subset_cons[0], n_v_cons, subset_cons[1]);
@@ -195,16 +245,22 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
   else:
     to_plot = range(n_v_cons);
 
+  # Plot!
   for c in reversed(range(n_v_cons)):
 
       if not np.in1d(c, to_plot):
         continue;
 
-      v_sfs = ~np.isnan(respMean[disp, :, v_cons[c]]);        
+      if isSach:
+        #plot_resp = respMean[c];
+        v_sfs = np.where(all_sfs>0)[0];
+        plot_resp = respMean[c, v_sfs];
+      else:
+        v_sfs = ~np.isnan(respMean[disp, :, v_cons[c]]);
+        plot_resp = respMean[disp, v_sfs, v_cons[c]];
 
       col = [(n_v_cons-c-1)/float(n_v_cons), (n_v_cons-c-1)/float(n_v_cons), (n_v_cons-c-1)/float(n_v_cons)];
       col = np.sqrt(col);
-      plot_resp = respMean[disp, v_sfs, v_cons[c]];
       if forceLog == 1:
         if baseline_resp > 0: #is not None:
           to_sub = baseline_resp;
@@ -216,18 +272,31 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
         to_sub = np.array(0);
         baseline_resp_curr = baseline_resp;
 
+      prms_curr = descrParams[c] if isSach else descrParams[disp, v_cons[c]];
+      curr_con = v_cons[c] if isSach else all_cons[v_cons[c]];
+
       if plot_sem_on_log:
-        sem_curr = respSem[disp, v_sfs, v_cons[c]];
+        sem_curr = respSem[c, v_sfs] if isSach else respSem[disp, v_sfs, v_cons[c]];
+        #sem_curr = respSem[c] if isSach else respSem[disp, v_sfs, v_cons[c]];
         # errbars should be (2,n_sfs)
         high_err = sem_curr; # no problem with going to higher values
         low_err = np.minimum(sem_curr, plot_resp-minToPlot-1e-2); # i.e. don't allow us to make the err any lower than where the plot will cut-off (incl. negatives)
         errs = np.vstack((low_err, high_err));
-        ax[i,j].errorbar(all_sfs[v_sfs][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', clip_on=True, color=col);
+        curr_plot_sfs = all_sfs[v_sfs] if isSach else all_sfs[v_sfs];
+        #curr_plot_sfs = all_sfs if isSach else all_sfs[v_sfs];
+        ax[i,j].errorbar(curr_plot_sfs[plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', clip_on=True, color=col);
 
-      prms_curr = descrParams[disp, v_cons[c]];
+        if hasZfreq and isSach: # then also plot the zero frequency data/model, but isolated...
+          fake_sf = all_sfs[1]/2;
+          ax[i,j].errorbar(fake_sf, respMean[c, 0], np.vstack((np.minimum(respSem[c,0], respMean[c,0]-minToPlot-1e-2), respSem[c,0])), fmt='o', clip_on=True, color=col);
+          fake_sfs = np.geomspace(fake_sf/np.sqrt(1.5), fake_sf*np.sqrt(1.5), 25);
+          descrResp = hf.get_descrResp(prms_curr, fake_sfs, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
+          plt_resp = descrResp-to_sub;
+          ax[i,j].plot(fake_sfs[plt_resp>minToPlot], plt_resp[plt_resp>minToPlot], color=col, clip_on=True);
+
       descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
       plt_resp = descrResp-to_sub;
-      ax[i,j].plot(sfs_plot[plt_resp>minToPlot], plt_resp[plt_resp>minToPlot], color=col, clip_on=True, label='%s\%%' % (str(int(100*np.round(all_cons[v_cons[c]], 2)))));
+      ax[i,j].plot(sfs_plot[plt_resp>minToPlot], plt_resp[plt_resp>minToPlot], color=col, clip_on=True, label='%s\%%' % (str(int(100*np.round(curr_con, 2)))));
 
   ax[i,j].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
 
@@ -240,7 +309,8 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
     else:
         ax[i,j].set_ylim((minToPlot, 1.2*maxResp));
     logSuffix = 'log_';
-    ax[i,j].set_aspect('equal'); # if both axes are log, must make equal scales!
+    #ax[i,j].set_aspect('equal'); # if both axes are log, must make equal scales!
+    ax[i,j].axis('scaled'); # this works better for minimizing white space (as compared to set_aspect('equal'))
   else:
     ax[i,j].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
     logSuffix = '';
@@ -248,11 +318,11 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
   # Set ticks out, remove top/right axis, put ticks only on bottom/left
   sns.despine(ax=ax[i,j], offset=10, trim=False); 
 
+  pltd_sfs = all_sfs if isSach else all_sfs[v_sfs];
   for jj, axis in enumerate([ax[i,j].xaxis, ax[i,j].yaxis]):
       axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
       if jj == 0 and specify_ticks: # i.e. x-axis
         core_ticks = np.array([1]);
-        pltd_sfs = all_sfs[v_sfs];
         if np.min(pltd_sfs)<=0.3:
             core_ticks = np.hstack((0.3, core_ticks, 3));
         else:
