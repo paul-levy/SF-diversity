@@ -23,30 +23,7 @@ warnings.filterwarnings('once');
 
 import pdb
 
-''' These things will be done when calling the function
-  ### DATALIST
-  expName = hf.get_datalist(expDir, force_full=1);
-  ### DESCRLIST
-  hpc_str = 'HPC' if isHPC else '';
-  if expDir == 'LGN/':
-      descrBase = 'descrFits%s_220702vE' % hpc_str;
-  else:
-    if expDir == 'altExp/':
-      descrBase = 'descrFits%s_220707vEs' % hpc_str;
-    else:
-      descrBase = 'descrFits%s_220721vEs' % hpc_str;
-    #descrBase = 'descrFits%s_220531' % hpc_str;
-  if expDir == 'LGN/':
-    rvcBase = 'rvcFits%s_220531' % hpc_str;
-    #rvcBase = 'rvcFits%s_220511' % hpc_str;
-  else:
-    if expDir == 'altExp/':
-      rvcBase = 'rvcFits%s_220609' % hpc_str;
-    else:
-      rvcBase = 'rvcFits%s_220718' % hpc_str;
-  # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
-
-'''
+# See plot_sf_figs_breakAxisAttempt.py to continue attempt at making a proper break in the x-axis for zero frequency, rather than just pretending it's a slightly lower freq.
 
 def prepare_sfs_plot_sach(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, old_refprm):
   # helper function called in plot_sfs
