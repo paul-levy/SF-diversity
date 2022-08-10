@@ -2634,7 +2634,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
     # -- first, some general bounds that we can apply as needed for different parameters
     gtMult_bound = (1, None); # (1, None) multiplier limit when we want param >= mult*orig_param [greaterThan-->gt] ||| was previously (1, 7) --> then (1,5) --> then (1, 15)
-    mult_bound_xc = (1, 2);
+    mult_bound_xc = (1, 3);
+    #mult_bound_xc = (1, 2);
     #mult_bound_xc = (1, 1.00001);
     sigmoid_bound = (None, None); # params that are input to sigmoids are unbounded - since sigmoid is bounded [0,1]
     noSurr_radBound = (0.01, 0.010001); # gain will be 0 if we are turning off surround; this will be just a small range of radius values to stop the optimization from exploring this parameter space
@@ -2969,7 +2970,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
             elif joint == 9: # as joint==8, but also with flank overall gain fixed across contrast
                allInitParams = [init_intercept, init_slope, ref_init[3], ref_init[4], *ref_init[-2:]]; 
             elif joint == 10: # as joint==8, but also with flank overall gain fixed across contrast
-               allInitParams = [init_intercept, init_slope, ref_init[3], ref_init[4], random_in_range((1.2,1.7))[0], *ref_init[-2:]];
+               allInitParams = [init_intercept, init_slope, ref_init[3], ref_init[4], random_in_range((xc2_bound[0], xc2_bound[1]))[0], *ref_init[-2:]];
 
       # now, we cycle through all responses and add the per-contrast parameters
       for resps_curr, sfs_curr, stds_curr, curr_init, resps_curr_tr, sfs_curr_tr, cons_curr in zip(allResps, allSfs, allRespsSem, isolParams, allRespsTr, allSfsTr, allCons):

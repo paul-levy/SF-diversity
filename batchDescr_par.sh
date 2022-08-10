@@ -106,11 +106,11 @@ fi
 if [ "$EXP_DIR" = "altExp/" ]; then
   if [[ $RVC_FIT -eq 1 ]]; then
     # altExp/ -- rvc_f0 and descr only
-    python3.6 descr_fits.py -108 0 altExp/ 0 0 1 1 0 0 $LOSS $BOOT_REPS $JOINT
+    python3.6 descr_fits.py -108 0 altExp/ -1 0 1 1 0 0 $LOSS $BOOT_REPS $JOINT
   fi
   wait
   if [[ $DESCR_FIT -eq 1 ]]; then
-    python3.6 descr_fits.py -108 0 altExp/ 0 0 0 1 1 $DOGMOD $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S or Sach
+    python3.6 descr_fits.py -108 0 altExp/ -1 0 0 1 1 $DOGMOD $LOSS $BOOT_REPS $JOINT 0 $MOD_RECOV $CROSS_VAL # d-DoG-S or Sach
   fi
 fi
 

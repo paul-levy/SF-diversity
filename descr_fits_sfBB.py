@@ -19,13 +19,13 @@ else:
 
 expName = hf.get_datalist('V1_BB/', force_full=1);
 
-sfName = 'descrFits%s_220807vEs' % hpcSuff;
+sfName = 'descrFits%s_220808vEs' % hpcSuff;
 #sfName = 'descrFits%s_220801vEs' % hpcSuff;
 rvcName = 'rvcFits%s_220718' % hpcSuff;
 #sfName = 'descrFits%s_220609' % hpcSuff;
 #rvcName = 'rvcFits%s_220609' % hpcSuff;
 
-def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, toSave=1, fracSig=1, nBoots=0, n_repeats=25, jointSf=0, resp_thresh=(-1e5,0), veThresh=-1e5, sfModRef=1, phAdvCorr=True):
+def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, toSave=1, fracSig=1, nBoots=0, n_repeats=25, jointSf=0, resp_thresh=(-1e5,0), veThresh=-1e5, sfModRef=1, phAdvCorr=True, phAdj=True):
   ''' Separate fits for DC, F1 
       -- for DC: [maskOnly, mask+base]
       -- for F1: [maskOnly, mask+base {@mask TF}] 
@@ -64,7 +64,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
 
   if fit_sf == 1 or fit_sf is not None:
     modStr = hf.descrMod_name(sfMod);
-    sfNameFinal = hf.descrFit_name(loss_type, descrBase=sfName, modelName=modStr, joint=jointSf); # descrLoss order is lsq/sqrt/poiss/sach
+    sfNameFinal = hf.descrFit_name(loss_type, descrBase=sfName, modelName=modStr, joint=jointSf, phAdj=phAdj); # descrLoss order is lsq/sqrt/poiss/sach
     if fit_sf == 1:
       if os.path.isfile(data_path + sfNameFinal):
         sfFits = hf.np_smart_load(data_path + sfNameFinal);
@@ -308,13 +308,13 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
           if jointSf>0:
             try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
               modStr  = hf.descrMod_name(sfMod);
-              ref_fits = hf.np_smart_load(data_path + hf.descrFit_name(loss_type, descrBase=sfName, modelName=modStr, joint=0));
+              ref_fits = hf.np_smart_load(data_path + hf.descrFit_name(loss_type, descrBase=sfName, modelName=modStr, joint=0, phAdj=phAdj));
               isolFits = ref_fits[cellNum-1][resp_str][wK]['params'];
               if sfMod==sfModRef:
                 ref_varExpl = ref_fits[cellNum-1][resp_str][wK]['varExpl'];
               else:
                 # otherwise, load the DoG
-                vExp_ref_fits = hf.np_smart_load(data_path + hf.descrFit_name(loss_type, descrBase=sfName, modelName=hf.descrMod_name(sfModRef), joint=0));
+                vExp_ref_fits = hf.np_smart_load(data_path + hf.descrFit_name(loss_type, descrBase=sfName, modelName=hf.descrMod_name(sfModRef), joint=0, phAdj=phAdj));
                 ref_varExpl = vExp_ref_fits[cellNum-1][resp_str][wK]['varExpl'];
             except:
                isolFits = None;
@@ -514,6 +514,8 @@ if __name__ == '__main__':
   else:
     cross_val = None;
 
+  phAdj = True; # as of late July 2022, we automatically apply phAdj to V1_BB data
+    
   #resp_thresh = (5,2); # at least 2 responses must be g.t.e. 5 spks/s
   veThresh = 60; # i.e. let all through
   resp_thresh = (-1e5,0);
@@ -531,7 +533,7 @@ if __name__ == '__main__':
     # to avoid race conditions, load the previous fits beforehand; and the datalist
     rvcNameFinal = hf.rvc_fit_name(rvcName, rvc_mod, None, vecF1=1); # DEFAULT is vecF1 adjustment
     modStr = hf.descrMod_name(sf_mod);
-    sfNameFinal = hf.descrFit_name(loss_type, descrBase=sfName, modelName=modStr, joint=jointSf); # descrLoss order is lsq/sqrt/poiss/sach
+    sfNameFinal = hf.descrFit_name(loss_type, descrBase=sfName, modelName=modStr, joint=jointSf, phAdj=phAdj); # descrLoss order is lsq/sqrt/poiss/sach
 
     pass_rvc = hf.np_smart_load('%s%s%s' % (basePath, data_suff, rvcNameFinal)) if fit_rvc else None;
     pass_sf = hf.np_smart_load('%s%s%s' % (basePath, data_suff, sfNameFinal)) if fit_sf else None;
@@ -545,7 +547,7 @@ if __name__ == '__main__':
 
     with mp.Pool(processes = nCpu) as pool:
       # if we're doing as parallel, do NOT save
-      fit_perCell = partial(make_descr_fits, fit_rvc=pass_rvc, fit_sf=pass_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig, loss_type=loss_type, nBoots=nBoots, jointSf=jointSf, n_repeats=n_repeats, resp_thresh=resp_thresh, veThresh=veThresh);
+      fit_perCell = partial(make_descr_fits, fit_rvc=pass_rvc, fit_sf=pass_sf, rvcMod=rvc_mod, sfMod=sf_mod, toSave=0, fracSig=fracSig, loss_type=loss_type, nBoots=nBoots, jointSf=jointSf, n_repeats=n_repeats, resp_thresh=resp_thresh, veThresh=veThresh, phAdj=phAdj);
       fits = zip(*pool.map(fit_perCell, zip(range(start_cell, end_cell+1), dataList['unitName'])));
       rvc_fits, sf_fits = fits; # unpack
 
@@ -565,7 +567,7 @@ if __name__ == '__main__':
       # --- SF
       if fit_sf:
         modStr = hf.descrMod_name(sf_mod); # we pass this sf_mod argument on the command line
-        sfNameFinal = hf.descrFit_name(lossType=2, descrBase=sfName, modelName=modStr, joint=jointSf); # descrLoss order is lsq/sqrt/poiss/sach
+        sfNameFinal = hf.descrFit_name(lossType=2, descrBase=sfName, modelName=modStr, joint=jointSf, phAdj=phAdj); # descrLoss order is lsq/sqrt/poiss/sach
         if os.path.isfile(dataPath + sfNameFinal):
           print('reloading sfFits...');
           sfFits = hf.np_smart_load(dataPath + sfNameFinal);
@@ -581,5 +583,5 @@ if __name__ == '__main__':
     else:
       n_repeats = 5 if jointSf>0 else 12; # was previously be 3, 15, then 7, 15
 
-    make_descr_fits(cell_num, fit_rvc=fit_rvc, fit_sf=fit_sf, rvcMod=rvc_mod, sfMod=sf_mod, loss_type=loss_type, nBoots=nBoots, jointSf=jointSf, n_repeats=n_repeats, resp_thresh=resp_thresh, veThresh=veThresh);
+    make_descr_fits(cell_num, fit_rvc=fit_rvc, fit_sf=fit_sf, rvcMod=rvc_mod, sfMod=sf_mod, loss_type=loss_type, nBoots=nBoots, jointSf=jointSf, n_repeats=n_repeats, resp_thresh=resp_thresh, veThresh=veThresh, phAdj=phAdj);
 
