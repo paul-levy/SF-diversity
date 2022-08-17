@@ -27,7 +27,10 @@ warnings.filterwarnings('once');
 
 import pdb
 
-plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
+try:
+  plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
+except:
+  pass; # i.e. if the github server is down...(v rare)
 
 lblSize = 40;
 y_lblpad = 6;
@@ -87,14 +90,15 @@ expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
 if expDir == 'LGN/':
-    descrBase = 'descrFits%s_220702vE' % hpc_str;
-    #descrBase = 'descrFits%s_220609' % hpc_str;
+    #descrBase = 'descrFits%s_220702vE' % hpc_str;
+    descrBase = 'descrFits%s_220810vEs' % hpc_str;
 else:
-  if expDir == 'altExp/':
-    descrBase = 'descrFits%s_220707vEs' % hpc_str;
-  else:
-    descrBase = 'descrFits%s_220721vEs' % hpc_str;
-  #descrBase = 'descrFits%s_220531' % hpc_str;
+  #if expDir == 'altExp/':
+  #  descrBase = 'descrFits%s_220707vEs' % hpc_str;
+  #else:
+  #  descrBase = 'descrFits%s_220721vEs' % hpc_str;
+  descrBase = 'descrFits%s_220811vEs' % hpc_str;
+  #descrBase = 'descrFits%s_220810vEs' % hpc_str;
 if expDir == 'LGN/':
   rvcBase = 'rvcFits%s_220531' % hpc_str;
   #rvcBase = 'rvcFits%s_220511' % hpc_str;
@@ -256,7 +260,13 @@ for d in range(nDisps):
       ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
       ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
     else:
-      ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+      try:
+        if joint<10:
+          ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+        else:
+          ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), descrFits[cellNum-1]['paramList'][d][4]]); # [4] is xc2 ratio index for joint==10
+      except:
+        ref_params = None; # oy vey
       ref_rc_val = None;
 
     for c in reversed(range(n_v_cons)):
@@ -424,7 +434,13 @@ for d in range(nDisps):
       ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
       ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
     else:
-      ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+      try:
+        if joint<10:
+          ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+        else:
+          ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), descrFits[cellNum-1]['paramList'][d][4]]); # [4] is xc2 ratio index for joint==10
+      except:
+        ref_params = None; # oy vey
       ref_rc_val = None;
 
 
@@ -546,7 +562,13 @@ for d in range(nDisps):
       ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
       ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
     else:
-      ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+      try:
+        if joint<10:
+          ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+        else:
+          ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), descrFits[cellNum-1]['paramList'][d][4]]); # [4] is xc2 ratio index for joint==10
+      except:
+        ref_params = None; # oy vey
       ref_rc_val = None;
 
 
@@ -769,7 +791,13 @@ for d in range(nDisps):
       ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
       ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
     else:
-      ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+      try:
+        if joint<10:
+          ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+        else:
+          ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), descrFits[cellNum-1]['paramList'][d][4]]); # [4] is xc2 ratio index for joint==10
+      except:
+        ref_params = None; # oy vey
       ref_rc_val = None;
 
 
@@ -1134,7 +1162,13 @@ if plt_joint:
       ref_params = descrParams[d, val_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
       ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
     else:
-      ref_params = np.array([np.nanmin(descrParams[d, val_cons, 1]), 1]) if joint>0 else None;
+      try:
+        if joint<10:
+          ref_params = np.array([np.nanmin(descrParams[d, val_cons, 1]), 1]) if joint>0 else None;
+        else:
+          ref_params = np.array([np.nanmin(descrParams[d, val_cons, 1]), descrFits[cellNum-1]['paramList'][d][4]]); # [4] is xc2 ratio index for joint==10
+      except:
+        ref_params = None; # oy vey
       ref_rc_val = None;
 
 
@@ -1287,7 +1321,13 @@ if descrMod == 3 or descrMod == 5 and plt_sfMix_dDoGs: # i.e. d-DoG-s
         ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
         ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
       else:
-        ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+        try:
+          if joint<10:
+            ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+          else:
+            ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), descrFits[cellNum-1]['paramList'][d][4]]); # [4] is xc2 ratio index for joint==10
+        except:
+          ref_params = None; # oy vey
         ref_rc_val = None;
 
 
@@ -1380,7 +1420,13 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
         ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
         ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
       else:
-        ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+        try:
+          if joint<10:
+            ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), 1]) if joint>0 else None;
+          else:
+            ref_params = np.array([np.nanmin(descrParams[d, v_cons, 1]), descrFits[cellNum-1]['paramList'][d][4]]); # [4] is xc2 ratio index for joint==10
+        except:
+          ref_params = None; # oy vey
         ref_rc_val = None;
 
 

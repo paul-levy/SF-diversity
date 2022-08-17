@@ -80,8 +80,8 @@ phAdj = np.abs(phAdj);
 expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
-descrBase = 'descrFits%s_220720vEs' % hpc_str;
-#descrBase = 'descrFits%s_220410' % hpc_str;
+descrBase = 'descrFits%s_220811vEs' % hpc_str;
+#descrBase = 'descrFits%s_220720vEs' % hpc_str;
 ### RVCFITS
 rvcBase = 'rvcFits%s_220718' % hpc_str;
 #rvcBase = 'rvcFits%s_220609' % hpc_str;
@@ -128,7 +128,6 @@ byTrial = expInfo['trial'];
 f1f0_rat = hf_sf.compute_f1f0(expInfo)[0];
 #f1f0_rat_all = hf_sf.compute_f1f0(expInfo, vecF1=1);
 #f1f0_rat_all_noVec = hf_sf.compute_f1f0(expInfo, vecF1=0);
-#pdb.set_trace();
 maskSf, maskCon = expInfo['maskSF'], expInfo['maskCon'];
 
 if f1f0_rat >= 1:
@@ -210,12 +209,13 @@ if old_refprm:
     ref_params = descrParams[-1] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
 else:
     all_xc = hf.nan_rm(descrParams[:,1]); # xc
-    ref_params = [np.nanmin(all_xc), 1]; # xc1, xc2 multiplier (i.e. xc2=xc1*xc2multi)
-#if joint>0:
-#    tot_prms = df_curr['paramList'];
-#    ref_params = descrParams[-1] if tot_prms[1]<0 else descrParams[0];
-#else:
-#    ref_params = None
+    try:
+      if joint < 10:
+        ref_params = [np.nanmin(all_xc), 1]; # xc1, xc2 multiplier (i.e. xc2=xc1*xc2multi)
+      else:
+        ref_params = [np.nanmin(all_xc), df_curr['paramList'][4]]; # xc1, xc2 multiplier (i.e. xc2=xc1*xc2multi{loc=4 in paramList})
+    except:
+      ref_params = None;
 
 for c in reversed(range(n_v_cons)):
     c_plt_ind = len(maskCon) - c - 1;
@@ -668,10 +668,7 @@ if descrMod == 3 or descrMod == 5: # i.e. d-DoG-s
   full_save = os.path.dirname(str(save_loc + 'byDisp_ddogs%s/' % save_resp_str));
   if not os.path.exists(full_save):
     os.makedirs(full_save);
-  try:
-    pdfSv = pltSave.PdfPages(full_save + saveName);
-    pdfSv.savefig(fDisp)
-    plt.close(fDisp)
-    pdfSv.close();
-  except:
-    pdb.set_trace();
+  pdfSv = pltSave.PdfPages(full_save + saveName);
+  pdfSv.savefig(fDisp)
+  plt.close(fDisp)
+  pdfSv.close();

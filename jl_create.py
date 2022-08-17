@@ -7,6 +7,7 @@ from scipy.stats import ks_2samp, kstest, linregress
 import itertools, pdb
 
 area = sys.argv[1];
+jointType = int(sys.argv[2]);
 
 if area == 'V1':
 
@@ -51,16 +52,18 @@ if area == 'V1':
   #dogNames = ['descrFitsHPC_220609_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
 
   dogMod = 3; # 1 (sach), 2 (Tony), 3 (d-DoG-S), 4 (N/A), 5 (d-DoG-S Hawk)
-  #jointType = 0; # 0/1/2 --> none/[g,S]/[*, surr1_rad, surr2_rad]
-  #dogNames = ['descrFitsHPC_220702_sqrt_ddogs.npy'];
-  #jointType = 7;
-  #dogNames = ['descrFitsHPC_220609_sqrt_ddogs_JTflankSurrShapeCtrRaSlope.npy'];
-  jointType = 9;
-  dogNames = ['descrFitsHPC_220801vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220801vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220801vEs_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
-  #dogNames = ['descrFitsHPC_220721vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220721vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220720vEs_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
-  #dogNames = ['descrFitsHPC_220721_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220721_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220720_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
-  #dogNames = ['descrFitsHPC_220720vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
-  #dogNames = ['descrFitsHPC_220707vEs_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
+  if jointType == 10:
+    dogNames = ['descrFitsHPC_220811vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy']
+  if jointType == 0:
+    dogNames = ['descrFitsHPC_220811vEs_sqrt_ddogs.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs.npy'];
+  if jointType == 7:
+    dogNames = ['descrFitsHPC_220609_sqrt_ddogs_JTflankSurrShapeCtrRaSlope.npy'];
+  if jointType == 9:
+    dogNames = ['descrFitsHPC_220801vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220801vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220801vEs_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
+    #dogNames = ['descrFitsHPC_220721vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220721vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220720vEs_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
+    #dogNames = ['descrFitsHPC_220721_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220721_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy', 'descrFitsHPC_220720_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
+    #dogNames = ['descrFitsHPC_220720vEs_phAdj_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
+    #dogNames = ['descrFitsHPC_220707vEs_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
 
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
   descrNames = ['descrFits_210914_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210916_sqrt_flex.npy'];
@@ -83,7 +86,6 @@ if area == 'V1':
   expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods = expt;
 
   base_dir = os.getcwd() + '/';
-
 
   ###
   # what do we want to track for each cell?
@@ -111,8 +113,8 @@ if area == 'V1':
   jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType)
 
   from datetime import datetime
-  suffix = datetime.today().strftime('%y%m%d')
-  #suffix = '220721'
+  #suffix = datetime.today().strftime('%y%m%d')
+  suffix = '220811'
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
@@ -151,18 +153,15 @@ if area == 'LGN':
   #dogNames = ['descrFits_s210304_sach_sach.npy'];
   #descrNames = ['descrFits_s210304_sqrt_flex.npy'];
   dogMod = 1; # 1 (sach) or 2 (Tony)
-  jointType = 7; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
-  dogNames = ['descrFitsHPC_220702vE_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220730vE_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
-  #dogNames = ['descrFitsHPC_220702vE_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220702_vE_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
-  #dogNames = ['descrFitsHPC_220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
-  #jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
-  #dogNames = ['descrFitsHPC_220609_phAdj_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220609_phAdj_sqrt_sach_JTsurrShape.npy'];
-  #jointType = 0; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
-  #dogNames = ['descrFitsHPC_220609_phAdj_sqrt_sach.npy', 'descrFitsHPC_s220609_phAdj_sqrt_sach.npy'];
 
-  #dogNames = ['descrFitsHPC_220606alt_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220606_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
-  #jointType = 2; # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
-  #dogNames = ['descrFitsHPC_220606_phAdj_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220606_phAdj_sqrt_sach_JTsurrShape.npy'];
+  if jointType == 7: # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
+    dogNames = ['descrFitsHPC_220810vEs_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220810vEs_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
+    #dogNames = ['descrFitsHPC_220702vE_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220730vE_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
+    #dogNames = ['descrFitsHPC_220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_s220610_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
+  if jointType == 2: # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
+    dogNames = ['descrFitsHPC_220810vEs_phAdj_sqrt_sach_JTsurrShape.npy', 'descrFitsHPC_s220810vEs_phAdj_sqrt_sach_JTsurrShape.npy'];
+  if jointType == 0: # [0/1/2/3 --> NONE//fix gs,rs//fix rs//fix rc,rs]
+    dogNames = ['descrFitsHPC_220810vEs_phAdj_sqrt_sach.npy', 'descrFitsHPC_s220810vEs_phAdj_sqrt_sach.npy'];
 
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
   descrNames = ['descrFits_211005_sqrt_flex.npy', 'descrFits_s211006_sach_flex.npy'];
@@ -209,5 +208,5 @@ if area == 'LGN':
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
-  jt_str = '_jt%d' % jointType if jointType<7 else ''; # 7 is now the default
+  jt_str = '_jt%d' % jointType
   np.save(base_dir + 'jointList_LGN_%s_vT%02d_dvT%02d%s' % (suffix, varExplThresh_str, dog_varExplThresh_str, jt_str), jointList)

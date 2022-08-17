@@ -164,12 +164,16 @@ def prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fL
     ref_params = descrParams[disp, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
     ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
   else:
-    ref_params = np.array([np.nanmin(descrParams[disp, v_cons, 1]), 1]) if joint>0 else None;
+    if joint<10:
+      ref_params = np.array([np.nanmin(descrParams[disp, v_cons, 1]), 1]) if joint>0 else None;
+    else: # if joint==10, then we allow xc2 NEQ xc1
+      ref_params = np.array([np.nanmin(descrParams[disp, v_cons, 1]), descrFits[cellNum-1]['paramList'][disp][4]]); # param[4] is the xc2 ratio, rel. xc1
+
     ref_rc_val = None;
 
   return respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val;
 
-def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvcAdj, phBase=None, descrLoss=2, rvcMod=1, phAmpByMean=1, respVar=1, plot_sem_on_log=1, disp=0, forceLog=1, subplot_title=False, specify_ticks=True, old_refprm=False, fracSig=1, incl_legend=False, nrow=2, subset_cons=None, minToPlot = 1):
+def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvcAdj, phBase=None, descrLoss=2, rvcMod=1, phAmpByMean=1, respVar=1, plot_sem_on_log=1, disp=0, forceLog=1, subplot_title=False, specify_ticks=True, old_refprm=False, fracSig=1, incl_legend=False, nrow=2, subset_cons=None, minToPlot = 1, despine_offset=2):
 
   # Set up, load some files
   x_lblpad=6; y_lblpad=8;
@@ -227,6 +231,10 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
 
       if not np.in1d(c, to_plot):
         continue;
+      # also make sure that we have parameters for this data
+      prms_curr = descrParams[c] if isSach else descrParams[disp, v_cons[c]];
+      if np.any(np.isnan(prms_curr)):
+        continue;
 
       if isSach:
         #plot_resp = respMean[c];
@@ -249,7 +257,6 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
         to_sub = np.array(0);
         baseline_resp_curr = baseline_resp;
 
-      prms_curr = descrParams[c] if isSach else descrParams[disp, v_cons[c]];
       curr_con = v_cons[c] if isSach else all_cons[v_cons[c]];
 
       if plot_sem_on_log:
@@ -264,7 +271,7 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
         ax[i,j].errorbar(curr_plot_sfs[plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', clip_on=True, color=col);
 
         if hasZfreq and isSach: # then also plot the zero frequency data/model, but isolated...
-          fake_sf = all_sfs[1]/2;
+          fake_sf = all_sfs[1]/2; # .../2
           ax[i,j].errorbar(fake_sf, respMean[c, 0], np.vstack((np.minimum(respSem[c,0], respMean[c,0]-minToPlot-1e-2), respSem[c,0])), fmt='o', clip_on=True, color=col);
           fake_sfs = np.geomspace(fake_sf/np.sqrt(1.5), fake_sf*np.sqrt(1.5), 25);
           descrResp = hf.get_descrResp(prms_curr, fake_sfs, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
@@ -293,7 +300,7 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
     logSuffix = '';
 
   # Set ticks out, remove top/right axis, put ticks only on bottom/left
-  sns.despine(ax=ax[i,j], offset=10, trim=False); 
+  sns.despine(ax=ax[i,j], offset=despine_offset, trim=False); 
 
   pltd_sfs = all_sfs if isSach else all_sfs[v_sfs];
   for jj, axis in enumerate([ax[i,j].xaxis, ax[i,j].yaxis]):
@@ -328,7 +335,7 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
     ax[i,j].set_xlabel('Spatial frequency (c/deg)', labelpad=x_lblpad); 
 
   if subplot_title:
-      ax[i,j].set_title('D%02d - sf tuning' % (d+1));
+      ax[i,j].set_title('%s%02d j%d' % (expDir, cellNum, joint));
   if incl_legend:
     ax[i,j].legend(fontsize='x-small'); 
   
