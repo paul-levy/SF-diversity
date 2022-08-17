@@ -2634,7 +2634,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
 
     # -- first, some general bounds that we can apply as needed for different parameters
     gtMult_bound = (1, None); # (1, None) multiplier limit when we want param >= mult*orig_param [greaterThan-->gt] ||| was previously (1, 7) --> then (1,5) --> then (1, 15)
-    mult_bound_xc = (1, 3);
+    mult_bound_xc = (1, 4);
+    #mult_bound_xc = (1, 3);
     #mult_bound_xc = (1, 2);
     #mult_bound_xc = (1, 1.00001);
     sigmoid_bound = (None, None); # params that are input to sigmoids are unbounded - since sigmoid is bounded [0,1]
@@ -2643,7 +2644,7 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     # -- then, the central gaussian
     kc1_bound = (0, 1.5*max_max_resp);
     #kc1_bound = (0, None);
-    xc1_bound = (0.01, 0.5); # values from Hawk; he also uses upper bound of 0.15
+    xc1_bound = (0.01, 0.75); # values from Hawk; he also uses upper bound of 0.15, depending on eccentricity
     surr1_gain_bound = sigmoid_bound; #(-1.73, 1.1); # through sigmoid translates to (0.15, 0.75), bounds per Hawk; previously was sigmoid_bound
     surr1_rad_bound =  gtMult_bound if DoGmodel==3 else (xc1_bound[1]+0.2, 4); # per Hawk; #gtMult_bound if multiplicative surround
     # -- next, the second (i.e. flanking) gaussian

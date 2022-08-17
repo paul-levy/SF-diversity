@@ -19,7 +19,7 @@ else:
 
 expName = hf.get_datalist('V1_BB/', force_full=1);
 
-sfName = 'descrFits%s_220808vEs' % hpcSuff;
+sfName = 'descrFits%s_220811vEs' % hpcSuff;
 #sfName = 'descrFits%s_220801vEs' % hpcSuff;
 rvcName = 'rvcFits%s_220718' % hpcSuff;
 #sfName = 'descrFits%s_220609' % hpcSuff;
