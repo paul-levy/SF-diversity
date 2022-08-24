@@ -2084,7 +2084,7 @@ def dog_charFreqMod(descrFit, allCons, val_inds, varThresh=70, DoGmodel=1, lowCo
 
   return fcRatio, fc_model, opt_params, np.power(2, charFreqs), conVals;
 
-def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=None):
+def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=None, which_dog=0, recur_level=0):
   ''' given a code for which tuning metric to get, and the model/parameters used, return that metric
       codes: 'gc', 'gs', 'rc', 'rs', 'vc', 'vs'
       -- parker_hawken_equiv=False means original sach formultion
@@ -2098,14 +2098,17 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=No
 
   if DoGmodel == 0:
     return np.nan; # we cannot compute from that form of the model!
-  #elif DoGmodel == 3 or DoGmodel == 5:
-  #  return dog_get_param(
+
   #########
   ### Gain
   #########
+  if DoGmodel == 3 and recur_level==0: # i.e. d-DoG-S, first go around 
+     params = parker_hawken_transform(np.copy(params), isMult=True);
+     params = params[range(4*which_dog, 4*which_dog+4)]; # either params [0-3] or [4-8]
+
   if metric == 'gc': # i.e. center gain
-    if DoGmodel == 1: # sach
-      gc = params[0]/(np.pi * np.square(dog_get_param(params, DoGmodel, 'rc', parker_hawken_equiv))) if parker_hawken_equiv else params[0];
+    if DoGmodel == 1 or DoGmodel == 3: # sach, or d-DoG-S
+      gc = params[0]/(np.pi * np.square(dog_get_param(params, DoGmodel, 'rc', parker_hawken_equiv, recur_level=recur_level+1))) if parker_hawken_equiv else params[0];
     elif DoGmodel == 2: # tony
       fc = params[1];
       rc = np.divide(1, np.pi*fc);
@@ -2118,8 +2121,9 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=No
     else:
       return gc / con_val;
   if metric == 'gs': # i.e. surround gain
-    if DoGmodel == 1: # sach
-      gs = params[0]*params[2]/(np.pi * np.square(dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv))) if parker_hawken_equiv else params[2];
+    if DoGmodel == 1 or DoGmodel == 3: # sach, or d-DoG-S
+       gain_mult = params[0]*params[2] if DoGmodel==1 else params[2];
+       gs = gain_mult/(np.pi * np.square(dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv, recur_level=recur_level+1))) if parker_hawken_equiv else params[2];
     elif DoGmodel == 2: # tony
       fc = params[1];
       rs = np.divide(1, np.pi*fc*params[3]); # params[3] is the multiplier on fc to get fs
@@ -2127,7 +2131,7 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=No
     elif DoGmodel == 4: # sachVol
       # then it becomes gain*pi*radius^2
       # --- note that here, we do NOT pass in the con val, since we'll normalize that out below, if needed 
-      gc, rs = dog_get_param(params, DoGmodel, 'gc', parker_hawken_equiv), dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv);
+      gc, rs = dog_get_param(params, DoGmodel, 'gc', parker_hawken_equiv, recur_level=recur_level+1), dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv, recur_level=recur_level+1);
       gs = gc*params[2]; # params[2] is the relative surround gain
       gs = gs*np.pi*np.square(rs);
     if con_val is None:
@@ -2138,7 +2142,7 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=No
   ### Radius
   #########
   if metric == 'rc': # i.e. center radius
-    if DoGmodel == 1 or DoGmodel == 4: # sach, sachVol
+    if DoGmodel == 1 or DoGmodel == 3 or DoGmodel == 4: # sach, sachVol
       return params[1];
     elif DoGmodel == 2: # tony
       fc = params[1];
@@ -2150,13 +2154,15 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=No
       fc = params[1];
       rs = np.divide(1, np.pi*fc*params[3]); # params[3] is the multiplier on fc to get fs
       return rs;
+    elif DoGmodel == 3: # d-DoG-S, already transformed
+      return params[3];
   #########
   ### Volume (gain * radius^2)
   #########
   if metric == 'vc': # i.e. center vol.
-      return dog_get_param(params, DoGmodel, 'gc', parker_hawken_equiv, con_val) * np.square(dog_get_param(params, DoGmodel, 'rc', parker_hawken_equiv));
+      return dog_get_param(params, DoGmodel, 'gc', parker_hawken_equiv, con_val, recur_level=recur_level+1) * np.square(dog_get_param(params, DoGmodel, 'rc', parker_hawken_equiv, recur_level=recur_level+1));
   if metric == 'vs': # i.e. surr. vol.
-      return dog_get_param(params, DoGmodel, 'gs', parker_hawken_equiv, con_val) * np.square(dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv));
+      return dog_get_param(params, DoGmodel, 'gs', parker_hawken_equiv, con_val, recur_level=recur_level+1) * np.square(dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv, recur_level=recur_level+1));
 
 def dog_total_volume(params, DoGmodel):
    # Given a set of parameters, compute the volume (will be if not a DoG-based model)
@@ -3253,7 +3259,7 @@ def compute_LSFV(fit, sfMod=0):
 
     return lsfv;  
 
-def compute_SF_BW(fit, height, sf_range, which_half=0, sfMod=0, baseline=None, fracSig=1):
+def compute_SF_BW(fit, height, sf_range, which_half=0, sfMod=0, baseline=None, fracSig=1, ref_params=None, ref_rc_val=None):
     ''' if which_half = 0, use both-halves; if +1/-1, only return bandwidth at higher/lower SF end
      Height is defined RELATIVE to baseline
      i.e. baseline = 10, peak = 50, then half height is NOT 25 but 30
@@ -3282,11 +3288,11 @@ def compute_SF_BW(fit, height, sf_range, which_half=0, sfMod=0, baseline=None, f
       right_cpd = fit[2] * exp((sigRight * sqrt(2*log(1/height))));
 
     else: # we'll do this numerically rather than in closed form
-      prefSf = descr_prefSf(fit, dog_model=sfMod, all_sfs=sf_range)
-      peakResp = get_descrResp(fit, prefSf, sfMod);
+      prefSf = descr_prefSf(fit, dog_model=sfMod, all_sfs=sf_range, ref_params=ref_params, ref_rc_val=ref_rc_val)
+      peakResp = get_descrResp(fit, prefSf, sfMod, ref_params=ref_params, ref_rc_val=ref_rc_val);
       targetResp = peakResp*height;
       # todo: verify this is OK? 21.11.11
-      obj = lambda sf: np.square(targetResp - get_descrResp(fit, stim_sf=sf, DoGmodel=sfMod));
+      obj = lambda sf: np.square(targetResp - get_descrResp(fit, stim_sf=sf, DoGmodel=sfMod, ref_params=ref_params, ref_rc_val=ref_rc_val));
       # lower half, first
       sf_samps = np.geomspace(sf_range[0], prefSf, 500);
       sf_evals = np.argmin([obj(x) for x in sf_samps]);
@@ -3925,6 +3931,26 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
      #######
      start_incl = False; # Once the lowest contrast value has passed the thresold, we start including
      start_incl_dog = False;
+
+     # for d-DoG-S, slope models, get the reference xc:
+     if jointType>=7 and dogMod==3: # slope model for d-DoG-S
+        try:
+           tot_prms = dogFits[cell_ind]['paramList'][d];
+           val_cons = np.where(~np.isnan(dogFits[cell_ind]['NLL'][d]))[0];
+           all_xc = get_xc_from_slope(tot_prms[0], tot_prms[1], cons[val_cons]);
+           ref_params = np.array([np.nanmin(all_xc), 1]) if jointType<=9 else np.array([np.nanmin(all_xc), tot_prms[4]]);
+        except: # will fail if no parameters...
+           ref_params = None;
+        # and also try ref_params for the boots?
+        try:
+           val_cons = np.where(~np.isnan(dogFits[cell_ind]['NLL'][d]))[0]; # same val_cons as before
+           boot_all_xc = [np.nanmin(get_xc_from_slope(x[0], x[1], cons[val_cons])) for x in dogFits[cell_ind]['boot_paramList'][:,d]];
+           boot_ref_params = np.vstack((boot_all_xc, [x[4] for x in dogFits[cell_ind]['boot_paramList'][:,d]]));
+        except: 
+           print('oy');
+     else:
+        ref_params = None;
+
      for c in range(nCons):
 
        # zeroth...model-free metrics
@@ -3966,20 +3992,18 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
 
              # get the params and do bandwidth, high-freq. cut-off measures
              dog_params_curr = dogFits[cell_ind]['params'][d, c];
+
              for ky,height in zip(['dog_bwHalf', 'dog_bw34'], [0.5, 0.75]):
-                dataMetrics[ky][d, c] = compute_SF_BW(dog_params_curr, height, sf_range=sf_range, sfMod=dogMod, baseline=baseline_resp)[1];
+                dataMetrics[ky][d, c] = compute_SF_BW(dog_params_curr, height, sf_range=sf_range, sfMod=dogMod, baseline=baseline_resp, ref_params=ref_params)[1];
              for ky,height in zip(['dog_bwHalf_split', 'dog_bw34_split'], [0.5, 0.75]):
                 for splitInd,splitHalf in enumerate([-1,1]):
-                   dataMetrics[ky][d, c, splitInd] = compute_SF_BW(dog_params_curr, height=height, sf_range=sf_range, which_half=splitHalf, sfMod=dogMod, baseline=baseline_resp)[1];
+                   dataMetrics[ky][d, c, splitInd] = compute_SF_BW(dog_params_curr, height=height, sf_range=sf_range, which_half=splitHalf, sfMod=dogMod, baseline=baseline_resp, ref_params=ref_params)[1];
              # -- note that for sf_highCut with the Diff. of Gauss models, we do NOT need to subtract the baseline
              # -- why? becaue the descr. model is already fit on top of the baseline (i.e. the descr. fit response does not include baseline)
              for ky,frac in zip(['dog_sf70', 'dog_sfE'], [0.7, eFrac]):
                 dataMetrics[ky][d, c] = sf_highCut(dog_params_curr, sfMod=dogMod, frac=frac, sfRange=(0.1, 15));
              # Also get spatial params, i.e. center gain, radius, volume; surround gain, radius, volume
-             if not is_mod_DoG(dogMod): # i.e. it's a d-DoG-S
-               dataMetrics['dog_mech'][d, c] = [dog_get_param(dog_params_curr[0:4], 1, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]; #dogMod 1, since they're param. like Sach
-             else:
-               dataMetrics['dog_mech'][d, c] = [dog_get_param(dog_params_curr, dogMod, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']];
+             dataMetrics['dog_mech'][d, c] = [dog_get_param(dog_params_curr, dogMod, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']];
 
              # Now, bootstrap estimates
              try:
@@ -3989,13 +4013,10 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                if boot_prms.shape[0] == 1:
                  boot_prms = np.transpose(boot_prms, axes=(1,0,2,3)); # i.e. flip 1st and 2nd axes
                # ---- zeroth, mechanism
-               if not is_mod_DoG(dogMod): # i.e. it's a d-DoG-S
-                  try:
-                     dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, 0:4]), 1, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]); #dogMod 1, since they're param. like Sach
-                  except:
-                     pass;
-               else:
+               try:
                   dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, :]), dogMod, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]);
+               except:
+                  pass;
                # then, in order: sf70, pSf, charFreq
                metrs = ['pSf', 'charFreq', 'sf70', 'bwHalf', 'bw34'];
                compute = ['np.nanmedian(', 'np.nanmean(', 'np.nanstd(', 'np.nanstd(np.log10(']
@@ -4010,7 +4031,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                      dataMetrics[curr_key][d,c] = dogFits[cell_ind]['boot_%s' % metr][:, d, c] if 'charFreq' in metr else dogFits[cell_ind]['boot_prefSf'][:, d, c]
                   elif 'bw' in metr:
                      height = 0.5 if 'Half' in metr else 0.75; # assumes it's either half or 3/4th height
-                     dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=dogMod)[1] for boot_i in range(boot_prms.shape[0])]);
+                     dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=dogMod, ref_params=boot_ref_params[:,boot_i])[1] for boot_i in range(boot_prms.shape[0])]);
                   # now compute the metrics
                   for boot_metr,comp in zip(boot_metrs, compute):
                      if 'bw' in metr and 'stdLog' in boot_metr:
@@ -4322,7 +4343,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
 
   for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, rvcMod in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods):
 
-    #if expDir == 'LGN/':
+    #if expDir != 'V1_BB/':
     #   continue;
 
     # get the current directory, load data list
@@ -4388,7 +4409,6 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02, valIsFrac=
   '''
   np = numpy;
   nCells = len(jointList);
-  output = np.nan * np.zeros((nCells, ));
   matchCon = np.nan * np.zeros((nCells, ));
 
   # how to handle contrast? for each cell, find the contrast that is valid for that dispersion and matches the con_lvl
@@ -4400,6 +4420,11 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02, valIsFrac=
       #######
       curr_cell = jointList[i]
       curr_metr = curr_cell['metrics']['%s' % metric];
+      if i == 0: # set up the output metric
+         if len(curr_metr.shape)>2: # i.e. it's not just con/disp
+            output = np.nan * np.zeros((nCells, curr_metr.shape[-1]));
+         else:
+            output = np.nan * np.zeros((nCells, ));
       curr_meta = curr_cell['metadata'];
       curr_cons = curr_meta['stimVals'][1]; # stimVals[1] is list of contrasts
       curr_byDisp = curr_meta['val_con_by_disp'];
