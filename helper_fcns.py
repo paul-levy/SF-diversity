@@ -2098,7 +2098,6 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=No
 
   if DoGmodel == 0:
     return np.nan; # we cannot compute from that form of the model!
-
   #########
   ### Gain
   #########
@@ -2164,13 +2163,13 @@ def dog_get_param(params, DoGmodel, metric, parker_hawken_equiv=True, con_val=No
   if metric == 'vs': # i.e. surr. vol.
       return dog_get_param(params, DoGmodel, 'gs', parker_hawken_equiv, con_val, recur_level=recur_level+1) * np.square(dog_get_param(params, DoGmodel, 'rs', parker_hawken_equiv, recur_level=recur_level+1));
 
-def dog_total_volume(params, DoGmodel):
+def dog_total_volume(params, DoGmodel, which_dog=0):
    # Given a set of parameters, compute the volume (will be if not a DoG-based model)
    if DoGmodel == 0:
       return 0;
    else: # TODO: Fix for d-DoG-S model
-      vc = dog_get_param(params, DoGmodel, 'vc');
-      vs = dog_get_param(params, DoGmodel, 'vs');
+      vc = dog_get_param(params, DoGmodel, 'vc', which_dog=which_dog);
+      vs = dog_get_param(params, DoGmodel, 'vs', which_dog=which_dog);
       return vc+vs;
 
 ## - for fitting DoG models
@@ -2276,37 +2275,21 @@ def DoG_loss(params, resps, sfs, loss_type = 3, DoGmodel=1, dir=-1, resps_std=No
               start_ind=6+i*nParam;
               curr_params = [params[start_ind], xc_curr, params[start_ind+1], params[2],
                         params[start_ind+2], 1, params[start_ind+3], params[3], params[4], params[5]];
-              # also compute the high contrast parameters --> why? This will serve as reference for computing S at all contrasts
-              #ref_ind=6+(n_fits-1)*nParam;
-              #ref_params = [params[ref_ind], xc_ref, params[ref_ind+1], params[2],
-              #          params[ref_ind+2], 1, params[ref_ind+3], params[3], params[4], params[5]]; # 22.06.01 --> note that we FIX xc2 = xc1
            elif joint == 8:
               nParam = nParams_descrMod(DoGmodel)-7; # as in joint==7, but no separate parameter for flanking surround
               start_ind=5+i*nParam; # as in joint==7, except surround radius 2 is same as surr radius 1
               curr_params = [params[start_ind], xc_curr, params[start_ind+1], params[2],
                         params[start_ind+2], 1, params[start_ind+1], params[2], params[3], params[4]];
-              # also compute the high contrast parameters --> why? This will serve as reference for computing S at all contrasts
-              #ref_ind=5+(n_fits-1)*nParam;
-              #ref_params = [params[ref_ind], xc_ref, params[ref_ind+1], params[2],
-              #          params[ref_ind+2], 1, params[ref_ind+1], params[2], params[3], params[4]]; # 22.06.01 --> note that we FIX xc2 = xc1
            elif joint == 9:
               nParam = nParams_descrMod(DoGmodel)-8; # as in joint==8, but flanking DoG will always have the same relative strength across contrast
               start_ind=6+i*nParam; # as in joint==8, but 
               curr_params = [params[start_ind], xc_curr, params[start_ind+1], params[2],
                         params[3], 1, params[start_ind+1], params[2], params[4], params[5]];
-              # also compute the high contrast parameters --> why? This will serve as reference for computing S at all contrasts
-              #ref_ind=6+(n_fits-1)*nParam;
-              #ref_params = [params[ref_ind], xc_ref, params[ref_ind+1], params[2],
-              #          params[3], 1, params[ref_ind+1], params[2], params[4], params[5]]; # 22.06.01 --> note that we FIX xc2 = xc1
            elif joint == 10: # as in 9, but we allow xc2 to be some multiple (g.t.) of xc1
               nParam = nParams_descrMod(DoGmodel)-8; # as in joint==8, but flanking DoG will always have the same relative strength across contrast
               start_ind=7+i*nParam; # one additional fixed parameter
               curr_params = [params[start_ind], xc_curr, params[start_ind+1], params[2],
                              params[3], params[4], params[start_ind+1], params[2], params[5], params[6]];
-              # also compute the high contrast parameters --> why? This will serve as reference for computing S at all contrasts
-              #ref_ind=7+(n_fits-1)*nParam;
-              #ref_params = [params[ref_ind], xc_ref, params[ref_ind+1], params[2],
-              #              params[3], params[4], params[ref_ind+1], params[2], params[5], params[6]]; # 22.06.01 --> note that we FIX xc2 = xc1
 
       if enforceMaxPenalty:
         max_data = np.max(curr_resps);
@@ -2641,15 +2624,13 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
     # -- first, some general bounds that we can apply as needed for different parameters
     gtMult_bound = (1, None); # (1, None) multiplier limit when we want param >= mult*orig_param [greaterThan-->gt] ||| was previously (1, 7) --> then (1,5) --> then (1, 15)
     mult_bound_xc = (1, 4);
-    #mult_bound_xc = (1, 3);
-    #mult_bound_xc = (1, 2);
-    #mult_bound_xc = (1, 1.00001);
+    #mult_bound_xc = (1, 1.00001); # use if you want to restrict xc2=xc1
     sigmoid_bound = (None, None); # params that are input to sigmoids are unbounded - since sigmoid is bounded [0,1]
     noSurr_radBound = (0.01, 0.010001); # gain will be 0 if we are turning off surround; this will be just a small range of radius values to stop the optimization from exploring this parameter space
     noSurr_gainBound = (-9999.00001, -9999); # sigmoid of this value will be basically 0
     # -- then, the central gaussian
-    kc1_bound = (0, 1.5*max_max_resp);
-    #kc1_bound = (0, None);
+    kc1_bound = (0, 1.5*max_max_resp); # bounded, as done in Hawken & Parker '87
+    #kc1_bound = (0, None); # if unbounded?
     xc1_bound = (0.01, 0.75); # values from Hawk; he also uses upper bound of 0.15, depending on eccentricity
     surr1_gain_bound = sigmoid_bound; #(-1.73, 1.1); # through sigmoid translates to (0.15, 0.75), bounds per Hawk; previously was sigmoid_bound
     surr1_rad_bound =  gtMult_bound if DoGmodel==3 else (xc1_bound[1]+0.2, 4); # per Hawk; #gtMult_bound if multiplicative surround
@@ -3381,7 +3362,7 @@ def parker_hawken_transform(params, twoDim=False, space_in_arcmin=False, isMult=
     xs2 = C*xc2 if isMult else C;
     if isMult:
        if ref_params is None:
-          S = numpy.minimum(xc1, xc2) + sigmoid(Spr) * 1 * numpy.maximum(xc1, xc2); # 220120 ;i.e. must be between [min(xc1, xc2), xc1+xc2]
+          S = numpy.minimum(xc1, xc2) + sigmoid(Spr) * 1 * numpy.maximum(xc1, xc2); # i.e. must be between [min(xc1, xc2), xc1+xc2]
        else:
           if len(ref_params) > 2:
              ref_xc1, ref_xc2 = ref_params[1], ref_params[1]*ref_params[5];

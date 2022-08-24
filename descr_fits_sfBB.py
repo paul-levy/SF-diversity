@@ -19,7 +19,7 @@ else:
 
 expName = hf.get_datalist('V1_BB/', force_full=1);
 
-sfName = 'descrFits%s_220811vEs' % hpcSuff;
+sfName = 'descrFits%s_220820vEs' % hpcSuff;
 #sfName = 'descrFits%s_220801vEs' % hpcSuff;
 rvcName = 'rvcFits%s_220718' % hpcSuff;
 #sfName = 'descrFits%s_220609' % hpcSuff;
@@ -364,7 +364,10 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
               if sfMod==3:
                 try:
                   all_xc = prms[:,1]; # xc
-                  ref_params = [np.nanmin(all_xc), 1];
+                  if joint < 10:
+                    ref_params = [np.nanmin(all_xc), 1];
+                  else:
+                    ref_params = [np.nanmin(all_xc), totPrm[4]]; # here, xc2 not necessarily equal to xc1!...[4] is xc2 ratio index for joint==10
                 except:
                   pass;
               else:

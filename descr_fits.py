@@ -20,7 +20,7 @@ else:
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #dogName = 'descrFits%s_220531' % hpcSuff;
-dogName = 'descrFits%s_220811vEs' % hpcSuff;
+dogName = 'descrFits%s_220820vEs' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220531' % hpcSuff
   rvcName_f1 = 'rvcFits%s_220531' % hpcSuff;
@@ -929,12 +929,15 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
           if DoGmodel==3:
             try:
               all_xc = prms[d,:,1]; # xc values
-              ref_params = [np.nanmin(all_xc), 1];
+              if joint < 10:
+                ref_params = [np.nanmin(all_xc), 1];
+              else:
+                ref_params = [np.nanmin(all_xc), totPrm[4]]; # here, xc2 not necessarily equal to xc1!...[4] is xc2 ratio index for joint==10
             except:
               pass;
           else:
             ref_params = prms[-1]; # high contrast condition
-            ref_rc_val = totPrm[2] if joint>0 else None; # even then, only used for joint==5
+            ref_rc_val = totPrm[2] if joint==5 else None;
         except:
           ref_params = None; ref_rc_val = None;
         
