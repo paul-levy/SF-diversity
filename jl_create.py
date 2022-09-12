@@ -114,7 +114,7 @@ if area == 'V1':
 
   from datetime import datetime
   #suffix = datetime.today().strftime('%y%m%d')
-  suffix = '220811'
+  suffix = '220905'
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
@@ -204,7 +204,8 @@ if area == 'LGN':
   jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType, reducedSave=True)
 
   from datetime import datetime
-  suffix = datetime.today().strftime('%y%m%d')
+  #suffix = datetime.today().strftime('%y%m%d')
+  suffix = '220905';
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;

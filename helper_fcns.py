@@ -213,10 +213,14 @@ def np_smart_load(file_path, encoding_str='latin1', allow_pickle=True):
 def nan_rm(x):
    return x[~numpy.isnan(x)];
 
-def sigmoid(x):
+def sigmoid(x, inv=False):
+  # if inv==True, then we ask what value, when passed into the sigmoid, returns x (the input)
   if x<-100:
     return 0; # avoid overflow
-  return 1.0 / (1 + numpy.exp(-x));
+  if inv: # this compute
+     return -numpy.log((1-x)/x);
+  else:
+     return 1.0 / (1 + numpy.exp(-x));
 
 def arcmin_to_deg(x, reverse=False):
   if reverse: # i.e. go from deg to arcmin
@@ -1861,7 +1865,8 @@ def DoGsach(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0, parker_hawken_equiv=T
      tune = baseline + gain_c*(np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.exp(-np.square(stim_sf*np.pi*r_s*r_c_ref)));
   else:
     tune = baseline + np.maximum(0, gain_c*np.pi*np.square(r_c)*np.exp(-np.square(stim_sf*np.pi*r_c)) - gain_s*np.pi*np.square(r_s)*np.exp(-np.square(stim_sf*np.pi*r_s)));
-  return tune, [];
+  tune_norm = np.divide(tune, np.nanmax(tune)); 
+  return tune, tune_norm;
 
 def DoGsachVol(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0):
   ''' As in DoGsachVol, but parameterized such the mechanisms are normalized (and given in Ch 3, eq. 1 in Sokol thesis [2009])
@@ -3693,6 +3698,13 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                      ('corr_derivWithErrsInd', super_curr['corr_derivWithErrsInd']),
                      ('supr_index', super_curr['supr_index'])]);
      except:
+       suppr = dict([('byDisp', None),
+                     ('bySf', None),
+                     ('sfErrsInd_var', None),
+                     ('errsRat_var', None),
+                     ('corr_derivWithErr', None),
+                     ('corr_derivWithErrsInd', None),
+                     ('supr_index', None)]);
        pass;
 
    ###########
@@ -3928,9 +3940,10 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
            boot_all_xc = [np.nanmin(get_xc_from_slope(x[0], x[1], cons[val_cons])) for x in dogFits[cell_ind]['boot_paramList'][:,d]];
            boot_ref_params = np.vstack((boot_all_xc, [x[4] for x in dogFits[cell_ind]['boot_paramList'][:,d]]));
         except: 
-           print('oy');
+           boot_ref_params = None;
      else:
         ref_params = None;
+        boot_ref_params = None;
 
      for c in range(nCons):
 
@@ -4012,7 +4025,10 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                      dataMetrics[curr_key][d,c] = dogFits[cell_ind]['boot_%s' % metr][:, d, c] if 'charFreq' in metr else dogFits[cell_ind]['boot_prefSf'][:, d, c]
                   elif 'bw' in metr:
                      height = 0.5 if 'Half' in metr else 0.75; # assumes it's either half or 3/4th height
-                     dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=dogMod, ref_params=boot_ref_params[:,boot_i])[1] for boot_i in range(boot_prms.shape[0])]);
+                     if boot_ref_params is not None:
+                        dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=dogMod, ref_params=boot_ref_params[:,boot_i])[1] for boot_i in range(boot_prms.shape[0])]);
+                     else:
+                        dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=dogMod)[1] for boot_i in range(boot_prms.shape[0])]);
                   # now compute the metrics
                   for boot_metr,comp in zip(boot_metrs, compute):
                      if 'bw' in metr and 'stdLog' in boot_metr:
@@ -4336,7 +4352,8 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     dogFits = np_smart_load(data_loc + dog_nm);
     rvcFits = np_smart_load(data_loc + rv_nm);
     try:
-      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_210824.npy');
+      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_220713.npy');
+      #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_210824.npy');
     except:
       superAnalysis = None;
 

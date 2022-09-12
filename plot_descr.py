@@ -787,6 +787,7 @@ for d in range(nDisps):
     #    ref_rc_val = ref_params[2] if joint>0 else None;
     #except:
     #    print('cell %d --> bad ref_rc_val?' % cellNum);
+    v_cons = ~np.isnan(respMean[d, v_sf_inds[0], :]);
     if old_refprm:
       ref_params = descrParams[d, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
       ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)

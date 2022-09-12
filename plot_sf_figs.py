@@ -25,7 +25,7 @@ import pdb
 
 # See plot_sf_figs_breakAxisAttempt.py to continue attempt at making a proper break in the x-axis for zero frequency, rather than just pretending it's a slightly lower freq.
 
-def prepare_sfs_plot_sach(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, old_refprm):
+def prepare_sfs_plot_sach(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, old_refprmm):
   # helper function called in plot_sfs
 
   descrFits = hf.np_smart_load(data_loc + fLname);
@@ -173,7 +173,7 @@ def prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fL
 
   return respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val;
 
-def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvcAdj, phBase=None, descrLoss=2, rvcMod=1, phAmpByMean=1, respVar=1, plot_sem_on_log=1, disp=0, forceLog=1, subplot_title=False, specify_ticks=True, old_refprm=False, fracSig=1, incl_legend=False, nrow=2, subset_cons=None, minToPlot = 1, despine_offset=2):
+def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvcAdj, phBase=None, descrLoss=2, rvcMod=1, phAmpByMean=1, respVar=1, plot_sem_on_log=1, disp=0, forceLog=1, subplot_title=False, specify_ticks=True, old_refprm=False, fracSig=1, incl_legend=False, nrow=2, subset_cons=None, minToPlot = 1, despine_offset=2, incl_zfreq=True):
 
   # Set up, load some files
   x_lblpad=6; y_lblpad=8;
@@ -270,8 +270,8 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
         #curr_plot_sfs = all_sfs if isSach else all_sfs[v_sfs];
         ax[i,j].errorbar(curr_plot_sfs[plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', clip_on=True, color=col);
 
-        if hasZfreq and isSach: # then also plot the zero frequency data/model, but isolated...
-          fake_sf = all_sfs[1]/2; # .../2
+        if hasZfreq and isSach and incl_zfreq: # then also plot the zero frequency data/model, but isolated...
+          fake_sf = all_sfs[1]/10; # .../2, or something to make it even smaller
           ax[i,j].errorbar(fake_sf, respMean[c, 0], np.vstack((np.minimum(respSem[c,0], respMean[c,0]-minToPlot-1e-2), respSem[c,0])), fmt='o', clip_on=True, color=col);
           fake_sfs = np.geomspace(fake_sf/np.sqrt(1.5), fake_sf*np.sqrt(1.5), 25);
           descrResp = hf.get_descrResp(prms_curr, fake_sfs, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
@@ -340,3 +340,146 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
     ax[i,j].legend(fontsize='x-small'); 
   
   return ax[i,j];
+
+def plot_rvcs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvcAdj, phBase=None, descrLoss=2, rvcMod=1, phAmpByMean=1, respVar=1, plot_sem_on_log=1, disp=0, forceLog=1, subplot_title=False, specify_ticks=True, old_refprm=False, fracSig=1, incl_legend=False, nrow=2, subset_sfs=None, minToPlot = 1, despine_offset=2, incl_zfreq=True, conMult=1, alph=1, color='k'):
+
+  # Set up, load some files
+  x_lblpad=6; y_lblpad=8;
+
+  loc_base = os.getcwd() + '/';
+
+  data_loc = loc_base + expDir + 'structures/';
+  save_loc = loc_base + expDir + 'figures/';
+
+  isSach = True if 'sach' in expDir else False;
+  isBB = True if 'BB' in expDir else False;
+
+  whichArea = 'LGN' if 'LGN' in expDir else 'V1';
+
+  rvcAdjSigned = rvcAdj;
+  rvcAdj = np.abs(rvcAdj);
+
+  modStr  = hf.descrMod_name(descrMod)
+  fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint, phAdj=1 if rvcAdjSigned==1 else None);
+  # set the save directory to save_loc, then create the save directory if needed
+  subDir = fLname.replace('Fits', '').replace('.npy', '');
+  save_loc = str(save_loc + subDir + '/');
+
+  if not os.path.exists(save_loc):
+    os.makedirs(save_loc);
+
+  # call the necessary function
+  if not isSach and not isBB: # this works for altExp, V1, V1_orig, LGN
+    respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val = prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, disp, old_refprm);
+  else:
+    if isSach:
+      respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val = prepare_sfs_plot_sach(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, old_refprm);
+    else: # only here if isBB
+      # TODO: not written as of 22.08.08
+      pass;
+
+  # Getting ready to plot
+  maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)]))); 
+  # -- decide which SFs we'll plot...
+  n_v_sfs = len(all_sfs);
+  # --- assumes that all SFs are used at all contrasts
+  v_sf_inds = np.arange(n_v_sfs);
+  if subset_sfs is not None:
+    if len(subset_sfs)==2: # then it's start index, how many to skip
+      to_plot = np.arange(subset_sfs[0], n_v_cons, subset_sfs[1]);
+    else: # then we've passed in the list to plot
+      to_plot = subset_sfs;
+  else:
+    to_plot = range(n_v_sfs);
+
+  if np.isnan(i) or np.isnan(j):
+    curr_ax = ax[i] if np.isnan(j) else ax[j];
+  else:
+    curr_ax = ax[i,j]
+
+  # Plot!
+  curr_sf_pltd = 0;
+  
+  wids = np.linspace(2,0.5,len(to_plot))
+  sizes = np.linspace(5,3,len(to_plot));
+  
+  for sf in zip(range(n_v_sfs)):
+
+      if not np.in1d(sf, to_plot):
+        continue;
+
+      wid, size = wids[curr_sf_pltd], sizes[curr_sf_pltd];
+
+      sf_ind = v_sf_inds[sf];
+      v_cons = ~np.isnan(respMean[disp, sf_ind, :]);
+      n_cons = sum(v_cons);
+
+      sf_str = str(np.round(all_sfs[sf_ind], 2));
+      # plot data
+      plot_resp = respMean[disp, sf_ind, v_cons];
+      if forceLog == 1:
+        if baseline_resp > 0: #is not None:
+          to_sub = baseline_resp;
+        else:
+          to_sub = np.array(0);
+        plot_resp = plot_resp - to_sub;
+      # make sure we have error bars, too
+      sem_curr = respSem[disp, sf_ind, v_cons];
+      # errbars should be (2,n_cons)
+      high_err = sem_curr; # no problem with going to higher values
+      low_err = np.minimum(sem_curr, plot_resp-minToPlot-1e-2); # i.e. don't allow us to make the err any lower than where the plot will cut-off (incl. negatives)
+      errs = np.vstack((low_err, high_err));
+
+      curr_ax.errorbar(conMult*all_cons[v_cons][plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', color=color, elinewidth=wid, \
+                                    clip_on=False, markersize=size, label='%s c/deg' % sf_str, alpha=alph, markerfacecolor='w', markeredgecolor=color, mew=1);
+      if subplot_title:
+          curr_ax.set_title('D%d: RVC data' % (disp+1));
+
+      cons = all_cons[v_cons];
+      resps_curr = np.array([hf.get_descrResp(descrParams[disp, vc], all_sfs[sf_ind], descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val) for vc in np.where(v_cons)[0]]) - to_sub;
+      curr_ax.plot(conMult*all_cons[v_cons][resps_curr>minToPlot], resps_curr[resps_curr>minToPlot], color=color, \
+                   clip_on=False, linestyle='-', marker=None, linewidth=wid);
+      if subplot_title:
+        curr_ax.set_title('D%d: RVC from SF fit' % (disp+1));
+
+      curr_sf_pltd += 1; # add one to how many curves we've plotted...
+
+  # Set ticks out, remove top/right axis, put ticks only on bottom/left
+  sns.despine(ax=curr_ax, offset=despine_offset, trim=False); 
+  curr_ax.set_xscale('log');
+  curr_ax.set_yscale('log');
+
+  for jj, axis in enumerate([curr_ax.xaxis, curr_ax.yaxis]):
+    if jj==0: # i.e. x-axis
+      core_ticks = np.array([0.1, 1])
+      axis.set_ticks(core_ticks)
+      inter_val = 0.03 if whichArea == 'LGN' else 0.05;
+      # really hacky, but allows us to put labels at 3/30% contrast, format them properly, and not add any extra labels
+      axis.set_minor_formatter(FuncFormatter(lambda x,y: '%.1f' % x if np.square(x-inter_val*10)<1e-5 else '%.2f' % x if np.square(x-inter_val)<1e-5 else '')) # this will make everything in non-scientific notation!
+    if jj==1 and specify_ticks: # i.e. y-axis
+      core_ticks = np.array([1, 10]);
+      if maxResp>=90:
+          core_ticks = np.hstack((core_ticks, 100));
+      elif maxResp>=45:
+          core_ticks = np.hstack((core_ticks[0], 5, core_ticks[1], 50));
+      else:
+          core_ticks = np.hstack((core_ticks[0], 3, core_ticks[1], 30));
+      axis.set_ticks(core_ticks)
+    if conMult == 100:
+      axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+    else:
+      axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x if x>=0.1 else '%.2f' % x)) # this will make
+
+  lbl_str = '';
+  if j==0:
+    curr_ax.set_ylabel('Response %s(spikes/s)' % lbl_str, labelpad=y_lblpad);
+  if i==nrow-1 or nrow==1:
+    con_str = ' (\%)' if conMult==100 else ''
+    curr_ax.set_xlabel('Contrast%s' % con_str, labelpad=x_lblpad); 
+
+  if subplot_title:
+      curr_ax.set_title('%s%02d j%d' % (expDir, cellNum, joint));
+  if incl_legend:
+    curr_ax.legend(fontsize='x-small'); 
+  
+  return curr_ax;
