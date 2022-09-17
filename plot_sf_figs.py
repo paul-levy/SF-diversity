@@ -299,35 +299,31 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
     ax[i,j].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
     logSuffix = '';
 
-  # Set ticks out, remove top/right axis, put ticks only on bottom/left
-  sns.despine(ax=ax[i,j], offset=despine_offset, trim=False); 
-
   pltd_sfs = all_sfs if isSach else all_sfs[v_sfs];
   for jj, axis in enumerate([ax[i,j].xaxis, ax[i,j].yaxis]):
       axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
       if jj == 0 and specify_ticks: # i.e. x-axis
         core_ticks = np.array([1]);
         if np.min(pltd_sfs)<=0.3:
-            core_ticks = np.hstack((0.3, core_ticks, 3));
-        else:
-            core_ticks = np.hstack((0.5, core_ticks, 5));
+            core_ticks = np.hstack((0.1, core_ticks));
         if np.max(pltd_sfs)>=7:
             core_ticks = np.hstack((core_ticks, 10));
         axis.set_ticks(core_ticks)
+        # really hacky, but allows us to put labels at 0.3/3 cpd, format them properly, and not add any extra labels
+        inter_val = 3;
+        axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val)<1e-3 else '%.1f' % x if np.square(x-inter_val/10)<1e-3 else '')) # this will make everything in non-scientific notation!
+        axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
       else:
-        axis.set_tick_params(labelleft=True); 
+        #axis.set_tick_params(labelleft=True); 
         if jj == 1 and specify_ticks: # y axis
-          core_ticks = np.array([1, 10]);
+          core_ticks = np.array([1, 10, ]);
           if maxResp>=90:
               core_ticks = np.hstack((core_ticks, 100));
-          elif maxResp>=45:
-              core_ticks = np.hstack((core_ticks[0], 5, core_ticks[1], 50));
-          else:
-              core_ticks = np.hstack((core_ticks[0], 3, core_ticks[1], 30));
           axis.set_ticks(core_ticks)
-        
+        inter_val = 3; # put labels (minor) at 3/30 spks/s
+        axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val*10)<1e-5 else '%d' % x if np.square(x-inter_val)<1e-5 else '')) # this will make everything in non-scientific notation!
+        axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
  
-  #lbl_str = '' if i==0 else 'above baseline ';
   lbl_str = '';
   if j==0:
     ax[i,j].set_ylabel('Response %s(spikes/s)' % lbl_str, labelpad=y_lblpad);
@@ -339,6 +335,9 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
   if incl_legend:
     ax[i,j].legend(fontsize='x-small'); 
   
+  # Set ticks out, remove top/right axis, put ticks only on bottom/left
+  sns.despine(ax=ax[i,j], offset=despine_offset, trim=False); 
+
   return ax[i,j];
 
 def plot_rvcs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvcAdj, phBase=None, descrLoss=2, rvcMod=1, phAmpByMean=1, respVar=1, plot_sem_on_log=1, disp=0, forceLog=1, subplot_title=False, specify_ticks=True, old_refprm=False, fracSig=1, incl_legend=False, nrow=2, subset_sfs=None, minToPlot = 1, despine_offset=2, incl_zfreq=True, conMult=1, alph=1, color='k'):
@@ -453,22 +452,23 @@ def plot_rvcs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rv
     if jj==0: # i.e. x-axis
       core_ticks = np.array([0.1, 1])
       axis.set_ticks(core_ticks)
-      inter_val = 0.03 if whichArea == 'LGN' else 0.05;
+      inter_val_curr = 3;
       # really hacky, but allows us to put labels at 3/30% contrast, format them properly, and not add any extra labels
-      axis.set_minor_formatter(FuncFormatter(lambda x,y: '%.1f' % x if np.square(x-inter_val*10)<1e-5 else '%.2f' % x if np.square(x-inter_val)<1e-5 else '')) # this will make everything in non-scientific notation!
+      axis.set_minor_formatter(FuncFormatter(lambda x,y: '%.1f' % x if np.square(x-inter_val_curr/10)<1e-5 else '%.2f' % x if np.square(x-inter_val_curr/100)<1e-5 else '')) # this will make everything in non-scientific notation!
     if jj==1 and specify_ticks: # i.e. y-axis
       core_ticks = np.array([1, 10]);
       if maxResp>=90:
           core_ticks = np.hstack((core_ticks, 100));
-      elif maxResp>=45:
-          core_ticks = np.hstack((core_ticks[0], 5, core_ticks[1], 50));
-      else:
-          core_ticks = np.hstack((core_ticks[0], 3, core_ticks[1], 30));
       axis.set_ticks(core_ticks)
+      inter_val = 3;
+      # really hacky, but allows us to put labels at 3/30% contrast, format them properly, and not add any extra labels
+      axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val*10)<1e-5 else '%d' % x if np.square(x-inter_val)<1e-5 else '')) # this will make everything in non-scientific notation!
+
     if conMult == 100:
       axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
     else:
       axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x if x>=0.1 else '%.2f' % x)) # this will make
+    axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
 
   lbl_str = '';
   if j==0:
