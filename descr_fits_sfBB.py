@@ -1,4 +1,3 @@
-
 import numpy as np
 import sys
 import helper_fcns as hf
@@ -19,13 +18,13 @@ else:
 
 expName = hf.get_datalist('V1_BB/', force_full=1);
 
-sfName = 'descrFits%s_220820vEs' % hpcSuff;
+sfName = 'descrFits%s_220826vEs' % hpcSuff;
 #sfName = 'descrFits%s_220801vEs' % hpcSuff;
 rvcName = 'rvcFits%s_220718' % hpcSuff;
 #sfName = 'descrFits%s_220609' % hpcSuff;
 #rvcName = 'rvcFits%s_220609' % hpcSuff;
 
-def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, toSave=1, fracSig=1, nBoots=0, n_repeats=25, jointSf=0, resp_thresh=(-1e5,0), veThresh=-1e5, sfModRef=1, phAdvCorr=True, phAdj=True):
+def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, rvcMod=1, sfMod=0, loss_type=2, vecF1=1, onsetCurr=None, rvcName=rvcName, sfName=sfName, toSave=1, fracSig=1, nBoots=0, n_repeats=25, jointSf=0, resp_thresh=(-1e5,0), veThresh=-1e5, sfModRef=1, phAdvCorr=True, phAdj=True, DoGjointRef=7):
   ''' Separate fits for DC, F1 
       -- for DC: [maskOnly, mask+base]
       -- for F1: [maskOnly, mask+base {@mask TF}] 
@@ -295,6 +294,7 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
         valConByDisp = [np.arange(0,len(cons))]; # all cons are valid in sfBB experiment
 
         for wR, wK, wA, heldout in zip(whichResp, whichKey, whichAll, heldouts):
+          jointFits = None; # we use this for initializing joint fits, if applicable...
           if wK not in sfFits_curr_toSave[resp_str]:
             sfFits_curr_toSave[resp_str][wK] = dict();
 
@@ -319,13 +319,22 @@ def make_descr_fits(cellNum, data_path=basePath+data_suff, fit_rvc=1, fit_sf=1, 
             except:
                isolFits = None;
                ref_varExpl = None;
+
+            if sfMod == 3 and jointSf>=7: # then, we'll try to load joint=7, DoG fits (DoG = sfModRef)
+              try:
+                jointFits = hf.np_smart_load(data_path + hf.descrFit_name(loss_type, descrBase=sfName, modelName=hf.descrMod_name(sfModRef), joint=DoGjointRef, phAdj=phAdj));
+                jointFits = jointFits[cell_num-1][resp_str][wK]; # don't take just 'params', since we also want paramList!
+              except:
+                jointFits = None;
+                print('failed to load joint fits!!');
+
           else:
             isolFits = None;
             ref_varExpl = None;
-
+            
           allCurr = np.expand_dims(np.transpose(wA, [1,0,2]), axis=0) if wA is not None else None;
           # -- by default, loss_type=2 (meaning sqrt loss); why expand dims and transpose? dog fits assumes the data is in [disp,sf,con] and we just have [con,sf]
-          nll, prms, vExp, pSf, cFreq, totNLL, totPrm, success = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), allCurr, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig, n_repeats=n_repeats, isolFits=isolFits, ref_varExpl=ref_varExpl, veThresh=veThresh, joint=jointSf, ftol=ftol, resp_thresh=resp_thresh) # noDisp=1 means that we don't index dispersion when accessins prevFits
+          nll, prms, vExp, pSf, cFreq, totNLL, totPrm, success = hf.dog_fit([np.expand_dims(np.transpose(wR[:,:,0]), axis=0), allCurr, np.expand_dims(np.transpose(wR[:,:,1]), axis=0), baseline], sfMod, loss_type=2, disp=0, expInd=None, stimVals=stimVals, validByStimVal=None, valConByDisp=valConByDisp, prevFits=sfFit_curr, noDisp=1, fracSig=fracSig, n_repeats=n_repeats, isolFits=isolFits, ref_varExpl=ref_varExpl, veThresh=veThresh, joint=jointSf, ftol=ftol, resp_thresh=resp_thresh, jointFits=jointFits) # noDisp=1 means that we don't index dispersion when accessins prevFits
           
           if resample or cross_val is not None:
             if boot_i == 0: # i.e. first time around

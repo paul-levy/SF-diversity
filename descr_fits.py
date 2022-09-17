@@ -20,7 +20,7 @@ else:
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #dogName = 'descrFits%s_220531' % hpcSuff;
-dogName = 'descrFits%s_220820vEs' % hpcSuff;
+dogName = 'descrFits%s_220826vEs' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220531' % hpcSuff
   rvcName_f1 = 'rvcFits%s_220531' % hpcSuff;
@@ -671,7 +671,7 @@ def fit_descr_empties(nDisps, nCons, nParam, joint=0, nBoots=1, flt32=True):
 
   return bestNLL, currParams, varExpl, prefSf, charFreq, totalNLL, paramList, success;
  
-def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=0, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3, phAmpOnMean=False, phAdvName=phAdvName, resp_thresh=(-1e5,0), sfModRef=1, veThresh=60): # n_repeats was 100, before 21.09.01
+def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, force_dc=False, get_rvc=1, dir=+1, gain_reg=0, fLname = dogName, dLname=expName, modRecov=False, rvcName=rvcName_f1, rvcMod=0, joint=0, vecF1=0, to_save=1, returnDict=0, force_f1=False, fracSig=1, debug=0, nBoots=0, cross_val=None, vol_lam=0, no_surr=False, jointMinCons=3, phAmpOnMean=False, phAdvName=phAdvName, resp_thresh=(-1e5,0), sfModRef=1, veThresh=60, DoGjointRef=7): # n_repeats was 100, before 21.09.01
   ''' This function is used to fit a descriptive tuning function to the spatial frequency responses of individual neurons 
       note that we must fit to non-negative responses - thus f0 responses cannot be baseline subtracted, and f1 responses should be zero'd (TODO: make the f1 calc. work)
 
@@ -734,6 +734,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
   print('Making descriptive SF fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
 
   phAdj = None if vecF1==1 else 1;
+  jointFits=None; # pre-define this as none, since it's only defined in a small set of uses
   if joint>0:
     try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
       modStr  = hf.descrMod_name(DoGmodel);
@@ -749,6 +750,13 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     except:
       ref_varExpl = None;
       isolFits = None;
+
+    if DoGmodel == 3: # then, we'll try to load joint=7, DoG fits (DoG = sfModRef)
+      try:
+        jointFits = hf.np_smart_load(data_loc + hf.descrFit_name(loss_type, descrBase=fLname, modelName=hf.descrMod_name(sfModRef), joint=DoGjointRef, phAdj=phAdj));
+        jointFits = jointFits[cell_num-1];
+      except:
+        pass;
   else:
     ref_varExpl = None; # set to None as default
     isolFits = None;
@@ -908,9 +916,9 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
     for d in range(1): #nDisps): # works for all disps
       # a separate fitting call for each dispersion
       if debug:
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits, ftol=ftol, resp_thresh=resp_thresh, veThresh=veThresh)
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, DEBUG, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, debug=1, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits, ftol=ftol, resp_thresh=resp_thresh, veThresh=veThresh, jointFits=jointFits)
       else:
-        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits, ftol=ftol, resp_thresh=resp_thresh, veThresh=veThresh)
+        nll, prms, vExp, pSf, cFreq, totNLL, totPrm, succ = hf.dog_fit([resps_mean, resps_all, resps_sem, base_rate], DoGmodel, loss_type, d, expInd, stimVals, validByStimVal, valConByDisp, n_repeats, joint, gain_reg=gain_reg, ref_varExpl=ref_varExpl, prevFits=prevFits, fracSig=fracSig, vol_lam=vol_lam, modRecov=modRecov, no_surr=no_surr, jointMinCons=jointMinCons, isolFits=isolFits, ftol=ftol, resp_thresh=resp_thresh, veThresh=veThresh, jointFits=jointFits)
 
       if cross_val is not None and resample:
         # compute the loss, varExpl on the heldout (i.e. test) data
