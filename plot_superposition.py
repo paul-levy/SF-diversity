@@ -73,13 +73,14 @@ if 'pl1465' in basePath or useHPCfit:
 else:
   loc_str = '';
 
-#rvcName = 'rvcFits_191023' # updated - computes RVC for best responses (i.e. f0 or f1)
-#rvcName = 'rvcFits_210304';
-rvcName = 'rvcFits%s_220531' % hpc_str if expDir=='LGN/' else 'rvcFits%s_220609' % hpc_str
+rvcName = 'rvcFits%s_220531' % hpc_str if expDir=='LGN/' else 'rvcFits%s_220718' % hpc_str
+#rvcName = 'rvcFits%s_220531' % hpc_str if expDir=='LGN/' else 'rvcFits%s_220609' % hpc_str
 rvcFits = None; # pre-define this as None; will be overwritten if available/needed
 if expDir == 'altExp/': # we don't adjust responses there...
   rvcName = None;
-dFits_base = 'descrFits%s_220609' % hpc_str if expDir=='LGN/' else 'descrFits%s_220631' % hpc_str
+phAdvName = 'phaseAdvanceFits%s_220531' % hpc_str if expDir=='LGN/' else 'phaseAdvanceFits%s_220718' % hpc_str;
+
+dFits_base = 'descrFits%s_220609' % hpc_str if expDir=='LGN/' else 'descrFits%s_220718' % hpc_str
 #dFits_base = 'descrFits_210304';
 #dFits_base = 'descrFits_191023';
 if use_mod_resp == 1:
@@ -142,28 +143,28 @@ if expDir == 'LGN/':
   rvcMod = 0; 
   dMod_num = 1;
   rvcDir = 1;
-  vecF1 = -1;
+  vecF1 = 0;
 else:
   rvcMod = 1; # i.e. Naka-rushton (1)
   dMod_num = 3; # d-dog-s
-  rvcDir = None; # None if we're doing vec-corrected
+  rvcDir = 1; # PREVIOUSLY, was  None (vec-corrected), but now we still do vec correction for V1
   if expDir == 'altExp/':
-    vecF1 = 0;
+    vecF1 = None;
   else:
-    vecF1 = 1;
+    vecF1 = 0;
+  #  vecF1 = 1;
 
 dFits_mod = hf.descrMod_name(dMod_num)
-descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, modelName=dFits_mod, phAdj=1 if vecF1==-1 else None);
+descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, modelName=dFits_mod, phAdj=1 if vecF1==0 else None);
 
 ## now, let it run
 dataPath = basePath + expDir + 'structures/'
 save_loc = basePath + expDir + 'figures/'
-save_locSuper = save_loc + 'superposition_220713/'
+save_locSuper = save_loc + 'superposition_220917/'
 if use_mod_resp == 1:
   save_locSuper = save_locSuper + '%s/' % fitBase
 
 dataList = hf.np_smart_load(dataPath + dataListNm);
-print('Trying to load descrFits at: %s' % (dataPath + descrFits_name));
 descrFits = hf.np_smart_load(dataPath + descrFits_name);
 if use_mod_resp == 1 or use_mod_resp == 2:
   fitList = hf.np_smart_load(dataPath + fitList_nm);
@@ -251,6 +252,9 @@ if vecF1 == 1:
   else:
     respOverwrite = None;
 
+_, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd); # call just to get these values (not spikes/activity)
+respsPhAdv_mean_ref = None; # defaulting to None here -- if not None, then we've collected mean responses based on phAmp corr. on means (not trial by trial)
+
 if (respMeasure == 1 or expDir == 'LGN/') and expDir != 'altExp/' : # i.e. if we're looking at a simple cell, then let's get F1
   if vecF1 == 1:
     spikes_byComp = respOverwrite
@@ -258,16 +262,19 @@ if (respMeasure == 1 or expDir == 'LGN/') and expDir != 'altExp/' : # i.e. if we
     allCons = np.vstack(expData['con']).transpose();
     blanks = np.where(allCons==0);
     spikes_byComp[blanks] = 0; # just set it to 0 if that component was blank during the trial
-  else:
-    if rvcName is not None:
-      try:
-        rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
-      except:
-        rvcFits = None;
-    else:
-      rvcFits = None
-    spikes_byComp = hf.get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
-  spikes = np.array([np.sum(x) for x in spikes_byComp]);
+    spikes = np.array([np.sum(x) for x in spikes_byComp]);
+  else: # then we're doing phAdj -- however, we'll still get trial-by-trial estimates for variability estimates
+    # ---- BUT [TODO] those trial-by-trial estimates are not adjusted on means (instead adj. by trial)
+    rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
+    spikes, which_measure = hf.get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName=rvcFits, rvcMod=-1, baseline_sub=False, return_measure=1, vecF1=vecF1);
+    # now, get the real mean responses we'll use (again, the above is just for variability)
+    phAdvFits = hf.np_smart_load(dataPath + hf.phase_fit_name(phAdvName, dir=rvcDir));
+    all_opts = phAdvFits[which_cell-1]['params'];
+    try:
+      respsPhAdv_mean_ref = hf.organize_phAdj_byMean(expData, expInd, all_opts, stimVals, val_con_by_disp);
+    except:
+      print('\n*******\nFailed!!!\n*******\n');
+      pass; # this will fail IFF there isn't a trial for each condition - these cells are ignored in the analysis, anyway; in those cases, just give non-phAdj responses so that we don't fail
   rates = True if vecF1 == 0 else False; # when we get the spikes from rvcFits, they've already been converted into rates (in hf.get_all_fft)
   baseline = None; # f1 has no "DC", yadig?
 else: # otherwise, if it's complex, just get F0
@@ -280,7 +287,7 @@ else: # otherwise, if it's complex, just get F0
 
 #print('###\nGetting spikes (data): rates? %d\n###' % rates);
 _, _, _, respAll = hf.organize_resp(spikes, expData, expInd, respsAsRate=rates); # only using respAll to get variance measures
-resps_data, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates, modsAsRate=rates);
+resps_data, _, _, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates, modsAsRate=rates);
 
 if fitList is None:
   resps = resps_data; # otherwise, we'll still keep resps_data for reference
@@ -328,7 +335,8 @@ elif fitList is not None: # OVERWRITE the data with the model spikes!
 
 predResps = resps[2];
 
-respMean = resps[0]; # equivalent to resps[0];
+# However! Now, if respsPhAdv_mean_ref is not None, this becomes our respMean
+respMean = resps[0] if respsPhAdv_mean_ref is None else respsPhAdv_mean_ref; # equivalent to resps[0];
 respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
 # compute SEM, too
 findNaN = np.isnan(respAll);

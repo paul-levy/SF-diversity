@@ -2172,7 +2172,7 @@ def dog_total_volume(params, DoGmodel, which_dog=0):
    # Given a set of parameters, compute the volume (will be if not a DoG-based model)
    if DoGmodel == 0:
       return 0;
-   else: # TODO: Fix for d-DoG-S model
+   else:
       vc = dog_get_param(params, DoGmodel, 'vc', which_dog=which_dog);
       vs = dog_get_param(params, DoGmodel, 'vs', which_dog=which_dog);
       return vc+vs;
@@ -2357,7 +2357,6 @@ def dog_init_params(resps_curr, base_rate, all_sfs, valSfVals, DoGmodel, bounds=
   ''' return the initial parameters for the DoG model, given the model choice and responses
       --- if bounds is not None, then we'll ensure that each parameter is within the specified bounds
       --- no_surr applies for d-DoG-S only (as of 21.12.06)
-  TODO: Check why all_sfs AND valSfVals are passed in???
   '''
   np = numpy;
 
@@ -3079,16 +3078,8 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
               allInitParams = [*allInitParams, curr_init[0], curr_init[2]]; # no need to add separate flank gains (flank surround is same as central surround; flank center gain is jointly fit)
               
       # previously, we choose optimization method (L-BFGS-B for even, TNC for odd) --- we now just choose the former
-      #methodStr = 'TNC' if ref_paramList_prev_joint is not None else 'L-BFGS-B';
-      #methodStr = 'Nelder-Mead' if ref_paramList_prev_joint is not None else 'L-BFGS-B';
       methodStr = 'L-BFGS-B'
-      ##### ONLY INCLUDING THESE COMMENTS FOR ONE COMMIT - WAS NOT NECESSARY AFTER FIXING INITIALIZATION
-      ### The above is unbelievably hacky, and frankly embarassing...but
-      # --- L-BFGS-B, though better overall, pushes us out of a local (global?) minimum when we initialize d-DoG-S with DoG params
-      # ----- however, Nelder-Mead does not fail us in the same way...so this ensures that, if initialized properly,
-      # ----- the d-DoG-S model will never fare worse than the DoG model
       obj = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=DoGmodel, dir=dir, gain_reg=gain_reg, joint=joint, baseline=baseline, vol_lam=vol_lam, n_fits=len(allResps), conVals=allCons, );
-      obj_prev = lambda params: DoG_loss(params, allResps, allSfs, resps_std=allRespsSem, var_to_mean=var_to_mean, loss_type=loss_type, DoGmodel=1, dir=dir, gain_reg=gain_reg, joint=7, baseline=baseline, vol_lam=vol_lam, n_fits=len(allResps), conVals=allCons, );
       # --- debugging ---
       try: # 95000; 35000; 975000
         maxfun = 1975000 if not is_mod_DoG(DoGmodel) else 155000; # default is 15000; d-dog-s model often needs more iters to finish
@@ -3104,9 +3095,6 @@ def dog_fit(resps, DoGmodel, loss_type, disp, expInd, stimVals, validByStimVal, 
       # compare
       NLL = wax['fun'];
       params_curr = np.asarray(wax['x'], np.float32) if flt32 else wax['x']
-      #print('DoG vs d-DoG-S (init|final): %.2f | %.2f | %.2f' % (obj_prev(paramList_prev_joint), obj(allInitParams), NLL));
-      #if obj_prev(paramList_prev_joint)>NLL or np.isnan(NLL):
-      #   pdb.set_trace();
 
       if np.isnan(overallNLL) or NLL < overallNLL or len(params_curr) != len(params): # the final check is if the # of parameters here is different from the exising # params --> then update, because our separate fits have updated and we have different # of conditions to fit
         overallNLL = NLL;
@@ -5000,8 +4988,8 @@ def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_d
       # --- but, if mixture, need to sum across conds
       if disp > 0: # then we need to sum component responses and get overall std measure (we'll fit to sum, not indiv. comp responses!)
         adjSumResp  = [np.sum(x, 1) if x else [] for x in adjMeans];
+        # TODO 22.06.04 --> WILL NEED TO ADD ADJBYTRIAL if uncommenting the below -- not necessary, as of 22.09.17
         # --- adjSemTr is [nSf x nValCon], i.e. s.e.m. per condition
-        # TODO 22.06.04 --> WILL NEED TO ADD ADJBYTRIAL if uncommenting the below
         #adjSemTr    = [[sem(np.sum(hf.switch_inner_outer(x), 1)) for x in y] for y in adjByTrial];
         #adjSemCompTr  = [[sem(hf.switch_inner_outer(x)) for x in y] for y in adjByTrial];
 

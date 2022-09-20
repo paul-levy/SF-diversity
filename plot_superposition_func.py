@@ -42,11 +42,12 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   else:
     loc_str = '';
 
-  rvcName = 'rvcFits%s_220531' % loc_str if expDir=='LGN/' else 'rvcFits%s_220609' % loc_str
+  rvcName = 'rvcFits%s_220531' % loc_str if expDir=='LGN/' else 'rvcFits%s_220718' % loc_str
   rvcFits = None; # pre-define this as None; will be overwritten if available/needed
   if expDir == 'altExp/': # we don't adjust responses there...
     rvcName = None;
-  dFits_base = 'descrFits%s_220609' % loc_str if expDir=='LGN/' else 'descrFits%s_220631' % loc_str
+  phAdvName = 'phaseAdvanceFits%s_220531' % loc_str if expDir=='LGN/' else 'phaseAdvanceFits%s_220718' % loc_str;
+  dFits_base = 'descrFits%s_220609' % loc_str if expDir=='LGN/' else 'descrFits%s_220721' % loc_str
   if use_mod_resp == 1:
     rvcName = None; # Use NONE if getting model responses, only
     if excType == 1:
@@ -107,23 +108,23 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
     rvcMod = 0; 
     dMod_num = 1;
     rvcDir = 1;
-    vecF1 = -1;
+    vecF1 = 0;
   else:
     rvcMod = 1; # i.e. Naka-rushton (1)
     dMod_num = 3; # d-dog-s
-    rvcDir = None; # None if we're doing vec-corrected
+    rvcDir = 1;
     if expDir == 'altExp/':
-      vecF1 = 0;
+      vecF1 = 0 # was None?
     else:
-      vecF1 = 1;
+      vecF1 = 0; # was previously 1, but now we do phAmp, not just vecF1
 
   dFits_mod = hf.descrMod_name(dMod_num)
-  descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, modelName=dFits_mod, phAdj=1 if vecF1==-1 else None);
+  descrFits_name = hf.descrFit_name(lossType=dLoss_num, descrBase=dFits_base, modelName=dFits_mod, phAdj=1 if vecF1==0 else None);
 
   ## now, let it run
   dataPath = basePath + expDir + 'structures/'
   save_loc = basePath + expDir + 'figures/'
-  save_locSuper = save_loc + 'superposition_220713/'
+  save_locSuper = save_loc + 'superposition_220918/'
   if use_mod_resp == 1:
     save_locSuper = save_locSuper + '%s/' % fitBase
 
@@ -216,6 +217,9 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
     else:
       respOverwrite = None;
 
+  _, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd); # call just to get these values (not spikes/activity)
+  respsPhAdv_mean_ref = None; # defaulting to None here -- if not None, then we've collected mean responses based on phAmp corr. on means (not trial by trial)
+
   if (respMeasure == 1 or expDir == 'LGN/') and expDir != 'altExp/' : # i.e. if we're looking at a simple cell, then let's get F1
     if vecF1 == 1:
       spikes_byComp = respOverwrite
@@ -223,16 +227,19 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
       allCons = np.vstack(expData['con']).transpose();
       blanks = np.where(allCons==0);
       spikes_byComp[blanks] = 0; # just set it to 0 if that component was blank during the trial
-    else:
-      if rvcName is not None:
-        try:
-          rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
-        except:
-          rvcFits = None;
-      else:
-        rvcFits = None
-      spikes_byComp = hf.get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd);
-    spikes = np.array([np.sum(x) for x in spikes_byComp]);
+      spikes = np.array([np.sum(x) for x in spikes_byComp]);
+    else: # then we're doing phAdj -- however, we'll still get trial-by-trial estimates for variability estimates
+    # ---- BUT [TODO] those trial-by-trial estimates are not adjusted on means (instead adj. by trial)
+      rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
+      spikes, which_measure = hf.get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName=rvcFits, rvcMod=-1, baseline_sub=False, return_measure=1, vecF1=vecF1);
+      # now, get the real mean responses we'll use (again, the above is just for variability)
+      phAdvFits = hf.np_smart_load(dataPath + hf.phase_fit_name(phAdvName, dir=rvcDir));
+      all_opts = phAdvFits[which_cell-1]['params'];
+      try:
+        respsPhAdv_mean_ref = hf.organize_phAdj_byMean(expData, expInd, all_opts, stimVals, val_con_by_disp);
+      except:
+        print('\n*******\nFailed!!!\n*******\n');
+        pass; # this will fail IFF there isn't a trial for each condition - these cells are ignored in the analysis, anyway; in those cases, just give non-phAdj responses so that we don't fail
     rates = True if vecF1 == 0 else False; # when we get the spikes from rvcFits, they've already been converted into rates (in hf.get_all_fft)
     baseline = None; # f1 has no "DC", yadig?
   else: # otherwise, if it's complex, just get F0
@@ -245,7 +252,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
 
   #print('###\nGetting spikes (data): rates? %d\n###' % rates);
   _, _, _, respAll = hf.organize_resp(spikes, expData, expInd, respsAsRate=rates); # only using respAll to get variance measures
-  resps_data, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates, modsAsRate=rates);
+  resps_data, _, _, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates, modsAsRate=rates);
 
   if fitList is None:
     resps = resps_data; # otherwise, we'll still keep resps_data for reference
@@ -293,7 +300,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
 
   predResps = resps[2];
 
-  respMean = resps[0]; # equivalent to resps[0];
+  respMean = resps[0] if respsPhAdv_mean_ref is None else respsPhAdv_mean_ref; # equivalent to resps[0];
   respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
   # compute SEM, too
   findNaN = np.isnan(respAll);
@@ -323,7 +330,13 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
       non_neg_data = np.where(all_preds_data>0) # cannot fit negative values with naka-rushton...
       fitz, _ = opt.curve_fit(myFit, all_preds_data[non_neg_data], all_resps_data[non_neg_data], p0=[100, 2, 25], maxfev=5000)
     else:
-      fitz, _ = opt.curve_fit(myFit, all_preds[non_neg], all_resps[non_neg], p0=[100, 2, 25], maxfev=5000)
+      # Add bounds, smarter initialization (22.09.18)
+      max_resp, max_pred = np.nanmax(all_resps[non_neg]), np.nanmax(all_preds[non_neg]);
+      bounds = np.vstack(((0,1.5*max_resp), (0.5, 4), (0,1.5*max_pred))).transpose(); # gain, c50 must be pos; exp. between 0.5-4
+      init_gain = np.nanmax(all_resps[non_neg]);
+      init_exp = hf.random_in_range([0.75, 2.5])[0];
+      init_c50 = np.nanmedian(all_preds[non_neg]);
+      fitz, _ = opt.curve_fit(myFit, all_preds[non_neg], all_resps[non_neg], p0=[init_gain, init_exp, init_c50], bounds=bounds, maxfev=5000)
     rel_c50 = np.divide(fitz[-1], np.max(all_preds[non_neg]));
   except:
     fitz = None;
