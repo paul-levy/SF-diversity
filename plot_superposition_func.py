@@ -121,7 +121,7 @@ def get_model_responses(S, curr_fit, fitType, lossType, expInd, which_cell, excT
 
   return resps;
 
-def fit_overall_suppression(all_resps, all_preds):
+def fit_overall_suppression(all_resps, all_preds, expFixed=True):
   ''' Fit the overall suppression (i.e. superposition failures) with a Naka-Rushton fit
       - assumes resps/preds are nConds x 1 (i.e. flattened) and only includes mixtures, ie not single gratings
   '''
@@ -131,11 +131,14 @@ def fit_overall_suppression(all_resps, all_preds):
   # Setting bounds
   non_neg = np.where(all_preds>0) # cannot fit negative values with naka-rushton...
   max_resp, max_pred = np.nanmax(all_resps[non_neg]), np.nanmax(all_preds[non_neg]);
-  bounds = np.vstack(((0,1.5*max_resp), (0.5, 4), (0,1.5*max_pred))).transpose(); # gain, c50 must be pos; exp. between 0.5-4
+  if expFixed: # fixed at 1...
+    bounds = np.vstack(((0,1.5*max_resp), (1, 1.000001), (0,1.5*max_pred))).transpose(); # gain, c50 must be pos; exp. fixed at 1
+  else:
+    bounds = np.vstack(((0,1.5*max_resp), (0.5, 4), (0,1.5*max_pred))).transpose(); # gain, c50 must be pos; exp. between 0.5-4
 
   # Setting initial params
   init_gain = np.nanmax(all_resps[non_neg]);
-  init_exp = hf.random_in_range([0.75, 2.5])[0];
+  init_exp = 1 if expFixed else hf.random_in_range([0.75, 2.5])[0];
   init_c50 = np.nanmedian(all_preds[non_neg]);
   
   # Running the optimization
@@ -395,7 +398,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   ## now, let it run
   dataPath = basePath + expDir + 'structures/'
   save_loc = basePath + expDir + 'figures/'
-  save_locSuper = save_loc + 'superposition_220920/'
+  save_locSuper = save_loc + 'superposition_220923/'
   if use_mod_resp == 1:
     save_locSuper = save_locSuper + '%s/' % fitBase
 
@@ -895,12 +898,17 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
     curr_suppr['corr_derivWithErr'] = np.nan;
     curr_suppr['corr_derivWithErrsInd'] = np.nan;
 
-  # make a polynomial fit
+  # make a polynomial fit - DEPRECATE 
   try:
     hmm = np.polyfit(allSum, allMix, deg=1) # returns [a, b] in ax + b 
   except:
     hmm = [np.nan];
   curr_suppr['supr_index'] = hmm[0];
+  # compute area under the curve --- both for the linear expectation and for the Naka-Rushton
+  xvals = np.linspace(0, np.nanmax(all_preds), 100);
+  lin_area = np.trapz(xvals, x=xvals);
+  nr_area = np.trapz(myFit(xvals, *fitz), x=xvals);
+  curr_suppr['supr_area'] = nr_area/lin_area;
 
   for j in range(1):
     for jj in range(nCols):
@@ -910,7 +918,8 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
       ax[j, jj].plot([0, 1*maxResp], [0, 1*maxResp], 'k--')
       ax[j, jj].set_xlim((-5, maxResp));
       ax[j, jj].set_ylim((-5, 1.1*maxResp));
-      ax[j, jj].set_title('Suppression index: %.2f|%.2f [%.1f\%%]' % (curr_suppr['supr_index'], curr_suppr['rel_c50'], curr_suppr['var_expl']));
+      ax[j, jj].set_title('Suppression index: %.2f|%.2f [%.1f%s%%]' % (curr_suppr['supr_area'], curr_suppr['rel_c50'], curr_suppr['var_expl'], '\\' if useTex else ''))
+      #ax[j, jj].set_title('Suppression index: %.2f|%.2f [%.1f\%%]' % (curr_suppr['supr_index'], curr_suppr['rel_c50'], curr_suppr['var_expl']));
       ax[j, jj].legend(fontsize='xx-small', ncol=1+jj); # want two legend columns for SF
 
   fSuper.suptitle('%s \#%d [%s]; f1f0 %.2f; szSupr[dt/md] %.2f/%.2f; oriBW|CV %.2f|%.2f; tfBW %.2f]' % (cellType, which_cell, cellName.replace('_','\_'), f1f0_rat, suprDat, suprMod, oriBW, oriCV, tfBW), fontsize='small')
