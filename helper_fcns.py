@@ -4953,7 +4953,7 @@ def organize_adj_responses(data, rvcFits, expInd, vecF1=0):
      
   return adjResps;
 
-def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_disp, phAdv_model=None, resample=False, dir=1, redo_phAdv=True):
+def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_disp, phAdv_model=None, resample=False, dir=1, redo_phAdv=True, incl_preds=False, val_by_stim_val=None, return_comps=False):
    ''' Organize the responses in the usual way (i.e. [d,sf,con])
          In the style of organize_resp, organize_adj_resp
    '''
@@ -4962,7 +4962,12 @@ def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_d
       phAdv_model = get_phAdv_model();
       
    nDisps, nCons, nSfs = len(stimVals[0]), len(stimVals[1]), len(stimVals[2]);
+
    means = np.nan * np.zeros((nDisps, nSfs, nCons));
+   preds = np.copy(means);
+   if return_comps:
+      val_trials_by_cond = np.nan * np.zeros((nDisps, nSfs, nCons, 12)); # never more than 10 trials, but add extra to be safe...
+      comp_resp_means = np.nan * np.zeros((nDisps, nSfs, nCons, ), dtype='O');
 
    for disp in range(nDisps):
 
@@ -4998,8 +5003,43 @@ def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_d
          to_pass = adjMeans[sf][con].size >0 if disp==0 else len(allCompCon[sf])>0;
          if to_pass: # otherwise it's blank; already pre-populated with NaN
             means[disp,sf,con_ind] = adjMeans[sf][con] if disp==0 else adjSumResp[sf][con];
+            if return_comps:
+               comp_resp_means[disp,sf,con_ind] = adjMeans[sf][con]
 
-   return means;
+         if incl_preds and to_pass: # need to have to_pass here, too?
+            # First, we'll need to find out which trials correspond to this mixture
+            # Then, for each constituent grating, get the individual response 
+            try:
+              curr_pred = 0;
+              valid_tr = get_valid_trials(expStructure, disp, con_ind, sf, expInd, stimVals=stimVals, validByStimVal=val_by_stim_val)[0];
+              if return_comps:
+                 val_trials_by_cond[disp, sf, con_ind, 0:len(valid_tr[0])] = valid_tr[0];
+              for n_comp in range(stimVals[0][disp]): # stimVals[0] is nGrats
+                 # find information for each component, find corresponding trials, get response, sum
+                 # Note: unique(.) will only be one value, since all equiv stim have same equiv componentss 
+                 curr_con = np.unique(expStructure['con'][n_comp][valid_tr]);
+                 if len(curr_con)!=1:
+                    pdb.set_trace(); 
+                 # values in stimVals[1] are rounded, so we have to check for equality carefully
+                 curr_con_ind = val_con_by_disp[0][np.where(np.isclose(stimVals[1][val_con_by_disp[0]], curr_con, atol=0.01))[0][0]];
+                 curr_sf = np.unique(expStructure['sf'][n_comp][valid_tr]);
+                 if len(curr_sf)!=1:
+                    pdb.set_trace();
+                 curr_sf_ind = np.where(np.isclose(stimVals[2], curr_sf[0], atol=0.005))[0];
+
+                 curr_pred += means[0, curr_sf_ind, curr_con_ind] # always adding the zero dispersion prediction!
+            except:
+              pdb.set_trace();
+
+            preds[disp, sf, con_ind] = curr_pred;
+
+   if return_comps and incl_preds: # then, also return component-by-component resposne for mixture AND list of indices found in each mixture
+      return means, preds, comp_resp_means, val_trials_by_cond;
+   else:
+      if incl_preds:
+         return means, preds, 
+      else:
+         return means;
 
 def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, resample=False, cellNum=-1, cross_val=None):
     ''' organizes the responses by condition given spikes, experiment structure, and expInd
