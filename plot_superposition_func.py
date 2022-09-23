@@ -1,7 +1,7 @@
 import os
 import numpy as np
-import matplotlib
-matplotlib.use('Agg') # to avoid GUI/cluster issues...
+import pandas as pd
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
 import matplotlib.animation as anim
@@ -15,6 +15,7 @@ import model_responses_pytorch as mrpt
 import scipy.optimize as opt
 from scipy.stats.mstats import gmean as geomean
 import time
+from matplotlib.ticker import FuncFormatter
 
 import pdb
 
@@ -26,7 +27,266 @@ import sys # so that we can import model_responses (in different folder)
 import warnings
 warnings.filterwarnings('once');
 
-def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excType=1, useHPCfit=1, conType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1):
+def get_responses(expData, which_cell, expInd, expDir, dataPath, respMeasure, stimVals, val_con_by_disp, rvcFits=None, phAdvName=None, vecF1=0, f1_expCutoff=2, rvcDir=1, val_by_stim_val=None):
+  # Get the correct DC or F1 responses
+  if vecF1 == 1:
+    # get the correct, adjusted F1 response
+    if expInd > f1_expCutoff and respMeasure == 1:
+      respOverwrite = hf.adjust_f1_byTrial(expData, expInd);
+    else:
+      respOverwrite = None;
+
+  respsPhAdv_mean_ref = None; # defaulting to None here -- if not None, then we've collected mean responses based on phAmp corr. on means (not trial by trial)
+  respsPhAdv_mean_pred = None;
+  adjMeansByComp = None; val_tr_by_cond = None;
+
+  if (respMeasure == 1 or expDir == 'LGN/') and expDir != 'altExp/' : # i.e. if we're looking at a simple cell, then let's get F1
+    if vecF1 == 1:
+      spikes_byComp = respOverwrite
+      # then, sum up the valid components per stimulus component
+      allCons = np.vstack(expData['con']).transpose();
+      blanks = np.where(allCons==0);
+      spikes_byComp[blanks] = 0; # just set it to 0 if that component was blank during the trial
+      spikes = np.array([np.sum(x) for x in spikes_byComp]);
+    else: # then we're doing phAdj -- however, we'll still get trial-by-trial estimates for variability estimates
+    # ---- BUT [TODO] those trial-by-trial estimates are not adjusted on means (instead adj. by trial)
+      spikes, which_measure = hf.get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName=rvcFits, rvcMod=-1, baseline_sub=False, return_measure=1, vecF1=vecF1);
+      # now, get the real mean responses we'll use (again, the above is just for variability)
+      phAdvFits = hf.np_smart_load(dataPath + hf.phase_fit_name(phAdvName, dir=rvcDir));
+      all_opts = phAdvFits[which_cell-1]['params'];
+      try:
+        respsPhAdv_mean_ref, respsPhAdv_mean_pred, adjMeansByComp, val_tr_by_cond = hf.organize_phAdj_byMean(expData, expInd, all_opts, stimVals, val_con_by_disp, incl_preds=True, val_by_stim_val=val_by_stim_val, return_comps=True);
+      except:
+        print('\n*******\nFailed!!!\n*******\n');
+        pass; # this will fail IFF there isn't a trial for each condition - these cells are ignored in the analysis, anyway; in those cases, just give non-phAdj responses so that we don't fail
+    rates = True if vecF1 == 0 else False; # when we get the spikes from rvcFits, they've already been converted into rates (in hf.get_all_fft)
+    baseline = None; # f1 has no "DC", yadig?
+  else: # otherwise, if it's complex, just get F0
+    respMeasure = 0;
+    spikes = hf.get_spikes(expData, get_f0=1, rvcFits=None, expInd=expInd);
+    rates = False; # get_spikes without rvcFits is directly from spikeCount, which is counts, not rates!
+    baseline = hf.blankResp(expData, expInd)[0]; # we'll plot the spontaneous rate
+    # why mult by stimDur? well, spikes are not rates but baseline is, so we convert baseline to count (i.e. not rate, too)
+    spikes = spikes - baseline*hf.get_exp_params(expInd).stimDur; 
+
+  #print('###\nGetting spikes (data): rates? %d\n###' % rates);
+  _, _, _, respAll = hf.organize_resp(spikes, expData, expInd, respsAsRate=rates); # only using respAll to get variance measures
+  resps_data, _, _, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates, modsAsRate=rates);
+
+  return resps_data, respAll, respsPhAdv_mean_ref, respsPhAdv_mean_pred, baseline, adjMeansByComp, val_tr_by_cond;
+
+def get_model_responses(S, curr_fit, fitType, lossType, expInd, which_cell, excType, f1f0_rat, respMeasure, baseline):
+  # This is ONLY for getting model responses
+  if use_mod_resp == 1:
+    curr_fit = fitList[which_cell-1]['params'];
+    modResp = mod_resp.SFMGiveBof(curr_fit, S, normType=fitType, lossType=lossType, expInd=expInd, cellNum=which_cell, excType=excType)[1];
+    if f1f0_rat < 1: # then subtract baseline..
+      modResp = modResp - baseline*hf.get_exp_params(expInd).stimDur; 
+    # now organize the responses
+    resps = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp, respsAsRates=False, modsAsRate=False)[0];
+
+  elif use_mod_resp == 2: # then pytorch model!
+    resp_str = hf_sf.get_resp_str(respMeasure)
+    curr_fit = fitList[which_cell-1][resp_str]['params'];
+    model = mrpt.sfNormMod(curr_fit, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod, lgnConType=conType, applyLGNtoNorm=_applyLGNtoNorm)
+    ### get the vec-corrected responses, if applicable
+    if expInd > f1_expCutoff and respMeasure == 1:
+      respOverwrite = hf.adjust_f1_byTrial(expData, expInd);
+    else:
+      respOverwrite = None;
+
+    dw = mrpt.dataWrapper(expData, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
+    modResp = model.forward(dw.trInf, respMeasure=respMeasure, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
+
+    if respMeasure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
+      blanks = np.where(dw.trInf['con']==0);
+      modResp[blanks] = 0;
+      # next, sum up across components
+      modResp = np.sum(modResp, axis=1);
+    # finally, make sure this fills out a vector of all responses (just have nan for non-modelled trials)
+    nTrialsFull = len(expData['num']);
+    modResp_full = np.nan * np.zeros((nTrialsFull, ));
+    modResp_full[dw.trInf['num']] = modResp;
+
+    if respMeasure == 0: # if DC, then subtract baseline..., as determined from data (why not model? we aren't yet calc. response to no stim, though it can be done)
+      modResp_full = modResp_full - baseline*hf.get_exp_params(expInd).stimDur;
+
+    # TODO: This is a work around for which measures are in rates vs. counts (DC vs F1, model vs data...)
+    stimDur = hf.get_exp_params(expInd).stimDur;
+    asRates = False;
+    #divFactor = stimDur if asRates == 0 else 1;
+    #modResp_full = np.divide(modResp_full, divFactor);
+    # now organize the responses
+    resps = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp_full, respsAsRates=asRates, modsAsRate=asRates)[0];
+
+  return resps;
+
+def fit_overall_suppression(all_resps, all_preds):
+  ''' Fit the overall suppression (i.e. superposition failures) with a Naka-Rushton fit
+      - assumes resps/preds are nConds x 1 (i.e. flattened) and only includes mixtures, ie not single gratings
+  '''
+  # Setting the function we'll use
+  myFit = lambda x, g, expon, c50: hf.naka_rushton(x, [0, g, expon, c50]) 
+
+  # Setting bounds
+  non_neg = np.where(all_preds>0) # cannot fit negative values with naka-rushton...
+  max_resp, max_pred = np.nanmax(all_resps[non_neg]), np.nanmax(all_preds[non_neg]);
+  bounds = np.vstack(((0,1.5*max_resp), (0.5, 4), (0,1.5*max_pred))).transpose(); # gain, c50 must be pos; exp. between 0.5-4
+
+  # Setting initial params
+  init_gain = np.nanmax(all_resps[non_neg]);
+  init_exp = hf.random_in_range([0.75, 2.5])[0];
+  init_c50 = np.nanmedian(all_preds[non_neg]);
+  
+  # Running the optimization
+  fit, _ = opt.curve_fit(myFit, all_preds[non_neg], all_resps[non_neg], p0=[init_gain, init_exp, init_c50], bounds=bounds, maxfev=5000)
+  rel_c50 = np.divide(fit[-1], np.max(all_preds[non_neg]));
+  
+  return fit, rel_c50, myFit
+
+def make_f1_comp_plots(expData, which_cell, mixture_df, respMean, resp_std, predResps, comp_resp_org, val_tr_org, save_loc, stimVals, val_con_by_disp, isol_pred=True, specify_ticks=True, tex_width=469, sns_offset = 5):
+  ''' inputs: expData, which_cell: cell structure, cell num
+              mixture_df: dataframe organizing all of the conditions, responses, etc
+              respMean, resp_std, predResps: mean/std of mixture responses, mixture predictions based on isol. comp responses
+              comp_resp_org, val_tr_org: organized by condition (disp/sf/con), the component responses in mixtures and the trial numbers assoc. w/each mixture
+  '''
+  # here are the single grating sfs/cons to consider
+
+  disp_mixes = []; # save all the dispersion plots to save in one PDF
+
+  if comp_resp_org is not None:
+
+      marker_by_disp = ['', '<', '>', '*']
+
+      save_loc_curr = save_loc + 'byComp/'
+      saveName = 'cell_%02d%s.pdf' % (which_cell, '_wPred' if isol_pred else '')
+      save_loc_disp = save_loc + 'byDisp/'
+      saveName_disps = 'cell_%02d.pdf' % (which_cell)
+
+      con_inds = val_con_by_disp[0];
+      disps, sfs, cons, all_cons = stimVals[0], stimVals[2], stimVals[1][val_con_by_disp[0]], stimVals[1];
+      nsfs, ncons = len(sfs), len(cons);
+
+      clrs = cm.viridis(np.linspace(0, 1, nsfs))
+
+      # make the figure for plots organized by isolated component
+      #f, ax = plt.subplots(nrows=nsfs, ncols=ncons, figsize=hf.set_size(tex_width, subplots=(nsfs,ncons), extra_height=2), sharey='row');
+      f, ax = plt.subplots(nrows=nsfs, ncols=ncons, figsize=(ncons*2.75,nsfs*2), sharey='row')
+
+      # plot isol. component responses
+      for d in range(1,len(disps)):
+
+          curr_subset = mixture_df[mixture_df['disp']==disps[d]]
+          curr_mix_sfs, curr_mix_cons = mixture_df[mixture_df['disp']==disps[d]]['sf'].unique(), mixture_df[mixture_df['disp']==disps[d]]['total_con'].unique()
+          # set up the figure for looking at specific mixtures (new figure for each dispersion)
+          curr_disp_nrow, curr_disp_ncol = len(curr_mix_sfs), len(curr_mix_cons);
+          g, disp_ax = plt.subplots(nrows=curr_disp_nrow, ncols=curr_disp_ncol, 
+                                    #figsize=hf.set_size(tex_width, extra_height=2, subplots=(curr_disp_nrow, curr_disp_ncol)), 
+                                    #sharex=True, sharey=True)
+                                    figsize=(len(curr_mix_cons)*3,len(curr_mix_sfs)*2.5), sharex=True, sharey=True)
+
+          for sf_ind_mix, con_ind_mix in itertools.product(range(val_tr_org.shape[1]), range(val_tr_org.shape[2])):
+
+              if np.all(np.isnan(comp_resp_org[d, sf_ind_mix, con_ind_mix])):
+                  continue;
+
+              disp_con_ind = np.where(all_cons[con_ind_mix] == curr_mix_cons)[0][0]
+              disp_sf_ind = np.where(sfs[sf_ind_mix] == curr_mix_sfs)[0][0]
+
+              # How much was the mixture response as a fraction of the prediction, i.e. overall mixture response suppressed?
+              overall_red = respMean[d, sf_ind_mix, con_ind_mix]/predResps[d, sf_ind_mix, con_ind_mix]
+
+              # Otherwise, we have a valid reponse!               
+              curr_trials = hf.nan_rm(val_tr_org[d, sf_ind_mix, con_ind_mix])
+              curr_sfs_plt = [];
+              for comp_i, resp_i in enumerate(comp_resp_org[d, sf_ind_mix, con_ind_mix]):
+                  curr_sf, curr_con = np.unique(expData['sf'][comp_i, curr_trials.astype('int')]), np.unique(expData['con'][comp_i, curr_trials.astype('int')])
+                  sf_ind = np.where(np.isclose(curr_sf, sfs, atol=0.001))[0][0]
+                  con_ind = np.where(np.isclose(curr_con, cons, atol=0.01))[0][0]
+
+                  ### plot the isolated component response - first, organized by component
+                  rand_xoffset = hf.random_in_range([0,0.3])[0];
+                  if curr_sf==sfs[sf_ind_mix]:
+                      rand_sgn = np.sign(np.random.rand()-0.5); # just to avoid values showing up exactly on top of the specific response
+                      rand_xloc = rand_sgn*(1.01 + hf.random_in_range([0, 0.04])[0]);
+                  else: # scale the distance according to how far the mixture SF was from the current SF component
+                      rel_step = np.log2(sfs[sf_ind_mix]/curr_sf)
+                      rand_xloc = 1 + rel_step*hf.random_in_range([0.05, 0.07])[0];
+                  ax[sf_ind, con_ind].plot(rand_xloc, resp_i, color=clrs[sf_ind_mix], alpha=all_cons[con_ind_mix], 
+                                           marker=marker_by_disp[d], label='%.2f,%.2f[%d]' % (all_cons[con_ind_mix], sfs[sf_ind_mix], disps[d]))
+                  if isol_pred:
+                      pred_i = respMean[0, sf_ind, con_ind] * overall_red
+                      ax[sf_ind, con_ind].plot(rand_xloc, pred_i, color=clrs[sf_ind_mix], alpha=all_cons[con_ind_mix],
+                                   marker=marker_by_disp[d], fillstyle='none')
+                      # and plot connecting line
+                      ax[sf_ind, con_ind].plot([rand_xloc, rand_xloc], [resp_i, pred_i], color=clrs[sf_ind_mix], alpha=all_cons[con_ind_mix],marker=None, linestyle='--')
+
+                  ### - then, organized by mixture: get the current SF (to plot all components together), and plot the isol. response
+                  curr_sfs_plt.append(sfs[sf_ind]);
+                  disp_ax[disp_sf_ind, disp_con_ind].errorbar(sfs[sf_ind], respMean[0, sf_ind, con_inds[con_ind]],
+                                           resp_std[0, sf_ind, con_inds[con_ind]], marker='o', color=clrs[sf_ind])
+              ### For byDisp organization, plot it together (with lines connecing the isolated mixture responses)
+              sf_order = np.argsort(curr_sfs_plt)
+              disp_ax[disp_sf_ind, disp_con_ind].semilogx(np.array(curr_sfs_plt)[sf_order], 
+                                                      np.array(comp_resp_org[d, sf_ind_mix, con_ind_mix])[sf_order], '-o');
+              if disp_con_ind==0: # i.e. left-most column
+                  disp_ax[disp_sf_ind, disp_con_ind].set_ylabel('Resp (spks/s)')
+              if disp_sf_ind==(len(curr_mix_sfs)-1): # bottom row
+                  disp_ax[disp_sf_ind, disp_con_ind].set_xlabel('Spatial frequency (c/deg)');
+              log_supr = np.log2(overall_red) if overall_red>0 else np.nan
+              disp_ax[disp_sf_ind, disp_con_ind].set_title('%.2f cpd, %.2f [log(supr)=%.2f]' % (sfs[sf_ind_mix], all_cons[con_ind_mix], log_supr), fontsize='medium')
+
+              # format to have integers (not scientific notation)
+              for jj, axis in enumerate([disp_ax[disp_sf_ind, disp_con_ind].xaxis, disp_ax[disp_sf_ind, disp_con_ind].yaxis]):
+                  axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+                  if jj == 0 and specify_ticks: # i.e. x-axis
+                      core_ticks = np.array([1]);
+                      if np.min(sfs)<=0.2:
+                          core_ticks = np.hstack((0.1, core_ticks));
+                      if np.max(sfs)>=7:
+                          core_ticks = np.hstack((core_ticks, 10));
+                      axis.set_ticks(core_ticks)
+                      # really hacky, but allows us to put labels at 0.3/3 cpd, format them properly, and not add any extra labels
+                      inter_val = 3;
+                      axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val)<1e-3 else '%.1f' % x if np.square(x-inter_val/10)<1e-3 else '')) # this will make everything in non-scientific notation!
+                      axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
+
+              g.tight_layout();
+              sns.despine(offset=sns_offset, ax=disp_ax[disp_sf_ind, disp_con_ind]);
+          # DONE WITH LOOP OVER ALL CONDITIONS
+          disp_mixes.append(g);
+
+      # then plot isolated responses
+      for sf_ind,con_ind in itertools.product(range(len(sfs)), range(len(cons))):
+          ax[sf_ind, con_ind].errorbar(1, respMean[0, sf_ind, con_inds[con_ind]], resp_std[0, sf_ind, con_inds[con_ind]], marker='o', color=clrs[sf_ind]);
+          ax[sf_ind, con_ind].legend(fontsize='xx-small', framealpha=0.3, ncol=2);
+          ax[sf_ind, con_ind].set_title('%.2f cpd, %.2f' % (sfs[sf_ind], cons[con_ind]), fontsize='small');
+          if con_ind==0:
+              ax[sf_ind, con_ind].set_ylabel('Resp (spks/s)')
+          ax[sf_ind, con_ind].xaxis.set_visible(False)
+
+      # now save
+      if not os.path.exists(save_loc_curr):
+          os.makedirs(save_loc_curr)
+      pdfSv = pltSave.PdfPages(save_loc_curr + saveName);
+      pdfSv.savefig(f, bbox_inches='tight') # only one figure here...
+      pdfSv.close()
+
+      # and save
+      if not os.path.exists(save_loc_disp):
+          os.makedirs(save_loc_disp)
+      pdfSv = pltSave.PdfPages(save_loc_disp + saveName_disps);
+      for gg in disp_mixes:
+          pdfSv.savefig(gg)
+          plt.close(gg)
+      pdfSv.close();
+
+def selected_supr_metrics(df):
+  ''' Add selected metrics here, which you can then call in the primary function --> this will make it easier to add into jointList
+  '''
+  return None;
+
+def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excType=1, useHPCfit=1, conType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=True, useTex=False):
 
   if use_mod_resp == 2:
     rvcAdj   = -1; # this means vec corrected F1, not phase adjustment F1...
@@ -77,26 +337,37 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   ############
   plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
   from matplotlib import rcParams
-  rcParams['font.size'] = 20;
-  rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
-  rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
-  rcParams['lines.linewidth'] = 2.5;
-  rcParams['axes.linewidth'] = 1.5;
-  rcParams['lines.markersize'] = 8; # this is in style sheet, just being explicit
+  tex_width = 469; # per \layout in Overleaf on document
+  sns_offset = 2; 
+  hist_width = 0.9;
+  hist_ytitle = 0.94; # moves the overall title a bit further down on histogram plots0
+
+  rcParams.update(mpl.rcParamsDefault)
+
+  fontsz = 12;
+  tick_scalar = 1.5;
+
+  rcParams['pdf.fonttype'] = 42
+  rcParams['ps.fonttype'] = 42
+
+  if useTex:
+    rcParams['text.latex.preamble']=[r"\usepackage{lmodern}"]
+    params = {'text.usetex' : True,
+              'font.size' : fontsz,
+              'font.family': 'lmodern',
+               'font.style': 'italic'}
+    plt.rcParams.update(params)
+  else:
+    rcParams['font.style'] = 'oblique';
+
+  # rcParams['lines.linewidth'] = 2.5;
   rcParams['lines.markeredgewidth'] = 0; # no edge, since weird tings happen then
+  # rcParams['axes.linewidth'] = 2; # was 1.5
+  # rcParams['lines.markersize'] = 5;
 
-  rcParams['xtick.major.size'] = 15
-  rcParams['xtick.minor.size'] = 5; # no minor ticks
-  rcParams['ytick.major.size'] = 15
-  rcParams['ytick.minor.size'] = 0; # no minor ticks
-
-  rcParams['xtick.major.width'] = 2
-  rcParams['xtick.minor.width'] = 2;
-  rcParams['ytick.major.width'] = 2
-  rcParams['ytick.minor.width'] = 0
-
-  rcParams['font.style'] = 'oblique';
-  rcParams['font.size'] = 20;
+  tick_adj = ['xtick.major.size', 'xtick.minor.size', 'ytick.major.size', 'ytick.minor.size']
+  for adj in tick_adj:
+      rcParams[adj] = rcParams[adj] * tick_scalar;
 
   ############
   # load everything
@@ -124,7 +395,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   ## now, let it run
   dataPath = basePath + expDir + 'structures/'
   save_loc = basePath + expDir + 'figures/'
-  save_locSuper = save_loc + 'superposition_220918/'
+  save_locSuper = save_loc + 'superposition_220920/'
   if use_mod_resp == 1:
     save_locSuper = save_locSuper + '%s/' % fitBase
 
@@ -202,7 +473,6 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
     # TODO: note, this is dangerous; thus far, only V1 cells don't have 'unitType' field in dataList, so we can safely do this
     cellType = 'V1';
 
-
   ############
   ### compute f1f0 ratio, and load the corresponding F0 or F1 responses
   ############
@@ -210,102 +480,50 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   curr_suppr['f1f0'] = f1f0_rat;
   respMeasure = 1 if f1f0_rat > 1 else 0;
 
-  if vecF1 == 1:
-    # get the correct, adjusted F1 response
-    if expInd > f1_expCutoff and respMeasure == 1:
-      respOverwrite = hf.adjust_f1_byTrial(expData, expInd);
-    else:
-      respOverwrite = None;
+  # load rvcFits in case needed
+  rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
 
-  _, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd); # call just to get these values (not spikes/activity)
-  respsPhAdv_mean_ref = None; # defaulting to None here -- if not None, then we've collected mean responses based on phAmp corr. on means (not trial by trial)
-
-  if (respMeasure == 1 or expDir == 'LGN/') and expDir != 'altExp/' : # i.e. if we're looking at a simple cell, then let's get F1
-    if vecF1 == 1:
-      spikes_byComp = respOverwrite
-      # then, sum up the valid components per stimulus component
-      allCons = np.vstack(expData['con']).transpose();
-      blanks = np.where(allCons==0);
-      spikes_byComp[blanks] = 0; # just set it to 0 if that component was blank during the trial
-      spikes = np.array([np.sum(x) for x in spikes_byComp]);
-    else: # then we're doing phAdj -- however, we'll still get trial-by-trial estimates for variability estimates
-    # ---- BUT [TODO] those trial-by-trial estimates are not adjusted on means (instead adj. by trial)
-      rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
-      spikes, which_measure = hf.get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName=rvcFits, rvcMod=-1, baseline_sub=False, return_measure=1, vecF1=vecF1);
-      # now, get the real mean responses we'll use (again, the above is just for variability)
-      phAdvFits = hf.np_smart_load(dataPath + hf.phase_fit_name(phAdvName, dir=rvcDir));
-      all_opts = phAdvFits[which_cell-1]['params'];
-      try:
-        respsPhAdv_mean_ref = hf.organize_phAdj_byMean(expData, expInd, all_opts, stimVals, val_con_by_disp);
-      except:
-        print('\n*******\nFailed!!!\n*******\n');
-        pass; # this will fail IFF there isn't a trial for each condition - these cells are ignored in the analysis, anyway; in those cases, just give non-phAdj responses so that we don't fail
-    rates = True if vecF1 == 0 else False; # when we get the spikes from rvcFits, they've already been converted into rates (in hf.get_all_fft)
-    baseline = None; # f1 has no "DC", yadig?
-  else: # otherwise, if it's complex, just get F0
-    respMeasure = 0;
-    spikes = hf.get_spikes(expData, get_f0=1, rvcFits=None, expInd=expInd);
-    rates = False; # get_spikes without rvcFits is directly from spikeCount, which is counts, not rates!
-    baseline = hf.blankResp(expData, expInd)[0]; # we'll plot the spontaneous rate
-    # why mult by stimDur? well, spikes are not rates but baseline is, so we convert baseline to count (i.e. not rate, too)
-    spikes = spikes - baseline*hf.get_exp_params(expInd).stimDur; 
-
-  #print('###\nGetting spikes (data): rates? %d\n###' % rates);
-  _, _, _, respAll = hf.organize_resp(spikes, expData, expInd, respsAsRate=rates); # only using respAll to get variance measures
-  resps_data, _, _, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates, modsAsRate=rates);
+  _, stimVals, val_con_by_disp, val_by_stim_val, _ = hf.tabulate_responses(expData, expInd); # call just to get these values (not spikes/activity)
+  resps_data, respAll, respsPhAdv_mean_ref, respsPhAdv_mean_preds, baseline, comp_resp_org, val_tr_org = get_responses(expData, which_cell, expInd, expDir, dataPath, 
+                                                                                                                       respMeasure, stimVals, val_con_by_disp, rvcFits, phAdvName, vecF1, f1_expCutoff=f1_expCutoff, rvcDir=rvcDir, val_by_stim_val=val_by_stim_val);
 
   if fitList is None:
     resps = resps_data; # otherwise, we'll still keep resps_data for reference
   elif fitList is not None: # OVERWRITE the data with the model spikes!
-    if use_mod_resp == 1:
-      curr_fit = fitList[which_cell-1]['params'];
-      modResp = mod_resp.SFMGiveBof(curr_fit, S, normType=fitType, lossType=lossType, expInd=expInd, cellNum=which_cell, excType=excType)[1];
-      if f1f0_rat < 1: # then subtract baseline..
-        modResp = modResp - baseline*hf.get_exp_params(expInd).stimDur; 
-      # now organize the responses
-      resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp, respsAsRates=False, modsAsRate=False);
-    elif use_mod_resp == 2: # then pytorch model!
-      resp_str = hf_sf.get_resp_str(respMeasure)
-      curr_fit = fitList[which_cell-1][resp_str]['params'];
-      model = mrpt.sfNormMod(curr_fit, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod, lgnConType=conType, applyLGNtoNorm=_applyLGNtoNorm)
-      ### get the vec-corrected responses, if applicable
-      if expInd > f1_expCutoff and respMeasure == 1:
-        respOverwrite = hf.adjust_f1_byTrial(expData, expInd);
-      else:
-        respOverwrite = None;
+    resps = get_model_responses(S, curr_fit, fitType, lossType, expInd, which_cell, excType, f1f0_rat, respMeasure, baseline);
 
-      dw = mrpt.dataWrapper(expData, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
-      modResp = model.forward(dw.trInf, respMeasure=respMeasure, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
-
-      if respMeasure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
-        blanks = np.where(dw.trInf['con']==0);
-        modResp[blanks] = 0;
-        # next, sum up across components
-        modResp = np.sum(modResp, axis=1);
-      # finally, make sure this fills out a vector of all responses (just have nan for non-modelled trials)
-      nTrialsFull = len(expData['num']);
-      modResp_full = np.nan * np.zeros((nTrialsFull, ));
-      modResp_full[dw.trInf['num']] = modResp;
-
-      if respMeasure == 0: # if DC, then subtract baseline..., as determined from data (why not model? we aren't yet calc. response to no stim, though it can be done)
-        modResp_full = modResp_full - baseline*hf.get_exp_params(expInd).stimDur;
-
-      # TODO: This is a work around for which measures are in rates vs. counts (DC vs F1, model vs data...)
-      stimDur = hf.get_exp_params(expInd).stimDur;
-      asRates = False;
-      #divFactor = stimDur if asRates == 0 else 1;
-      #modResp_full = np.divide(modResp_full, divFactor);
-      # now organize the responses
-      resps, stimVals, val_con_by_disp, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp_full, respsAsRates=asRates, modsAsRate=asRates);
-
-  predResps = resps[2];
-
+  predResps = resps[2] if respsPhAdv_mean_preds is None else respsPhAdv_mean_preds;
   respMean = resps[0] if respsPhAdv_mean_ref is None else respsPhAdv_mean_ref; # equivalent to resps[0];
   respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
+  predStd = resps[3]; # WARNING/todo: if fitList is not None, this might be a problem?
   # compute SEM, too
   findNaN = np.isnan(respAll);
   nonNaN  = np.sum(findNaN == False, axis=-1);
   respSem = np.nanstd(respAll, -1) / np.sqrt(nonNaN);
+
+
+  ############
+  ### zeroth...just organize into pandas for some potential/future processing
+  ###
+  ############
+  # broadcast disps/cons/sfs for use with pandas
+  disps_expand = np.broadcast_to(np.expand_dims(np.expand_dims(stimVals[0], axis=-1), axis=-1), respMean.shape)
+  cons_expand = np.broadcast_to(np.expand_dims(np.expand_dims(stimVals[1], axis=0), axis=0), respMean.shape)
+  sfs_expand = np.broadcast_to(np.expand_dims(np.expand_dims(stimVals[2], axis=0), axis=-1), respMean.shape)
+  mixture_exp = pd.DataFrame(data=np.column_stack((disps_expand.flatten(), sfs_expand.flatten(), cons_expand.flatten(), respMean.flatten(), respStd.flatten(), predResps.flatten(), predStd.flatten())),
+                        columns=['disp', 'sf', 'total_con', 'respMean', 'respStd', 'predMean', 'predStd'], dtype=np.float32)
+  # drop the NaN conditions (i.e. no respMean and/or no predMean for a given dispXconXsf)
+  mixture_exp = mixture_exp.dropna(subset=['respMean', 'predMean'], )
+
+  ############
+  ###
+  ### Intermission - make some plots that allows us to compare specific component responses in mixtures against isol. resp
+  ### --- this only works for simple/LGN cells (i.e. need F1)
+  ###
+  ############
+  if plt_f1_plots and comp_resp_org is not None and val_tr_org is not None: # i.e. this was a set of F1 responses...
+    #pdb.set_trace();
+    make_f1_comp_plots(expData, which_cell, mixture_exp, respMean, respStd, predResps, comp_resp_org, val_tr_org, save_locSuper, stimVals, val_con_by_disp, isol_pred=True, specify_ticks=True, tex_width=tex_width)
 
   ############
   ### first, fit a smooth function to the overall pred V measured responses
@@ -320,27 +538,36 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   #         fitz, _ = opt.curve_fit(myFit, all_preds[non_nan], all_resps[non_nan], p0=[-5, 10, 5], maxfev=5000)
   # naka rushton
   myFit = lambda x, g, expon, c50: hf.naka_rushton(x, [0, g, expon, c50]) 
-  non_neg = np.where(all_preds>0) # cannot fit negative values with naka-rushton...
   try:
     if use_mod_resp == 1: # the reference will ALWAYS be the data -- redo the above analysis for data
+      # TODO? Make sure we can use fit_overall_suppression for this too?
       predResps_data = resps_data[2];
       respMean_data = resps_data[0];
       all_resps_data = respMean_data[1:, :, :].flatten() # all disp>0
       all_preds_data = predResps_data[1:, :, :].flatten() # all disp>0
       non_neg_data = np.where(all_preds_data>0) # cannot fit negative values with naka-rushton...
       fitz, _ = opt.curve_fit(myFit, all_preds_data[non_neg_data], all_resps_data[non_neg_data], p0=[100, 2, 25], maxfev=5000)
+      rel_c50 = np.divide(fitz[-1], np.max(all_preds[non_neg]));
     else:
-      # Add bounds, smarter initialization (22.09.18)
-      max_resp, max_pred = np.nanmax(all_resps[non_neg]), np.nanmax(all_preds[non_neg]);
-      bounds = np.vstack(((0,1.5*max_resp), (0.5, 4), (0,1.5*max_pred))).transpose(); # gain, c50 must be pos; exp. between 0.5-4
-      init_gain = np.nanmax(all_resps[non_neg]);
-      init_exp = hf.random_in_range([0.75, 2.5])[0];
-      init_c50 = np.nanmedian(all_preds[non_neg]);
-      fitz, _ = opt.curve_fit(myFit, all_preds[non_neg], all_resps[non_neg], p0=[init_gain, init_exp, init_c50], bounds=bounds, maxfev=5000)
-    rel_c50 = np.divide(fitz[-1], np.max(all_preds[non_neg]));
+      fitz, rel_c50, nr_mod = fit_overall_suppression(all_resps, all_preds)
   except:
     fitz = None;
     rel_c50 = -99;
+  curr_suppr['rel_c50'] = rel_c50;
+
+  #### Now, recapitulate the key measures for the dataframe
+  # and add the model prediction given the input drive (i.e. predMean)
+  mixture_exp['mod_pred'] = np.maximum(myFit(mixture_exp['predMean'], *fitz), 0.5)
+  # --- only keep mixtures in this dataframe
+  mixute_exp_mixs = mixture_exp[mixture_exp['disp']>1];
+  to_use = mixute_exp_mixs;
+  # 1. Relative suppression (expected/measured)
+  to_use['rel_err'] = to_use['respMean'] - to_use['mod_pred']
+  # 2. Suppression index  [r-p]/[r+p]
+  to_use['supr_ind'] = (to_use['respMean']-to_use['mod_pred'])/(to_use['respMean']+to_use['mod_pred'])
+  # 3. rel. supr
+  to_use['rel_supr'] = to_use['respMean']/to_use['mod_pred']
+  curr_suppr['var_expl'] = hf.var_explained(to_use['respMean'], to_use['mod_pred'], sfVals=None);
 
   ############
   ### organize stimulus information
@@ -367,10 +594,14 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   lbls_con = ['con: %.2f' % x for x in val_con];
 
   ############
-  ### create the figure
+  ### create the key figure (i.e. Abramov-Levine '75)
   ############
-  fSuper, ax = plt.subplots(nRows, nCols, figsize=(10*nCols, 8*nRows))
-  sns.despine(fig=fSuper, offset=10)
+  #fSuper, ax = plt.subplots(nRows, nCols, figsize=hf.set_size(tex_width, subplots=(nRows,nCols), extra_height=nRows));
+  fSuper, ax = plt.subplots(nRows, nCols, figsize=(4.5*nCols, 3*nRows))
+  mrkrsz = mpl.rcParams['lines.markersize']*0.75; # when we make the size adjustment above, the points are too large for the scatter
+  mew = 0.2 * mrkrsz; # just very faint
+  #print('%.2f, %.2f' % (mrkrsz, mew))
+  sns.despine(fig=fSuper, offset=sns_offset)
 
   allMix = [];
   allSum = [];
@@ -378,11 +609,11 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   ### plot reference tuning [row 1 (i.e. 2nd row)]
   ## on the right, SF tuning (high contrast)
   sfRef = hf.nan_rm(respMean[0, :, -1]); # high contrast tuning
-  ax[1, 1].plot(all_sfs, sfRef, 'k-', marker='o', label='ref. tuning (d0, high con)', clip_on=False)
+  ax[1, 1].plot(all_sfs, sfRef, 'k-', marker='o', label='ref. tuning (d0, high con)')
   ax[1, 1].set_xscale('log')
   ax[1, 1].set_xlim((0.1, 10));
-  ax[1, 1].set_xlabel('sf (c/deg)')
-  ax[1, 1].set_ylabel('response (spikes/s)')
+  ax[1, 1].set_xlabel('Spatial frequency (c/deg)')
+  ax[1, 1].set_ylabel('Response (spikes/s)')
   ax[1, 1].set_ylim((-5, 1.1*np.nanmax(sfRef)));
   ax[1, 1].legend(fontsize='x-small');
 
@@ -414,10 +645,10 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
     curr_suppr['c50'] = np.nan; curr_suppr['conGain'] = np.nan;
     curr_suppr['c50_emp'] = np.nan; curr_suppr['c50_emp_eval'] = np.nan;
 
-  ax[1, 0].plot(all_cons[v_cons_single], rvcRef, 'k-', marker='o', label='ref. tuning (d0, peak SF)', clip_on=False)
+  ax[1, 0].plot(all_cons[v_cons_single], rvcRef, 'k-', marker='o', label='ref. tuning (d0, peak SF)')
   #         ax[1, 0].set_xscale('log')
-  ax[1, 0].set_xlabel('contrast (%)');
-  ax[1, 0].set_ylabel('response (spikes/s)')
+  ax[1, 0].set_xlabel('Contrast');
+  ax[1, 0].set_ylabel('Response (spikes/s)')
   ax[1, 0].set_ylim((-5, 1.1*np.nanmax(rvcRef)));
   ax[1, 0].legend(fontsize='x-small');
 
@@ -445,19 +676,18 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   #      print('condition: d(%d), c(%d), sf(%d):: pred(%.2f)|real(%.2f)' % (d, v_cons[c], s, sumResp, mixResp))
         # PLOT in by-disp panel
         if c == 0 and s == v_sfs[0]:
-          ax[0, 0].plot(sumResp, mixResp, 'o', color=clrs_d[d-1], label=lbls_d[d], clip_on=False)
+          ax[0, 0].plot(sumResp, mixResp, 'o', color=clrs_d[d-1], label=lbls_d[d], clip_on=False, markersize=mrkrsz, markeredgecolor='w', markeredgewidth=mew)
         else:
-          ax[0, 0].plot(sumResp, mixResp, 'o', color=clrs_d[d-1], clip_on=False)
+          ax[0, 0].plot(sumResp, mixResp, 'o', color=clrs_d[d-1], clip_on=False, markersize=mrkrsz, markeredgecolor='w', markeredgewidth=mew)
         # PLOT in by-sf panel
         sfInd = np.where(np.array(v_sfs) == s)[0][0]; # will only be one entry, so just "unpack"
         try:
           if d == 1 and c == 0:
-            ax[0, 1].plot(sumResp, mixResp, 'o', color=clrs_sf[sfInd], label=lbls_sf[sfInd], clip_on=False);
+            ax[0, 1].plot(sumResp, mixResp, 'o', color=clrs_sf[sfInd], label=lbls_sf[sfInd], clip_on=False, markersize=mrkrsz, markeredgecolor='w', markeredgewidth=mew);
           else:
-            ax[0, 1].plot(sumResp, mixResp, 'o', color=clrs_sf[sfInd], clip_on=False);
+            ax[0, 1].plot(sumResp, mixResp, 'o', color=clrs_sf[sfInd], clip_on=False, markersize=mrkrsz, markeredgecolor='w', markeredgewidth=mew);
         except:
           pass;
-          #pdb.set_trace();
         # plot baseline, if f0...
   #       if baseline is not None:
   #         [ax[0, i].axhline(baseline, linestyle='--', color='k', label='spon. rate') for i in range(2)];
@@ -547,15 +777,15 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   sfRef = hf.nan_rm(respMean[0, val_sfs, -1]); # high contrast tuning
   sfRefShift = offset - scale * (sfRef/np.nanmax(sfRef))
   ax[2,1].scatter(all_sfs[val_sfs][sfInds], sfRats, color=clrs_sf[sfInds], clip_on=False)
-  ax[2,1].errorbar(all_sfs[val_sfs][sfInds], sfRats, sfRatStd, color='k', linestyle='-', clip_on=False, label='suppression tuning')
+  ax[2,1].errorbar(all_sfs[val_sfs][sfInds], sfRats, sfRatStd, color='k', linestyle='-', label='suppression tuning')
   #         ax[2,1].plot(all_sfs[val_sfs][sfInds], sfRats, 'k-', clip_on=False, label='suppression tuning')
-  ax[2,1].plot(all_sfs[val_sfs], sfRefShift, 'k--', label='ref. tuning', clip_on=False)
+  ax[2,1].plot(all_sfs[val_sfs], sfRefShift, 'k--', label='ref. tuning')
   ax[2,1].axhline(1, ls='--', color='k')
-  ax[2,1].set_xlabel('sf (cpd)')
+  ax[2,1].set_xlabel('Spatial Frequency (c/deg)')
   ax[2,1].set_xscale('log')
   ax[2,1].set_xlim((0.1, 10));
   #ax[2,1].set_xlim((np.min(all_sfs), np.max(all_sfs)));
-  ax[2,1].set_ylabel('suppression ratio');
+  ax[2,1].set_ylabel('Suppression ratio');
   ax[2,1].set_yscale('log')
   #ax[2,1].yaxis.set_ticks(minorticks)
   ax[2,1].set_ylim(0.1, 10);        
@@ -566,24 +796,30 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   if fitz is not None:
     # mean signed error: and labels/plots for the error as f'n of SF
     ax[3,1].axhline(0, ls='--', color='k')
-    ax[3,1].set_xlabel('sf (cpd)')
+    ax[3,1].set_xlabel('Spatial Frequency (c/deg)')
     ax[3,1].set_xscale('log')
     ax[3,1].set_xlim((0.1, 10));
     #ax[3,1].set_xlim((np.min(all_sfs), np.max(all_sfs)));
     ax[3,1].set_ylabel('mean (signed) error');
-    ax[3,1].errorbar(all_sfs[val_sfs][sfInds], sfErrs, sfErrsStd, color='k', marker='o', linestyle='-', clip_on=False)
+    ax[3,1].errorbar(all_sfs[val_sfs][sfInds], sfErrs, sfErrsStd, color='k', marker='o', linestyle='-')
     # -- and normalized by the prediction output response + output respeonse
     val_errs = np.logical_and(~np.isnan(sfErrsRat), np.logical_and(np.array(sfErrsIndStd)>0, np.array(sfErrsIndStd) < 2));
     norm_subset = np.array(sfErrsInd)[val_errs];
     normStd_subset = np.array(sfErrsIndStd)[val_errs];
     ax[4,1].axhline(0, ls='--', color='k')
-    ax[4,1].set_xlabel('sf (cpd)')
+    ax[4,1].set_xlabel('Spatial Frequency (c/deg)')
     ax[4,1].set_xscale('log')
     ax[4,1].set_xlim((0.1, 10));
     #ax[4,1].set_xlim((np.min(all_sfs), np.max(all_sfs)));
     ax[4,1].set_ylim((-1, 1));
     ax[4,1].set_ylabel('error index');
-    ax[4,1].errorbar(all_sfs[val_sfs][sfInds][val_errs], norm_subset, normStd_subset, color='k', marker='o', linestyle='-', clip_on=False)
+    ax[4,1].errorbar(all_sfs[val_sfs][sfInds][val_errs], norm_subset, normStd_subset, color='k', marker='o', linestyle='-')
+    # --- check if the pandas grouping gives the same results as what we have above?
+    #sfs = np.unique(to_use['sf']);
+    #mns, sems = to_use.groupby('sf')['supr_ind'].mean(), to_use.groupby('sf')['supr_ind'].std()/to_use.groupby('sf')['supr_ind'].count()
+    #ax[4,1].errorbar(sfs, mns, yerr=sems, marker='*', linestyle='--');
+
+
     # -- AND simply the ratio between the mixture response and the mean expected mix response (i.e. Naka-Rushton)
     # --- equivalent to the suppression ratio, but relative to the NR fit rather than perfect linear summation
     val_errs = np.logical_and(~np.isnan(sfErrsRat), np.logical_and(np.array(sfErrsRatStd)>0, np.array(sfErrsRatStd) < 2));
@@ -591,9 +827,9 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
     ratStd_subset = np.array(sfErrsRatStd)[val_errs];
     #ratStd_subset = (1/np.log(2))*np.divide(np.array(sfErrsRatStd)[val_errs], rat_subset);
     ax[5,1].scatter(all_sfs[val_sfs][sfInds][val_errs], rat_subset, color=clrs_sf[sfInds][val_errs], clip_on=False)
-    ax[5,1].errorbar(all_sfs[val_sfs][sfInds][val_errs], rat_subset, ratStd_subset, color='k', linestyle='-', clip_on=False, label='suppression tuning')
+    ax[5,1].errorbar(all_sfs[val_sfs][sfInds][val_errs], rat_subset, ratStd_subset, color='k', linestyle='-', label='suppression tuning')
     ax[5,1].axhline(1, ls='--', color='k')
-    ax[5,1].set_xlabel('sf (cpd)')
+    ax[5,1].set_xlabel('Spatial Frequency (c/deg)')
     ax[5,1].set_xscale('log')
     ax[5,1].set_xlim((0.1, 10));
     ax[5,1].set_ylabel('suppression ratio (wrt NR)');
@@ -639,11 +875,11 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   ax2.plot(mod_sfs[1:], deriv_norm, '--', color="red", label='g\'');
   ax2.set_ylabel("deriv. (normalized)",color="red")
   ax2.legend();
-  sns.despine(ax=ax2, offset=10, right=False);
+  sns.despine(ax=ax2, offset=sns_offset, right=False);
   # -- and let's plot rescaled and shifted version in [2,1]
   offset, scale = np.nanmax(sfRats), np.nanmax(sfRats) - np.nanmin(sfRats);
   derivShift = offset - scale * (deriv_norm/np.nanmax(deriv_norm));
-  ax[2,1].plot(mod_sfs[1:], derivShift, 'r--', label='deriv(ref. tuning)', clip_on=False)
+  ax[2,1].plot(mod_sfs[1:], derivShift, 'r--', label='deriv(ref. tuning)')
   ax[2,1].legend(fontsize='x-small');
   # - then, normalize the sfErrs/sfErrsInd and compute the correlation coefficient
   if fitz is not None:
@@ -669,15 +905,17 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   for j in range(1):
     for jj in range(nCols):
       ax[j, jj].axis('square')
-      ax[j, jj].set_xlabel('prediction: sum(components) (imp/s)');
-      ax[j, jj].set_ylabel('mixture response (imp/s)');
+      ax[j, jj].set_xlabel('sum(components) (spikes/s)');
+      ax[j, jj].set_ylabel('Mixture response (spikes/s)');
       ax[j, jj].plot([0, 1*maxResp], [0, 1*maxResp], 'k--')
       ax[j, jj].set_xlim((-5, maxResp));
       ax[j, jj].set_ylim((-5, 1.1*maxResp));
-      ax[j, jj].set_title('Suppression index: %.2f|%.2f' % (hmm[0], rel_c50))
-      ax[j, jj].legend(fontsize='x-small');
+      ax[j, jj].set_title('Suppression index: %.2f|%.2f [%.1f\%%]' % (curr_suppr['supr_index'], curr_suppr['rel_c50'], curr_suppr['var_expl']));
+      ax[j, jj].legend(fontsize='xx-small', ncol=1+jj); # want two legend columns for SF
 
-  fSuper.suptitle('Superposition: %s #%d [%s; f1f0 %.2f; szSupr[dt/md] %.2f/%.2f; oriBW|CV %.2f|%.2f; tfBW %.2f]' % (cellType, which_cell, cellName, f1f0_rat, suprDat, suprMod, oriBW, oriCV, tfBW))
+  fSuper.suptitle('%s \#%d [%s]; f1f0 %.2f; szSupr[dt/md] %.2f/%.2f; oriBW|CV %.2f|%.2f; tfBW %.2f]' % (cellType, which_cell, cellName.replace('_','\_'), f1f0_rat, suprDat, suprMod, oriBW, oriCV, tfBW), fontsize='small')
+
+  fSuper.tight_layout();
 
   if fitList is None:
     save_name = 'cell_%03d.pdf' % which_cell
