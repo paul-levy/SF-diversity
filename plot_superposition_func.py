@@ -1,3 +1,4 @@
+
 import os
 import numpy as np
 import pandas as pd
@@ -307,12 +308,13 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   else:
     loc_str = '';
 
-  rvcName = 'rvcFits_220926' if expDir=='LGN/' else 'rvcFits%s_220926' % loc_str
+  rvcName = 'rvcFits%s_220926' % ''# % loc_str
+  phAdvName = 'phaseAdvanceFits%s_220926' % ''# % loc_str
   #rvcName = 'rvcFits_220926' if expDir=='LGN/' else 'rvcFits%s_220718' % loc_str
+  #phAdvName = 'phaseAdvanceFits%s_220531' % loc_str if expDir=='LGN/' else 'phaseAdvanceFits%s_220718' % loc_str;
   rvcFits = None; # pre-define this as None; will be overwritten if available/needed
   if expDir == 'altExp/': # we don't adjust responses there...
     rvcName = '%s_f0' % rvcName;
-  phAdvName = 'phaseAdvanceFits%s_220531' % loc_str if expDir=='LGN/' else 'phaseAdvanceFits%s_220718' % loc_str;
   dFits_base = 'descrFits%s_220609' % loc_str if expDir=='LGN/' else 'descrFits%s_220721' % loc_str
   if use_mod_resp == 1:
     rvcName = None; # Use NONE if getting model responses, only
@@ -415,7 +417,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
     fitList = None;
 
   if not os.path.exists(save_locSuper):
-    os.makedirs(save_locSuper)
+    os.makedirs(save_locSuper);
 
   cells = np.arange(1, 1+len(dataList['unitName']))
 
@@ -640,15 +642,18 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
     rel_rvc = rvcFits[0]['params'][sfPeak]; # we get 0 dispersion, peak SF
     c50, pk = hf.get_c50(rvcMod, rel_rvc), rvcFits[0]['conGain'][sfPeak];
   else:
-    rvcFits_temp = hf.np_smart_load('%s%s' % (dataPath, hf.rvc_fit_name(rvcName, rvcMod, dir=rvcDir)));
-    rvcFits_temp = rvcFits_temp[which_cell-1];
-    rel_rvc = rvcFits_temp['params'][0, sfPeak]; # we get 0 dispersion, peak SF
-    try: # assume that it's f0 type (altExp, since that's the only time we should here)
-      c50, pk = hf.get_c50(rvcMod, rel_rvc), rvcFits_temp['conGain'][0, sfPeak]; # zero dispersion
+    try:
+      rvcFits_temp = hf.np_smart_load('%s%s' % (dataPath, hf.rvc_fit_name(rvcName, rvcMod, dir=rvcDir)));
+      rvcFits_temp = rvcFits_temp[which_cell-1];
+      rel_rvc = rvcFits_temp['params'][0, sfPeak]; # we get 0 dispersion, peak SF
+      try: # assume that it's f0 type (altExp, since that's the only time we should here)
+        c50, pk = hf.get_c50(rvcMod, rel_rvc), rvcFits_temp['conGain'][0, sfPeak]; # zero dispersion
+      except:
+        c50, pk = hf.get_c50(rvcMod, rel_rvc), rvcFits_temp[0]['conGain'][sfPeak];
     except:
-      c50, pk = hf.get_c50(rvcMod, rel_rvc), rvcFits_temp[0]['conGain'][sfPeak];
-
-    
+      rel_rvc = None
+      c50, pk = np.nan, np.nan
+   
   if rel_rvc is not None:
     plt_cons = np.geomspace(all_cons[0], all_cons[-1], 50);
     c50_emp, c50_eval = hf.c50_empirical(rvcMod, rel_rvc); # determine c50 by optimization, numerical approx.
@@ -704,8 +709,8 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
           else:
             ax[0, 0].plot(sumResp, mixResp, 'o', color=clrs_d[d-1], clip_on=False, markersize=mrkrsz, markeredgecolor='w', markeredgewidth=mew)
         # PLOT in by-sf panel --> same regardless of full or simplified plot
-        sfInd = np.where(np.array(val_sfs) == s)[0][0]; # will only be one entry, so just "unpack"
         try:
+          sfInd = np.where(np.array(val_sfs) == s)[0][0]; # will only be one entry, so just "unpack"
           if d == 1 and c == 0: # just make the label once...
             if altHollow:
               ax[0, 1].plot(sumResp, mixResp, 'o', label=lbls_sf[sfInd], clip_on=False, markersize=mrkrsz - mew*np.mod(sfInd,2), markeredgecolor='w' if np.mod(sfInd,2)==0 else clrs_sf[sfInd], markeredgewidth=mew, markerfacecolor='None' if np.mod(sfInd,2)==1 else clrs_sf[sfInd]);
@@ -718,10 +723,6 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
               ax[0, 1].plot(sumResp, mixResp, 'o', color=clrs_sf[sfInd], clip_on=False, markersize=mrkrsz, markeredgecolor='w', markeredgewidth=mew);
         except:
           pass;
-        # plot baseline, if f0...
-  #       if baseline is not None:
-  #         [ax[0, i].axhline(baseline, linestyle='--', color='k', label='spon. rate') for i in range(2)];
-
 
     # plot averaged across all cons/sfs (i.e. average for the whole dispersion) [1,0]
     mixDisp = respMean[d, :, :].flatten();
@@ -729,13 +730,10 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
     mixDisp, sumDisp = zr_rm_pair(mixDisp, sumDisp, 0.5);
     curr_rats = np.divide(mixDisp, sumDisp)
     curr_mn = geomean(curr_rats); curr_std = np.std(np.log10(curr_rats));
-  #  curr_rat = geomean(np.divide(mixDisp, sumDisp));
     if not simple_plot:
       ax[2, 0].bar(d, curr_mn, yerr=curr_std, color=clrs_d[d-1]);
       ax[2, 0].set_yscale('log')
       ax[2, 0].set_ylim(0.1, 10);
-   #  ax[2, 0].yaxis.set_ticks(minorticks)
-   #  ax[2, 0].bar(d, np.mean(np.divide(mixDisp, sumDisp)), color=clrs_d[d-1]);
     dispRats.append(curr_mn);
 
     # also, let's plot the (signed) error relative to the fit
@@ -785,14 +783,10 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
         curr_errNorm = np.divide(mixSf - curr_NR, mixSf + curr_NR);
         sfErrsInd.append(np.nanmean(curr_errNorm));
         sfErrsIndStd.append(np.nanstd(curr_errNorm))
-        #sfErrsInd.append(np.mean(curr_errNorm));
-        #sfErrsIndStd.append(np.std(curr_errNorm))
 
         curr_errRat = np.divide(mixSf, curr_NR);
         sfErrsRat.append(np.nanmean(curr_errRat));
         sfErrsRatStd.append(np.nanstd(curr_errRat));
-        #sfErrsRat.append(np.mean(curr_errRat));
-        #sfErrsRatStd.append(np.std(curr_errRat));
 
         curr_normFactors = np.array(curr_NR)
         curr_errNormFactor.append(geomean(curr_normFactors[curr_normFactors>0]));
@@ -816,16 +810,13 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   if not simple_plot:
     ax[2,1].scatter(all_sfs[val_sfs][sfInds], sfRats, color=clrs_sf[sfInds], clip_on=False)
     ax[2,1].errorbar(all_sfs[val_sfs][sfInds], sfRats, sfRatStd, color='k', linestyle='-', label='suppression tuning')
-    #         ax[2,1].plot(all_sfs[val_sfs][sfInds], sfRats, 'k-', clip_on=False, label='suppression tuning')
     ax[2,1].plot(all_sfs[val_sfs], sfRefShift, 'k--', label='ref. tuning')
     ax[2,1].axhline(1, ls='--', color='k', alpha=ref_line_alpha)
     ax[2,1].set_xlabel('Spatial Frequency (c/deg)')
     ax[2,1].set_xscale('log')
     ax[2,1].set_xlim((0.1, 10));
-    #ax[2,1].set_xlim((np.min(all_sfs), np.max(all_sfs)));
     ax[2,1].set_ylabel('Suppression ratio');
     ax[2,1].set_yscale('log')
-    #ax[2,1].yaxis.set_ticks(minorticks)
     ax[2,1].set_ylim(0.1, 10);        
     ax[2,1].legend(fontsize='x-small');
 
@@ -837,11 +828,9 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
       ax[3,1].set_xlabel('Spatial Frequency (c/deg)')
       ax[3,1].set_xscale('log')
       ax[3,1].set_xlim((0.1, 10));
-      #ax[3,1].set_xlim((np.min(all_sfs), np.max(all_sfs)));
       ax[3,1].set_ylabel('mean (signed) error');
       ax[3,1].errorbar(all_sfs[val_sfs][sfInds], sfErrs, sfErrsStd, color='k', marker='o', linestyle='-')
     # -- and normalized by the prediction output response + output respeonse
-    #val_errs = ~np.isnan(sfErrsRat);
     val_errs = np.logical_and(~np.isnan(sfErrsRat), np.logical_and(np.array(sfErrsIndStd)>0, np.array(sfErrsIndStd) < 2));
 
     norm_subset = np.array(sfErrsInd)[val_errs];
@@ -865,7 +854,10 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
     except:
       sct_clrs = 'k'
     ok_inds = np.logical_and(to_use['respMean']>=ltThresh, to_use['predMean']>=ltThresh)
-    ax[4+row_ind_offset,1].scatter([add_log_jitter(x, 0.6 if simple_plot else 0.7, np.nanmean(np.log(sfs[1:]/sfs[0:-1]))) for x in to_use['sf'][ok_inds]], to_use['supr_ind'][ok_inds], alpha=0.5, s=mrkrsz, color=sct_clrs[ok_inds])
+    try:
+      ax[4+row_ind_offset,1].scatter([add_log_jitter(x, 0.6 if simple_plot else 0.7, np.nanmean(np.log(sfs[1:]/sfs[0:-1]))) for x in to_use['sf'][ok_inds]], to_use['supr_ind'][ok_inds], alpha=0.5, s=mrkrsz, color=sct_clrs[ok_inds])
+    except: # for the 1-2 V1 cells with oddities, the above won't work --> just skip it
+      pass;
     # --- check if the pandas grouping gives the same results as what we have above?
     #mns, sems = to_use.groupby('sf')['supr_ind'].mean(), to_use.groupby('sf')['supr_ind'].std()/to_use.groupby('sf')['supr_ind'].count()
     #ax[4,1].errorbar(sfs, mns, yerr=sems, marker='*', linestyle='--');

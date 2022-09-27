@@ -18,42 +18,15 @@ else:
   hpcSuff = '';
 
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
-df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
-#dogName = 'descrFits%s_220531' % hpcSuff;
-dogName = 'descrFits%s_220826vEs' % hpcSuff;
+dogName = 'descrFits%s_220926vEs' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220926' % hpcSuff
   rvcName_f1 = 'rvcFits%s_220926' % hpcSuff;
-  #rvcName_f1 = 'rvcFits%s_220531' % hpcSuff;
-  #phAdvName = 'phaseAdvanceFits%s_220519' % hpcSuff
-  #rvcName_f1 = 'rvcFits%s_220519' % hpcSuff;
-  #phAdvName = 'phaseAdvanceFits_211108'
-  #rvcName_f1 = 'rvcFits_211108'; # FOR LGN
-  rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+  rvcName_f0 = 'rvcFits_220926_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 else:
   phAdvName = 'phaseAdvanceFits%s_220926' % hpcSuff
   rvcName_f1 = 'rvcFits%s_220926' % hpcSuff;
-  #phAdvName = 'phaseAdvanceFits%s_220718' % hpcSuff
-  #rvcName_f1 = 'rvcFits%s_220718' % hpcSuff;
-  #phAdvName = 'phaseAdvanceFits%s_220609' % hpcSuff
-  #rvcName_f1 = 'rvcFits%s_220609' % hpcSuff;
-  #phAdvName = 'phaseAdvanceFits%s_210914' % hpcSuff
-  #rvcName_f1 = 'rvcFits%s_210914' % hpcSuff; # FOR V1
-  #phAdvName = 'phaseAdvanceFits%s_210914' % hpcSuff
-  #rvcName_f1 = 'rvcFits%s_210914' % hpcSuff; # FOR V1
-  rvcName_f0 = 'rvcFits%s_220609_f0' % hpcSuff; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-  #rvcName_f0 = 'rvcFits_210914_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
-
-'''
-modelRecov = 0; # 
-## model recovery??? OUTDATED, as of 21.11, and only applicable in RVC fits, anyway
-if modelRecov == 1:
-  normType = 1; # use if modelRecov == 1 :: 1 - flat; 2 - wght; ...
-  dogName =  'mr%s_descrFits_190503' % hf.fitType_suffix(normType);
-  rvcName = 'mr%s_rvcFits_f0.npy' % hf.fitType_suffix(normType);
-else:
-  normType = 0;
-'''
+  rvcName_f0 = 'rvcFits%s_220926_f0' % hpcSuff; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 
 ##########
 ### TODO:
@@ -349,13 +322,7 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
         rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(to_use, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True, prevFits=rvcFits_curr, n_repeats=n_repeats);
 
       currResp = adjSumResp if disp > 0 else adjMeans
-      # --- if the responses we're fitting are [], then we just give np.nan for varExpl
-      '''
-      if len(np.unique([len(x) for x in all_opts])) > 1:
-        print('###########');
-        print('OH NO: CELL %d' % cell_num);
-        print('###########');
-      '''
+
       try:
         varExpl = [hf.var_explained(hf.nan_rm(np.array(dat)), hf.nan_rm(hf.get_rvcResp(prms, valCons, rvcMod)), None) if dat != [] else np.nan for dat, prms in zip(currResp, all_opts)];
       except:
@@ -445,11 +412,6 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
     prevFits_toSave['boot_params'] = boot_opts;
     prevFits_toSave['boot_conGain'] = boot_conGains;
     prevFits_toSave['boot_varExpl'] = boot_varExpl;
-    # We should default to not saving these -- will get very large with high nBoots
-    #prevFits_toSave['boot_adjMeans'] = boot_adjMeans;
-    #prevFits_toSave['boot_adjByTr'] = boot_adjByTrial if boot_adjByTrialCorr is None else boot_adjByTrialCorr;
-    #prevFits_toSave['boot_adjSem'] = boot_adjSemTr;
-    #prevFits_toSave['boot_adjSemComp'] = boot_adjSemCompTr;
   else:
     prevFits_toSave['loss'] = all_loss;
     prevFits_toSave['params'] = all_opts;
@@ -1256,7 +1218,7 @@ if __name__ == '__main__':
       if rvc_fits == 1:
         print('rvc fits!!!');
         with mp.Pool(processes = nCpu) as pool:
-          rvc_perCell = partial(rvc_adjusted_fit, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, returnMod=0, to_save=0, nBoots=nBoots);
+          rvc_perCell = partial(rvc_adjusted_fit, data_loc=dataPath, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, returnMod=0, to_save=0, nBoots=nBoots);
           rvcFits = pool.starmap(rvc_perCell, zip(zip(range(start_cell, end_cell+1), dL['unitName']), expInds));
           pool.close();
 
@@ -1332,7 +1294,7 @@ if __name__ == '__main__':
       if ph_fits == 1 and disp==0:
         phase_advance_fit(cell_num, expInd=expInd, data_loc=dataPath, disp=disp, dir=dir);
       if rvc_fits == 1:
-        rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, descrFitName_f0=df_f0, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, nBoots=nBoots);
+        rvc_adjusted_fit(cell_num, expInd=expInd, data_loc=dataPath, disp=disp, dir=dir, force_f1=force_f1, rvcMod=rvc_model, vecF1=vecF1, nBoots=nBoots);
       if descr_fits == 1:
         if nBoots > 1:
           if dog_model<3: # i.e. DoG, not d-DoG-S
