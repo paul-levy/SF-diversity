@@ -22,16 +22,19 @@ df_f0 = 'descrFits%s_200507_sqrt_flex.npy';
 #dogName = 'descrFits%s_220531' % hpcSuff;
 dogName = 'descrFits%s_220826vEs' % hpcSuff;
 if sys.argv[3] == 'LGN/':
-  phAdvName = 'phaseAdvanceFits%s_220531' % hpcSuff
-  rvcName_f1 = 'rvcFits%s_220531' % hpcSuff;
+  phAdvName = 'phaseAdvanceFits%s_220926' % hpcSuff
+  rvcName_f1 = 'rvcFits%s_220926' % hpcSuff;
+  #rvcName_f1 = 'rvcFits%s_220531' % hpcSuff;
   #phAdvName = 'phaseAdvanceFits%s_220519' % hpcSuff
   #rvcName_f1 = 'rvcFits%s_220519' % hpcSuff;
   #phAdvName = 'phaseAdvanceFits_211108'
   #rvcName_f1 = 'rvcFits_211108'; # FOR LGN
   rvcName_f0 = 'rvcFits_211108_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 else:
-  phAdvName = 'phaseAdvanceFits%s_220718' % hpcSuff
-  rvcName_f1 = 'rvcFits%s_220718' % hpcSuff;
+  phAdvName = 'phaseAdvanceFits%s_220926' % hpcSuff
+  rvcName_f1 = 'rvcFits%s_220926' % hpcSuff;
+  #phAdvName = 'phaseAdvanceFits%s_220718' % hpcSuff
+  #rvcName_f1 = 'rvcFits%s_220718' % hpcSuff;
   #phAdvName = 'phaseAdvanceFits%s_220609' % hpcSuff
   #rvcName_f1 = 'rvcFits%s_220609' % hpcSuff;
   #phAdvName = 'phaseAdvanceFits%s_210914' % hpcSuff
@@ -184,7 +187,7 @@ def phase_advance_fit(cell_num, expInd, data_loc, phAdvName=phAdvName, to_save=1
   else:
     return curr_fit;
 
-def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=1, expName=expName, force_f1=False, rvcMod=0, vecF1=0, returnMod=1, n_repeats=25, nBoots=0):
+def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=rvcName_f1, descrFitName_f1=None, to_save=1, disp=0, dir=1, expName=expName, force_f1=False, rvcMod=0, vecF1=0, returnMod=1, n_repeats=25, nBoots=0, adjOnMeans=True):
   ''' With the corrected response amplitudes, fit the RVC model; save the results and/or return the resulting fits
 
        ###############
@@ -299,8 +302,13 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
         allPhiTrials = [[x[2] for x in sf] for sf in allPhi]; # trial-by-trial is third element 
        
         adjMeans   = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
-        adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs);
+        adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs, check_nans=False);
         # -- adjByTrial is series of nested lists: [nSfs x nConsValid x nComps x nRepeats]
+        # --- the below is means projected on average all trials of a condition -- we'll use this instead of adjMeans as needed
+        try: # will fail for weird examples (e.g. V1/27)
+          adjMeansOnMean = hf.organize_phAdj_byMean(data, expInd, all_opts, stimVals, valConByDisp);
+        except:
+          adjMeansOnMean = None;
 
       # if we are doing vector math 
       elif vecF1==1:
@@ -329,14 +337,16 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
         # --- adjSemTr is [nSf x nValCon], i.e. s.e.m. per condition
         adjSemTr    = [[sem(np.sum(hf.switch_inner_outer(x), 1)) for x in y] for y in adjByTrial] if vecF1 == 0 else [[sem(hf.nan_rm(x)) for x in y] for y in adjByTrialSum]
         adjSemCompTr  = [[sem(hf.switch_inner_outer(x)) for x in y] for y in adjByTrial] if vecF1 == 0 else None;
-        rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjSumResp, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True, prevFits=rvcFits_curr, n_repeats=n_repeats);
+        to_use = [hf.nan_rm(x) for x in adjMeansOnMean[disp]] if adjOnMeans and adjMeansOnMean is not None else adjSumResp
+        rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(to_use, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True, prevFits=rvcFits_curr, n_repeats=n_repeats);
       elif disp == 0:
         if vecF1 == 0:
           adjSemTr   = [[sem(x) for x in y] for y in adjByTrial]; # keeping for backwards compatability? check when this one works
         elif vecF1 == 1:
           adjSemTr   = [[sem(hf.nan_rm(x)) for x in y] for y in adjByTrialSum]; # keeping for backwards compatability? check when this one works
         adjSemCompTr = adjSemTr; # for single gratings, there is only one component!
-        rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(adjMeans, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True, prevFits=rvcFits_curr, n_repeats=n_repeats);
+        to_use = [hf.nan_rm(x) for x in adjMeansOnMean[disp]] if adjOnMeans and adjMeansOnMean is not None else adjMeans
+        rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(to_use, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True, prevFits=rvcFits_curr, n_repeats=n_repeats);
 
       currResp = adjSumResp if disp > 0 else adjMeans
       # --- if the responses we're fitting are [], then we just give np.nan for varExpl

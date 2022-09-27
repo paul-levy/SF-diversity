@@ -1234,7 +1234,7 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, des
 ##################################################################
 ##################################################################
 
-def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None, allSfs=None):
+def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None, allSfs=None, check_nans=True):
   ''' Using our model fit of (expected) response phase as a function of response amplitude, we can
       determine the difference in angle between the expected and measured phase and then project the
       measured response vector (i.e. amp/phase in polar coordinates) onto the expected phase line
@@ -1254,9 +1254,10 @@ def project_resp(amp, phi_resp, phAdv_model, phAdv_params, disp, allCompSf=None,
       # just compute readily 
       phi_true = np.array([phAdv_model(phAdv_params[i][0], phAdv_params[i][1], x) for x in amp[i]]);
       proj = np.array([np.multiply(amp[i][j], np.cos(np.deg2rad(phi_resp[i][j])-np.deg2rad(phi_true[j]))) for j in range(len(amp[i]))]);
-      if np.any(np.isnan(proj)):
-         nan_inds = np.where(np.isnan(proj));
-         proj[nan_inds] = 0; # why? We'll only end up with NaN if phi_resp is Nan, which only happens when the response is 0 (i.e. no spikes...)
+      if check_nans:
+         if np.any(np.isnan(proj)):
+            nan_inds = np.where(np.isnan(proj));
+            proj[nan_inds] = 0; # why? We'll only end up with NaN if phi_resp is Nan, which only happens when the response is 0 (i.e. no spikes...)
       all_proj.append(proj);
       
     elif disp > 0: # then we'll need to use the allCompSf to get the right phase advance fit for each component
@@ -1411,7 +1412,7 @@ def polar_vec_mean(amps, phases, sem=0):
      curr_amps = amps[cond];
      curr_phis = phases[cond];
 
-     n_reps = len(curr_amps);
+     n_reps = len(curr_amps); # 22.09.26 --> problem?
      # convert each amp/phase value to x, y
      [x_polar, y_polar] = [curr_amps*np.cos(np.radians(curr_phis)), curr_amps*np.sin(np.radians(curr_phis))]
      # take the mean/std
@@ -1715,7 +1716,11 @@ def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=False, 
      curr_amps = amps[i];
      curr_cons = cons[i];
      
-     if curr_amps == [] or curr_cons == []:
+     try:
+        no_len = curr_amps.size==0; # i.e. if it's zero, then we don't want to proceed
+     except: # we tried to evaluate this, but didn't work --> ok, just move on anyway (will happen for complex cells?)
+        no_len = False; 
+     if curr_amps == [] or curr_cons == [] or no_len: # try to remove curr_amps.size reference
        # nothing to do - set to blank and move on
        all_opts.append([]);
        all_loss.append([]);
@@ -1774,7 +1779,10 @@ def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=False, 
            i_base = 0;
          else:
            i_base = np.min(curr_amps) + random_in_range([-2.5, 2.5])[0];
-         i_gain = random_in_range([0.8, 1.2])[0] * (np.max(curr_amps) - i_base);
+         try:
+            i_gain = random_in_range([0.8, 1.2])[0] * (np.max(curr_amps) - i_base);
+         except:
+            pdb.set_trace();
          i_expon = random_in_range([1, 2])[0];
          i_c50 = random_in_range([0.05, 0.6])[0];
          i_sExp = 1;
@@ -5012,6 +5020,7 @@ def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_d
             try:
               curr_pred = 0;
               valid_tr = get_valid_trials(expStructure, disp, con_ind, sf, expInd, stimVals=stimVals, validByStimVal=val_by_stim_val)[0];
+
               if return_comps:
                  val_trials_by_cond[disp, sf, con_ind, 0:len(valid_tr[0])] = valid_tr[0];
               for n_comp in range(stimVals[0][disp]): # stimVals[0] is nGrats
@@ -5019,17 +5028,15 @@ def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_d
                  # Note: unique(.) will only be one value, since all equiv stim have same equiv componentss 
                  curr_con = np.unique(expStructure['con'][n_comp][valid_tr]);
                  if len(curr_con)!=1:
-                    pdb.set_trace(); 
+                    continue; # problematic...
                  # values in stimVals[1] are rounded, so we have to check for equality carefully
                  curr_con_ind = val_con_by_disp[0][np.where(np.isclose(stimVals[1][val_con_by_disp[0]], curr_con, atol=0.01))[0][0]];
                  curr_sf = np.unique(expStructure['sf'][n_comp][valid_tr]);
-                 if len(curr_sf)!=1:
-                    pdb.set_trace();
                  curr_sf_ind = np.where(np.isclose(stimVals[2], curr_sf[0], atol=0.005))[0];
 
                  curr_pred += means[0, curr_sf_ind, curr_con_ind] # always adding the zero dispersion prediction!
             except:
-              pdb.set_trace();
+               continue;
 
             preds[disp, sf, con_ind] = curr_pred;
 
