@@ -20,13 +20,13 @@ else:
 expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
 dogName = 'descrFits%s_220926vEs' % hpcSuff;
 if sys.argv[3] == 'LGN/':
-  phAdvName = 'phaseAdvanceFits%s_220926' % hpcSuff
-  rvcName_f1 = 'rvcFits%s_220926' % hpcSuff;
-  rvcName_f0 = 'rvcFits_220926_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+  phAdvName = 'phaseAdvanceFits%s_220928' % hpcSuff
+  rvcName_f1 = 'rvcFits%s_220928' % hpcSuff;
+  rvcName_f0 = 'rvcFits_220928_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 else:
-  phAdvName = 'phaseAdvanceFits%s_220926' % hpcSuff
-  rvcName_f1 = 'rvcFits%s_220926' % hpcSuff;
-  rvcName_f0 = 'rvcFits%s_220926_f0' % hpcSuff; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+  phAdvName = 'phaseAdvanceFits%s_220928' % hpcSuff
+  rvcName_f1 = 'rvcFits%s_220928' % hpcSuff;
+  rvcName_f0 = 'rvcFits%s_220928_f0' % hpcSuff; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 
 ##########
 ### TODO:
@@ -277,6 +277,7 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
         adjMeans   = hf.project_resp(allAmpMeans, allPhiMeans, phAdv_model, all_opts, disp, allCompSf, allSfs);
         adjByTrial = hf.project_resp(allAmpTrials, allPhiTrials, phAdv_model, all_opts, disp, allCompSf, allSfs, check_nans=False);
         # -- adjByTrial is series of nested lists: [nSfs x nConsValid x nComps x nRepeats]
+        # ----- AS OF 22.09.28 --> adjMeansOnMean should be same as adjMeans??? Likely was unnecessary addition!
         # --- the below is means projected on average all trials of a condition -- we'll use this instead of adjMeans as needed
         try: # will fail for weird examples (e.g. V1/27)
           adjMeansOnMean = hf.organize_phAdj_byMean(data, expInd, all_opts, stimVals, valConByDisp);
@@ -318,7 +319,8 @@ def rvc_adjusted_fit(cell_num, expInd, data_loc, descrFitName_f0=None, rvcName=r
         elif vecF1 == 1:
           adjSemTr   = [[sem(hf.nan_rm(x)) for x in y] for y in adjByTrialSum]; # keeping for backwards compatability? check when this one works
         adjSemCompTr = adjSemTr; # for single gratings, there is only one component!
-        to_use = [hf.nan_rm(x) for x in adjMeansOnMean[disp]] if adjOnMeans and adjMeansOnMean is not None else adjMeans
+        #to_use = [hf.nan_rm(x) for x in adjMeansOnMean[disp]] if adjOnMeans and adjMeansOnMean is not None else adjMeans
+        to_use = adjMeans;
         rvc_model, all_opts, all_conGains, all_loss = hf.rvc_fit(to_use, consRepeat, adjSemTr, mod=rvcMod, fix_baseline=True, prevFits=rvcFits_curr, n_repeats=n_repeats);
 
       currResp = adjSumResp if disp > 0 else adjMeans

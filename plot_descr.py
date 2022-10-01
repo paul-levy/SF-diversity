@@ -37,6 +37,7 @@ y_lblpad = 6;
 x_lblpad = 8;
 
 subplot_title = False; # have subplot title? Not really necessary for pub. figures
+subplot_title_rvc = True; # as above, but only for CRF/RVC plot
 specify_ticks = True; # specify the SF ticks (x-axis for SF plots?)
 old_refprm = False; # how to we pass in ref_params?
 
@@ -90,29 +91,22 @@ expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
 if expDir == 'LGN/':
-    #descrBase = 'descrFits%s_220702vE' % hpc_str;
     descrBase = 'descrFits%s_220810vEs' % hpc_str;
 else:
-  #if expDir == 'altExp/':
-  #  descrBase = 'descrFits%s_220707vEs' % hpc_str;
-  #else:
-  #  descrBase = 'descrFits%s_220721vEs' % hpc_str;
   descrBase = 'descrFits%s_220811vEs' % hpc_str;
-  #descrBase = 'descrFits%s_220810vEs' % hpc_str;
 if expDir == 'LGN/':
-  rvcBase = 'rvcFits%s_220531' % hpc_str;
-  #rvcBase = 'rvcFits%s_220511' % hpc_str;
+  rvcBase = 'rvcFits%s_220928' % hpc_str;
+  #rvcBase = 'rvcFits%s_220531' % hpc_str;
 else:
-  if expDir == 'altExp/':
-    rvcBase = 'rvcFits%s_220609' % hpc_str;
-  else:
-    rvcBase = 'rvcFits%s_220718' % hpc_str;
+  rvcBase = 'rvcFits%s_220928' % hpc_str;
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
 
 if rvcAdjSigned==1 and phAmpByMean: # i.e. phAdv correction
-    phBase = 'phaseAdvanceFits%s_220531' % (hpc_str) if expDir=='LGN/' else 'phaseAdvanceFits%s_220609' % (hpc_str)
+    phBase = 'phaseAdvanceFits%s_220928' % hpc_str
+    #phBase = 'phaseAdvanceFits%s_220926' % hpc_str
+    #phBase = 'phaseAdvanceFits%s_220531' % (hpc_str) if expDir=='LGN/' else 'phaseAdvanceFits%s_220609' % (hpc_str)
     print(phBase);
     phAdvFits = hf.np_smart_load(data_loc + hf.phase_fit_name(phBase, dir=1));
     all_opts = phAdvFits[cellNum-1]['params'];
@@ -646,7 +640,7 @@ pdfSv.close()
 #### Response versus contrast (RVC; contrast response function, CRF)
 ##################
 
-cons_plot = np.geomspace(np.minimum(0.01, all_cons), np.max(all_cons), 100); # go down to at least 1% contrast
+cons_plot = np.geomspace(np.minimum(0.01, all_cons[0]), np.max(all_cons), 100); # go down to at least 1% contrast
 #cons_plot = np.geomspace(np.min(all_cons), np.max(all_cons), 100);
 
 # #### Plot contrast response functions with descriptive RVC model predictions
@@ -669,6 +663,7 @@ for d in range(nDisps):
         row_ind = int(sf/n_cols);
         col_ind = np.mod(sf, n_cols);
         sf_ind = v_sf_inds[sf];
+
         if n_cols > 1:
           plt_y = (row_ind, col_ind);
         else: # pyplot makes it (n_rows, ) if n_cols == 1
@@ -693,7 +688,8 @@ for d in range(nDisps):
           high_err = var_curr; # no problem with going to higher values
           low_err = np.minimum(var_curr, resp_curr-minResp_toPlot-1e-2); # i.e. don't allow us to make the err any lower than where the plot will cut-off (incl. negatives)
           errs = np.vstack((low_err, high_err));
-        rvcCurr[plt_y].errorbar(100*all_cons[v_cons][resp_curr>minResp_toPlot], resp_curr[resp_curr>minResp_toPlot], errs[:, resp_curr>minResp_toPlot], fmt='o', linestyle='-', clip_on=False, label='data', markersize=9, color=dataClr);
+        rvcCurr[plt_y].errorbar(100*all_cons[v_cons][resp_curr>minResp_toPlot], resp_curr[resp_curr>minResp_toPlot], errs[:, resp_curr>minResp_toPlot], fmt='o', linestyle='None', clip_on=False, label='data', markersize=9, color=dataClr);
+        #rvcCurr[plt_y].errorbar(100*all_cons[v_cons][resp_curr>minResp_toPlot], resp_curr[resp_curr>minResp_toPlot], errs[:, resp_curr>minResp_toPlot], fmt='o', linestyle='-', clip_on=False, label='data', markersize=9, color=dataClr);
 
  	# RVC descr model - TODO: Fix this discrepancy between f0 and f1 rvc structure? make both like descrFits?
         # NOTE: changing split of accessing rvcFits based on rvcAdj
@@ -710,8 +706,9 @@ for d in range(nDisps):
         if forceLog == 1:
            rvcResps = rvcResps - to_sub;
         val_inds = np.where(rvcResps>minResp_toPlot)[0];
+        #pdb.set_trace();
 
-        rvcCurr[plt_y].plot(100*cons_plot[val_inds], rvcResps[val_inds], color=modClr, alpha=0.7, clip_on=False, label=modTxt);
+        rvcCurr[plt_y].plot(100*cons_plot[val_inds], rvcResps[val_inds], color=modClr, alpha=1, clip_on=False)#, label=modTxt);
         if c50>0: # just to make sure that we don't plot anything odd...
           rvcCurr[plt_y].plot(100*c50, 1.5*minResp_toPlot, 'v', label='c50', color=modClr, clip_on=False);
         # now, let's also plot the baseline, if complex cell
@@ -725,17 +722,17 @@ for d in range(nDisps):
           rvcCurr[plt_y].legend();
 
         # set axis limits...
-        rvcCurr[plt_y].set_xlim([1, 100]);
         if forceLog == 1:
           #rvcCurr[plt_y].set_ylim((minResp_toPlot, 1.25*maxResp));
           rvcCurr[plt_y].set_yscale('log'); # double log
           rvcCurr[plt_y].set_aspect('equal'); 
+        rvcCurr[plt_y].set_xlim([1, 100]);
      
         try:
           curr_varExpl = rvcFits[d]['varExpl'][sf_ind] if rvcAdj else rvcFits['varExpl'][d, sf_ind];
         except:
           curr_varExpl = np.nan;
-        if subplot_title:
+        if subplot_title_rvc:
             rvcCurr[plt_y].set_title('D%d: sf: %.3f [vE=%.2f%%]' % (d+1, all_sfs[sf_ind], curr_varExpl), fontsize='large');
         if rvcMod == 0:
           try:

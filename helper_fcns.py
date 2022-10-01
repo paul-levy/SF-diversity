@@ -1788,20 +1788,21 @@ def rvc_fit(amps, cons, var = None, n_repeats = 100, mod=0, fix_baseline=False, 
          i_sExp = 1;
          init_params = [i_base, i_gain, i_expon, i_c50, i_sExp];
          if fix_baseline:
-           b_bounds = (0, 0);
+           b_bounds = (0, 0.00001);
          else:
            b_bounds = (None, None);
          g_bounds = (0, None);
-         e_bounds = (0.75, None);
+         e_bounds = (0.75, 4); # added exponent bound on 22.09.28
+         #e_bounds = (0.75, None);
          c_bounds = (0.01, 1);
          if mod == 1:
-           s_bounds = (1, 1);
+           s_bounds = (1, 1.00001);
          elif mod == 2:
            s_bounds = (1, 2); # for now, but can adjust as needed (TODO)
          all_bounds = (b_bounds, g_bounds, e_bounds, c_bounds, s_bounds);
        # now optimize
        try:
-         to_opt = opt.minimize(obj, init_params, bounds=all_bounds);
+         to_opt = opt.minimize(obj, init_params, bounds=all_bounds)#, method='L-BFGS-B');
        except:
          continue; # this fit failed; try again
        opt_params = to_opt['x'];
@@ -3645,7 +3646,7 @@ def get_rvcResp(params, curr_cons, rvcMod):
 ##################################################################
 ##################################################################
 
-def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0, reducedSave=False):
+def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0, reducedSave=False, briefVersion=False):
 
    ''' - bootThresh (fraction of time for which a boot metric must be defined in order to be included in analysis)
    '''
@@ -3752,10 +3753,19 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
        suppr = dict([('byDisp', super_curr['supr_disp']),
                      ('bySf', super_curr['supr_sf']),
                      ('sfErrsInd_var', super_curr['sfErrsInd_VAR']),
+                     ('sfErrsInd_var_prince', super_curr['sfErrsInd_VAR_prince']),
                      ('errsRat_var', super_curr['sfRat_VAR']),
                      ('corr_derivWithErr', super_curr['corr_derivWithErr']),
                      ('corr_derivWithErrsInd', super_curr['corr_derivWithErrsInd']),
-                     ('supr_index', super_curr['supr_index'])]);
+                     ('corr_derivWithErrsInd', super_curr['corr_derivWithErrsInd']),
+                     ('rel_c50', super_curr['rel_c50']),
+                     ('disp0_c50', super_curr['c50']),
+                     ('disp0_c50_emp', super_curr['c50_emp']),
+                     ('disp0_c50_emp_eval', super_curr['c50_emp_eval']),
+                     ('var_expl', super_curr['var_expl']), # expl. var of the N-R fit
+                     ('supr_area', super_curr['supr_area']),
+                     ('supr_disp', super_curr['supr_disp']),
+                     ('supr_index', super_curr['supr_index'])]); # supr_index is bad - should be deprecated?
      except:
        suppr = dict([('byDisp', None),
                      ('bySf', None),
@@ -3763,6 +3773,11 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
                      ('errsRat_var', None),
                      ('corr_derivWithErr', None),
                      ('corr_derivWithErrsInd', None),
+                     ('rel_c50', None),
+                     ('disp0_c50', None),
+                     ('var_expl', None),
+                     ('supr_area', None),
+                     ('supr_disp', None),
                      ('supr_index', None)]);
        pass;
 
@@ -3854,8 +3869,6 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    # --- then fill for the above in a programmatc fashion
    for name, mods, size, boots in zip(metrs, metrs_which_mod, metrs_size, metrs_has_boot):
       for mod in mods:
-         #if reducedSave and mod=='':
-         #   continue; # i.e. don't bother with non-DoG for reduced save
          curr_key = '%s%s' % (mod, name);
          dataMetrics[curr_key] = np.nan * np.zeros(size);
          if boots is not None:
@@ -4059,49 +4072,50 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
              dataMetrics['dog_mech'][d, c] = [dog_get_param(dog_params_curr, dogMod, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']];
 
              # Now, bootstrap estimates
-             try:
-               # -- now, get the distribution of bootstrap estimates for sf70, pSf, bw_sigma, and bwHalf/bw34
-               # temp. hack??!! fix code in descr_fits_sfBB [TODO]
-               boot_prms = dogFits[cell_ind]['boot_params']
-               if boot_prms.shape[0] == 1:
-                 boot_prms = np.transpose(boot_prms, axes=(1,0,2,3)); # i.e. flip 1st and 2nd axes
-               # ---- zeroth, mechanism
+             if not briefVersion:
                try:
-                  dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, :]), dogMod, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]);
-               except:
-                  pass;
-               # then, in order: sf70, pSf, charFreq
-               metrs = ['pSf', 'charFreq', 'sf70', 'bwHalf', 'bw34'];
-               compute = ['np.nanmedian(', 'np.nanmean(', 'np.nanstd(', 'np.nanstd(np.log10(']
-               for metr in metrs:
-                  # get the key, values
-                  curr_key = 'boot_dog_%s_values' % metr;
-                  if 'sf70' in metr:
-                     dataMetrics[curr_key][d,c] = [sf_highCut(boot_prms[boot_i, d, c, :], sfMod=dogMod, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp) for boot_i in range(boot_prms.shape[0])];
-                     #dataMetrics[curr_key][d,c] = np.array([sf_highCut(boot_prms[boot_i, d, c, :], sfMod=dogMod, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp) for boot_i in range(boot_prms.shape[0])]);
-                  elif 'pSf' in metr or 'charFreq' in metr:
-                     # --- must manually specify for pSf, since we call it "pSf" but fits have "prefSf"
-                     dataMetrics[curr_key][d,c] = dogFits[cell_ind]['boot_%s' % metr][:, d, c] if 'charFreq' in metr else dogFits[cell_ind]['boot_prefSf'][:, d, c]
-                  elif 'bw' in metr:
-                     height = 0.5 if 'Half' in metr else 0.75; # assumes it's either half or 3/4th height
-                     if boot_ref_params is not None:
-                        dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=dogMod, ref_params=boot_ref_params[:,boot_i])[1] for boot_i in range(boot_prms.shape[0])]);
-                     else:
-                        dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=dogMod)[1] for boot_i in range(boot_prms.shape[0])]);
-                  # now compute the metrics
-                  for boot_metr,comp in zip(boot_metrs, compute):
-                     if 'bw' in metr and 'stdLog' in boot_metr:
-                        continue; # don't compute log for bandwidth stuff
-                     boot_key = 'boot_dog_%s%s' % (metr, boot_metr);
-                     try: # need the if/else to handle the case where two parantheses need closing
-                        dataMetrics[boot_key][d,c] = eval('%sdataMetrics[curr_key][d,c]))' % comp) if 'stdLog' in boot_metr else eval('%sdataMetrics[curr_key][d,c])' % comp);
-                     except Exception as e:
-                        print('----jl_perCell error: %s' % e);
-                        pass
-            
-             except Exception as e:
-               print('----jl_perCell error [%s/%02d]: %s' % (expDir, cell_ind+1, e));
-               pass
+                 # -- now, get the distribution of bootstrap estimates for sf70, pSf, bw_sigma, and bwHalf/bw34
+                 # temp. hack??!! fix code in descr_fits_sfBB [TODO]
+                 boot_prms = dogFits[cell_ind]['boot_params']
+                 if boot_prms.shape[0] == 1:
+                   boot_prms = np.transpose(boot_prms, axes=(1,0,2,3)); # i.e. flip 1st and 2nd axes
+                 # ---- zeroth, mechanism
+                 try:
+                    dataMetrics['boot_dog_mech'][d, c] = np.vstack([dog_get_param(np.transpose(boot_prms[:, d, c, :]), dogMod, x, con_val=cons[c]) for x in ['gc', 'rc', 'vc', 'gs', 'rs', 'vs']]);
+                 except:
+                    pass;
+                 # then, in order: sf70, pSf, charFreq
+                 metrs = ['pSf', 'charFreq', 'sf70', 'bwHalf', 'bw34'];
+                 compute = ['np.nanmedian(', 'np.nanmean(', 'np.nanstd(', 'np.nanstd(np.log10(']
+                 for metr in metrs:
+                    # get the key, values
+                    curr_key = 'boot_dog_%s_values' % metr;
+                    if 'sf70' in metr:
+                       dataMetrics[curr_key][d,c] = [sf_highCut(boot_prms[boot_i, d, c, :], sfMod=dogMod, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp) for boot_i in range(boot_prms.shape[0])];
+                       #dataMetrics[curr_key][d,c] = np.array([sf_highCut(boot_prms[boot_i, d, c, :], sfMod=dogMod, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp) for boot_i in range(boot_prms.shape[0])]);
+                    elif 'pSf' in metr or 'charFreq' in metr:
+                       # --- must manually specify for pSf, since we call it "pSf" but fits have "prefSf"
+                       dataMetrics[curr_key][d,c] = dogFits[cell_ind]['boot_%s' % metr][:, d, c] if 'charFreq' in metr else dogFits[cell_ind]['boot_prefSf'][:, d, c]
+                    elif 'bw' in metr:
+                       height = 0.5 if 'Half' in metr else 0.75; # assumes it's either half or 3/4th height
+                       if boot_ref_params is not None:
+                          dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=dogMod, ref_params=boot_ref_params[:,boot_i])[1] for boot_i in range(boot_prms.shape[0])]);
+                       else:
+                          dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=dogMod)[1] for boot_i in range(boot_prms.shape[0])]);
+                    # now compute the metrics
+                    for boot_metr,comp in zip(boot_metrs, compute):
+                       if 'bw' in metr and 'stdLog' in boot_metr:
+                          continue; # don't compute log for bandwidth stuff
+                       boot_key = 'boot_dog_%s%s' % (metr, boot_metr);
+                       try: # need the if/else to handle the case where two parantheses need closing
+                          dataMetrics[boot_key][d,c] = eval('%sdataMetrics[curr_key][d,c]))' % comp) if 'stdLog' in boot_metr else eval('%sdataMetrics[curr_key][d,c])' % comp);
+                       except Exception as e:
+                          print('----jl_perCell error: %s' % e);
+                          pass
+
+               except Exception as e:
+                 print('----jl_perCell error [%s/%02d]: %s' % (expDir, cell_ind+1, e));
+                 pass
                   
          except: # then this dispersion does not have that contrast value, but it's ok - we already have nan
            pass 
@@ -4130,43 +4144,43 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
              for ky,frac in zip(['sf70', 'sfE'], [0.7, eFrac]):
                 dataMetrics[ky][d, c] = sf_highCut(params_curr, sfMod=descrMod, frac=frac, sfRange=(0.1, 15));
 
-             try:
-               # -- now, get the distribution of bootstrap estimates for sf70, pSf, bw_sigma, and bwHalf/bw34
-               # TEMPORARY HACK!!! fix code in descr_fits_sfBB [TODO]
-               boot_prms = descrFits[cell_ind]['boot_params']
-               if boot_prms.shape[0] == 1:
-                 boot_prms = np.transpose(boot_prms, axes=(1,0,2,3)); # i.e. flip 1st and 2nd axes
+             if not briefVersion:
+               try:
+                 # -- now, get the distribution of bootstrap estimates for sf70, pSf, bw_sigma, and bwHalf/bw34
+                 # TEMPORARY HACK!!! fix code in descr_fits_sfBB [TODO]
+                 boot_prms = descrFits[cell_ind]['boot_params']
+                 if boot_prms.shape[0] == 1:
+                   boot_prms = np.transpose(boot_prms, axes=(1,0,2,3)); # i.e. flip 1st and 2nd axes
 
-               # then, in order: sf70, pSf, charFreq
-               metrs = ['sf70', 'pSf', 'bwHalf', 'bw34'];
-               compute = ['np.nanmedian(', 'np.nanmean(', 'np.nanstd(', 'np.nanstd(np.log10(']
-               for metr in metrs:
-                  # get the key, values
-                  curr_key = 'boot_%s_values' % metr;
-                  if 'sf70' in metr:
-                     dataMetrics[curr_key][d,c] = [sf_highCut(boot_prms[boot_i, d, c, :], sfMod=descrMod, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp) for boot_i in range(boot_prms.shape[0])];
-                  elif 'pSf' in metr:
-                     dataMetrics[curr_key][d,c] = descrFits[cell_ind]['boot_prefSf'][:, d, c]
-                     # must manually specify, since the key is ...prefSf in the descrFits, but pSf here
-                  elif 'bw' in metr:
-                     height = 0.5 if 'Half' in metr else 0.75; # assumes it's either half or 3/4th height
-                     dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=descrMod)[1] for boot_i in range(boot_prms.shape[0])]);
-                  # now compute the metrics, IF we have enough valid boot iters
-                  n_nonNan = np.sum(~np.isnan(dataMetrics[curr_key][d,c]));
-                  if n_nonNan < bootThresh*boot_prms.shape[0]:
-                     continue; # i.e. don't do this if we have too few parameters
+                 # then, in order: sf70, pSf, charFreq
+                 metrs = ['sf70', 'pSf', 'bwHalf', 'bw34'];
+                 compute = ['np.nanmedian(', 'np.nanmean(', 'np.nanstd(', 'np.nanstd(np.log10(']
+                 for metr in metrs:
+                    # get the key, values
+                    curr_key = 'boot_%s_values' % metr;
+                    if 'sf70' in metr:
+                       dataMetrics[curr_key][d,c] = [sf_highCut(boot_prms[boot_i, d, c, :], sfMod=descrMod, frac=0.7, sfRange=(0.1, 15), baseline_sub=baseline_resp) for boot_i in range(boot_prms.shape[0])];
+                    elif 'pSf' in metr:
+                       dataMetrics[curr_key][d,c] = descrFits[cell_ind]['boot_prefSf'][:, d, c]
+                       # must manually specify, since the key is ...prefSf in the descrFits, but pSf here
+                    elif 'bw' in metr:
+                       height = 0.5 if 'Half' in metr else 0.75; # assumes it's either half or 3/4th height
+                       dataMetrics[curr_key][d,c] = np.array([compute_SF_BW(boot_prms[boot_i, d, c, :], height=height, sf_range=sf_range, sfMod=descrMod)[1] for boot_i in range(boot_prms.shape[0])]);
+                    # now compute the metrics, IF we have enough valid boot iters
+                    n_nonNan = np.sum(~np.isnan(dataMetrics[curr_key][d,c]));
+                    if n_nonNan < bootThresh*boot_prms.shape[0]:
+                       continue; # i.e. don't do this if we have too few parameters
 
-                  for boot_metr,comp in zip(boot_metrs, compute):
-                     if 'bw' in metr and 'stdLog' in boot_metr:
-                        continue; # don't compute log for bandwidth stuff
-                     boot_key = 'boot_%s%s' % (metr, boot_metr);
-                     try: # need the if/else to handle the case where two parantheses need closing
-                        dataMetrics[boot_key][d,c] = eval('%sdataMetrics[curr_key][d,c]))' % comp) if 'stdLog' in boot_metr else eval('%sdataMetrics[curr_key][d,c])' % comp);
-                     except:
-                        pass
-             except:
-               pass
-
+                    for boot_metr,comp in zip(boot_metrs, compute):
+                       if 'bw' in metr and 'stdLog' in boot_metr:
+                          continue; # don't compute log for bandwidth stuff
+                       boot_key = 'boot_%s%s' % (metr, boot_metr);
+                       try: # need the if/else to handle the case where two parantheses need closing
+                          dataMetrics[boot_key][d,c] = eval('%sdataMetrics[curr_key][d,c]))' % comp) if 'stdLog' in boot_metr else eval('%sdataMetrics[curr_key][d,c])' % comp);
+                       except:
+                          pass
+               except:
+                 pass
 
          except: # then this dispersion does not have that contrast value, but it's ok - we already have nan
            pass 
@@ -4370,7 +4384,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    return cellSummary;
 
 def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods,
-              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, jointType=0, reducedSave=False):
+              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, jointType=0, reducedSave=False, briefVersion=False):
   ''' create the "super structure" that we use to analyze data across multiple versions of the experiment
       TODO: update this to get proper spikes/tuning measures based on f1/f0 ratio (REQUIRES descrFits to be like rvcFits, i.e. fit F1 or F0 responses, accordingly)
       inputs:
@@ -4411,7 +4425,8 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     dogFits = np_smart_load(data_loc + dog_nm);
     rvcFits = np_smart_load(data_loc + rv_nm);
     try:
-      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_220713.npy');
+      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_220930.npy');
+      #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_220926.npy');
       #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_210824.npy');
     except:
       superAnalysis = None;
@@ -4426,7 +4441,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     isBB = 1 if 'BB' in expDir else 0;
 
     if toPar:
-      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType, reducedSave=reducedSave)
+      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType, reducedSave=reducedSave, briefVersion=briefVersion)
 
       #if isBB:
       #  oh = perCell_summary(30);
@@ -4744,7 +4759,7 @@ def get_isolated_responseAdj(data, trials, adjByTrial):
 
 ##
 
-def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False, modsAsRate=False, resample=False, cellNum=-1, cross_val=None):
+def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False, modsAsRate=False, resample=False, cellNum=-1, cross_val=None, sum_power=1):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
         (ii) all_disps, all_cons, all_sfs - i.e. the stimulus conditions of the experiment
@@ -4762,6 +4777,7 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
         -- if not None, then cross_val should be tuple with (fracInTest, startInd); i.e. what fraction of overall data is test, which index to start with?
         ---- Further note: if startInd is negative, then we'll just randomly sample WITHOUT replacement
         ----> why? for joint fits, better to randomly sample then take trials i through j for all conditions
+       sum_power --> np.power(sum(x^sum_power), 1/sum_power)
     '''
     np = numpy;
     conDig = 3; # round contrast to the thousandth
@@ -4879,10 +4895,10 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                     
                     curr_resps = resample_array(resample, respToUse[val_tr]); # will just be the array if resample==0
 
-                    curr_pred = curr_pred + np.mean(curr_resps/respDiv);
+                    curr_pred = curr_pred + np.power(np.mean(curr_resps/respDiv), sum_power);
                     curr_var = curr_var + np.var(curr_resps/respDiv);
                     
-                predMean[d, sf, con] = curr_pred;
+                predMean[d, sf, con] = np.power(curr_pred, 1./sum_power);
                 predStd[d, sf, con] = np.sqrt(curr_var);
                 
                 if mod: # if needed, convert spike counts in each trial to spike rate (spks/s)
@@ -4961,9 +4977,10 @@ def organize_adj_responses(data, rvcFits, expInd, vecF1=0):
      
   return adjResps;
 
-def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_disp, phAdv_model=None, resample=False, dir=1, redo_phAdv=True, incl_preds=False, val_by_stim_val=None, return_comps=False):
+def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_disp, phAdv_model=None, resample=False, dir=1, redo_phAdv=True, incl_preds=False, val_by_stim_val=None, return_comps=False, sum_power=1):
    ''' Organize the responses in the usual way (i.e. [d,sf,con])
          In the style of organize_resp, organize_adj_resp
+       sum_power --> np.power(sum(x^sum_power), 1/sum_power)
    '''
    np = numpy;
    if phAdv_model is None:
@@ -5034,11 +5051,11 @@ def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_d
                  curr_sf = np.unique(expStructure['sf'][n_comp][valid_tr]);
                  curr_sf_ind = np.where(np.isclose(stimVals[2], curr_sf[0], atol=0.005))[0];
 
-                 curr_pred += means[0, curr_sf_ind, curr_con_ind] # always adding the zero dispersion prediction!
+                 curr_pred += np.power(means[0, curr_sf_ind, curr_con_ind], sum_power) # always adding the zero dispersion prediction!
             except:
                continue;
 
-            preds[disp, sf, con_ind] = curr_pred;
+            preds[disp, sf, con_ind] = np.power(curr_pred, 1./sum_power);
 
    if return_comps and incl_preds: # then, also return component-by-component resposne for mixture AND list of indices found in each mixture
       return means, preds, comp_resp_means, val_trials_by_cond;

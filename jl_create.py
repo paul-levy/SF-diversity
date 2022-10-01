@@ -9,6 +9,8 @@ import itertools, pdb
 area = sys.argv[1];
 jointType = int(sys.argv[2]);
 
+brief=True; # save boot iter metrics, too?
+
 if area == 'V1':
 
   ########################
@@ -69,7 +71,8 @@ if area == 'V1':
   descrNames = ['descrFits_210914_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210916_sqrt_flex.npy'];
   #descrNames = ['descrFits_190503_sqrt_flex.npy', 'descrFits_190503_sqrt_flex.npy', 'descrFits_191023_sqrt_flex.npy'];
 
-  rvcNames = ['rvcFitsHPC_220609_vecF1_NR.npy']
+  rvcNames = ['rvcFitsHPC_220928_NR_pos.npy']
+  #rvcNames = ['rvcFitsHPC_220609_vecF1_NR.npy']
   #rvcNames = ['rvcFitsHPC_220609_f0_NR.npy', 'rvcFitsHPC_220609_vecF1_NR.npy']
   #rvcNames = ['rvcFitsHPC_220609_f0_NR.npy', 'rvcFitsHPC_220609_vecF1_NR.npy', 'V1_BB/structures/rvcFitsHPC_220609_vecF1_NR.npy']
   rvcMods = [1];
@@ -110,11 +113,11 @@ if area == 'V1':
   # WARNING: This takes [~/<]10 minutes (as of 20.04.14)
   # jointList_V1full = hf.jl_create(base_dir, [expDirs[-1]], [expNames[-1]], [fitNamesWght[-1]], [fitNamesFlat[-1]], [descrNames[-1]], [dogNames[-1]], [rvcNames[-1]], [rvcMods[-1]])
 
-  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType)
+  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType, reducedSave=True, briefVersion=brief)
 
   from datetime import datetime
-  #suffix = datetime.today().strftime('%y%m%d')
-  suffix = '220905'
+  suffix = datetime.today().strftime('%y%m%d')
+  #suffix = '220926'
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
@@ -166,8 +169,9 @@ if area == 'LGN':
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
   descrNames = ['descrFits_211005_sqrt_flex.npy', 'descrFits_s211006_sach_flex.npy'];
 
-  rvcMods = [0,0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
-  rvcNames = ['rvcFitsHPC_220531_pos.npy', 'rvcFitsHPC_220531_pos.npy'];
+  rvcMods = [1,0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
+  rvcNames = ['rvcFitsHPC_220926_NR_pos.npy', 'rvcFitsHPC_220531_pos.npy'];
+  #rvcNames = ['rvcFitsHPC_220531_pos.npy', 'rvcFitsHPC_220531_pos.npy'];
   #rvcNames = ['rvcFitsHPC_220506_vecF1.npy', 'rvcFitsHPC_220508_vecF1.npy'];
   #rvcNames = ['rvcFits_210914_pos.npy', 'rvcFitsHPC_220219_pos.npy'];
   #rvcMods = [0]; # 0-mov (blank); 1-Nakarushton (NR); 2-Peirce (peirce)
@@ -201,11 +205,11 @@ if area == 'LGN':
 
   # NOTE: the real code for creating the jointList has been moved to helper_fcns!
   # WARNING: This takes ~10 minutes (as of 09.06.19)
-  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType, reducedSave=True)
+  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType, reducedSave=True, briefVersion=brief)
 
   from datetime import datetime
-  #suffix = datetime.today().strftime('%y%m%d')
-  suffix = '220905';
+  suffix = datetime.today().strftime('%y%m%d')
+  #suffix = '220926';
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
