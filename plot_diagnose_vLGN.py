@@ -68,7 +68,7 @@ rvcAdj   = int(sys.argv[8]); # if 1, then let's load rvcFits to adjust responses
 rvcMod   = int(sys.argv[9]); # 0/1/2 (see hf.rvc_fit_name)
 diffPlot = int(sys.argv[10]);
 intpMod  = int(sys.argv[11]);
-kMult  = float(sys.argv[12]);
+kMult  = float(sys.argv[12]); # only applies for lossType=4
 
 if len(sys.argv) > 13:
   fixRespExp = float(sys.argv[13]);
@@ -151,7 +151,10 @@ elif excType == 2:
     if force_full:
       fitBase = 'fitList%s_pyt_210331' % loc_str
 
+fitBase = 'fitList%s_pyt_221001' % '' #loc_str
 #fitBase = 'holdout_fitList_190513cA';
+rvcDir = 1;
+vecF1 = 0;
 
 if pytorch_mod == 1 and rvcAdj == -1:
   vecCorrected = 1;
@@ -160,14 +163,14 @@ else:
 
 ### RVCFITS
 #rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
-rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
+#rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
+rvcBase = 'rvcFits%s_220928' % loc_str; # direc flag & '.npy' are added
 
 ### Model types
 # 0th: Unpack the norm types, con types, lgnTypes
 normA, normB = int(np.floor(normTypesIn/10)), np.mod(normTypesIn, 10)
 conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
 lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
-
 fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
 fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
 # what's the shorthand we use to refer to these models...
@@ -272,7 +275,7 @@ _, stimVals, val_con_by_disp, validByStimVal, _ = hf.tabulate_responses(expData,
 if rvcAdj >= 0:
   if rvcAdj == 1:
     rvcFlag = '';
-    rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
+    rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
     asRates = True;
   elif rvcAdj == 0:
     rvcFlag = '_f0';
@@ -916,10 +919,14 @@ for (pltNum, modPrm),lgnType,lgnConType,mWt in zip(enumerate(modFits), lgnTypes,
 # Compute the reference, untuned gain control (apply as necessary)
 inhAsym = 0;
 inhWeight = [];
-nInhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
+try:
+  inhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
+except: # if that didn't work, then we need to create the norm_resp
+  norm_resp = mod_resp.GetNormResp(cellNum, data_loc, expDir='', dataListName=expName); # in GetNormResp, expDir added to data_loc; already included here
+  inhChan = norm_resp['pref']['sf']
 inhSfTuning = hf.getSuppressiveSFtuning();
-for iP in range(len(nInhChan)):
-    inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]) - np.mean(np.log(expData['sfm']['mod']['normalization']['pref']['sf'][iP]))));
+for iP in range(len(inhChan)):
+    inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(inhChan[iP]) - np.mean(np.log(inhChan[iP]))));
 sfNorm_flat = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
 sfNorm_flat = sfNorm_flat/np.amax(np.abs(sfNorm_flat));
 

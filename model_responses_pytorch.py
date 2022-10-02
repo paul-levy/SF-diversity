@@ -220,7 +220,9 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
         else:
           tf_as_ind = _cast_as_tensor(hf.tf_to_ind(tfs, stimDur), dtype=torch.long); # if 1s, then TF corresponds to index; if stimDur is 2 seconds, then we can resolve half-integer frequencies -- i.e. 0.5 Hz = 1st index, 1 Hz = 2nd index, ...; CAST to integer
         if len(spectrum[0]) == len(tf_as_ind): # i.e. we have separate tfs for each trial
-          rel_amp = [torch.stack([spectrum[0][i][tf_as_ind[i]] for i in range(len(tf_as_ind))])];
+          spec_curr = spectrum[0];
+          #pdb.set_trace();
+          rel_amp = [torch.stack([spec_curr[i][tf_as_ind[i]] for i in range(len(tf_as_ind))])];
         else: # i.e. it's just a fixed set of TFs that applies for all trials (expInd=-1)
           rel_amp = [spectrum[i][:, tf_as_ind[i]] for i in range(len(tf_as_ind))];
       except:
@@ -873,7 +875,10 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 #def setParams():
 #  ''' Set the parameters of the model '''
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=15000, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None): # learning rate 0.04ish on 20.03.06 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+### 22.10.01 --> max_epochs was 15000
+### --- temporarily, reduce to make faster
+
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=2000, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None): # learning rate 0.04ish on 20.03.06 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   global dataListName
@@ -926,6 +931,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           fL_name = 'fitList%s_pyt_210321' % (loc_str);
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
+    # TEMP: Just overwrite any of the above with this name
+    fL_name = 'fitList%s_pyt_221001' % loc_str;
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1112,6 +1119,11 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   hessian_history = []
 
   first_pred = model.forward(trInf, respMeasure=respMeasure);
+
+  #pdb.set_trace();
+  #import cProfile
+  #cProfile.runctx('model.forward(trInf, respMeasure=respMeasure)', {'model':model}, locals())
+
   accum = np.nan; # keep track of accumulator (will be replaced with zero at first step)
   for t in range(max_epochs):
       optimizer.zero_grad()
@@ -1328,7 +1340,7 @@ if __name__ == '__main__':
 
     start = time.process_time();
     dcOk = 0; f1Ok = 0 if (expDir == 'V1/' or expDir == 'V1_BB/') else 1; # i.e. we don't bother fitting F1 if fit is from V1_orig/ or altExp/
-    nTry = 30;
+    nTry = 10; # 30
     if cellNum >= 0:
       while not dcOk and nTry>0:
         try:
@@ -1340,7 +1352,8 @@ if __name__ == '__main__':
           pass;
         nTry -= 1;
       # now, do F1 fits
-      nTry=30; # reset nTry...
+
+      nTry=10; #30; # reset nTry...
       while not f1Ok and nTry>0:
         try:
           setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # then F1

@@ -91,9 +91,11 @@ expName = hf.get_datalist(expDir, force_full=1);
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
 if expDir == 'LGN/':
-    descrBase = 'descrFits%s_220810vEs' % hpc_str;
+  descrBase = 'descrFits%s_221001vEs' % hpc_str;
+  #descrBase = 'descrFits%s_220810vEs' % hpc_str;
 else:
-  descrBase = 'descrFits%s_220811vEs' % hpc_str;
+  descrBase = 'descrFits%s_221001vEs' % hpc_str;
+  #descrBase = 'descrFits%s_220811vEs' % hpc_str;
 if expDir == 'LGN/':
   rvcBase = 'rvcFits%s_220928' % hpc_str;
   #rvcBase = 'rvcFits%s_220531' % hpc_str;

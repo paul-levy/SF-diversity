@@ -18,14 +18,15 @@ try:
 except:
   cellNum = numpy.nan;
 try:
-  dataListName = hf.get_datalist(sys.argv[2]); # argv[2] is expDir
+  dataListName = hf.get_datalist(sys.argv[2], force_full=1); # argv[2] is expDir
 except:
   dataListName = None;
 
 modRecov = 0;
 
 #rvcBaseName = 'rvcFits_191023'; # a base set of RVC fits used for initializing c50 in opt...(full name, except .npy
-rvcBaseName = 'rvcFits_200507'; # a base set of RVC fits used for initializing c50 in opt...(full name, except .npy)
+rvcBaseName = 'rvcFitsHPC_220928'; # a base set of RVC fits used for initializing c50 in opt...(full name, except .npy)
+#rvcBaseName = 'rvcFits_200507'; # a base set of RVC fits used for initializing c50 in opt...(full name, except .npy)
 
 # now, get descrFit name (ask if modRecov, too)
 if modRecov == 1:
@@ -43,7 +44,8 @@ if modRecov == 1:
     rvcBase = None;
 else:
   try:
-    descrFitName = 'descrFits_200507_sqrt_flex.npy' # dataset 200507
+    descrFitName = 'descrFitsHPC_221001vEs_sqrt_flex.npy' # dataset 200507
+    #descrFitName = 'descrFits_200507_sqrt_flex.npy' # dataset 200507
     #descrFitName = 'descrFits_191023_poiss_flex.npy' # full dataset 
   except:
     warnings.warn('Could not load descrFits in model_responses');
@@ -1204,7 +1206,7 @@ def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None, overwrite
 
     normPool = {'n': n, 'nUnits': nUnits, 'gain': gain};
 
-    curr_dir = expDir + 'structures/';
+    curr_dir = '' if expDir=='' else str(expDir + 'structures/'); # i.e. if expDir=='', then we've already passed in the full path
     loadPath = loadPath + curr_dir; # the loadPath passed in is the base path, then we add the directory for the specific experiment
     
     if isinstance(iU, int): # if we've passd in an index to the datalist
@@ -1360,27 +1362,6 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
       sigmaFilt = hf.evalSigmaFilter(filter, scale_sigma, offset_sigma, evalSfs);
     else:
       sigmaFilt = numpy.square(sigma); # i.e. square the normalization constant
-
-    ''' unused
-    # Compute weights for suppressive signals
-    nInhChan = T['mod']['normalization']['pref']['sf'];
-    nTrials = len(T['exp']['trial']['num']);
-    inhWeight = [];
-    nFrames = hf.num_frames(expInd);
-
-    if normType == 2 or normType == 4:
-      inhWeightMat = hf.genNormWeights(structureSFM, nInhChan, gs_mean, gs_std, nTrials, expInd, normType);
-    else: # normType == 1 or anything else,
-      gs_mean = None; gs_std = None;
-      for iP in range(len(nInhChan)):
-          inhWeight = numpy.append(inhWeight, 1 + inhAsym*(numpy.log(T['mod']['normalization']['pref']['sf'][iP]) \
-                                              - numpy.mean(numpy.log(T['mod']['normalization']['pref']['sf'][iP]))));
-      # assumption by creation (made by Robbe) - only two normalization pools
-      inhWeightT1 = numpy.reshape(inhWeight, (1, len(inhWeight)));
-      inhWeightT2 = repmat(inhWeightT1, nTrials, 1);
-      inhWeightT3 = numpy.reshape(inhWeightT2, (nTrials, len(inhWeight), 1));
-      inhWeightMat  = numpy.tile(inhWeightT3, (1,1,nFrames));
-    '''
                               
     # Evaluate sfmix experiment
     for iR in range(1): #range(len(structureSFM['sfm'])): # why 1 for now? We don't have S.sfm as array (just one)
@@ -1399,6 +1380,9 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         #time = timeit.timeit(stmt=Eslow, globals={'structureSFM': structureSFM, 'excChannel': excChannel, 'expInd': expInd, 'excType': excType, 'SFMSimpleResp': SFMSimpleResp, 'lgnFrontEnd': lgnFrontEnd, 'allParams': allParams}, number=25);
         #eMMtime = timeit.timeit(stmt=E, globals={'structureSFM': structureSFM, 'excChannel': excChannel, 'expInd': expInd, 'excType': excType, 'SFMSimpleResp_matMul': SFMSimpleResp_matMul, 'lgnFrontEnd': lgnFrontEnd, 'allParams': allParams}, number=25);
 
+        #import cProfile
+        #oyvey= cProfile.runctx('SFMSimpleResp_matMul(structureSFM, excChannel, expInd=expInd, excType=excType, lgnFrontEnd=lgnFrontEnd, allParams=allParams);', {'SFMSimpleResp_matMul': SFMSimpleResp_matMul}, locals());
+        
         # Extract simple cell response (half-rectified linear filtering)
         Lexc = E['simpleResp']; # [nFrames x nTrials]
 
@@ -1418,12 +1402,14 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         ratio         = pow(numpy.maximum(0, numerator/denominator), respExp);
         meanRate      = ratio.mean(0);
         respModel     = noiseLate + scale*meanRate; # respModel[iR]
-        rateModel     = respModel / T['exp']['trial']['duration'];
+        rateModel     = respModel / T['exp']['trial']['durations'];
+        #rateModel     = respModel / T['exp']['trial']['duration']; # found this on 22.10.01 --> should be durations, with 's'
         # and get the spike count
         if overwriteSpikes is not None:
           spikeCount = hf.get_spikes(trialInf, rvcFits=rvcFits, expInd=expInd, overwriteSpikes=overwriteSpikes);
         else:
-          f1f0_rat = hf.compute_f1f0(T['exp']['trial'], cellNum, expInd, loc_data=None)[0];
+          # NOTE: f1f0_rat should NOT be in this part of the function call!!!!!
+          #f1f0_rat = hf.compute_f1f0(T['exp']['trial'], cellNum, expInd, loc_data=None)[0];
           # TODO: should add line forcing F1 if LGN experiment...
           # -- rvcMod = - 1 only because rvcFits already contains the loaded fits (tells func call to use rvcName as fits)
           spikeRate = hf.get_adjusted_spikerate(T['exp']['trial'], cellNum, expInd, dataPath=None, rvcName=rvcFits, rvcMod=-1, baseline_sub=False);
@@ -1509,6 +1495,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
       loss_glob.append(NLL);
       resp_glob.append(respModel);
 
+    #pdb.set_trace();
     return NLL, respModel, nll_notSum, vE_SF, vE_con; # add varExpl stuff here...
 
 def sfmToPartial(ind, cellN, sfm, rvc, eInd, mask, params, lgn_params, n_params, normType, lossType, trackSteps, overwriteSpikes, kMult, excType, compute_varExpl, lgnFrontEnd):
@@ -1782,7 +1769,7 @@ def SFMsimulate(params, structureSFM, stimFamily, con, sf_c, unweighted = 0, nor
 
     return respModel, Linh, Lexc, normResp['normResp'], denominator;
 
-def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBaseName, rvcMod=1, dataListName=dataListName, kMult=0.1, excType=1, lgnFrontEnd=0, fixRespExp=None):
+def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBaseName, rvcMod=1, dataListName=dataListName, kMult=0.1, excType=1, lgnFrontEnd=0, fixRespExp=None, rvcDir=1, vecF1=0):
     # Given just a cell number, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
     #
     # lossType
@@ -1828,6 +1815,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
           fL_name = 'fitList%s_200417' % (loc_str);
         elif excType == 2:
           fL_name = 'fitList%s_200507' % (loc_str);
+        fL_name = 'fitList%s_221001' % (loc_str);
         #fL_name = 'fitList%s_200519%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_200522%s' % (loc_str, hf.chiSq_suffix(kMult));
 
@@ -1891,7 +1879,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
         prefSfEst = np.median(allSfs);
 
     # load RVC fits, then get normConst estimate
-    rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
+    rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
     try: 
       peakSf = prefSfEst; # just borrow from above
       stimVals = hf.tabulate_responses(S, expInd)[1];
@@ -2088,6 +2076,10 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     ## NOW: set up the objective function
     obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult, excType=excType, lgnFrontEnd=lgnFrontEnd)[0];
 
+    import cProfile
+    oyvey= cProfile.runctx('obj(param_list)', None, locals());
+    pdb.set_trace();
+
     print('...now minimizing!'); 
     if 'TNC' in fL_name:
       tomin = opt.minimize(obj, param_list, bounds=all_bounds, method='TNC');
@@ -2154,7 +2146,7 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
 
 ############ NEW
 
-def setModel_joint(cellNums, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBaseName, rvcMod=1, dataListName=dataListName, kMult=0.1, excType=1, lgnFrontEnd=0, fixRespExp=None, toPar=False):
+def setModel_joint(cellNums, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_name=None, trackSteps=False, holdOutCondition = None, modRecov = None, rvcBase=rvcBaseName, rvcMod=1, dataListName=dataListName, kMult=0.1, excType=1, lgnFrontEnd=0, fixRespExp=None, toPar=False, rvcDir=1, vecF1=0):
     # Given a list of cell numbers, will fit the Robbe-inspired V1 model to the data for a particular experiment (expInd)
     # NOTE: Should be used ONLY for fits with an LGN front end (since the front end parameters are precisely what is jointly optimized
     #
@@ -2198,9 +2190,11 @@ def setModel_joint(cellNums, expDir, lossType = 1, fitType = 1, initFromCurr = 1
         #fL_name = 'fitList%s_200418%s_TNC' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_190321c' % loc_str
         if excType == 1:
-          fL_name = 'fitList%s_200417' % (loc_str);
+          #fL_name = 'fitList%s_200417' % (loc_str);
+          fL_name = 'fitList%s_221001' % (loc_str);
         elif excType == 2:
-          fL_name = 'fitList%s_200507' % (loc_str);
+          #fL_name = 'fitList%s_200507' % (loc_str);
+          fL_name = 'fitList%s_221001' % (loc_str);
         #fL_name = 'fitList%s_200519%s' % (loc_str, hf.chiSq_suffix(kMult));
         #fL_name = 'fitList%s_200522%s' % (loc_str, hf.chiSq_suffix(kMult));
 
@@ -2298,7 +2292,7 @@ def setModel_joint(cellNums, expDir, lossType = 1, fitType = 1, initFromCurr = 1
           prefSfEst = np.median(allSfs);
 
       # load RVC fits, then get normConst estimate
-      rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod);
+      rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
       rvcs.append(rvcFits);
       try: 
         peakSf = prefSfEst; # just borrow from above
