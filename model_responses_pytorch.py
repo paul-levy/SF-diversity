@@ -447,18 +447,18 @@ class sfNormMod(torch.nn.Module):
       self.inhAsym = _cast_as_param(normParams);
 
     ### LGN front parameters
-    self.LGNmodel = 2;
+    self.LGNmodel = 2; # parameterized as DiffOfGauss (not DoGsach)
     # prepopulate DoG parameters -- will overwrite, if needed
-    self.M_k = _cast_as_tensor(1);
-    self.M_fc = _cast_as_tensor(3);
-    self.M_ks = _cast_as_tensor(0.3);
-    self.M_js = _cast_as_tensor(0.4);
-    self.P_k = _cast_as_tensor(1);
-    self.P_fc = _cast_as_tensor(9);
-    self.P_ks = _cast_as_tensor(0.5);
-    self.P_js = _cast_as_tensor(0.4);
+    self.M_k = _cast_as_tensor(1); # gain of 1
+    self.M_fc = _cast_as_tensor(3); # char. freq of 3
+    self.M_ks = _cast_as_tensor(0.3); # surround gain rel. to center
+    self.M_js = _cast_as_tensor(0.4); # relative char. frequency of surround
+    self.P_k = _cast_as_tensor(1); # gain of 1 [we handle M vs. P sensitivity in the RVC]
+    self.P_fc = _cast_as_tensor(9); # char. freq of 9 [3x is a big discrepancy]
+    self.P_ks = _cast_as_tensor(0.5); # surround gain rel. to center
+    self.P_js = _cast_as_tensor(0.4); # relative char. freq of surround
     if self.lgnFrontEnd == 2:
-      self.M_fc = _cast_as_tensor(6);
+      self.M_fc = _cast_as_tensor(6); # different variant (make magno f_c=6, not 3)
     elif self.lgnFrontEnd == 99: # 99 is code for fitting an LGN front end which is common across all cells in the dataset...
       # parameters are passed as [..., m_fc, p_fc, m_ks, p_ks, m_js, p_js]
       self.M_fc = _cast_as_param(self.modParams[-6]);
@@ -470,10 +470,11 @@ class sfNormMod(torch.nn.Module):
       self.P_js = _cast_as_param(self.modParams[-1]);
     # specify rvc parameters (not true "parameters", i.e. not optimized)
     if self.lgnFrontEnd > 0:
-      self.rvcMod = 0;
-      self.rvc_m = _cast_as_tensor([0, 12.5, 0.05]);
+      self.rvcMod = 0; # Tony formulation of RVC
+      self.rvc_m = _cast_as_tensor([0, 12.5, 0.05]); # magno has lower gain, c50
       self.rvc_p = _cast_as_tensor([0, 17.5, 0.50]);
-      self.dog_m = [self.M_k, self.M_fc, self.M_ks, self.M_js]
+      # --- and pack the DoG parameters we specified above
+      self.dog_m = [self.M_k, self.M_fc, self.M_ks, self.M_js] 
       self.dog_p = [self.P_k, self.P_fc, self.P_ks, self.P_js]
     ### END OF INIT
 
@@ -498,7 +499,8 @@ class sfNormMod(torch.nn.Module):
       print('tuned norm mn|std: %.2f|%.2f' % (normMn, self.gs_std.item()));
       if self.normType == 5:
         print('\tAnd the norm gain (transformed|untransformed) is: %.2f|%.2f' % (torch.mul(_cast_as_tensor(_sigmoidGainNorm), torch.sigmoid(self.gs_gain)).item(), self.gs_gain.item()));
-    print('still applying the LGN filter for the gain control') if self.applyLGNtoNorm else print('No LGN for GC');
+    print('still applying the LGN filter for the gain control' if self.applyLGNtoNorm else 'No LGN for GC')
+    #print('still applying the LGN filter for the gain control') if self.applyLGNtoNorm else print('No LGN for GC')
     print('********END OF MODEL PARAMETERS********\n');
 
     return None;
@@ -878,9 +880,10 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=2000, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None): # learning rate 0.04ish on 20.03.06 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=4500, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True): # learning rate 0.04ish on 20.03.06 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
+  # --- to_save should be set to False if calling setModel in parallel!
   global dataListName
   global force_full
   
@@ -1174,6 +1177,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           loss_history[t].append(loss_curr.item())
           time_history[t].append(time.time() - start_time)
           if np.isnan(loss_curr.item()) or np.isinf(loss_curr.item()):
+              pdb.set_trace();
               # we raise an exception here and then try again.
               raise Exception("Loss is nan or inf on epoch %s, batch %s!" % (t, 0))
 
@@ -1210,15 +1214,16 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   else:
     NLL = loss_sfNormMod(curr_resp.flatten(), gt_resp.flatten(), model.lossType).detach().numpy();
 
-  ## we've finished optimization, so reload again to make sure that this  NLL is better than the currently saved one
+  ## we've finished optimization, so reload again to make sure that this NLL is better than the currently saved one
   ## -- why do we have to do it again here? We may be running multiple fits for the same cells at the same and we want to make sure that if one of those has updated, we don't overwrite that opt. if it's better
   currNLL = 1e7;
-  if os.path.exists(loc_data + fitListName):
+  if os.path.exists(loc_data + fitListName) and to_save: # otherwise, no need to reload...
     fitList = hf.np_smart_load(str(loc_data + fitListName));
-    try: # well, even if fitList loads, we might not have currNLL, so we have to have an exception here
-      currNLL = fitList[cellNum-1][respStr]['NLL']; # exists - either from real fit or as placeholder
-    except:
-      pass; # we've already defined the currNLL...
+  try: # well, even if fitList loads, we might not have currNLL, so we have to have an exception here
+    currNLL = fitList[cellNum-1][respStr]['NLL']; # exists - either from real fit or as placeholder
+  except:
+    pass; # we've already defined the currNLL...
+
   try:
     nll_history = fitList[cellNum-1][respStr]['nll_history'];
   except:
@@ -1227,39 +1232,52 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   ### SAVE: Now we save the results, including the results of each step, if specified
   print('...finished. New NLL (%.2f) vs. previous NLL (%.2f)' % (NLL, currNLL)); 
   # reload fitlist in case changes have been made with the file elsewhere!
-  if os.path.exists(loc_data + fitListName):
+  if os.path.exists(loc_data + fitListName) and to_save:
     fitList = hf.np_smart_load(str(loc_data + fitListName));
   # else, nothing to reload!!!
   # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
   # TODO: Make this smarter for doing cross-validation...
-  if cellNum-1 not in fitList:
-    print('cell did not exist yet');
-    fitList[cellNum-1] = dict();
-    fitList[cellNum-1][respStr] = dict();
-  elif respStr not in fitList[cellNum-1]:
-    print('%s did not exist yet' % respStr);
-    fitList[cellNum-1][respStr] = dict();
-  else:
-    print('we will be overwriting %s (if updating)' % respStr);
+
+  # curr_fit will slot into fitList[cellNum-1][respStr]
+  curr_fit = dict();
+
   # now, if the NLL is now the best, update this
   if NLL < currNLL:
-    fitList[cellNum-1][respStr]['NLL'] = NLL;
-    fitList[cellNum-1][respStr]['params'] = opt_params;
+    curr_fit['NLL'] = NLL;
+    curr_fit['params'] = opt_params;
     # NEW: Also save *when* this most recent fit was made (19.02.04); and nll_history below
-    fitList[cellNum-1][respStr]['time'] = datetime.datetime.now();
+    curr_fit['time'] = datetime.datetime.now();
     # NEW: Also also save entire loss/optimizaiotn structure
     optInfo = dict();
     optInfo['call'] = optimizer;
     optInfo['epochs'] = max_epochs;
     optInfo['batch_size'] = batch_size;
     optInfo['learning_rate'] = learning_rate;
-    fitList[cellNum-1][respStr]['opt'] = optInfo;
+    curr_fit['opt'] = optInfo;
+    curr_fit['nll_history'] = np.append(nll_history, NLL);
   else:
     print('new NLL not less than currNLL, not saving result, but updating overall fit list (i.e. tracking each fit)');
-  fitList[cellNum-1][respStr]['nll_history'] = np.append(nll_history, NLL);
-  np.save(loc_data + fitListName, fitList);
+
+  if to_save:
+    if cellNum-1 not in fitList:
+      print('cell did not exist yet');
+      fitList[cellNum-1] = dict();
+      fitList[cellNum-1][respStr] = dict();
+    elif respStr not in fitList[cellNum-1]:
+      print('%s did not exist yet' % respStr);
+      fitList[cellNum-1][respStr] = dict();
+    else:
+      print('we will be overwriting %s (if updating)' % respStr);
+    # again, this is under to_save; otherwise, we're just going to return curr_fit
+    fitList[cellNum-1][respStr] = curr_fit;
+    np.save(loc_data + fitListName, fitList);
+
   # now the step list, if needed
   if trackSteps and NLL < currNLL:
+    curr_steplist = dict(); # again, will slot into stepList[cellNum-1][respStr]
+    curr_steplist['loss'] = loss_history;
+    curr_steplist['time'] = time_history;
+
     if os.path.exists(loc_data + stepListName):
       try:
         stepList = hf.np_smart_load(str(loc_data + stepListName));
@@ -1276,11 +1294,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       stepList[cellNum-1][respStr] = dict();
     else:
       print('we will be overwriting %s (if updating)' % respStr);
-    stepList[cellNum-1][respStr]['loss'] = loss_history;
-    stepList[cellNum-1][respStr]['time'] = time_history;
+    stepList[cellNum-1][respStr] = curr_steplist;
     np.save(loc_data + stepListName, stepList);
 
-  return NLL, opt_params;
+  if to_save:
+    return NLL, opt_params;
+  else:
+    return curr_fit, curr_steplist;
 
 #############
 
@@ -1369,7 +1389,36 @@ if __name__ == '__main__':
       loc_data = loc_base + expDir + 'structures/';
       dataList = hf.np_smart_load(str(loc_data + dataListName));
       dataNames = dataList['unitName'];
-      cellNums = np.arange(1, 1+len(dataNames));
+      cellNums = np.arange(1, 4); #1+len(dataNames));
+
+      from functools import partial
+      import multiprocessing as mp
+      nCpu = mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
+      print('***cpu count: %02d***' % nCpu);
+
+      # First, DC? (should only do DC or F1?)
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False);
+      sm_perCell(1);
+      with mp.Pool(processes = nCpu) as pool:
+        smFits = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
+        pool.close();
+
+      pdb.set_trace();
+      # do f1 here?
+
+      ### do the saving HERE!
+      todoCV = 0; #  1 if whichTrials is not None else 0;
+      fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
+      if os.path.isfile(dataPath + phAdvName):
+        print('reloading phAdvFits...');
+        phFitNPY = hf.np_smart_load(dataPath + phAdvName);
+      else:
+        phFitNPY = dict();
+      for iii, phFit in enumerate(phFits):
+        phFitNPY[iii] = phFit;
+      np.save(dataPath + phAdvName, phFitNPY)
+
+
       # SETMODEL_JOINT DOES NOT EXIST TODO
       #setModel_joint(cellNums, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod, excType=excType, lgnFrontEnd=lgnFrontOn, fixRespExp=fixRespExp, toPar=toPar);
 
