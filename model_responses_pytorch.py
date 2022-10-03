@@ -221,8 +221,8 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
           tf_as_ind = _cast_as_tensor(hf.tf_to_ind(tfs, stimDur), dtype=torch.long); # if 1s, then TF corresponds to index; if stimDur is 2 seconds, then we can resolve half-integer frequencies -- i.e. 0.5 Hz = 1st index, 1 Hz = 2nd index, ...; CAST to integer
         if len(spectrum[0]) == len(tf_as_ind): # i.e. we have separate tfs for each trial
           spec_curr = spectrum[0];
-          #pdb.set_trace();
-          rel_amp = [torch.stack([spec_curr[i][tf_as_ind[i]] for i in range(len(tf_as_ind))])];
+          rel_amp = [torch.gather(spec_curr, dim=1, index=tf_as_ind)];
+          #rel_amp = [torch.stack([spec_curr[i][tf_as_ind[i]] for i in range(len(tf_as_ind))])]; # DEPRECATED --> SLOW!
         else: # i.e. it's just a fixed set of TFs that applies for all trials (expInd=-1)
           rel_amp = [spectrum[i][:, tf_as_ind[i]] for i in range(len(tf_as_ind))];
       except:
@@ -528,7 +528,7 @@ class sfNormMod(torch.nn.Module):
 
     return param_list
 
-  def simpleResp_matMul(self, trialInf, stimParams = [], sigmoidSigma=_sigmoidSigma):
+  def simpleResp_matMul(self, trialInf, stimParams = [], sigmoidSigma=_sigmoidSigma, preCompOri=None):
     # returns object with simpleResp and other things
     # --- Created 20.10.12 --- provides ~4x speed up compared to SFMSimpleResp() without need to explicit parallelization
     # --- Updated 20.10.29 --- created new method 
@@ -602,8 +602,12 @@ class sfNormMod(torch.nn.Module):
       selSf = flexible_Gauss([0,1,self.maxPrefSf*torch.sigmoid(self.prefSf),self.sigLow,self.sigHigh], stimSf, minThresh=0, sigmoidValue=sigmoidSigma);
  
     # II. Phase, space and time
-    omegaX = torch.mul(stimSf, torch.cos(stimOr)); # the stimulus in frequency space
-    omegaY = torch.mul(stimSf, torch.sin(stimOr));
+    if preCompOri is None:
+      omegaX = torch.mul(stimSf, torch.cos(stimOr)); # the stimulus in frequency space
+      omegaY = torch.mul(stimSf, torch.sin(stimOr));
+    else: # preCompOri is the same for all trials/comps --> cos(stimOr) is [0], sin(-) is [1]
+      omegaX = torch.mul(stimSf, preCompOri[0]); # the stimulus in frequency space
+      omegaY = torch.mul(stimSf, preCompOri[1]);
     omegaT = stimTf;
 
     P = torch.empty((nTrials, nFrames, nStimComp, 3)); # nTrials x nFrames for number of frames x nStimComp x [two for x and y coordinate, one for time]
@@ -744,9 +748,9 @@ class sfNormMod(torch.nn.Module):
 
     return respPerTr; # will be [nTrials] -- later, will ensure right output size during operation
 
-  def respPerCell(self, trialInf, debug=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm):
+  def respPerCell(self, trialInf, debug=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, preCompOri=None):
     # excitatory filter, first
-    simpleResp = self.simpleResp_matMul(trialInf, sigmoidSigma=sigmoidSigma);
+    simpleResp = self.simpleResp_matMul(trialInf, sigmoidSigma=sigmoidSigma, preCompOri=preCompOri);
     normResp = self.SimpleNormResp(trialInf, recenter_norm=recenter_norm); # [nFrames x nTrials]
     if self.newMethod == 1:
       Lexc = simpleResp; # [nFrames x nTrials]
@@ -788,9 +792,9 @@ class sfNormMod(torch.nn.Module):
       respModel     = torch.add(self.noiseLate, torch.mul(torch.abs(self.scale), meanRate));
       return respModel; # I don't think we need to transpose here...
 
-  def forward(self, trialInf, respMeasure=0, returnPsth=0, debug=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm): # expInd=-1 for sfBB
+  def forward(self, trialInf, respMeasure=0, returnPsth=0, debug=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, preCompOri=None): # expInd=-1 for sfBB
     # respModel is the psth! [nTr x nFr]
-    respModel = self.respPerCell(trialInf, debug, sigmoidSigma=sigmoidSigma, recenter_norm=recenter_norm);
+    respModel = self.respPerCell(trialInf, debug, sigmoidSigma=sigmoidSigma, recenter_norm=recenter_norm, preCompOri=preCompOri);
 
     if debug:
       return respModel
@@ -881,7 +885,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=50, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15): # learning rate 0.04ish on 20.03.06 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=3500, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, allCommonOri=True): # learning rate 0.04ish on 20.03.06 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1126,11 +1130,17 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   model_history = []
   hessian_history = []
 
-  first_pred = model.forward(trInf, respMeasure=respMeasure);
+  if len(np.unique(trInf['ori']))==1: # then we can pre-compute the ori!
+    only_ori = np.unique(trInf['ori']);
+    preCompOri = [torch.cos(_cast_as_tensor((np.pi/180)*only_ori)), torch.sin(_cast_as_tensor((np.pi/180)*only_ori))]
+  else:
+    preCompOri = None;
+  first_pred = model.forward(trInf, respMeasure=respMeasure, preCompOri=preCompOri);
 
   #pdb.set_trace();
   #import cProfile
-  #cProfile.runctx('model.forward(trInf, respMeasure=respMeasure)', {'model':model}, locals())
+  #cProfile.runctx('model.simpleResp_matMul(trInf, preCompOri=preCompOri)', {'model':model}, locals())
+  #cProfile.runctx('model.forward(trInf, respMeasure=respMeasure, preCompOri=preCompOri)', {'model':model}, locals())
 
   accum = np.nan; # keep track of accumulator (will be replaced with zero at first step)
   for t in range(max_epochs):
@@ -1140,7 +1150,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       time_history.append([])
 
       for bb, (feature, target) in enumerate(dataloader):
-          predictions = model.forward(feature, respMeasure=respMeasure)
+          predictions = model.forward(feature, respMeasure=respMeasure, preCompOri=preCompOri)
           if respMeasure == 1: # figure out which stimulus components were blank for the given trials
             if expInd == -1:
               maskInd, baseInd = hf_sfBB.get_mask_base_inds();
@@ -1198,7 +1208,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   ##############
   # Most importantly, get the optimal parameters
   opt_params = model.return_params(); # check this...
-  curr_resp = model.forward(dw.trInf, respMeasure=respMeasure);
+  curr_resp = model.forward(dw.trInf, respMeasure=respMeasure, preCompOri=preCompOri);
   gt_resp = _cast_as_tensor(dw.resp);
   # fix up responses if respMeasure == 1 (i.e. if mask or base con is 0, match the data & model responses...)
   if respMeasure == 1:
@@ -1398,7 +1408,7 @@ if __name__ == '__main__':
       loc_data = loc_base + expDir + 'structures/';
       dataList = hf.np_smart_load(str(loc_data + dataListName));
       dataNames = dataList['unitName'];
-      cellNums = np.arange(1, 4); #1+len(dataNames));
+      cellNums = np.arange(1, 1+len(dataNames));
 
       from functools import partial
       import multiprocessing as mp
