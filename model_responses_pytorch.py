@@ -881,7 +881,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=4500, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15): # learning rate 0.04ish on 20.03.06 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=50, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15): # learning rate 0.04ish on 20.03.06 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -993,7 +993,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   if os.path.isfile(loc_data + fitListName):
     fitList = hf.np_smart_load(str(loc_data + fitListName));
     try:
-      curr_params = fitList[cellNum-1][respStr]['params'];
+      curr_fit = fitList[cellNum-1][respStr];
+      curr_params = curr_fit['params'];
       # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
       testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm)
       trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite) # warning: added respOverwrite here; also add whichTrials???
@@ -1009,6 +1010,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   else:
     initFromCurr = 0;
     fitList = dict();
+    curr_fit = dict();
 
   ### set parameters
   # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
@@ -1180,7 +1182,6 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           loss_history[t].append(loss_curr.item())
           time_history[t].append(time.time() - start_time)
           if np.isnan(loss_curr.item()) or np.isinf(loss_curr.item()):
-              pdb.set_trace();
               # we raise an exception here and then try again.
               raise Exception("Loss is nan or inf on epoch %s, batch %s!" % (t, 0))
 
@@ -1242,10 +1243,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   # TODO: Make this smarter for doing cross-validation...
 
   # curr_fit will slot into fitList[cellNum-1][respStr]
-  curr_fit = dict();
 
   # now, if the NLL is now the best, update this
   if NLL < currNLL:
+    curr_fit = dict();
     curr_fit['NLL'] = NLL;
     curr_fit['params'] = opt_params;
     # NEW: Also save *when* this most recent fit was made (19.02.04); and nll_history below
@@ -1275,30 +1276,35 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     fitList[cellNum-1][respStr] = curr_fit;
     np.save(loc_data + fitListName, fitList);
 
+  if os.path.exists(loc_data + stepListName):
+    try:
+      stepList = hf.np_smart_load(str(loc_data + stepListName));
+      curr_steplist = stepList[cellNum-1][respStr];
+    except: # if the file is corrupted in some way...
+      stepList = dict();
+      curr_steplist = dict();
+  else:
+    stepList = dict();
+    curr_steplist = dict();
+
   # now the step list, if needed
   if trackSteps and NLL < currNLL:
     curr_steplist = dict(); # again, will slot into stepList[cellNum-1][respStr]
     curr_steplist['loss'] = loss_history;
     curr_steplist['time'] = time_history;
 
-    if os.path.exists(loc_data + stepListName):
-      try:
-        stepList = hf.np_smart_load(str(loc_data + stepListName));
-      except: # if the file is corrupted in some way...
-        stepList = dict();
-    else:
-      stepList = dict();
-    if cellNum-1 not in stepList:
-      print('[steplist] cell did not exist yet');
-      stepList[cellNum-1] = dict();
-      stepList[cellNum-1][respStr] = dict();
-    elif respStr not in stepList[cellNum-1]:
-      print('%s did not exist yet' % respStr);
-      stepList[cellNum-1][respStr] = dict();
-    else:
-      print('we will be overwriting %s (if updating)' % respStr);
-    stepList[cellNum-1][respStr] = curr_steplist;
-    np.save(loc_data + stepListName, stepList);
+    if to_save:
+      if cellNum-1 not in stepList:
+        print('[steplist] cell did not exist yet');
+        stepList[cellNum-1] = dict();
+        stepList[cellNum-1][respStr] = dict();
+      elif respStr not in stepList[cellNum-1]:
+        print('%s did not exist yet' % respStr);
+        stepList[cellNum-1][respStr] = dict();
+      else:
+        print('we will be overwriting %s (if updating)' % respStr);
+      stepList[cellNum-1][respStr] = curr_steplist;
+      np.save(loc_data + stepListName, stepList);
 
   if to_save:
     return NLL, opt_params;
@@ -1403,27 +1409,38 @@ if __name__ == '__main__':
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False);
       #sm_perCell(1); # use this to debug...
       with mp.Pool(processes = nCpu) as pool:
-        smFits = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
+        smFits_dc = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
         pool.close();
 
-      pdb.set_trace();
       # do f1 here?
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False);
+      #sm_perCell(1); # use this to debug...
+      with mp.Pool(processes = nCpu) as pool:
+        smFits_f1 = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
+        pool.close();
 
       ### do the saving HERE!
       todoCV = 0; #  1 if whichTrials is not None else 0;
+      loc_str = 'HPC' if 'pl1465' in loc_data else '';
+      fL_name = 'fitList%s_pyt_221001' % loc_str; # figure out how to pass the name into setModel, too, so names are same regardless of call?
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
-      if os.path.isfile(dataPath + phAdvName):
-        print('reloading phAdvFits...');
-        phFitNPY = hf.np_smart_load(dataPath + phAdvName);
+      if os.path.isfile(loc_data + fitListName):
+        print('reloading fit list...');
+        fitListNPY = hf.np_smart_load(loc_data + fitListName);
       else:
-        phFitNPY = dict();
-      for iii, phFit in enumerate(phFits):
-        phFitNPY[iii] = phFit;
-      np.save(dataPath + phAdvName, phFitNPY)
+        fitListNPY = dict();
 
-
-      # SETMODEL_JOINT DOES NOT EXIST TODO
-      #setModel_joint(cellNums, expDir, lossType, fitType, initFromCurr, trackSteps=trackSteps, modRecov=modRecov, kMult=kMult, rvcMod=rvcMod, excType=excType, lgnFrontEnd=lgnFrontOn, fixRespExp=fixRespExp, toPar=toPar);
+      # now, iterate through and fit!
+      respStr_dc = hf_sfBB.get_resp_str(0);
+      respStr_f1 = hf_sfBB.get_resp_str(1);
+      for (iii, currFit_dc), currFit_f1 in zip(enumerate(smFits_dc), smFits_f1):
+        fitListNPY[iii] = dict();
+        # dc
+        fitListNPY[iii][respStr_dc] = currFit_dc[0]; # currFit[1] is the details...ignore for now
+        # f1
+        fitListNPY[iii][respStr_f1] = currFit_f1[0]; # currFit[1] is the details...ignore for now
+      # --- finally, save
+      np.save(loc_data + fitListName, fitListNPY)
 
     enddd = time.process_time();
     print('Took %d minutes -- dc %d || f1 %d' % ((enddd-start)/60, dcOk, f1Ok));
