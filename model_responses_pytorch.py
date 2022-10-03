@@ -363,7 +363,7 @@ class dataWrapper(torchdata.Dataset):
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module()
 
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu'):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=15):
 
     super().__init__();
 
@@ -377,6 +377,7 @@ class sfNormMod(torch.nn.Module):
     self.applyLGNtoNorm = applyLGNtoNorm; # do we also apply the LGN front-end to the gain control tuning? Default is 1 for backwards compatability, but should be 0 (i.e., DON'T; per Eero, 21.02.26)
     self.device = device;
     self.newMethod = newMethod;
+    self.maxPrefSf = _cast_as_tensor(pSfBound); # don't allow the max prefSf to exceed this value (will enforce via sigmoid)
 
     ### all modparams
     self.modParams = modParams;
@@ -482,7 +483,7 @@ class sfNormMod(torch.nn.Module):
   def print_params(self, transformed=1):
     # return a list of the parameters
     print('\n********MODEL PARAMETERS********');
-    print('prefSf: %.2f' % self.prefSf.item());
+    print('prefSf: %.2f' % (self.maxPrefSf.item()*torch.sigmoid(self.prefSf).item())); # was just self.prefSf.item()
     if self.excType == 1:
       dord = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.dordSp)) if transformed else self.dordSp.item();
       print('deriv. order: %.2f' % dord);
@@ -592,13 +593,13 @@ class sfNormMod(torch.nn.Module):
 
     if self.excType == 1:
       # Compute spatial frequency tuning - Deriv. order Gaussian
-      sfRel = torch.div(stimSf, self.prefSf);
+      sfRel = torch.div(stimSf, self.maxPrefSf*torch.sigmoid(self.prefSf));
       effDord = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.dordSp));
       s     = torch.pow(stimSf, effDord) * torch.exp(-effDord/2 * torch.pow(sfRel, 2));
-      sMax  = torch.pow(self.prefSf, effDord) * torch.exp(-effDord/2);
+      sMax  = torch.pow(self.maxPrefSf*torch.sigmoid(self.prefSf), effDord) * torch.exp(-effDord/2);
       selSf   = torch.div(s, sMax);
     elif self.excType == 2:
-      selSf = flexible_Gauss([0,1,self.prefSf,self.sigLow,self.sigHigh], stimSf, minThresh=0, sigmoidValue=sigmoidSigma);
+      selSf = flexible_Gauss([0,1,self.maxPrefSf*torch.sigmoid(self.prefSf),self.sigLow,self.sigHigh], stimSf, minThresh=0, sigmoidValue=sigmoidSigma);
  
     # II. Phase, space and time
     omegaX = torch.mul(stimSf, torch.cos(stimOr)); # the stimulus in frequency space
@@ -880,7 +881,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=4500, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True): # learning rate 0.04ish on 20.03.06 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=4500, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15): # learning rate 0.04ish on 20.03.06 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1011,7 +1012,9 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   ### set parameters
   # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
-  prefSfEst = np.random.uniform(0.3, 2);
+  prefSfEst = np.random.uniform(0.3, 2); # this is the value we want AFTER taking the sigmoid (and applying the upper bound)
+  sig_inv_input = prefSfEst/pSfBound;
+  prefSfEst = -np.log((1-sig_inv_input)/sig_inv_input)
   normConst = -2; # per Tony, just start with a low value (i.e. closer to linear)
   if fitType == 1:
     inhAsym = 0;
@@ -1096,7 +1099,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     param_list = param_list[0:-1];   
 
   ### define model, grab training parameters
-  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm)
+  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound)
 
   training_parameters = [p for p in model.parameters() if p.requires_grad]
   model.print_params(); # optionally, nicely print the initial parameters...
@@ -1398,7 +1401,7 @@ if __name__ == '__main__':
 
       # First, DC? (should only do DC or F1?)
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False);
-      sm_perCell(1);
+      #sm_perCell(1); # use this to debug...
       with mp.Pool(processes = nCpu) as pool:
         smFits = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
         pool.close();
