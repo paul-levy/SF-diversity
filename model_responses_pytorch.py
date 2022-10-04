@@ -1474,7 +1474,6 @@ if __name__ == '__main__':
 
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False);
-      #sm_perCell(1); # use this to debug...
       with mp.Pool(processes = nCpu) as pool:
         smFits_f1 = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
         pool.close();
@@ -1489,7 +1488,7 @@ if __name__ == '__main__':
       ### do the saving HERE!
       todoCV = 0; #  1 if whichTrials is not None else 0;
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_221001' % loc_str; # figure out how to pass the name into setModel, too, so names are same regardless of call?
+      fL_name = 'fitList%s_pyt_221004' % loc_str; # figure out how to pass the name into setModel, too, so names are same regardless of call?
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
