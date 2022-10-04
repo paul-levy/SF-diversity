@@ -363,7 +363,7 @@ class dataWrapper(torchdata.Dataset):
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module()
 
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=15):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1):
 
     super().__init__();
 
@@ -378,6 +378,7 @@ class sfNormMod(torch.nn.Module):
     self.device = device;
     self.newMethod = newMethod;
     self.maxPrefSf = _cast_as_tensor(pSfBound); # don't allow the max prefSf to exceed this value (will enforce via sigmoid)
+    self.minPrefSf = _cast_as_tensor(pSfBound_low); # don't allow the prefSf to go below this value (will avoid div by 0)
 
     ### all modparams
     self.modParams = modParams;
@@ -483,7 +484,7 @@ class sfNormMod(torch.nn.Module):
   def print_params(self, transformed=1):
     # return a list of the parameters
     print('\n********MODEL PARAMETERS********');
-    print('prefSf: %.2f' % (self.maxPrefSf.item()*torch.sigmoid(self.prefSf).item())); # was just self.prefSf.item()
+    print('prefSf: %.2f' % (self.minPrefSf.item() + self.maxPrefSf.item()*torch.sigmoid(self.prefSf).item())); # was just self.prefSf.item()
     if self.excType == 1:
       dord = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.dordSp)) if transformed else self.dordSp.item();
       print('deriv. order: %.2f' % dord);
@@ -579,8 +580,14 @@ class sfNormMod(torch.nn.Module):
       selSf_m = torch.div(resps_m, max_m);
       selSf_p = torch.div(resps_p, max_p);
       # - then RVC response: # ASSUMES rvcMod 0 (Movshon)
-      selCon_m = get_rvc_model(self.rvc_m, stimCo);
+      # --- the following commented out lines show how we could evaluate the rvc at one contrast for all components -->
+      # -----> HOWEVER, this is how we factor in contrast, so likely this will be useful only for eval. SF at diff. con, if we introduce LGN shifts [22.10.03]
+      #scm = torch.max(stimCo, axis=1)[0];
+      #selCon_m = get_rvc_model(self.rvc_m, scm).unsqueeze(dim=1);
+      #selCon_p = get_rvc_model(self.rvc_p, scm).unsqueeze(dim=1);
+      selCon_m = get_rvc_model(self.rvc_m, stimCo); # could evaluate at torch.max(stimCo,axis=1)[0] rather than stimCo, i.e. highest grating con, not per grating
       selCon_p = get_rvc_model(self.rvc_p, stimCo);
+
       if self.lgnConType == 1: # DEFAULT
         # -- then here's our final responses per component for the current stimulus
         # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
@@ -593,13 +600,13 @@ class sfNormMod(torch.nn.Module):
 
     if self.excType == 1:
       # Compute spatial frequency tuning - Deriv. order Gaussian
-      sfRel = torch.div(stimSf, self.maxPrefSf*torch.sigmoid(self.prefSf));
+      sfRel = torch.div(stimSf, self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf));
       effDord = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.dordSp));
       s     = torch.pow(stimSf, effDord) * torch.exp(-effDord/2 * torch.pow(sfRel, 2));
-      sMax  = torch.pow(self.maxPrefSf*torch.sigmoid(self.prefSf), effDord) * torch.exp(-effDord/2);
+      sMax  = torch.pow(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf), effDord) * torch.exp(-effDord/2);
       selSf   = torch.div(s, sMax);
     elif self.excType == 2:
-      selSf = flexible_Gauss([0,1,self.maxPrefSf*torch.sigmoid(self.prefSf),self.sigLow,self.sigHigh], stimSf, minThresh=0, sigmoidValue=sigmoidSigma);
+      selSf = flexible_Gauss([0,1,self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf),self.sigLow,self.sigHigh], stimSf, minThresh=0, sigmoidValue=sigmoidSigma);
  
     # II. Phase, space and time
     if preCompOri is None:
@@ -885,7 +892,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=3500, learning_rate=0.04, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, allCommonOri=True): # learning rate 0.04ish on 20.03.06 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.10, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, allCommonOri=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1018,15 +1025,15 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   ### set parameters
   # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
-  prefSfEst = np.random.uniform(0.3, 2); # this is the value we want AFTER taking the sigmoid (and applying the upper bound)
-  sig_inv_input = prefSfEst/pSfBound;
+  prefSfEst_goal = np.random.uniform(0.3, 2); # this is the value we want AFTER taking the sigmoid (and applying the upper bound)
+  sig_inv_input = (0.1+prefSfEst_goal)/pSfBound;
   prefSfEst = -np.log((1-sig_inv_input)/sig_inv_input)
   normConst = -2; # per Tony, just start with a low value (i.e. closer to linear)
   if fitType == 1:
     inhAsym = 0;
   if fitType == 2 or fitType == 5:
     # see modCompare.ipynb, "Smarter initialization" for details
-    normMean = np.random.uniform(0.75, 1.25) * np.log10(prefSfEst) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
+    normMean = np.random.uniform(0.75, 1.25) * np.log10(prefSfEst_goal) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
     normStd = np.random.uniform(0.3, 2) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
     if fitType == 5:
       normGain = np.random.uniform(-3, -1) if initFromCurr == 0 else curr_params[10]; # will be a sigmoid-ed value...
@@ -1412,7 +1419,7 @@ if __name__ == '__main__':
 
       from functools import partial
       import multiprocessing as mp
-      nCpu = mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
+      nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
 
       # First, DC? (should only do DC or F1?)
