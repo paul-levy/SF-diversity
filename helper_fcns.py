@@ -4931,11 +4931,13 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                     
     return [respMean, respStd, predMean, predStd], [all_disps, all_cons, all_sfs], val_con_by_disp, [valid_disp, valid_con, valid_sf], modRespOrg;
 
-def organize_adj_responses(data, rvcFits, expInd, vecF1=0):
+def organize_adj_responses(data, rvcFits, expInd, vecF1=0, autoPad=False):
   ''' Used as a wrapper to call the organize_adj_responses function for a given experiment
       BUT, also has organize_adj_responses for newer experiments (see "except" assoc. with main try block)
       We set the organize_adj_responses separately for each experiment since some versions don't have adjusted responses
         and for those that do, some aspects of the calculation may differ
+      - if autoPad (added 22.10.03), then we ensure each trial is a numpy array of length stimComp, with NaN in non-stim components
+      --- ONLY applies to vecF1=0, i.e. phAmp correction
   '''
   ### First, we'll see if there is a direct helper_fcns method for this
   dir = get_exp_params(expInd).dir;
@@ -4948,7 +4950,11 @@ def organize_adj_responses(data, rvcFits, expInd, vecF1=0):
   ### otherwise...
   # a "simple" adj responses
   nTr = len(data['num']);
-  adjResps = numpy.nan * numpy.zeros((nTr, ), dtype='O');
+  if autoPad:
+     nComp = get_exp_params(expInd).nStimComp;
+     adjResps = numpy.nan * numpy.zeros((nTr, nComp));
+  else:
+     adjResps = numpy.nan * numpy.zeros((nTr, ), dtype='O');
   # first, get all of the stimulus conds
   _, conds, val_con_by_disp, val_by_stim_val, _ = tabulate_responses(data, expInd);
   all_d = conds[0];
@@ -4963,18 +4969,29 @@ def organize_adj_responses(data, rvcFits, expInd, vecF1=0):
           # NOTE: We will only make it to this code if we're getting F1 responses and they are vecF1 corrected
           for vT in val_trials[0]: # cannot be done with list comprehension? I think, bc we're doing assignment
             adjResps[vT] = rvcFits[d_ind]['adjByTr'][vT] # non-valid stimComps will be zero'd anyway!
-        else:
+        else: # then we're doing phAmp correction!
           # this is why we enumerate val_cons above - the index into val_cons is how we index into rvcFits
           curr_resps = rvcFits[d_ind]['adjByTr'][s_ind_total][c_ind_val];
-          if d_ind > 0:
+          if d_ind > 0: # if d==0, (nTr,1)
             try: # well, if the cell is simple & this is mixture stimulus, then we need to do this
               curr_flipped = switch_inner_outer(curr_resps, asnp=True);
-              adjResps[val_trials] = curr_flipped;
+              if autoPad:
+                 stck = numpy.vstack(curr_flipped);
+                 adjResps[val_trials, 0:stck.shape[-1]] = stck;
+              else: 
+                 adjResps[val_trials] = curr_flipped;
             except: # otherwise, we "flatten" the incoming list
-              adjResps[val_trials] = curr_resps.flatten();
+              if autoPad: # TODO: THIS HAS NOT BEEN VERIFIED; ALSO SHOULD NOT APPEAR
+                 stck = numpy.vstack(curr_resps.flatten());
+                 adjResps[val_trials, range(stck.shape[-1])] = stck;
+              else: 
+                 adjResps[val_trials] = curr_resps.flatten();
           if d_ind == 0:
-              adjResps[val_trials] = curr_resps.flatten();
-     
+            if autoPad:
+               adjResps[val_trials, 0] = curr_resps.flatten();
+            else:
+               adjResps[val_trials] = curr_resps.flatten();
+
   return adjResps;
 
 def organize_phAdj_byMean(expStructure, expInd, all_opts, stimVals, val_con_by_disp, phAdv_model=None, resample=False, dir=1, redo_phAdv=True, incl_preds=False, val_by_stim_val=None, return_comps=False, sum_power=1):
@@ -5129,7 +5146,7 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, re
 
     return rateOr, rateCo, rateSfMix, allSfMix;  
 
-def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes = None, vecF1=0):
+def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes = None, vecF1=0, autoPad=False):
   ''' Get trial-by-trial spike count
       Given the data (S.sfm.exp.trial), if rvcFits is None, simply return saved spike count;
                                         else return the adjusted spike counts (e.g. LGN, expInd 3)
@@ -5148,7 +5165,7 @@ def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes 
       warnings.warn('Should pass in expInd; defaulting to 3');
       expInd = 3; # should be specified, but just in case
     try:
-      spikes = organize_adj_responses(data, rvcFits, expInd, vecF1);
+      spikes = organize_adj_responses(data, rvcFits, expInd, vecF1, autoPad=autoPad);
     except: # in case this does not work...
       warnings.warn('Tried to access f1 adjusted responses, defaulting to F1/F0 request');
       if get_f0 == 1:
@@ -5180,15 +5197,16 @@ def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', rvcMod=0, direc=1
 
   return rvcFits;
 
-def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMod=0, vecF1=0, descrFitName_f0=None, descrFitName_f1=None, force_dc=False, force_f1=False, baseline_sub=True, return_measure=False):
+def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMod=0, vecF1=0, descrFitName_f0=None, descrFitName_f1=None, force_dc=False, force_f1=False, baseline_sub=True, return_measure=False, returnByComp=False, returnByCompExpand=True):
   ''' wrapper function which will call needed subfunctions to return dc-subtracted spikes by trial
       note: rvcMod = -1 is the code indicating that rvcName is actually the fits, already!
       OUTPUT: SPIKES (as rate, per s), baseline subtracted (default, if DC); responses are per stimulus, not per component
         note: user can override f1f0 calculation to force return of DC values only (set force_dc=TRUE) or F! values only (force_f1=TRUE)
+      If returnByComp==True, then we return the responses per component, rather than summing across component
+      --- if rBC==True AND returnByCompExpand==True, then expand the rBC into [nTrials, nComp] rather than having components per resp.
   '''
   f1f0_rat = compute_f1f0(expData, which_cell, expInd, dataPath, descrFitName_f0=descrFitName_f0, descrFitName_f1=descrFitName_f1)[0];
   stimDur = get_exp_params(expInd).stimDur; # may need this value
-  
   ### i.e. if we're looking at a simple cell, then let's get F1
   if (f1f0_rat > 1 and force_dc is False) or force_f1 is True:
       if rvcMod == -1: # then rvcName is the rvcFits, already!
@@ -5198,8 +5216,12 @@ def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMo
           rvcFits = get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod);
         else:
           rvcFits = None
-      spikes_byComp = get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd, vecF1=vecF1);
-      spikes = numpy.array([numpy.sum(x) for x in spikes_byComp]);
+
+      spikes_byComp = get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd, vecF1=vecF1, autoPad=(returnByComp&returnByCompExpand));
+      if returnByComp:
+         spikes = spikes_byComp;
+      else:
+         spikes = numpy.array([numpy.sum(x) for x in spikes_byComp]);
       rates = True; # when we get the spikes from rvcFits, they've already been converted into rates (in get_all_fft)
       baseline = None; # f1 has no "DC", yadig? 
 

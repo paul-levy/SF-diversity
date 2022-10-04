@@ -238,7 +238,7 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
 
 ### Datawrapper/loader
 
-def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTrials=None):
+def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTrials=None, asTensor=False):
   ''' Process the trial-by-trial stimulus information for ease of use with the model
       Specifically, we stack the stimuli to be [nTr x nStimComp], where 
       - [:,0] is base, [:,1] is mask, respectively for sfBB
@@ -316,6 +316,13 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
   trInf['ph'] = np.transpose(np.vstack(trialInf['ph']), (1,0))[whichTrials, :]
   trInf['sf'] = np.transpose(np.vstack(trialInf['sf']), (1,0))[whichTrials, :]
   trInf['con'] = np.transpose(np.vstack(trialInf['con']), (1,0))[whichTrials, :]
+
+  if asTensor:
+    trInf['ori'] = _cast_as_tensor(trInf['ori']);
+    trInf['tf'] = _cast_as_tensor(trInf['tf']);
+    trInf['ph'] = _cast_as_tensor(trInf['ph']);
+    trInf['sf'] = _cast_as_tensor(trInf['sf']);
+    trInf['con'] = _cast_as_tensor(trInf['con']);
 
   return trInf, resp;
 
@@ -892,7 +899,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.10, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, allCommonOri=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.10, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -982,22 +989,37 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     expInfo = S['sfBB_core'];
   else:
     expInfo = S['sfm']['exp']['trial'];
+
   respOverwrite = None; # default to None, but if vecCorrected and expInd != -1, then we will specify
-  if vecCorrected and respMeasure == 1:
-    if expInd == -1:
-      # Overwrite f1 spikes
-      vec_corr_mask, vec_corr_base = hf_sfBB.adjust_f1_byTrial(expInfo);
-      expInfo['f1_mask'] = vec_corr_mask;
-      expInfo['f1_base'] = vec_corr_base;
-    else:
-      if expInd == 1:
-        sys.exit('Cannot run F1 model analysis on V1_orig/ experiment - exiting!');
-      respOverwrite = hf.adjust_f1_byTrial(expInfo, expInd);
+  if respMeasure == 1 and expInd!=1: # we cannot do F1 on V1_orig
+    # NOTE: For F1, we keep responses per component, and zero-out the blanks later on
+    if vecCorrected: # then do vecF1 correction
+      if expInd == -1:
+        # Overwrite f1 spikes
+        vec_corr_mask, vec_corr_base = hf_sfBB.adjust_f1_byTrial(expInfo);
+        expInfo['f1_mask'] = vec_corr_mask;
+        expInfo['f1_base'] = vec_corr_base;
+      else:
+        respOverwrite = hf.adjust_f1_byTrial(expInfo, expInd);
+    else: # then do phAmp correction here!
+      if expInd == -1:
+        # Overwrite f1 spikes
+        #### FIX THIS --> make sure you get trial-by-trial, phAmp corrected for sfBB
+        vec_corr_mask, vec_corr_base = hf_sfBB.adjust_f1_byTrial(expInfo);
+        expInfo['f1_mask'] = vec_corr_mask;
+        expInfo['f1_base'] = vec_corr_base;
+      else: # and the same for the "main" experiment
+        rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=0);
+        respOverwrite = hf.get_adjusted_spikerate(expInfo, cellNum, expInd, loc_data, rvcName=rvcFits, rvcMod=-1, baseline_sub=False, return_measure=True, vecF1=0, force_f1=True, returnByComp=True)[0]; # if we're here, then we get F1 regardless of f1f0
+  elif respMeasure == 1 and expInd==1:
+    sys.exit('Cannot run F1 model analysis on V1_orig/ experiment - exiting!');
+
   trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite);
+  # we zero out the blanks later on for all other loss types, but do it here otherwise
   if lossType == 3:
     if respMeasure == 1:
       blanks = np.where(trInf['con']==0); # then we'll need to zero-out the blanks
-      resp[blanks] = 1e-6;
+      resp[blanks] = 1e-6; # TODO: should NOT be magic number (replace with global_min?)
     orgMeans = _cast_as_tensor(organize_mean_perCond(trInf, resp));
  
   respStr = hf_sfBB.get_resp_str(respMeasure);
@@ -1144,7 +1166,6 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     preCompOri = None;
   first_pred = model.forward(trInf, respMeasure=respMeasure, preCompOri=preCompOri);
 
-  #pdb.set_trace();
   #import cProfile
   #cProfile.runctx('model.simpleResp_matMul(trInf, preCompOri=preCompOri)', {'model':model}, locals())
   #cProfile.runctx('model.forward(trInf, respMeasure=respMeasure, preCompOri=preCompOri)', {'model':model}, locals())
@@ -1383,6 +1404,11 @@ if __name__ == '__main__':
         nCpu = mp.cpu_count()
     else:
       toPar = False;
+
+    #setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # first do DC
+    #import cProfile
+    #cProfile.runctx('setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel':setModel}, locals())
+
 
     start = time.process_time();
     dcOk = 0; f1Ok = 0 if (expDir == 'V1/' or expDir == 'V1_BB/') else 1; # i.e. we don't bother fitting F1 if fit is from V1_orig/ or altExp/
