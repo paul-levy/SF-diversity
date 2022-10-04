@@ -238,7 +238,7 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
 
 ### Datawrapper/loader
 
-def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTrials=None, asTensor=False):
+def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTrials=None):
   ''' Process the trial-by-trial stimulus information for ease of use with the model
       Specifically, we stack the stimuli to be [nTr x nStimComp], where 
       - [:,0] is base, [:,1] is mask, respectively for sfBB
@@ -311,72 +311,47 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
   # then, process the raw data such that trInf is [nTr x nComp]
   # for expInd == -1, this means mask [ind=0], then base [ind=1]
   trInf['num'] = whichTrials;
-  trInf['ori'] = np.transpose(np.vstack(trialInf['ori']), (1,0))[whichTrials, :]
-  trInf['tf'] = np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :]
-  trInf['ph'] = np.transpose(np.vstack(trialInf['ph']), (1,0))[whichTrials, :]
-  trInf['sf'] = np.transpose(np.vstack(trialInf['sf']), (1,0))[whichTrials, :]
-  trInf['con'] = np.transpose(np.vstack(trialInf['con']), (1,0))[whichTrials, :]
-
-  if asTensor:
-    trInf['ori'] = _cast_as_tensor(trInf['ori']);
-    trInf['tf'] = _cast_as_tensor(trInf['tf']);
-    trInf['ph'] = _cast_as_tensor(trInf['ph']);
-    trInf['sf'] = _cast_as_tensor(trInf['sf']);
-    trInf['con'] = _cast_as_tensor(trInf['con']);
-
-    resp = _cast_as_tensor(resp);
+  trInf['ori'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['ori']), (1,0))[whichTrials, :])
+  trInf['tf'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :])
+  trInf['ph'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['ph']), (1,0))[whichTrials, :])
+  trInf['sf'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['sf']), (1,0))[whichTrials, :])
+  trInf['con'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['con']), (1,0))[whichTrials, :])
+  resp = _cast_as_tensor(resp);
 
   return trInf, resp;
 
 class dataWrapper(torchdata.Dataset):
-    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None, respOverwrite=None, asTensor=False):
+    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None, respOverwrite=None):
         # if respMeasure == 0, then we're getting DC; otherwise, F1
         # respOverwrite means overwrite the responses; used only for expInd>=0 for now
 
         super().__init__();
-        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite, asTensor=asTensor)
+        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite)
 
         self.trInf = trInf;
         self.resp = resp;
         self.device = device;
         self.expInd = expInd;
-        self.preFilledAsTensor = asTensor;
         
     def get_single_item(self, idx):
         # NOTE: This assumes that trInf['ori', 'tf', etc...] are already [nTr, nStimComp]
         feature = dict();
-        if self.preFilledAsTensor: # then we've already made trInf... as a tensor!
-          feature['ori'] = self.trInf['ori'][idx, :]
-          feature['tf'] = self.trInf['tf'][idx, :]
-          feature['sf'] = self.trInf['sf'][idx, :]
-          feature['con'] = self.trInf['con'][idx, :]
-          feature['ph'] = self.trInf['ph'][idx, :]
-        else:
-          feature['ori'] = _cast_as_tensor(self.trInf['ori'][idx, :])
-          feature['tf'] = _cast_as_tensor(self.trInf['tf'][idx, :])
-          feature['sf'] = _cast_as_tensor(self.trInf['sf'][idx, :])
-          feature['con'] = _cast_as_tensor(self.trInf['con'][idx, :])
-          feature['ph'] = _cast_as_tensor(self.trInf['ph'][idx, :])
+        feature['ori'] = self.trInf['ori'][idx, :]
+        feature['tf'] = self.trInf['tf'][idx, :]
+        feature['sf'] = self.trInf['sf'][idx, :]
+        feature['con'] = self.trInf['con'][idx, :]
+        feature['ph'] = self.trInf['ph'][idx, :]
         feature['num'] = idx; # which trials are part of this
         
         target = dict();
-        if self.preFilledAsTensor:
-          target['resp'] = self.resp[idx, :];
-        else:
-          target['resp'] = _cast_as_tensor(self.resp[idx, :]);
+        target['resp'] = self.resp[idx, :];
+
         if self.expInd == -1:
           maskInd, baseInd = hf_sfBB.get_mask_base_inds();
-          if self.preFilledAsTensor:
-            target['maskCon'] = self.trInf['con'][idx, maskInd]
-            target['baseCon'] = self.trInf['con'][idx, baseInd]
-          else:
-            target['maskCon'] = _cast_as_tensor(self.trInf['con'][idx, maskInd])
-            target['baseCon'] = _cast_as_tensor(self.trInf['con'][idx, baseInd])
+          target['maskCon'] = self.trInf['con'][idx, maskInd]
+          target['baseCon'] = self.trInf['con'][idx, baseInd]
         else:
-          if self.preFilledAsTensor:
-            target['cons'] = self.trInf['con'][idx, :];
-          else:
-            target['cons'] = _cast_as_tensor(self.trInf['con'][idx, :]);
+          target['cons'] = self.trInf['con'][idx, :];
         
         return (feature, target);
 
@@ -919,10 +894,12 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.10, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.10, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+  '''
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
+  '''
   global dataListName
   global force_full
   
@@ -1068,7 +1045,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   ### set parameters
   # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
   prefSfEst_goal = np.random.uniform(0.3, 2); # this is the value we want AFTER taking the sigmoid (and applying the upper bound)
-  sig_inv_input = (0.1+prefSfEst_goal)/pSfBound;
+  sig_inv_input = (pSfFloor+prefSfEst_goal)/pSfBound;
   prefSfEst = -np.log((1-sig_inv_input)/sig_inv_input)
   normConst = -2; # per Tony, just start with a low value (i.e. closer to linear)
   if fitType == 1:
@@ -1154,13 +1131,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     param_list = param_list[0:-1];   
 
   ### define model, grab training parameters
-  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound)
+  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound, pSfBound_low=pSfFloor)
 
   training_parameters = [p for p in model.parameters() if p.requires_grad]
   model.print_params(); # optionally, nicely print the initial parameters...
 
   ###  data wrapping
-  dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite, asTensor=True); # respOverwrite defined above (None if DC or if expInd=-1)
+  dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
   dataloader = torchdata.DataLoader(dw, batch_size)
 
   ### then set up the optimization
@@ -1240,8 +1217,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           loss_history[t].append(loss_curr.item())
           time_history[t].append(time.time() - start_time)
           if np.isnan(loss_curr.item()) or np.isinf(loss_curr.item()):
-              # we raise an exception here and then try again.
+            if to_save: # we raise an exception here and then try again.
               raise Exception("Loss is nan or inf on epoch %s, batch %s!" % (t, 0))
+            else: # otherwise, it's assumed that we're running this in parallel, so let's just give up on this cell!
+              return [], []; # we'll just save empty lists...
 
           loss_curr.backward(retain_graph=True)
           optimizer.step()
@@ -1425,11 +1404,10 @@ if __name__ == '__main__':
     else:
       toPar = False;
 
-    #setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # first do DC
-    import cProfile
-    cProfile.runctx('setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel':setModel}, locals())
-
-    pdb.set_trace();
+    #setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # try an F1 (use for debugging)
+    #import cProfile
+    #cProfile.runctx('setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel':setModel}, locals())
+    #pdb.set_trace();
 
     start = time.process_time();
     dcOk = 0; f1Ok = 0 if (expDir == 'V1/' or expDir == 'V1_BB/') else 1; # i.e. we don't bother fitting F1 if fit is from V1_orig/ or altExp/
