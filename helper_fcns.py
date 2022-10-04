@@ -5146,13 +5146,15 @@ def organize_resp(spikes, expStructure, expInd, mask=None, respsAsRate=False, re
 
     return rateOr, rateCo, rateSfMix, allSfMix;  
 
-def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes = None, vecF1=0, autoPad=False):
+def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes = None, vecF1=0, autoPad=False, returnAdjSuccess=False):
   ''' Get trial-by-trial spike count
       Given the data (S.sfm.exp.trial), if rvcFits is None, simply return saved spike count;
                                         else return the adjusted spike counts (e.g. LGN, expInd 3)
       --- If we pass in rvcFits, we can optionally specify if it's a vecF1 fit (will need to access...
       --- -- the responses differently in that case)
   '''
+  adjSuccess = True;
+  
   if overwriteSpikes is not None: # as of 19.05.02, used for fitting model recovery spikes
     return overwriteSpikes;
   if rvcFits is None:
@@ -5167,6 +5169,7 @@ def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes 
     try:
       spikes = organize_adj_responses(data, rvcFits, expInd, vecF1, autoPad=autoPad);
     except: # in case this does not work...
+      adjSuccess = False; 
       warnings.warn('Tried to access f1 adjusted responses, defaulting to F1/F0 request');
       if get_f0 == 1:
         spikes = data['spikeCount'];
@@ -5178,8 +5181,10 @@ def get_spikes(data, get_f0 = 1, rvcFits = None, expInd = None, overwriteSpikes 
            spikes = data['f1'];
         else: # we assume it's arranged (nComp, nTr), so sum!
            spikes = numpy.sum(data['f1'], axis=0); # i.e. sum over components
-
-  return spikes;
+  if returnAdjSuccess:
+     return spikes, adjSuccess;
+  else:
+     return spikes;
 
 def get_rvc_fits(loc_data, expInd, cellNum, rvcName='rvcFits', rvcMod=0, direc=1, vecF1=None):
   ''' simple function to return the rvc fits needed for adjusting responses
@@ -5217,7 +5222,7 @@ def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMo
         else:
           rvcFits = None
 
-      spikes_byComp = get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd, vecF1=vecF1, autoPad=(returnByComp&returnByCompExpand));
+      spikes_byComp, adj_success = get_spikes(expData, get_f0=0, rvcFits=rvcFits, expInd=expInd, vecF1=vecF1, autoPad=(returnByComp&returnByCompExpand), returnAdjSuccess=True);
       if returnByComp:
          spikes = spikes_byComp;
       else:
@@ -5225,7 +5230,7 @@ def get_adjusted_spikerate(expData, which_cell, expInd, dataPath, rvcName, rvcMo
       rates = True; # when we get the spikes from rvcFits, they've already been converted into rates (in get_all_fft)
       baseline = None; # f1 has no "DC", yadig? 
 
-      which_measure = 1; # i.e. F1 spikes
+      which_measure = 1 if adj_success else 0; # i.e. F1 spikes, unless adj_success failed!
   ### then complex cell, so let's get F0
   else:
       spikes = get_spikes(expData, get_f0=1, rvcFits=None, expInd=expInd, vecF1=vecF1);

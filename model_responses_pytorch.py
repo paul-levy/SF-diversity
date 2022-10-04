@@ -332,6 +332,7 @@ class dataWrapper(torchdata.Dataset):
         self.resp = resp;
         self.device = device;
         self.expInd = expInd;
+        self.respMeasure = respMeasure
         
     def get_single_item(self, idx):
         # NOTE: This assumes that trInf['ori', 'tf', etc...] are already [nTr, nStimComp]
@@ -344,7 +345,12 @@ class dataWrapper(torchdata.Dataset):
         feature['num'] = idx; # which trials are part of this
         
         target = dict();
-        target['resp'] = self.resp[idx, :];
+        try:
+          target['resp'] = self.resp[idx];
+          #target['resp'] = self.resp[idx, :];
+        except:
+          print('resp [rm=%d] has shape:' % self.respMeasure);
+          print(self.resp.shape);
 
         if self.expInd == -1:
           maskInd, baseInd = hf_sfBB.get_mask_base_inds();
@@ -951,7 +957,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_221001' % loc_str;
+    fL_name = 'fitList%s_pyt_221004' % loc_str;
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -988,6 +994,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     expInfo = S['sfm']['exp']['trial'];
 
   respOverwrite = None; # default to None, but if vecCorrected and expInd != -1, then we will specify
+  print('respMeasure, vecCorrected: %d, %d' % (respMeasure, vecCorrected));
   if respMeasure == 1 and expInd!=1: # we cannot do F1 on V1_orig
     # NOTE: For F1, we keep responses per component, and zero-out the blanks later on
     if vecCorrected: # then do vecF1 correction
@@ -1007,14 +1014,21 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         expInfo['f1_base'] = vec_corr_base;
       else: # and the same for the "main" experiment
         rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=0);
-        respOverwrite = hf.get_adjusted_spikerate(expInfo, cellNum, expInd, loc_data, rvcName=rvcFits, rvcMod=-1, baseline_sub=False, return_measure=True, vecF1=0, force_f1=True, returnByComp=True)[0]; # if we're here, then we get F1 regardless of f1f0
+        respOverwrite, whichMeasure_out = hf.get_adjusted_spikerate(expInfo, cellNum, expInd, loc_data, rvcName=rvcFits, rvcMod=-1, baseline_sub=False, return_measure=True, vecF1=0, force_f1=True, returnByComp=True); # if we're here, then we get F1 regardless of f1f0
+        # however, if whichMeasure is D.C., then we quit!
+        if whichMeasure_out==0: # i.e. dc
+          print('Cell %d failed in getting F1 responses' % cellNum);
+          return [], []; # this one failed --> could not get DC
   elif respMeasure == 1 and expInd==1:
     if to_save:
       sys.exit('Cannot run F1 model analysis on V1_orig/ experiment - exiting!');
     else:
       return [], []; # return two blank placeholders so that the parallelization can move on
 
-  trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite);
+  try:
+    trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite);
+  except:
+    raise Exception("Could not process_data in mrpt.setModel --> cell %d, respMeasure %d" % (cellNum, respMeasure))
   # we zero out the blanks later on for all other loss types, but do it here otherwise
   if lossType == 3:
     if respMeasure == 1:
@@ -1141,7 +1155,11 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   ###  data wrapping
   dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
-  dataloader = torchdata.DataLoader(dw, batch_size, shuffle=batch_size<2000) # i.e. if batch_size<2000, then shuffle!
+  exp_length = expInfo['num'][-1]; # longest trial
+  print('cell %d: rem. is %d [last iteration]' % (cellNum, np.mod(exp_length,batch_size)));
+  dl_shuffle = batch_size<2000 # i.e. if batch_size<2000, then shuffle!
+  dl_droplast = bool(np.mod(exp_length,batch_size)<10) # if the last iteration will have fewer than 10 trials, drop it!
+  dataloader = torchdata.DataLoader(dw, batch_size, shuffle=dl_shuffle, drop_last=dl_droplast)
 
   ### then set up the optimization
   optimizer = torch.optim.Adam(training_parameters, amsgrad=True, lr=learning_rate, ) # amsgrad is variant of opt
@@ -1298,6 +1316,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     optInfo['epochs'] = max_epochs;
     optInfo['batch_size'] = batch_size;
     optInfo['learning_rate'] = learning_rate;
+    optInfo['shuffle'] = dl_shuffle;
+    optInfo['dropLast'] = dl_droplast;
     curr_fit['opt'] = optInfo;
     curr_fit['nll_history'] = np.append(nll_history, NLL);
   else:
@@ -1413,7 +1433,7 @@ if __name__ == '__main__':
     #cProfile.runctx('oyvey=setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel':setModel}, locals())
     #oyvey=setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)
     #pdb.set_trace();
-
+  
     start = time.process_time();
     dcOk = 0; f1Ok = 0 if (expDir == 'V1/' or expDir == 'V1_BB/') else 1; # i.e. we don't bother fitting F1 if fit is from V1_orig/ or altExp/
     nTry = 10; # 30
@@ -1452,18 +1472,18 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
 
-      # First, DC? (should only do DC or F1?)
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False);
-      #sm_perCell(1); # use this to debug...
-      with mp.Pool(processes = nCpu) as pool:
-        smFits_dc = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
-        pool.close();
-
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False);
       #sm_perCell(1); # use this to debug...
       with mp.Pool(processes = nCpu) as pool:
         smFits_f1 = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
+        pool.close();
+
+      # First, DC? (should only do DC or F1?)
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False);
+      #sm_perCell(1); # use this to debug...
+      with mp.Pool(processes = nCpu) as pool:
+        smFits_dc = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
         pool.close();
 
       ### do the saving HERE!
@@ -1476,6 +1496,13 @@ if __name__ == '__main__':
         fitListNPY = hf.np_smart_load(loc_data + fitListName);
       else:
         fitListNPY = dict();
+      # and load fit details
+      fitDetailsName = fitListName.replace('.npy', '_details.npy');
+      if os.path.isfile(loc_data + fitListName):
+        print('reloading fit list...');
+        fitDetailsNPY = hf.np_smart_load(loc_data + fitListName);
+      else:
+        fitDetailsNPY = dict();
 
       # now, iterate through and fit!
       respStr_dc = hf_sfBB.get_resp_str(0);
@@ -1483,11 +1510,18 @@ if __name__ == '__main__':
       for (iii, currFit_dc), currFit_f1 in zip(enumerate(smFits_dc), smFits_f1):
         fitListNPY[iii] = dict();
         # dc
-        fitListNPY[iii][respStr_dc] = currFit_dc[0]; # currFit[1] is the details...ignore for now
+        fitListNPY[iii][respStr_dc] = currFit_dc[0];
         # f1
-        fitListNPY[iii][respStr_f1] = currFit_f1[0]; # currFit[1] is the details...ignore for now
+        fitListNPY[iii][respStr_f1] = currFit_f1[0];
+        try: # try the details
+          fitDetailsNPY[iii] = dict();
+          fitDetailsNPY[iii][respStr_dc] = currFit_dc[1];
+          fitDetailsNPY[iii][respStr_f1] = currFit_f1[1];
+        except:
+          pass;
       # --- finally, save
       np.save(loc_data + fitListName, fitListNPY)
+      np.save(loc_data + fitDetailsName, fitDetailsNPY)
 
     enddd = time.process_time();
     print('Took %d minutes -- dc %d || f1 %d' % ((enddd-start)/60, dcOk, f1Ok));
