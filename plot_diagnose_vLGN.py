@@ -151,7 +151,7 @@ elif excType == 2:
     if force_full:
       fitBase = 'fitList%s_pyt_210331' % loc_str
 
-fitBase = 'fitList%s_pyt_221001' % '' #loc_str
+fitBase = 'fitList%s_pyt_221001' % loc_str
 #fitBase = 'holdout_fitList_190513cA';
 rvcDir = 1;
 vecF1 = 0;
@@ -934,14 +934,14 @@ sfNorm_flat = sfNorm_flat/np.amax(np.abs(sfNorm_flat));
 # - first, the old way (including the subunits, which is now deprecated...)
 nTrials =  inhSfTuning.shape[0];
 if gs_mean_A is not None:
-  inhWeight_A = hf.genNormWeights(expData, nInhChan, gs_mean_A, gs_std_A, nTrials, expInd);
+  inhWeight_A = hf.genNormWeights(expData, None, gs_mean_A, gs_std_A, nTrials, expInd);
   inhWeight_A = inhWeight_A[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
   sfNormTune_A = np.sum(-.5*(inhWeight_A*np.square(inhSfTuning)), 1);
   sfNorm_A = sfNormTune_A/np.amax(np.abs(sfNormTune_A));
 else:
   sfNorm_A = sfNorm_flat
 if gs_mean_B is not None:
-  inhWeight_B = hf.genNormWeights(expData, nInhChan, gs_mean_B, gs_std_B, nTrials, expInd);
+  inhWeight_B = hf.genNormWeights(expData, None, gs_mean_B, gs_std_B, nTrials, expInd);
   inhWeight_B = inhWeight_B[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
   sfNormTune_B = np.sum(-.5*(inhWeight_B*np.square(inhSfTuning)), 1);
   sfNorm_B = sfNormTune_B/np.amax(np.abs(sfNormTune_B));
