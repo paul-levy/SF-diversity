@@ -324,39 +324,59 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
     trInf['sf'] = _cast_as_tensor(trInf['sf']);
     trInf['con'] = _cast_as_tensor(trInf['con']);
 
+    resp = _cast_as_tensor(resp);
+
   return trInf, resp;
 
 class dataWrapper(torchdata.Dataset):
-    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None, respOverwrite=None):
+    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None, respOverwrite=None, asTensor=False):
         # if respMeasure == 0, then we're getting DC; otherwise, F1
         # respOverwrite means overwrite the responses; used only for expInd>=0 for now
 
         super().__init__();
-        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite)
+        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite, asTensor=asTensor)
 
         self.trInf = trInf;
         self.resp = resp;
         self.device = device;
         self.expInd = expInd;
+        self.preFilledAsTensor = asTensor;
         
     def get_single_item(self, idx):
         # NOTE: This assumes that trInf['ori', 'tf', etc...] are already [nTr, nStimComp]
         feature = dict();
-        feature['ori'] = _cast_as_tensor(self.trInf['ori'][idx, :])
-        feature['tf'] = _cast_as_tensor(self.trInf['tf'][idx, :])
-        feature['sf'] = _cast_as_tensor(self.trInf['sf'][idx, :])
-        feature['con'] = _cast_as_tensor(self.trInf['con'][idx, :])
-        feature['ph'] = _cast_as_tensor(self.trInf['ph'][idx, :])
+        if self.preFilledAsTensor: # then we've already made trInf... as a tensor!
+          feature['ori'] = self.trInf['ori'][idx, :]
+          feature['tf'] = self.trInf['tf'][idx, :]
+          feature['sf'] = self.trInf['sf'][idx, :]
+          feature['con'] = self.trInf['con'][idx, :]
+          feature['ph'] = self.trInf['ph'][idx, :]
+        else:
+          feature['ori'] = _cast_as_tensor(self.trInf['ori'][idx, :])
+          feature['tf'] = _cast_as_tensor(self.trInf['tf'][idx, :])
+          feature['sf'] = _cast_as_tensor(self.trInf['sf'][idx, :])
+          feature['con'] = _cast_as_tensor(self.trInf['con'][idx, :])
+          feature['ph'] = _cast_as_tensor(self.trInf['ph'][idx, :])
         feature['num'] = idx; # which trials are part of this
         
         target = dict();
-        target['resp'] = _cast_as_tensor(self.resp[idx, :]);
+        if self.preFilledAsTensor:
+          target['resp'] = self.resp[idx, :];
+        else:
+          target['resp'] = _cast_as_tensor(self.resp[idx, :]);
         if self.expInd == -1:
           maskInd, baseInd = hf_sfBB.get_mask_base_inds();
-          target['maskCon'] = _cast_as_tensor(self.trInf['con'][idx, maskInd])
-          target['baseCon'] = _cast_as_tensor(self.trInf['con'][idx, baseInd])
+          if self.preFilledAsTensor:
+            target['maskCon'] = self.trInf['con'][idx, maskInd]
+            target['baseCon'] = self.trInf['con'][idx, baseInd]
+          else:
+            target['maskCon'] = _cast_as_tensor(self.trInf['con'][idx, maskInd])
+            target['baseCon'] = _cast_as_tensor(self.trInf['con'][idx, baseInd])
         else:
-          target['cons'] = _cast_as_tensor(self.trInf['con'][idx, :]);
+          if self.preFilledAsTensor:
+            target['cons'] = self.trInf['con'][idx, :];
+          else:
+            target['cons'] = _cast_as_tensor(self.trInf['con'][idx, :]);
         
         return (feature, target);
 
@@ -1140,7 +1160,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   model.print_params(); # optionally, nicely print the initial parameters...
 
   ###  data wrapping
-  dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
+  dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite, asTensor=True); # respOverwrite defined above (None if DC or if expInd=-1)
   dataloader = torchdata.DataLoader(dw, batch_size)
 
   ### then set up the optimization
@@ -1406,9 +1426,10 @@ if __name__ == '__main__':
       toPar = False;
 
     #setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # first do DC
-    #import cProfile
-    #cProfile.runctx('setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel':setModel}, locals())
+    import cProfile
+    cProfile.runctx('setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel':setModel}, locals())
 
+    pdb.set_trace();
 
     start = time.process_time();
     dcOk = 0; f1Ok = 0 if (expDir == 'V1/' or expDir == 'V1_BB/') else 1; # i.e. we don't bother fitting F1 if fit is from V1_orig/ or altExp/
