@@ -893,8 +893,8 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
-
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.10, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+# ---- previous to 22.10.03, batch_size=3000 (trials)
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=50, learning_rate=0.03, batch_size=128, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
@@ -1009,7 +1009,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         rvcFits = hf.get_rvc_fits(loc_data, expInd, cellNum, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=0);
         respOverwrite = hf.get_adjusted_spikerate(expInfo, cellNum, expInd, loc_data, rvcName=rvcFits, rvcMod=-1, baseline_sub=False, return_measure=True, vecF1=0, force_f1=True, returnByComp=True)[0]; # if we're here, then we get F1 regardless of f1f0
   elif respMeasure == 1 and expInd==1:
-    sys.exit('Cannot run F1 model analysis on V1_orig/ experiment - exiting!');
+    if to_save:
+      sys.exit('Cannot run F1 model analysis on V1_orig/ experiment - exiting!');
+    else:
+      return [], []; # return two blank placeholders so that the parallelization can move on
 
   trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite);
   # we zero out the blanks later on for all other loss types, but do it here otherwise
@@ -1138,7 +1141,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   ###  data wrapping
   dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
-  dataloader = torchdata.DataLoader(dw, batch_size)
+  dataloader = torchdata.DataLoader(dw, batch_size, shuffle=batch_size<2000) # i.e. if batch_size<2000, then shuffle!
 
   ### then set up the optimization
   optimizer = torch.optim.Adam(training_parameters, amsgrad=True, lr=learning_rate, ) # amsgrad is variant of opt
@@ -1146,7 +1149,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   if scheduler:
     # value of 0.5 per Billy (21.02.09); patience is # of epochs before we start to reduce the LR
     LR_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', 
-                                                              factor=0.3, patience=int(max_epochs/15)); # factor was 0.5 when learning rate was 0.10; 0.15 when lr was 0.20
+                                                              factor=0.1, patience=np.maximum(8, int(max_epochs/15))); # factor was 0.5 when l.r. was 0.10; 0.15 when lr was 0.20
+                                                              #factor=0.3, patience=int(max_epochs/15)); # factor was 0.5 when learning rate was 0.10; 0.15 when lr was 0.20
 
   # - then data
   # - predefine some arrays for tracking loss
@@ -1169,7 +1173,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   accum = np.nan; # keep track of accumulator (will be replaced with zero at first step)
   for t in range(max_epochs):
-      optimizer.zero_grad()
+      optimizer.zero_grad() # reset the gradient for each epoch!
 
       loss_history.append([])
       time_history.append([])
@@ -1344,7 +1348,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       np.save(loc_data + stepListName, stepList);
 
   if to_save:
-    return NLL, opt_params;
+    return NLL, opt_params; #, loss_history; # LAST RETURN ITEM IS TEMPORARY 22.10.04
   else:
     return curr_fit, curr_steplist;
 
@@ -1406,7 +1410,8 @@ if __name__ == '__main__':
 
     #setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # try an F1 (use for debugging)
     #import cProfile
-    #cProfile.runctx('setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel':setModel}, locals())
+    #cProfile.runctx('oyvey=setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel':setModel}, locals())
+    #oyvey=setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)
     #pdb.set_trace();
 
     start = time.process_time();
