@@ -1066,10 +1066,11 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   ### set parameters
   # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
-  prefSfEst_goal = np.random.uniform(0.3, 2); # this is the value we want AFTER taking the sigmoid (and applying the upper bound)
+  prefSfEst_goal = np.random.uniform(1,3); # this is the value we want AFTER taking the sigmoid (and applying the upper bound)
+  #prefSfEst_goal = np.random.uniform(0.3, 2); # this is the value we want AFTER taking the sigmoid (and applying the upper bound)
   sig_inv_input = (pSfFloor+prefSfEst_goal)/pSfBound;
   prefSfEst = -np.log((1-sig_inv_input)/sig_inv_input)
-  normConst = -2; # per Tony, just start with a low value (i.e. closer to linear)
+  normConst = -1.25; # per Tony, just start with a low value (i.e. closer to linear) --> pre 22.10.04, was -2
   if fitType == 1:
     inhAsym = 0;
   if fitType == 2 or fitType == 5:
@@ -1089,17 +1090,19 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       # - make sigHigh relative to sigLow, but bias it to be lower, i.e. narrower
       sigHigh = sigLow*np.random.uniform(0.5, 1.25) if initFromCurr==0 else curr_params[-1-np.sign(lgnFrontEnd)]; # if lgnFrontEnd == 0, then it's the last param; otherwise it's the 2nd to last param
     else: # this is from modCompare::smarter initialization, assuming _sigmoidSigma = 5
-      sigLow = np.random.uniform(-2, 0.5);
-      sigHigh = np.random.uniform(-2, 0.5);
+      sigLow = np.random.uniform(-2, -0.5); # was (-2, 0.5)
+      sigHigh = np.random.uniform(-2, -0.5); # was (-2, 0.5)
   normConst = normConst if initFromCurr==0 else curr_params[2];
   if rExp_gt1 is not None:
     respExp = 0 if initFromCurr==0 else curr_params[3];
   else:
-    respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
+    respExp = np.random.uniform(0.5, 1.5) if initFromCurr==0 else curr_params[3];
+    #respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3]; # pre 22.10.04 value
   if newMethod == 0:
     # easier to start with a small scalar and work up, rather than work down
-    respScalar = np.random.uniform(200, 700) if initFromCurr==0 else curr_params[4];
-    noiseEarly = -1 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
+    respScalar = np.random.uniform(-6, -1) if initFromCurr==0 else curr_params[4];
+    #respScalar = np.random.uniform(200, 700) if initFromCurr==0 else curr_params[4]; 
+    noiseEarly = -1e-2 if initFromCurr==0 else curr_params[5];
     noiseLate = 1e-1 if initFromCurr==0 else curr_params[6];
   else: # see modCompare.ipynb, "Smarter initialization" for details
     if respMeasure == 0: # slightly different range of successfully-fit respScalars for DC vs. F1 fits 
@@ -1162,8 +1165,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   ###  data wrapping
   dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
   exp_length = expInfo['num'][-1]; # longest trial
-  if verbose:
-    print('cell %d: rem. is %d [last iteration]' % (cellNum, np.mod(exp_length,batch_size)));
+  #if verbose:
+  #  print('cell %d: rem. is %d [last iteration]' % (cellNum, np.mod(exp_length,batch_size)));
   dl_shuffle = batch_size<2000 # i.e. if batch_size<2000, then shuffle!
   dl_droplast = bool(np.mod(exp_length,batch_size)<10) # if the last iteration will have fewer than 10 trials, drop it!
   dataloader = torchdata.DataLoader(dw, batch_size, shuffle=dl_shuffle, drop_last=dl_droplast)
@@ -1327,6 +1330,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     optInfo['learning_rate'] = learning_rate;
     optInfo['shuffle'] = dl_shuffle;
     optInfo['dropLast'] = dl_droplast;
+    optInfo['init_params'] = param_list; # TEMPORARY?
     curr_fit['opt'] = optInfo;
     curr_fit['nll_history'] = np.append(nll_history, NLL);
   else:
