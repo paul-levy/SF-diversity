@@ -900,7 +900,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 # ---- previous to 22.10.03, batch_size=3000 (trials)
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=50, learning_rate=0.03, batch_size=128, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=50, learning_rate=0.03, batch_size=128, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1,verbose=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
@@ -965,16 +965,18 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   # get the name for the stepList name, regardless of whether or not we keep this now
   stepListName = str(fitListName.replace('.npy', '_details.npy'));
 
-  print('\nFitList: %s [expDir is %s]' % (fitListName, expDir));
+  if verbose:
+    print('\nFitList: %s [expDir is %s]' % (fitListName, expDir));
 
   # Load datalist, then specific cell
   try:
     dataList = hf.np_smart_load(str(loc_data + dataListName));
   except:
-    dataListName = hf.get_datalist(expDir);
+    dataListName = hf.get_datalist(expDir, force_full=force_full);
     dataList = hf.np_smart_load(str(loc_data + dataListName));
   dataNames = dataList['unitName'];
-  print('loading data structure from %s...' % loc_data);
+  if verbose:
+    print('loading data structure from %s...' % loc_data);
   try:
     expInd = hf.exp_name_to_ind(dataList['expType'][cellNum-1]);
   except:
@@ -982,7 +984,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       expInd = -1; # for sfBB
     elif expDir == 'V1_orig/':
       expInd = 1;
-  print('expInd is %d' % expInd);
+  if verbose:
+    print('expInd is %d' % expInd);
   # - then cell
   if expInd == -1:
     S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfBB.npy')); # why -1? 0 indexing...
@@ -994,7 +997,9 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     expInfo = S['sfm']['exp']['trial'];
 
   respOverwrite = None; # default to None, but if vecCorrected and expInd != -1, then we will specify
-  print('respMeasure, vecCorrected: %d, %d' % (respMeasure, vecCorrected));
+  if verbose:
+    print('respMeasure, vecCorrected: %d, %d' % (respMeasure, vecCorrected));
+
   if respMeasure == 1 and expInd!=1: # we cannot do F1 on V1_orig
     # NOTE: For F1, we keep responses per component, and zero-out the blanks later on
     if vecCorrected: # then do vecF1 correction
@@ -1151,12 +1156,14 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound, pSfBound_low=pSfFloor)
 
   training_parameters = [p for p in model.parameters() if p.requires_grad]
-  model.print_params(); # optionally, nicely print the initial parameters...
+  if verbose:
+    model.print_params(); # optionally, nicely print the initial parameters...
 
   ###  data wrapping
   dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
   exp_length = expInfo['num'][-1]; # longest trial
-  print('cell %d: rem. is %d [last iteration]' % (cellNum, np.mod(exp_length,batch_size)));
+  if verbose:
+    print('cell %d: rem. is %d [last iteration]' % (cellNum, np.mod(exp_length,batch_size)));
   dl_shuffle = batch_size<2000 # i.e. if batch_size<2000, then shuffle!
   dl_droplast = bool(np.mod(exp_length,batch_size)<10) # if the last iteration will have fewer than 10 trials, drop it!
   dataloader = torchdata.DataLoader(dw, batch_size, shuffle=dl_shuffle, drop_last=dl_droplast)
@@ -1167,7 +1174,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   if scheduler:
     # value of 0.5 per Billy (21.02.09); patience is # of epochs before we start to reduce the LR
     LR_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', 
-                                                              factor=0.1, patience=np.maximum(8, int(max_epochs/15))); # factor was 0.5 when l.r. was 0.10; 0.15 when lr was 0.20
+                                                              factor=0.1, patience=np.maximum(8, int(max_epochs/10))); # factor was 0.5 when l.r. was 0.10; 0.15 when lr was 0.20
                                                               #factor=0.3, patience=int(max_epochs/15)); # factor was 0.5 when learning rate was 0.10; 0.15 when lr was 0.20
 
   # - then data
@@ -1220,7 +1227,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
               if bb == 0:
                 now = datetime.datetime.now()
                 current_time = now.strftime("%H:%M:%S")
-                print('\n****** STEP %d [%s] [t=%s] [prev loss: %.3f] *********' % (t, respStr, current_time, accum))
+                if verbose:
+                  print('\n****** STEP %d [%s] [t=%s] [prev loss: %.3f] *********' % (t, respStr, current_time, accum))
                 #print('\nTARGET, then predictions, finally loss');
                 #print(target[0:20]);
                 #print(predictions[0:20]);
@@ -1293,7 +1301,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     nll_history = np.array([]);
 
   ### SAVE: Now we save the results, including the results of each step, if specified
-  print('...finished. New NLL (%.2f) vs. previous NLL (%.2f)' % (NLL, currNLL)); 
+  if verbose:
+    print('...finished. New NLL (%.2f) vs. previous NLL (%.2f)' % (NLL, currNLL)); 
   # reload fitlist in case changes have been made with the file elsewhere!
   if os.path.exists(loc_data + fitListName) and to_save:
     fitList = hf.np_smart_load(str(loc_data + fitListName));
