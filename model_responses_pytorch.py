@@ -371,7 +371,7 @@ class dataWrapper(torchdata.Dataset):
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module()
 
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False):
 
     super().__init__();
 
@@ -418,7 +418,7 @@ class sfNormMod(torch.nn.Module):
     # Other (nonlinear) model components
     self.sigma    = _cast_as_param(modParams[2]); # normalization constant
     #self.respExp  = _cast_as_tensor(1); # response exponent -- fixed at one (not a free param)
-    self.respExp  = _cast_as_param(modParams[3]); # response exponent
+    self.respExp  = _cast_as_param(modParams[3]) if fixRespExp is None else _cast_as_tensor(modParams[3]); # response exponent
     self.scale    = _cast_as_param(modParams[4]); # response scalar
 
     # Noise parameters
@@ -900,7 +900,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 # ---- previous to 22.10.03, batch_size=3000 (trials)
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=4000, learning_rate=0.075, batch_size=128, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, verbose=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.001, batch_size=256, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
@@ -957,7 +957,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_221005' % loc_str;
+    fL_name = 'fitList%s_pyt_221005_noRE' % loc_str;
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -965,18 +965,16 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   # get the name for the stepList name, regardless of whether or not we keep this now
   stepListName = str(fitListName.replace('.npy', '_details.npy'));
 
-  if verbose:
-    print('\nFitList: %s [expDir is %s]' % (fitListName, expDir));
+  print('\nFitList: %s [expDir is %s]' % (fitListName, expDir));
 
   # Load datalist, then specific cell
   try:
     dataList = hf.np_smart_load(str(loc_data + dataListName));
   except:
-    dataListName = hf.get_datalist(expDir, force_full=force_full);
+    dataListName = hf.get_datalist(expDir);
     dataList = hf.np_smart_load(str(loc_data + dataListName));
   dataNames = dataList['unitName'];
-  if verbose:
-    print('loading data structure from %s...' % loc_data);
+  print('loading data structure from %s...' % loc_data);
   try:
     expInd = hf.exp_name_to_ind(dataList['expType'][cellNum-1]);
   except:
@@ -984,8 +982,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       expInd = -1; # for sfBB
     elif expDir == 'V1_orig/':
       expInd = 1;
-  if verbose:
-    print('expInd is %d' % expInd);
+  print('expInd is %d' % expInd);
   # - then cell
   if expInd == -1:
     S = hf.np_smart_load(str(loc_data + dataNames[cellNum-1] + '_sfBB.npy')); # why -1? 0 indexing...
@@ -997,8 +994,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     expInfo = S['sfm']['exp']['trial'];
 
   respOverwrite = None; # default to None, but if vecCorrected and expInd != -1, then we will specify
-  if verbose:
-    print('respMeasure, vecCorrected: %d, %d' % (respMeasure, vecCorrected));
+  print('respMeasure, vecCorrected: %d, %d' % (respMeasure, vecCorrected));
   if respMeasure == 1 and expInd!=1: # we cannot do F1 on V1_orig
     # NOTE: For F1, we keep responses per component, and zero-out the blanks later on
     if vecCorrected: # then do vecF1 correction
@@ -1071,7 +1067,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   prefSfEst_goal = np.random.uniform(0.3, 2); # this is the value we want AFTER taking the sigmoid (and applying the upper bound)
   sig_inv_input = (pSfFloor+prefSfEst_goal)/pSfBound;
   prefSfEst = -np.log((1-sig_inv_input)/sig_inv_input)
-  normConst = -1.25; # per Tony, just start with a low value (i.e. closer to linear) // previously was 2
+  normConst = -2; # per Tony, just start with a low value (i.e. closer to linear)
   if fitType == 1:
     inhAsym = 0;
   if fitType == 2 or fitType == 5:
@@ -1091,17 +1087,19 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       # - make sigHigh relative to sigLow, but bias it to be lower, i.e. narrower
       sigHigh = sigLow*np.random.uniform(0.5, 1.25) if initFromCurr==0 else curr_params[-1-np.sign(lgnFrontEnd)]; # if lgnFrontEnd == 0, then it's the last param; otherwise it's the 2nd to last param
     else: # this is from modCompare::smarter initialization, assuming _sigmoidSigma = 5
-      sigLow = np.random.uniform(-2, 0.5); # NOTE/TODO: Could just make (0.5, 2) --- I think sigma influence is sign-independent
+      sigLow = np.random.uniform(-2, 0.5);
       sigHigh = np.random.uniform(-2, 0.5);
   normConst = normConst if initFromCurr==0 else curr_params[2];
-  if rExp_gt1 is not None:
-    respExp = 0 if initFromCurr==0 else curr_params[3];
+  #if rExp_gt1 is not None: # SHOULD DEPRECATE rExp_gt1 (not used)
+  #  respExp = 0 if initFromCurr==0 else curr_params[3];
+  if fixRespExp is not None:
+    respExp = fixRespExp; # then, we set it to this value and make it a tensor (rather than parameter)
   else:
     respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
   if newMethod == 0:
     # easier to start with a small scalar and work up, rather than work down
-    respScalar = np.random.uniform(-6, -1) if initFromCurr==0 else curr_params[4];
-    noiseEarly = -1e-2 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
+    respScalar = np.random.uniform(200, 700) if initFromCurr==0 else curr_params[4];
+    noiseEarly = -1 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
     noiseLate = 1e-1 if initFromCurr==0 else curr_params[6];
   else: # see modCompare.ipynb, "Smarter initialization" for details
     if respMeasure == 0: # slightly different range of successfully-fit respScalars for DC vs. F1 fits 
@@ -1158,14 +1156,12 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound, pSfBound_low=pSfFloor)
 
   training_parameters = [p for p in model.parameters() if p.requires_grad]
-  if verbose:
-    model.print_params(); # optionally, nicely print the initial parameters...
+  model.print_params(); # optionally, nicely print the initial parameters...
 
   ###  data wrapping
   dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
   exp_length = expInfo['num'][-1]; # longest trial
-  if verbose:
-    print('cell %d: rem. is %d [last iteration]' % (cellNum, np.mod(exp_length,batch_size)));
+  print('cell %d: rem. is %d [last iteration]' % (cellNum, np.mod(exp_length,batch_size)));
   dl_shuffle = batch_size<2000 # i.e. if batch_size<2000, then shuffle!
   dl_droplast = bool(np.mod(exp_length,batch_size)<10) # if the last iteration will have fewer than 10 trials, drop it!
   dataloader = torchdata.DataLoader(dw, batch_size, shuffle=dl_shuffle, drop_last=dl_droplast)
@@ -1230,8 +1226,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
               if bb == 0:
                 now = datetime.datetime.now()
                 current_time = now.strftime("%H:%M:%S")
-                if verbose:
-                  print('\n****** STEP %d [%s] [t=%s] [prev loss: %.3f] *********' % (t, respStr, current_time, accum))
+                print('\n****** STEP %d [%s] [t=%s] [prev loss: %.3f] *********' % (t, respStr, current_time, accum))
                 #print('\nTARGET, then predictions, finally loss');
                 #print(target[0:20]);
                 #print(predictions[0:20]);
@@ -1500,7 +1495,7 @@ if __name__ == '__main__':
       ### do the saving HERE!
       todoCV = 0; #  1 if whichTrials is not None else 0;
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_221005' % loc_str; # figure out how to pass the name into setModel, too, so names are same regardless of call?
+      fL_name = 'fitList%s_pyt_221005%s' % (loc_str, '_noRE' if fixRespExp is not None else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
