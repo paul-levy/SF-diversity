@@ -900,7 +900,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 # ---- previous to 22.10.03, batch_size=3000 (trials)
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=50, learning_rate=0.03, batch_size=128, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1,verbose=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=4000, learning_rate=0.075, batch_size=128, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, verbose=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
@@ -957,7 +957,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_221004' % loc_str;
+    fL_name = 'fitList%s_pyt_221005' % loc_str;
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -999,7 +999,6 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   respOverwrite = None; # default to None, but if vecCorrected and expInd != -1, then we will specify
   if verbose:
     print('respMeasure, vecCorrected: %d, %d' % (respMeasure, vecCorrected));
-
   if respMeasure == 1 and expInd!=1: # we cannot do F1 on V1_orig
     # NOTE: For F1, we keep responses per component, and zero-out the blanks later on
     if vecCorrected: # then do vecF1 correction
@@ -1033,7 +1032,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   try:
     trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite);
   except:
-    raise Exception("Could not process_data in mrpt.setModel --> cell %d, respMeasure %d" % (cellNum, respMeasure))
+    if to_save:
+      raise Exception("Could not process_data in mrpt.setModel --> cell %d, respMeasure %d" % (cellNum, respMeasure))
+    else:
+      return [], [];
   # we zero out the blanks later on for all other loss types, but do it here otherwise
   if lossType == 3:
     if respMeasure == 1:
@@ -1066,11 +1068,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   ### set parameters
   # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
-  prefSfEst_goal = np.random.uniform(1,3); # this is the value we want AFTER taking the sigmoid (and applying the upper bound)
-  #prefSfEst_goal = np.random.uniform(0.3, 2); # this is the value we want AFTER taking the sigmoid (and applying the upper bound)
+  prefSfEst_goal = np.random.uniform(0.3, 2); # this is the value we want AFTER taking the sigmoid (and applying the upper bound)
   sig_inv_input = (pSfFloor+prefSfEst_goal)/pSfBound;
   prefSfEst = -np.log((1-sig_inv_input)/sig_inv_input)
-  normConst = -1.25; # per Tony, just start with a low value (i.e. closer to linear) --> pre 22.10.04, was -2
+  normConst = -1.25; # per Tony, just start with a low value (i.e. closer to linear) // previously was 2
   if fitType == 1:
     inhAsym = 0;
   if fitType == 2 or fitType == 5:
@@ -1090,19 +1091,17 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       # - make sigHigh relative to sigLow, but bias it to be lower, i.e. narrower
       sigHigh = sigLow*np.random.uniform(0.5, 1.25) if initFromCurr==0 else curr_params[-1-np.sign(lgnFrontEnd)]; # if lgnFrontEnd == 0, then it's the last param; otherwise it's the 2nd to last param
     else: # this is from modCompare::smarter initialization, assuming _sigmoidSigma = 5
-      sigLow = np.random.uniform(-2, -0.5); # was (-2, 0.5)
-      sigHigh = np.random.uniform(-2, -0.5); # was (-2, 0.5)
+      sigLow = np.random.uniform(-2, 0.5); # NOTE/TODO: Could just make (0.5, 2) --- I think sigma influence is sign-independent
+      sigHigh = np.random.uniform(-2, 0.5);
   normConst = normConst if initFromCurr==0 else curr_params[2];
   if rExp_gt1 is not None:
     respExp = 0 if initFromCurr==0 else curr_params[3];
   else:
-    respExp = np.random.uniform(0.5, 1.5) if initFromCurr==0 else curr_params[3];
-    #respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3]; # pre 22.10.04 value
+    respExp = np.random.uniform(1.5, 2.5) if initFromCurr==0 else curr_params[3];
   if newMethod == 0:
     # easier to start with a small scalar and work up, rather than work down
     respScalar = np.random.uniform(-6, -1) if initFromCurr==0 else curr_params[4];
-    #respScalar = np.random.uniform(200, 700) if initFromCurr==0 else curr_params[4]; 
-    noiseEarly = -1e-2 if initFromCurr==0 else curr_params[5];
+    noiseEarly = -1e-2 if initFromCurr==0 else curr_params[5]; # 02.27.19 - (dec. up. bound to 0.01 from 0.1)
     noiseLate = 1e-1 if initFromCurr==0 else curr_params[6];
   else: # see modCompare.ipynb, "Smarter initialization" for details
     if respMeasure == 0: # slightly different range of successfully-fit respScalars for DC vs. F1 fits 
@@ -1165,8 +1164,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   ###  data wrapping
   dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
   exp_length = expInfo['num'][-1]; # longest trial
-  #if verbose:
-  #  print('cell %d: rem. is %d [last iteration]' % (cellNum, np.mod(exp_length,batch_size)));
+  if verbose:
+    print('cell %d: rem. is %d [last iteration]' % (cellNum, np.mod(exp_length,batch_size)));
   dl_shuffle = batch_size<2000 # i.e. if batch_size<2000, then shuffle!
   dl_droplast = bool(np.mod(exp_length,batch_size)<10) # if the last iteration will have fewer than 10 trials, drop it!
   dataloader = torchdata.DataLoader(dw, batch_size, shuffle=dl_shuffle, drop_last=dl_droplast)
@@ -1177,7 +1176,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   if scheduler:
     # value of 0.5 per Billy (21.02.09); patience is # of epochs before we start to reduce the LR
     LR_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', 
-                                                              factor=0.1, patience=np.maximum(8, int(max_epochs/10))); # factor was 0.5 when l.r. was 0.10; 0.15 when lr was 0.20
+                                                              factor=0.3, patience=np.maximum(10, int(max_epochs/10))); # factor was 0.5 when l.r. was 0.10; 0.15 when lr was 0.20
+                                                              #factor=0.3, patience=np.maximum(8, int(max_epochs/10))); # factor was 0.5 when l.r. was 0.10; 0.15 when lr was 0.20
                                                               #factor=0.3, patience=int(max_epochs/15)); # factor was 0.5 when learning rate was 0.10; 0.15 when lr was 0.20
 
   # - then data
@@ -1304,8 +1304,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     nll_history = np.array([]);
 
   ### SAVE: Now we save the results, including the results of each step, if specified
-  if verbose:
-    print('...finished. New NLL (%.2f) vs. previous NLL (%.2f)' % (NLL, currNLL)); 
+  print('...finished. New NLL (%.2f) vs. previous NLL (%.2f)' % (NLL, currNLL)); 
   # reload fitlist in case changes have been made with the file elsewhere!
   if os.path.exists(loc_data + fitListName) and to_save:
     fitList = hf.np_smart_load(str(loc_data + fitListName));
@@ -1330,7 +1329,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     optInfo['learning_rate'] = learning_rate;
     optInfo['shuffle'] = dl_shuffle;
     optInfo['dropLast'] = dl_droplast;
-    optInfo['init_params'] = param_list; # TEMPORARY?
+    optInfo['init_params'] = param_list; # should be helpful to know starting values
     curr_fit['opt'] = optInfo;
     curr_fit['nll_history'] = np.append(nll_history, NLL);
   else:
@@ -1501,7 +1500,7 @@ if __name__ == '__main__':
       ### do the saving HERE!
       todoCV = 0; #  1 if whichTrials is not None else 0;
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_221004' % loc_str; # figure out how to pass the name into setModel, too, so names are same regardless of call?
+      fL_name = 'fitList%s_pyt_221005' % loc_str; # figure out how to pass the name into setModel, too, so names are same regardless of call?
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
