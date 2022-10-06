@@ -239,14 +239,15 @@ if pytorch_mod == 1:
   # load details, too, if possible
   try:
     try:
-      # this context manager approach will close the file immediately after leaving the context (big memory saving)
-      with hf.np_smart_load(data_loc + fitNameA.replace('.npy', '_details.npy')) as fitDetailsA:
-        loss_traj_A = fitDetailsA[cellNum-1][respStr]['loss'];
+      fitDetailsA = hf.np_smart_load(data_loc + fitNameA.replace('.npy', '_details.npy'))
+      loss_traj_A = fitDetailsA[cellNum-1][respStr]['loss'];
+      loss_traj_A = np.array([np.mean(x) for x in loss_traj_A]); # why mean? in case batch_size < # trials
     except:
       pass; # it's ok, we've already pre-defined None
     try:
-      with hf.np_smart_load(data_loc + fitNameB.replace('.npy', '_details.npy')) as fitDetailsB:
-        loss_traj_B = fitDetailsB[cellNum-1][respStr]['loss'];
+      fitDetailsB = hf.np_smart_load(data_loc + fitNameB.replace('.npy', '_details.npy'))
+      loss_traj_B = fitDetailsB[cellNum-1][respStr]['loss'];
+      loss_traj_B = np.array([np.mean(x) for x in loss_traj_B]); # why mean? in case batch_size < # trials
     except:
       pass
   except:
