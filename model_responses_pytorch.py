@@ -212,7 +212,7 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
 
     full_fourier = [torch.sqrt(epsil + torch.add(torch.pow(x[:,:,0], 2), torch.pow(x[:,:,1], 2))) for x in full_fourier]; # just get the amplitude
     spectrum = fft_amplitude(full_fourier, stimDur);
-
+    #pdb.set_trace();
     if tfs is not None:
       try:
         if 'torch' in str(type(tfs)):
@@ -900,9 +900,8 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 # ---- previous to 22.10.03, batch_size=3000 (trials)
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.001, batch_size=256, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, rExp_gt1=None, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.001, batch_size=256, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
-  # --- rExp_gt1 means that we force the response exponent to be gteq 1; else, None
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
   '''
@@ -920,12 +919,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     loc_str = 'HPC';
   else:
     loc_str = '';
+  #loc_str = 'HPC';
 
-  if rExp_gt1 is not None:
-    rExpStr = 're';
-  else:
-    rExpStr = '';
-    
   if fL_name is None: # otherwise, it's already defined...
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
@@ -957,7 +952,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_221005_noRE' % loc_str;
+    fL_name = 'fitList%s_pyt_221007f_noRE' % loc_str;
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -971,7 +966,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   try:
     dataList = hf.np_smart_load(str(loc_data + dataListName));
   except:
-    dataListName = hf.get_datalist(expDir);
+    dataListName = hf.get_datalist(expDir, force_full=force_full);
     dataList = hf.np_smart_load(str(loc_data + dataListName));
   dataNames = dataList['unitName'];
   print('loading data structure from %s...' % loc_data);
@@ -1040,6 +1035,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     orgMeans = _cast_as_tensor(organize_mean_perCond(trInf, resp));
  
   respStr = hf_sfBB.get_resp_str(respMeasure);
+
   if os.path.isfile(loc_data + fitListName):
     fitList = hf.np_smart_load(str(loc_data + fitListName));
     try:
@@ -1090,8 +1086,6 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       sigLow = np.random.uniform(-2, 0.5);
       sigHigh = np.random.uniform(-2, 0.5);
   normConst = normConst if initFromCurr==0 else curr_params[2];
-  #if rExp_gt1 is not None: # SHOULD DEPRECATE rExp_gt1 (not used)
-  #  respExp = 0 if initFromCurr==0 else curr_params[3];
   if fixRespExp is not None:
     respExp = fixRespExp; # then, we set it to this value and make it a tensor (rather than parameter)
   else:
@@ -1157,6 +1151,9 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   training_parameters = [p for p in model.parameters() if p.requires_grad]
   model.print_params(); # optionally, nicely print the initial parameters...
+
+  if returnOnlyInits: # 22.10.06 --> make an option to just use this for returning the initial parameters
+    return param_list;
 
   ###  data wrapping
   dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
@@ -1495,7 +1492,7 @@ if __name__ == '__main__':
       ### do the saving HERE!
       todoCV = 0; #  1 if whichTrials is not None else 0;
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_221005%s' % (loc_str, '_noRE' if fixRespExp is not None else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
+      fL_name = 'fitList%s_pyt_221007f%s' % (loc_str, '_noRE' if fixRespExp is not None else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');

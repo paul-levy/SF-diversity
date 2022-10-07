@@ -151,7 +151,8 @@ elif excType == 2:
     if force_full:
       fitBase = 'fitList%s_pyt_210331' % loc_str
 
-fitBase = 'fitList%s_pyt_221005' % loc_str
+#fitBase = 'fitList%s_pyt_221007f_noRE' % loc_str
+fitBase = 'fitList%s_pyt_221007ff_noRE_noSched' % loc_str
 #fitBase = 'holdout_fitList_190513cA';
 rvcDir = 1;
 vecF1 = 0;
