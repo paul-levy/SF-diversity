@@ -212,7 +212,7 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
 
     full_fourier = [torch.sqrt(epsil + torch.add(torch.pow(x[:,:,0], 2), torch.pow(x[:,:,1], 2))) for x in full_fourier]; # just get the amplitude
     spectrum = fft_amplitude(full_fourier, stimDur);
-    #pdb.set_trace();
+
     if tfs is not None:
       try:
         if 'torch' in str(type(tfs)):
@@ -406,6 +406,9 @@ class sfNormMod(torch.nn.Module):
       self.mWeight = _cast_as_tensor(modParams[-1]);
     elif self.lgnConType == 4: # FORCE at -1, i.e. all parvo
       self.mWeight = _cast_as_tensor(-np.Inf); # then it's NOT a parameter, and is fixed at -Inf, since as input to sigmoid, this gives 0 (i.e. all parvo)
+    # make sure mWeight is 0 if LGN is not on (this will also ensure it's defined)
+    if lgnFrontEnd<=0: # i.e. no LGN, then overwrite this!
+      self.mWeight = _cast_as_tensor(-np.Inf); # not used anyway!
       
     self.prefSf = _cast_as_param(modParams[0]);
     if self.excType == 1:
