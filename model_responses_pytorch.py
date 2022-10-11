@@ -515,7 +515,7 @@ class sfNormMod(torch.nn.Module):
     print('norm. const.: %.2f' % self.sigma.item());
     if self.normType == 2 or self.normType == 5:
       normMn = torch.exp(self.gs_mean).item() if transformed else self.gs_mean.item();
-      print('tuned norm mn|std: %.2f|%.2f' % (normMn, self.gs_std.item()));
+      print('tuned norm mn|std: %.2f|%.2f' % (normMn, torch.abs(self.gs_std).item()));
       if self.normType == 5:
         print('\tAnd the norm gain (transformed|untransformed) is: %.2f|%.2f' % (torch.mul(_cast_as_tensor(_sigmoidGainNorm), torch.sigmoid(self.gs_gain)).item(), self.gs_gain.item()));
     print('still applying the LGN filter for the gain control' if self.applyLGNtoNorm else 'No LGN for GC')
@@ -743,7 +743,7 @@ class sfNormMod(torch.nn.Module):
     elif self.normType == 2 or self.normType == 5:
       # Relying on https://pytorch.org/docs/stable/distributions.html#torch.distributions.normal.Normal.log_prob
       log_sfs = torch.log(sfs);
-      weight_distr = torch.distributions.normal.Normal(self.gs_mean, self.gs_std)
+      weight_distr = torch.distributions.normal.Normal(self.gs_mean, torch.abs(self.gs_std))
       new_weights = torch.exp(weight_distr.log_prob(log_sfs));
       gain_curr = torch.mul(_cast_as_tensor(_sigmoidGainNorm), torch.sigmoid(self.gs_gain)) if self.normType == 5 else _cast_as_tensor(1);
       new_weights = torch.mul(gain_curr, torch.mul(lgnStage, new_weights));
