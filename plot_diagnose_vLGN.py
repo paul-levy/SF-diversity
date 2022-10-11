@@ -57,6 +57,8 @@ rcParams['ytick.minor.width'] = 0
 minorWid, minorLen = 2, 12;
 majorWid, majorLen = 5, 25;
 
+clip_on = True
+
 cellNum  = int(sys.argv[1]);
 excType  = int(sys.argv[2]);
 lossType = int(sys.argv[3]);
@@ -152,7 +154,8 @@ elif excType == 2:
       fitBase = 'fitList%s_pyt_210331' % loc_str
 
 #fitBase = 'fitList%s_pyt_221007f_noRE' % loc_str
-fitBase = 'fitList%s_pyt_221007ff_noRE_noSched' % loc_str
+#fitBase = 'fitList%s_pyt_221007ff_noRE_noSched' % loc_str
+fitBase = 'fitList%s_pyt_221010ff_noRE_noSched' % loc_str
 #fitBase = 'holdout_fitList_190513cA';
 rvcDir = 1;
 vecF1 = 0;
@@ -521,7 +524,7 @@ for d in range(nDisps):
    
           ### plot data
           dispAx[d][c_plt_ind, i].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                        respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=False);
+                                           respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=clip_on);
 
           ### plot model fits
           if intpMod == 1:
@@ -543,7 +546,7 @@ for d in range(nDisps):
             for rsp, cc, s in zip(interpModBoth, modColors, modLabels):
               dispAx[d][c_plt_ind, i].plot(plt_sfs, rsp-relTo, color=cc, label=s);
           else: # plot model evaluated only at data point
-            [dispAx[d][c_plt_ind, i].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=False, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
+            [dispAx[d][c_plt_ind, i].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=clip_on, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
           '''
           sponRate = dispAx[d][c_plt_ind, 0].axhline(blankMean, color='b', linestyle='dashed', label='data spon. rate');
           [dispAx[d][c_plt_ind, 0].axhline(sponRate, color=cc, linestyle='dashed') for sponRate,cc in zip(modSponRates, modColors)];
@@ -619,7 +622,7 @@ if diffPlot != 1:
             col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
             plot_resp = curr_resps[d, v_sfs, v_cons[c]];
 
-            curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', clip_on=False, \
+            curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', clip_on=clip_on, \
                                            color=col, label=str(np.round(all_cons[v_cons[c]], 2)));
             lines.append(curr_line);
 
@@ -709,7 +712,7 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].set_title('con: %s (l_A %.1f, l_B %.1f)' % (str(np.round(all_cons[v_cons[c]], 2)), curr_loss, curr_loss_B));
         # plot data
         sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                       respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=False);
+                                       respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=clip_on);
 
 	# plot model fits
         if intpMod == 1:
@@ -730,14 +733,14 @@ for d in range(nDisps):
             relTo = np.zeros_like(interpModBoth[0]);
           for rsp, cc, s in zip(interpModBoth, modColors, modLabels):
             if d == 0 and c == 0:
-              sfMixAx[c_plt_ind, d].plot(plt_sfs, rsp-relTo, color=cc, label=s, clip_on=False);
+              sfMixAx[c_plt_ind, d].plot(plt_sfs, rsp-relTo, color=cc, label=s, clip_on=clip_on);
             else:
-              sfMixAx[c_plt_ind, d].plot(plt_sfs, rsp-relTo, color=cc, clip_on=False);
+              sfMixAx[c_plt_ind, d].plot(plt_sfs, rsp-relTo, color=cc, clip_on=clip_on);
         else: # plot model evaluated only at data point
           if d == 0 and c == 0:
-            [sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=False, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
+            [sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=clip_on, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
           else:
-            [sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=False) for modAvg, cc in zip(modAvgs, modColors)];
+            [sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=clip_on) for modAvg, cc in zip(modAvgs, modColors)];
 
         sfMixAx[c_plt_ind, d].set_xlim((np.min(all_sfs), np.max(all_sfs)));
         if diffPlot == 1:
@@ -792,8 +795,8 @@ if ~np.any([i is None for i in oriModResps]): # then we're using an experiment w
   sns.despine(ax=curr_ax, offset = 5);
 
   # plot ori tuning
-  [plt.plot(expData['sfm']['exp']['ori'], oriResp, '%so' % c, clip_on=False, label=s) for oriResp, c, s in zip(oriModResps, modColors, modLabels)]; # Model responses
-  expPlt = plt.plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-', clip_on=False); # Exp responses
+  [plt.plot(expData['sfm']['exp']['ori'], oriResp, '%so' % c, clip_on=clip_on, label=s) for oriResp, c, s in zip(oriModResps, modColors, modLabels)]; # Model responses
+  expPlt = plt.plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-', clip_on=clip_on); # Exp responses
   plt.xlabel('Ori (deg)', fontsize=12);
   plt.ylabel('Response (ips)', fontsize=12);
 
@@ -801,8 +804,8 @@ if ~np.any([i is None for i in conModResps]): # then we're using an experiment w
   # CRF - with values from TF simulation and the broken down (i.e. numerator, denominator separately) values from resimulated conditions
   curr_ax = plt.subplot2grid(detailSize, (0, 1)); # default size is 1x1
   consUse = expData['sfm']['exp']['con'];
-  plt.semilogx(consUse, expData['sfm']['exp']['conRateMean'], 'o-', clip_on=False); # Measured responses
-  [plt.plot(consUse, conResp, '%so' % c, clip_on=False, label=s) for conResp, c, s in zip(conModResps, modColors, modLabels)]; # Model responses
+  plt.semilogx(consUse, expData['sfm']['exp']['conRateMean'], 'o-', clip_on=clip_on); # Measured responses
+  [plt.plot(consUse, conResp, '%so' % c, clip_on=clip_on, label=s) for conResp, c, s in zip(conModResps, modColors, modLabels)]; # Model responses
   plt.xlabel('Con (%)', fontsize=20);
 
 # poisson test - mean/var for each condition (i.e. sfXdispXcon)
@@ -829,8 +832,8 @@ disp_rvc = 0;
 val_cons = np.array(val_con_by_disp[disp_rvc]);
 v_sfs = ~np.isnan(respMean[disp_rvc, :, val_cons[0]]); # remember, for single gratings, all cons have same #/index of sfs
 sfToUse = np.int(np.floor(len(v_sfs)/2));
-plt.semilogx(all_cons[val_cons], respMean[disp_rvc, sfToUse, val_cons], 'o', clip_on=False); # Measured responses
-[plt.plot(all_cons[val_cons], modAvg[disp_rvc, sfToUse, val_cons], marker=None, color=c, clip_on=False, label=s) for modAvg, c, s in zip(modAvgs, modColors, modLabels)]; # Model responses
+plt.semilogx(all_cons[val_cons], respMean[disp_rvc, sfToUse, val_cons], 'o', clip_on=clip_on); # Measured responses
+[plt.plot(all_cons[val_cons], modAvg[disp_rvc, sfToUse, val_cons], marker=None, color=c, clip_on=clip_on, label=s) for modAvg, c, s in zip(modAvgs, modColors, modLabels)]; # Model responses
 plt.xlabel('Con (%)', fontsize=20);
 plt.ylim([np.minimum(-5, np.nanmin(respMean[disp_rvc, sfToUse, val_cons])), 1.1*np.nanmax(respMean[disp_rvc, sfToUse, val_cons])]);
 
@@ -1151,9 +1154,9 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
           resp_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
           var_curr  = np.reshape([respVar[d, sf_ind, v_cons]], (n_cons, ));
           if diffPlot == 1: # don't set a baseline (i.e. response can be negative!)
-            respPlt = rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], resp_curr, var_curr, fmt='o', color='k', clip_on=False, label='data');
+            respPlt = rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], resp_curr, var_curr, fmt='o', color='k', clip_on=clip_on, label='data');
           else:
-            respPlt = rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], np.maximum(resp_curr, 0.1), var_curr, fmt='o', color='k', clip_on=False, label='data');
+            respPlt = rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], np.maximum(resp_curr, 0.1), var_curr, fmt='o', color='k', clip_on=clip_on, label='data');
 
           # RVC with full model fits (i.e. flat and weighted)
           if intpMod == 1:
@@ -1172,14 +1175,14 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
             else:
               relTo = np.zeros_like(interpModBoth[0]);
             for rsp, cc, s in zip(interpModBoth, modColors, modLabels):
-              rvcAx[plt_x][plt_y].plot(plt_cons, rsp-relTo, color=cc, label=s, clip_on=False);
+              rvcAx[plt_x][plt_y].plot(plt_cons, rsp-relTo, color=cc, label=s, clip_on=clip_on);
           else:
             [rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(modAvg[d, sf_ind, v_cons], 0.1), color=cc, \
-              alpha=0.7, clip_on=False, label=s) for modAvg,cc,s in zip(modAvgs, modColors, modLabels)];
+              alpha=0.7, clip_on=clip_on, label=s) for modAvg,cc,s in zip(modAvgs, modColors, modLabels)];
 
           # summary plots
           '''
-          curr_rvc = rvcAx[0][d, 0].plot(all_cons[v_cons], resps_curr, '-', clip_on=False);
+          curr_rvc = rvcAx[0][d, 0].plot(all_cons[v_cons], resps_curr, '-', clip_on=clip_on);
           rvc_plots.append(curr_rvc[0]);
 
           stdPts = np.hstack((0, np.reshape([respVar[d, sf_ind, v_cons]], (n_cons, ))));
@@ -1252,7 +1255,7 @@ if diffPlot != 1 or intpMod == 0:
             plot_resp = curr_resps[d, sf_ind, v_cons];
 
             line_curr, = crfAx[d][i].plot(all_cons[v_cons][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', color=col, \
-                                          clip_on=False, label = str(np.round(all_sfs[sf_ind], 2)));
+                                          clip_on=clip_on, label = str(np.round(all_sfs[sf_ind], 2)));
             lines_log.append(line_curr);
 
         crfAx[d][i].set_xlim([-0.1, 1]);
