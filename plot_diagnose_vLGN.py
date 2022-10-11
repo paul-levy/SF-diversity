@@ -155,7 +155,8 @@ elif excType == 2:
 
 #fitBase = 'fitList%s_pyt_221007f_noRE' % loc_str
 #fitBase = 'fitList%s_pyt_221007ff_noRE_noSched' % loc_str
-fitBase = 'fitList%s_pyt_221010ff_noRE_noSched' % loc_str
+#fitBase = 'fitList%s_pyt_221010f_noRE_noSched' % loc_str
+fitBase = 'fitList%s_pyt_221010f_noRE' % loc_str
 #fitBase = 'holdout_fitList_190513cA';
 rvcDir = 1;
 vecF1 = 0;
@@ -197,8 +198,6 @@ if intpMod == 1:
   compDir = str(compDir + '/intp');
 subDir   = compDir.replace('fitList', 'fits').replace('.npy', '');
 save_loc = str(save_loc + subDir + '/');
-if not os.path.exists(save_loc):
-  os.makedirs(save_loc);
 
 conDig = 3; # round contrast to the 3rd digit
 
@@ -282,12 +281,14 @@ if rvcAdj >= 0:
     rvcFlag = '';
     rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
     asRates = True;
+    force_dc = False
   elif rvcAdj == 0:
     rvcFlag = '_f0';
     rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName='None');
     asRates = False;
+    force_dc = True
   # rvcMod=-1 tells the function call to treat rvcName as the fits, already (we loaded above!)
-  spikes_rate = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=rvcFits, rvcMod=-1, descrFitName_f0=None, baseline_sub=False);
+  spikes_rate, meas = hf.get_adjusted_spikerate(expData['sfm']['exp']['trial'], cellNum, expInd, data_loc, rvcName=rvcFits, rvcMod=-1, descrFitName_f0=None, baseline_sub=False, return_measure=True, force_dc=force_dc);
 elif rvcAdj == -1: # i.e. ignore the phase adjustment stuff...
   if respMeasure == 1 and expInd > f1_expCutoff:
     spikes_byComp = respOverwrite;
@@ -572,6 +573,10 @@ for d in range(nDisps):
           dispAx[d][c_plt_ind, i].legend();
 
     fCurr.suptitle('%s #%d, loss %.2f|%.2f' % (cellType, cellNum, loss_A, loss_B));
+
+
+if not os.path.exists(save_loc):
+  os.makedirs(save_loc);
 
 saveName = "/cell_%03d.pdf" % (cellNum)
 full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));

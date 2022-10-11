@@ -52,16 +52,16 @@ do
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 22 21 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
 
     # compare norm. types
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
 
-    # compare LGN on vs. off
-    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 11 10 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 22 11 10 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 55 11 10 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 44 10 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    # no LGN
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
   else
     # ALT
     # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
