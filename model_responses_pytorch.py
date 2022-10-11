@@ -21,7 +21,7 @@ torch.autograd.set_detect_anomaly(True)
 #########
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
 force_earlyNoise = None; # if None, allow it as parameter; otherwise, force it to this value; used 0 for 210308-210315; None for 210321
-recenter_norm = 1;
+recenter_norm = 2;
 #_schedule = False; # use scheduler or not??? True or False
 _schedule = True; # use scheduler or not??? True or False
 fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304, 210308/11/12/14, 210321
@@ -754,6 +754,10 @@ class sfNormMod(torch.nn.Module):
         new_weights = toAdd + new_weights
         if threshWeights is not None:
           new_weights = torch.max(_cast_as_tensor(threshWeights), new_weights);
+      elif recenter_norm == 2: # we'll recenter this weighted normalization by division, s.t. the AVERAGE is 1
+        new_weights = new_weights/torch.mean(new_weights);
+        if threshWeights is not None:
+          new_weights = torch.max(_cast_as_tensor(threshWeights), new_weights);
         
     return new_weights;
 
@@ -967,7 +971,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_221010ff%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '');
+    fL_name = 'fitList%s_pyt_221011%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1523,7 +1527,7 @@ if __name__ == '__main__':
       ### do the saving HERE!
       todoCV = 0; #  1 if whichTrials is not None else 0;
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_221010f%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
+      fL_name = 'fitList%s_pyt_221011%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
