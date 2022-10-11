@@ -509,6 +509,8 @@ class sfNormMod(torch.nn.Module):
     else:
       print('No LGN!');
     scale = torch.mul(_cast_as_tensor(_sigmoidScale), torch.sigmoid(self.scale)).item() if transformed else self.scale.item();
+    if self.normToOne==1 and self.newMethod==1: # then scale is simpler!
+      scale = self.scale.item();
     print('scalar|early|late: %.3f|%.3f|%.3f' % (scale, self.noiseEarly.item(), self.noiseLate.item()));
     print('norm. const.: %.2f' % self.sigma.item());
     if self.normType == 2 or self.normType == 5:
@@ -1039,7 +1041,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   try:
     trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite);
-    resps_detached = np.sum(resp.detach().numpy(), axis=1);
+    resps_detached = np.nansum(resp.detach().numpy(), axis=1);
     # however, this ignores the blanks -- so we have to reconstitute the original order/full experiment, filling in these responses in the correct trial locations
     resps_full = np.nan * np.zeros((expInfo['num'][-1], ));
     resps_full[trInf['num']] = resps_detached;
@@ -1150,8 +1152,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if normToOne == 1:
       minResp, maxResp = np.nanmin(expByCond[0]), np.nanmax(expByCond[0]);
       noiseEarly = np.random.uniform(-0.03, 0) if initFromCurr==0 else curr_params[5]; # negative noiseEarly gives ODD results! helpful for strong, tuned suppression, but not good as a start
-      noiseLate = np.random.uniform(0.5, 1.5) * minResp if initFromCurr==0 else curr_params[6];
-      respScalar = np.random.uniform(0.75, 1.25) * (maxResp - noiseLate) if initFromCurr==0 else curr_params[4];
+      noiseLate = np.random.uniform(0.7, 1.3) * minResp if initFromCurr==0 else curr_params[6];
+      respScalar = np.random.uniform(0.9, 1.1) * (maxResp - noiseLate) if initFromCurr==0 else curr_params[4];
       normStd = np.random.uniform(0.3, 2) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
 
   varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
