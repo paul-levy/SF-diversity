@@ -343,7 +343,7 @@ def sf_var(resps, sfs, sf_cm, logSF=True):
   except:
     return np.nan
 
-def get_datalist(expDir, force_full=0):
+def get_datalist(expDir, force_full=0, new_v1=False):
   if expDir == 'V1_orig/':
     return 'dataList_200507.npy' if force_full==0 else 'dataList.npy'; # limited set of data
     #return 'dataList.npy';
@@ -354,9 +354,10 @@ def get_datalist(expDir, force_full=0):
     #return 'dataList_210524.npy'
     return 'dataList_220222.npy';
   elif expDir == 'V1/':
-    return 'dataList_glx_200507.npy' if force_full==0 else 'dataList_210721.npy' #'dataList_glx.npy'; # limited set of data
-    #return 'dataList_glx_200507.npy' if force_full==0 else 'dataList_210528.npy' #'dataList_glx.npy'; # limited set of data
-    #return 'dataList_glx.npy';
+    if new_v1: # excludes known V2 units!
+       return 'dataList_221011.npy';
+    else:
+       return 'dataList_glx_200507.npy' if force_full==0 else 'dataList_210721.npy' #'dataList_glx.npy'; # limited set of data
   elif expDir == 'V1_BB/':
     return 'dataList_210721.npy';
     #return 'dataList_210222.npy';

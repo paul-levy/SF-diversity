@@ -26,7 +26,7 @@ import pdb
 _sigmoidRespExp = None; # 3 or None, as of 21.03.14
 _sigmoidSigma = 5; # put a value (5, as of 21.03.10) or None (see model_responses_pytorch.py for details)
 _sigmoidGainNorm = 5;
-recenter_norm = 1;
+recenter_norm = 2;
 
 f1_expCutoff = 2; # if 1, then all but V1_orig/ are allowed to have F1; if 2, then altExp/ is also excluded
 
@@ -156,7 +156,9 @@ elif excType == 2:
 #fitBase = 'fitList%s_pyt_221007f_noRE' % loc_str
 #fitBase = 'fitList%s_pyt_221007ff_noRE_noSched' % loc_str
 #fitBase = 'fitList%s_pyt_221010f_noRE_noSched' % loc_str
-fitBase = 'fitList%s_pyt_221010f_noRE' % loc_str
+#fitBase = 'fitList%s_pyt_221010f_noRE' % loc_str
+#fitBase = 'fitList%s_pyt_221011_noRE' % loc_str
+fitBase = 'fitList%s_pyt_221011_noRE_noSched' % loc_str
 #fitBase = 'holdout_fitList_190513cA';
 rvcDir = 1;
 vecF1 = 0;
@@ -525,7 +527,7 @@ for d in range(nDisps):
    
           ### plot data
           dispAx[d][c_plt_ind, i].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                           respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=clip_on);
+                                           respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=False); # always show the full data
 
           ### plot model fits
           if intpMod == 1:
@@ -619,7 +621,6 @@ if diffPlot != 1:
         curr_resps = resps_curr[i];
         maxResp = np.max(np.max(np.max(curr_resps[~np.isnan(curr_resps)])));  
 
-        lines = [];
         for c in reversed(range(n_v_cons)):
             v_sfs = ~np.isnan(curr_resps[d, :, v_cons[c]]);        
 
@@ -627,9 +628,8 @@ if diffPlot != 1:
             col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
             plot_resp = curr_resps[d, v_sfs, v_cons[c]];
 
-            curr_line, = dispAx[d][i].plot(all_sfs[v_sfs][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', clip_on=clip_on, \
+            dispAx[d][i].plot(all_sfs[v_sfs][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', clip_on=False, \
                                            color=col, label=str(np.round(all_cons[v_cons[c]], 2)));
-            lines.append(curr_line);
 
         #dispAx[d][i].set_aspect('equal', 'box'); 
         dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
@@ -717,7 +717,7 @@ for d in range(nDisps):
         sfMixAx[c_plt_ind, d].set_title('con: %s (l_A %.1f, l_B %.1f)' % (str(np.round(all_cons[v_cons[c]], 2)), curr_loss, curr_loss_B));
         # plot data
         sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                       respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=clip_on);
+                                       respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=False);
 
 	# plot model fits
         if intpMod == 1:
@@ -800,7 +800,7 @@ if ~np.any([i is None for i in oriModResps]): # then we're using an experiment w
   sns.despine(ax=curr_ax, offset = 5);
 
   # plot ori tuning
-  [plt.plot(expData['sfm']['exp']['ori'], oriResp, '%so' % c, clip_on=clip_on, label=s) for oriResp, c, s in zip(oriModResps, modColors, modLabels)]; # Model responses
+  [plt.plot(expData['sfm']['exp']['ori'], oriResp, '%so' % c, clip_on=False, label=s) for oriResp, c, s in zip(oriModResps, modColors, modLabels)]; # Model responses
   expPlt = plt.plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-', clip_on=clip_on); # Exp responses
   plt.xlabel('Ori (deg)', fontsize=12);
   plt.ylabel('Response (ips)', fontsize=12);
@@ -809,7 +809,7 @@ if ~np.any([i is None for i in conModResps]): # then we're using an experiment w
   # CRF - with values from TF simulation and the broken down (i.e. numerator, denominator separately) values from resimulated conditions
   curr_ax = plt.subplot2grid(detailSize, (0, 1)); # default size is 1x1
   consUse = expData['sfm']['exp']['con'];
-  plt.semilogx(consUse, expData['sfm']['exp']['conRateMean'], 'o-', clip_on=clip_on); # Measured responses
+  plt.semilogx(consUse, expData['sfm']['exp']['conRateMean'], 'o-', clip_on=False); # Measured responses
   [plt.plot(consUse, conResp, '%so' % c, clip_on=clip_on, label=s) for conResp, c, s in zip(conModResps, modColors, modLabels)]; # Model responses
   plt.xlabel('Con (%)', fontsize=20);
 
@@ -837,7 +837,7 @@ disp_rvc = 0;
 val_cons = np.array(val_con_by_disp[disp_rvc]);
 v_sfs = ~np.isnan(respMean[disp_rvc, :, val_cons[0]]); # remember, for single gratings, all cons have same #/index of sfs
 sfToUse = np.int(np.floor(len(v_sfs)/2));
-plt.semilogx(all_cons[val_cons], respMean[disp_rvc, sfToUse, val_cons], 'o', clip_on=clip_on); # Measured responses
+plt.semilogx(all_cons[val_cons], respMean[disp_rvc, sfToUse, val_cons], 'o', clip_on=False); # Measured responses
 [plt.plot(all_cons[val_cons], modAvg[disp_rvc, sfToUse, val_cons], marker=None, color=c, clip_on=clip_on, label=s) for modAvg, c, s in zip(modAvgs, modColors, modLabels)]; # Model responses
 plt.xlabel('Con (%)', fontsize=20);
 plt.ylim([np.minimum(-5, np.nanmin(respMean[disp_rvc, sfToUse, val_cons])), 1.1*np.nanmax(respMean[disp_rvc, sfToUse, val_cons])]);
@@ -1159,7 +1159,7 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
           resp_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
           var_curr  = np.reshape([respVar[d, sf_ind, v_cons]], (n_cons, ));
           if diffPlot == 1: # don't set a baseline (i.e. response can be negative!)
-            respPlt = rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], resp_curr, var_curr, fmt='o', color='k', clip_on=clip_on, label='data');
+            respPlt = rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], resp_curr, var_curr, fmt='o', color='k', clip_on=False, label='data');
           else:
             respPlt = rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], np.maximum(resp_curr, 0.1), var_curr, fmt='o', color='k', clip_on=clip_on, label='data');
 
@@ -1260,7 +1260,7 @@ if diffPlot != 1 or intpMod == 0:
             plot_resp = curr_resps[d, sf_ind, v_cons];
 
             line_curr, = crfAx[d][i].plot(all_cons[v_cons][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', color=col, \
-                                          clip_on=clip_on, label = str(np.round(all_sfs[sf_ind], 2)));
+                                          clip_on=False, label = str(np.round(all_sfs[sf_ind], 2)));
             lines_log.append(line_curr);
 
         crfAx[d][i].set_xlim([-0.1, 1]);
