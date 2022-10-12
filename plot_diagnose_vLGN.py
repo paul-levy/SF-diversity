@@ -158,7 +158,7 @@ elif excType == 2:
 #fitBase = 'fitList%s_pyt_221010f_noRE_noSched' % loc_str
 #fitBase = 'fitList%s_pyt_221010f_noRE' % loc_str
 #fitBase = 'fitList%s_pyt_221011_noRE' % loc_str
-fitBase = 'fitList%s_pyt_221011_noRE_noSched' % loc_str
+fitBase = 'fitList%s_pyt_221012_noRE_noSched' % loc_str
 #fitBase = 'holdout_fitList_190513cA';
 rvcDir = 1;
 vecF1 = 0;

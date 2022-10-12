@@ -22,8 +22,8 @@ torch.autograd.set_detect_anomaly(True)
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
 force_earlyNoise = None; # if None, allow it as parameter; otherwise, force it to this value; used 0 for 210308-210315; None for 210321
 recenter_norm = 2;
-#_schedule = False; # use scheduler or not??? True or False
-_schedule = True; # use scheduler or not??? True or False
+_schedule = False; # use scheduler or not??? True or False
+#_schedule = True; # use scheduler or not??? True or False
 fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304, 210308/11/12/14, 210321
 spring2021_adj = 1; # further adjustment to make scale a sigmoid rather than abs; 210222
 if fall2020_adj:
@@ -670,7 +670,10 @@ class sfNormMod(torch.nn.Module):
     realImag[...,1] = imagPart;
     # NOTE: here, I use the term complex to denote that it is a complex number NOT
     # - that it reflects a complex cell (i.e. this is still a simple cell response)
-    rComplex = torch.einsum('ij,ikjz->ikz', torch.mul(selSi,stimCo), realImag) # mult. to get [nTr x nFr x 2] response
+    if self.lgnFrontEnd > 0: # contrast already included: TRY 22.10.12
+      rComplex = torch.einsum('ij,ikjz->ikz', selSi, realImag) # mult. to get [nTr x nFr x 2] response
+    else: # need to include contrast here
+      rComplex = torch.einsum('ij,ikjz->ikz', torch.mul(selSi,stimCo), realImag) # mult. to get [nTr x nFr x 2] response
     # The above line takes care of summing over stimulus components
     if self.normToOne == 1 and self.newMethod == 1:
       # since in new method, we just return [...,0], normalize the response to the max of that component
@@ -755,7 +758,8 @@ class sfNormMod(torch.nn.Module):
         if threshWeights is not None:
           new_weights = torch.max(_cast_as_tensor(threshWeights), new_weights);
       elif recenter_norm == 2: # we'll recenter this weighted normalization by division, s.t. the AVERAGE is 1
-        new_weights = new_weights/torch.mean(new_weights);
+        new_weights = new_weights/torch.max(_cast_as_tensor(0.001), torch.mean(new_weights)); # ensures no div by zero
+        #new_weights = new_weights/torch.mean(new_weights);
         if threshWeights is not None:
           new_weights = torch.max(_cast_as_tensor(threshWeights), new_weights);
         
@@ -918,7 +922,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 # ---- previous to 22.10.03, batch_size=3000 (trials) ;;;;; lr was 0.001
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=5000, learning_rate=0.02, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=10000, learning_rate=0.02, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -971,7 +975,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_221011%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '');
+    fL_name = 'fitList%s_pyt_221012%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1527,7 +1531,7 @@ if __name__ == '__main__':
       ### do the saving HERE!
       todoCV = 0; #  1 if whichTrials is not None else 0;
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_221011%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
+      fL_name = 'fitList%s_pyt_221012%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
