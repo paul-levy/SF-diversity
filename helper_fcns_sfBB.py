@@ -347,7 +347,7 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
     else:
       return maskResp_dc, maskResp_f1, maskResp_dcAll, maskResp_f1All;
 
-def adjust_f1_byTrial(expInfo, onsetTransient=None):
+def adjust_f1_byTrial(expInfo, onsetTransient=None, maskF1byPhAmp=None):
   ''' Correct the F1 ampltiudes for each trial (in order) by:
       - Projecting the full, i.e. (r, phi) FT vector onto the (vector) mean phase
         across all trials of a given condition
@@ -390,7 +390,10 @@ def adjust_f1_byTrial(expInfo, onsetTransient=None):
           resp_amp, phase_rel_stim = vec_byTrial[0], vec_byTrial[1];
           # finally, project the response as usual
           resp_proj = np.multiply(resp_amp, np.cos(np.deg2rad(mean_phi)-np.deg2rad(phase_rel_stim)));
-          updMask[val_trials] = resp_proj[:,maskInd];
+          if maskF1byPhAmp is not None and maskOn==1:
+            updMask[val_trials] = maskF1byPhAmp[whichCon, whichSf, 0:len(val_trials), 0]; # just unpack from the already processed maskF1 responses (corrected by phAmp) --> must be by trial 
+          else:
+            updMask[val_trials] = resp_proj[:,maskInd];
           updBase[val_trials] = resp_proj[:,baseInd];
 
   return updMask, updBase;

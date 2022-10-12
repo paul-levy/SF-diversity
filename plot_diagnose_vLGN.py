@@ -1073,7 +1073,7 @@ if loss_traj_A is not None or loss_traj_B is not None:
     plt.plot(loss_traj_A, label='modA', color=modColors[0])
   if loss_traj_B is not None:
     plt.plot(loss_traj_B, label='modB', color=modColors[1])
-  plt.xscale('log');
+  #plt.xscale('log');
   plt.yscale('symlog');
   plt.legend();
   plt.title('Loss traj. on best fit');

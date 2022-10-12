@@ -1029,9 +1029,9 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         respOverwrite = hf.adjust_f1_byTrial(expInfo, expInd);
     else: # then do phAmp correction here!
       if expInd == -1:
-        # Overwrite f1 spikes
-        #### FIX THIS --> make sure you get trial-by-trial, phAmp corrected for sfBB
-        vec_corr_mask, vec_corr_base = hf_sfBB.adjust_f1_byTrial(expInfo);
+        # Overwrite f1 --> for BB, must pretend that it's still vecCorrectedF1 (required for the default phAdvCorr to apply)
+        _, _, _, maskF1byPhAmp = hf_sfBB.get_mask_resp(expInfo, withBase=0, maskF1=1, vecCorrectedF1=1, returnByTr=1);
+        vec_corr_mask, vec_corr_base = hf_sfBB.adjust_f1_byTrial(expInfo, maskF1byPhAmp=maskF1byPhAmp);
         expInfo['f1_mask'] = vec_corr_mask;
         expInfo['f1_base'] = vec_corr_base;
       else: # and the same for the "main" experiment
@@ -1051,11 +1051,16 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite);
     resps_detached = np.nansum(resp.detach().numpy(), axis=1);
     # however, this ignores the blanks -- so we have to reconstitute the original order/full experiment, filling in these responses in the correct trial locations
-    resps_full = np.nan * np.zeros((expInfo['num'][-1], ));
+    nTrs_total = expInfo['num'][-1] if expInd != -1 else expInfo['trial']['ori'].shape[-1];
+    resps_full = np.nan * np.zeros((nTrs_total, ));
     resps_full[trInf['num']] = resps_detached;
-    _, _, expByCond, _ = hf.organize_resp(resps_full, expInfo, expInd);
+    if expInd != -1: # i.e. anything but B+B
+      _, _, expByCond, _ = hf.organize_resp(resps_full, expInfo, expInd);
+    else:
+      dcResp, f1Resp = hf_sfBB.get_mask_resp(expInfo, withBase=0, maskF1=1, vecCorrectedF1=vecCorrected);
+      expByCond = dcResp[:,:,0] if respMeasure==0 else f1Resp[:,:,0]; 
     unique_sfs = np.unique(trInf['sf'][:,0])
-    pref_sf = unique_sfs[np.argmax(expByCond[0,:,-1])];
+    pref_sf = unique_sfs[np.argmax(expByCond[0,:,-1])] if expInd != -1 else expInfo['baseSF'][0]; # we can just use baseSf
     if verbose:
       print('prefSf: %.2f' % pref_sf);
   except:
@@ -1158,7 +1163,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
     # in these cases, overwrite noiseLate and respScalar, since both are now applied AFTER the FFT
     if normToOne == 1:
-      minResp, maxResp = np.nanmin(expByCond[0]), np.nanmax(expByCond[0]);
+      if expInd != -1:
+        minResp, maxResp = np.nanmin(expByCond[0]), np.nanmax(expByCond[0]);
+      else:
+        minResp, maxResp = np.nanmin(expByCond), np.nanmax(expByCond);
       noiseEarly = np.random.uniform(-0.03, 0) if initFromCurr==0 else curr_params[5]; # negative noiseEarly gives ODD results! helpful for strong, tuned suppression, but not good as a start
       noiseLate = np.random.uniform(0.7, 1.3) * minResp if initFromCurr==0 else curr_params[6];
       respScalar = np.random.uniform(0.9, 1.1) * (maxResp - noiseLate) if initFromCurr==0 else curr_params[4];
@@ -1204,7 +1212,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   ###  data wrapping
   dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
-  exp_length = expInfo['num'][-1]; # longest trial
+  exp_length = expInfo['num'][-1] if expInd!=-1 else expInfo['trial']['con'].shape[-1];
   dl_shuffle = batch_size<2000 # i.e. if batch_size<2000, then shuffle!
   dl_droplast = bool(np.mod(exp_length,batch_size)<10) # if the last iteration will have fewer than 10 trials, drop it!
   dataloader = torchdata.DataLoader(dw, batch_size, shuffle=dl_shuffle, drop_last=dl_droplast)
@@ -1479,7 +1487,7 @@ if __name__ == '__main__':
   
     start = time.process_time();
     dcOk = 0; f1Ok = 0 if (expDir == 'V1/' or expDir == 'V1_BB/') else 1; # i.e. we don't bother fitting F1 if fit is from V1_orig/ or altExp/
-    nTry = 10; # 30
+    nTry = 3; # 30
     if cellNum >= 0:
       while not dcOk and nTry>0:
         try:
@@ -1492,7 +1500,7 @@ if __name__ == '__main__':
         nTry -= 1;
       # now, do F1 fits
 
-      nTry=10; #30; # reset nTry...
+      nTry=3; #30; # reset nTry...
       while not f1Ok and nTry>0:
         try:
           setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # then F1
