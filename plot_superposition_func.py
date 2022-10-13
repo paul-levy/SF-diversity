@@ -87,7 +87,10 @@ def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, 
 
   elif use_mod_resp == 2: # then pytorch model!
     resp_str = hf_sf.get_resp_str(respMeasure)
-    curr_fit = fitList[which_cell-1][resp_str]['params'];
+    if (which_cell-1) in fitList:
+      curr_fit = fitList[which_cell-1][resp_str]['params'];
+    else:
+      curr_fit = fitList; # we already passed in parameters
     model = mrpt.sfNormMod(curr_fit, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod, lgnConType=lgnConType, applyLGNtoNorm=_applyLGNtoNorm, normToOne=normToOne)
     ### get the vec-corrected responses, if applicable
     # NOTE: NEED TO FIX THIS, esp. for 
@@ -348,11 +351,12 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
   elif use_mod_resp == 2:
     rvcName = None; # Use NONE if getting model responses, only
-    fitBase = 'fitList%s_pyt_221011_noRE_noSched' % loc_str
+    #fitBase = 'fitList%s_pyt_221011_noRE' % loc_str
+    fitBase = 'fitList%s_pyt_221012_noRE_noSched' % loc_str
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=-rvcAdj);
 
-  # ^^^ EDIT rvc/descrFits/fitList names here; 
-  
+  # ^^^ EDIT rvc/descrFits/fitList names here;
+
   ############
   # Before any plotting, fix plotting paramaters
   ############
@@ -421,7 +425,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   save_locSuper = save_loc + 'superposition_%s%s%s%s%s/' % (datetime.today().strftime('%y%m%d'), '_simple' if simple_plot else '', '' if plt_supr_ind else '_mse', '_prince' if supr_ind_prince else '', '_p%d' % sum_power if sum_power!=1 else '')
   if use_mod_resp == 1:
     save_locSuper = save_locSuper + '%s/' % fitBase
-  print('saving %s' % save_locSuper);
+  #print('saving %s' % save_locSuper);
 
   dataList = hf.np_smart_load(dataPath + dataListNm);
   #print('Trying to load descrFits at: %s' % (dataPath + descrFits_name));
@@ -1038,7 +1042,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   if fitList is None:
     save_name = 'cell_%03d.pdf' % (which_cell);
   else:
-    save_name = 'cell_%03d_mod%s.pdf' % (which_cell, hf.fitType_suffix(fitType))
+    save_name = 'cell_%03d_mod%s%s.pdf' % (which_cell, hf.fitType_suffix(fitType), hf.lgnType_suffix(lgnFrontEnd, lgnConType=1))
   pdfSv = pltSave.PdfPages(str(save_locSuper + save_name));
   pdfSv.savefig(fSuper)
   pdfSv.close();
@@ -1093,9 +1097,20 @@ if __name__ == '__main__':
       supr_ind_prince = int(sys.argv[4])==1;
     else:
       supr_ind_prince = False;
+    if len(sys.argv)>5:
+      use_mod_resp = int(sys.argv[5]);
+    else:
+      use_mod_resp = 0;
+    if len(sys.argv)>6:
+      normType = int(sys.argv[6]);
+    else:
+      normType = 1; # default to flat
+    if len(sys.argv)>7:
+      lgnOn = int(sys.argv[7]);
+    else:
+      lgnOn = 0; # default to no LGN
 
     fitList='fitList%s_pyt_221011' % 'HPC'; # TEMPORARY
-    use_mod_resp = 2;
 
     if asMulti:
       from functools import partial
@@ -1104,7 +1119,7 @@ if __name__ == '__main__':
       print('***cpu count: %02d***' % nCpu);
 
       with mp.Pool(processes = nCpu) as pool:
-        sup_perCell = partial(plot_save_superposition, expDir=expDir, use_mod_resp=use_mod_resp, fitType=2, excType=1, useHPCfit=1, lgnConType=1, lgnFrontEnd=1, to_save=0, plt_supr_ind=plt_supr_ind, supr_ind_prince=supr_ind_prince);
+        sup_perCell = partial(plot_save_superposition, expDir=expDir, use_mod_resp=use_mod_resp, fitType=normType, useHPCfit=1, lgnConType=1, lgnFrontEnd=lgnOn, to_save=0, plt_supr_ind=plt_supr_ind, supr_ind_prince=supr_ind_prince);
         supFits = pool.map(sup_perCell, range(start_cell, end_cell+1));
         pool.close();
 
@@ -1115,7 +1130,7 @@ if __name__ == '__main__':
         suffix = datetime.today().strftime('%y%m%d')
         super_name = 'superposition_analysis_%s.npy' % suffix;
       else:
-        super_name = 'superposition_analysis_mod%s.npy' % hf.fitType_suffix(fitType);
+        super_name = 'superposition_analysis_mod%s%s.npy' % (hf.fitType_suffix(normType), hf.lgnType_suffix(lgnOn, lgnConType=1));
 
       if os.path.exists(dataPath + super_name):
         suppr_all = hf.np_smart_load(dataPath + super_name);
@@ -1124,6 +1139,7 @@ if __name__ == '__main__':
       for iii, sup_fit in enumerate(supFits):
         suppr_all[iii] = sup_fit;
       np.save(dataPath + super_name, suppr_all);
-    else:
-      plot_save_superposition(cell_num, expDir, to_save=1, plt_supr_ind=plt_supr_ind, use_mod_resp=use_mod_resp, supr_ind_prince=supr_ind_prince, lgnConType=1, lgnFrontEnd=0);
+
+    else: # i.e. not multi
+      plot_save_superposition(cell_num, expDir, to_save=1, plt_supr_ind=plt_supr_ind, use_mod_resp=use_mod_resp, supr_ind_prince=supr_ind_prince, lgnConType=1, lgnFrontEnd=lgnOn, fitType=normType);
 

@@ -683,6 +683,10 @@ class sfNormMod(torch.nn.Module):
       # --- this ensures that the amplitude is the same regardless of whether LGN is ON or OFF
       # --- added 22.10.10
       rComplex = torch.div(rComplex, torch.max(_cast_as_tensor(globalMin), torch.max(rComplex[...,0]))); # max = 1
+      # Only used for debugging purposes/looking into quadrature (in pair with the commented out line in the return of self.newMethod == 1
+      #rComplexA = torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(rComplex[...,1]))); # max = 1
+      #rComplexB = torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,0]))); # max = 1
+      #rComplexC = torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,1]))); # max = 1
 
     if debug: # TEMPORARY?
       return P,omegas,dotprod, selSi,torch.mul(selSi,stimCo);
@@ -690,7 +694,8 @@ class sfNormMod(torch.nn.Module):
     # Store response in desired format - which is actually [nFr x nTr], so transpose it!
     if self.newMethod == 1:
       respSimple1 = rComplex[...,0]; # we'll keep the half-wave rectification for the end...
-      return torch.transpose(respSimple1, 0, 1);
+      return torch.transpose(respSimple1, 0, 1)
+      #return torch.transpose(respSimple1, 0, 1), torch.transpose(rComplexA,0,1), torch.transpose(rComplexB,0,1), torch.transpose(rComplexC,0,1);
     else: # Old approach, in which we return the complex response
       # four filters placed in quadrature (only if self.newMethod == 0, which is default)
       respSimple1 = torch.max(_cast_as_tensor(globalMin), rComplex[...,0]); # half-wave rectification,...
@@ -815,14 +820,8 @@ class sfNormMod(torch.nn.Module):
     # -- this line if we're using sigmoid-transformed response exponent (bounded between [1,1+_sigmoidRespExp], currently [1,4]
     #ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), 1+torch.mul(_cast_as_tensor(_sigmoidRespExp), torch.sigmoid(self.respExp)));
     # -- otherwise, this line
-    if self.newMethod==1 and self.normToOne==1:
-      # even if this is just for debugging, we need to figure out WHY freq.dep effects w/o gain control
-      ratio     = torch.pow(rawResp, self.respExp);
-    else:
-      ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), self.respExp);
-    # just rectify, don't even add the power
-    #ratio = torch.max(_cast_as_tensor(globalMin), rawResp);
-    # we're now skipping the averaging across frames...
+    ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), self.respExp);
+
     if self.newMethod == 1 and self.normToOne == 1:
       # in this case, only apply the noiseLate and self.scale AFTER the FT
       # --- 22.10.13 --> don't thresh! That introduces oddities!!!
@@ -983,7 +982,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_221012%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '');
+    fL_name = 'fitList%s_pyt_221013%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1133,8 +1132,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       # - make sigHigh relative to sigLow, but bias it to be lower, i.e. narrower
       sigHigh = sigLow*np.random.uniform(0.5, 1.25) if initFromCurr==0 else curr_params[-1-np.sign(lgnFrontEnd)]; # if lgnFrontEnd == 0, then it's the last param; otherwise it's the 2nd to last param
     else: # this is from modCompare::smarter initialization, assuming _sigmoidSigma = 5
-      sigLow = np.random.uniform(-2, 0.5);
-      sigHigh = np.random.uniform(-2, 0.5);
+      sigLow = np.random.uniform(-2, -0.5);
+      sigHigh = np.random.uniform(-2, -0.5);
   normConst = normConst if initFromCurr==0 else curr_params[2];
   if fixRespExp is not None:
     respExp = fixRespExp; # then, we set it to this value and make it a tensor (rather than parameter)
@@ -1547,7 +1546,7 @@ if __name__ == '__main__':
       ### do the saving HERE!
       todoCV = 0; #  1 if whichTrials is not None else 0;
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_221012%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
+      fL_name = 'fitList%s_pyt_221013%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');

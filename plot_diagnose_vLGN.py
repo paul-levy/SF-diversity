@@ -121,7 +121,7 @@ else:
   rExpStr = '';
 
 ### DATALIST
-expName = hf.get_datalist(expDir, force_full=force_full);
+expName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
 ### FITLIST
 _applyLGNtoNorm = 0;
 # -- some params are sigmoid, we'll use this to unpack the true parameter
@@ -154,11 +154,9 @@ elif excType == 2:
       fitBase = 'fitList%s_pyt_210331' % loc_str
 
 #fitBase = 'fitList%s_pyt_221007f_noRE' % loc_str
-#fitBase = 'fitList%s_pyt_221007ff_noRE_noSched' % loc_str
-#fitBase = 'fitList%s_pyt_221010f_noRE_noSched' % loc_str
-#fitBase = 'fitList%s_pyt_221010f_noRE' % loc_str
-#fitBase = 'fitList%s_pyt_221011_noRE' % loc_str
-fitBase = 'fitList%s_pyt_221012_noRE_noSched' % loc_str
+fitBase = 'fitList%s_pyt_221011_noRE' % loc_str
+#fitBase = 'fitList%s_pyt_221011_noRE_noSched' % loc_str
+#fitBase = 'fitList%s_pyt_221012_noRE_noSched' % loc_str
 #fitBase = 'holdout_fitList_190513cA';
 rvcDir = 1;
 vecF1 = 0;
@@ -402,7 +400,8 @@ else:
   gs_mean_B, gs_std_B = None, None
 
 # now organize the responses
-orgs = [hf.organize_resp(mr, expData, expInd, respsAsRate=False) for mr in modResps];
+orgs = [hf.organize_resp(mr, expData, expInd, respsAsRate=True) for mr in modResps];
+#orgs = [hf.organize_resp(mr, expData, expInd, respsAsRate=False) for mr in modResps];
 oriModResps = [org[0] for org in orgs]; # only non-empty if expInd = 1
 conModResps = [org[1] for org in orgs]; # only non-empty if expInd = 1
 sfmixModResps = [org[2] for org in orgs];
@@ -567,14 +566,14 @@ for d in range(nDisps):
               dispAx[d][c_plt_ind, i].set_ylim((0, 1.5*maxResp));
               if np.array_equal(all_loss, np.nan):
                 dispAx[d][c_plt_ind, i].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True, fontsize=25);
-              dispAx[d][c_plt_ind, i].text(min(all_sfs), 0.8*maxResp, '%.2f, %.2f' % (varExplSF_A[d, v_cons[c]], varExplSF_B[d, v_cons[c]]), ha='left', wrap=True, fontsize=25);
+              dispAx[d][c_plt_ind, i].text(min(all_sfs), 1.2*maxResp, '%.2f, %.2f' % (varExplSF_A[d, v_cons[c]], varExplSF_B[d, v_cons[c]]), ha='left', wrap=True, fontsize=25);
             else:
               dispAx[d][c_plt_ind, i].set_yscale('symlog');
               dispAx[d][c_plt_ind, i].set_ylim((1.1*minResp, 1.5*maxResp));
 
           dispAx[d][c_plt_ind, i].legend();
 
-    fCurr.suptitle('%s #%d, loss %.2f|%.2f' % (cellType, cellNum, loss_A, loss_B));
+    fCurr.suptitle('%s #%d, loss %.2f|%.2f [%s]' % (cellType, cellNum, loss_A, loss_B, respStr));
 
 
 if not os.path.exists(save_loc):
@@ -606,7 +605,7 @@ if diffPlot != 1:
       fDisp.append(fCurr)
       dispAx.append(dispCurr);
 
-      fCurr.suptitle('%s #%d' % (cellType, cellNum));
+      fCurr.suptitle('%s #%d [%s]' % (cellType, cellNum, respStr));
 
       resps_curr = [modAvgs[0], respMean, modAvgs[1]];
       labels     = [modLabels[0], 'data', modLabels[1]];
@@ -784,7 +783,7 @@ if pytorch_mod == 1:
   print('saving varExplained in: %s' % (data_loc+fitNameA));
   np.save(data_loc + fitNameA, fitListA);
   np.save(data_loc + fitNameB, fitListB);
-f.suptitle('%s #%d (%s), loss %.2f|%.2f%s [varExpl=%.2f|%.2f]' % (cellType, cellNum, cellName, loss_A, loss_B, lgnStr, varExpl_A, varExpl_B));
+f.suptitle('%s #%d (%s; %s), loss %.2f|%.2f%s [varExpl=%.2f|%.2f]' % (cellType, cellNum, cellName, respStr, loss_A, loss_B, lgnStr, varExpl_A, varExpl_B));
 	        
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc
@@ -934,6 +933,7 @@ try:
 except: # if that didn't work, then we need to create the norm_resp
   norm_resp = mod_resp.GetNormResp(cellNum, data_loc, expDir='', dataListName=expName); # in GetNormResp, expDir added to data_loc; already included here
   inhChan = norm_resp['pref']['sf']
+  expData  = hf.np_smart_load(str(data_loc + cellName + '_sfm.npy')); # then we have to reload expData...
 inhSfTuning = hf.getSuppressiveSFtuning();
 for iP in range(len(inhChan)):
     inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(inhChan[iP]) - np.mean(np.log(inhChan[iP]))));
@@ -1130,7 +1130,7 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
       fRVC.append(fCurr);
       rvcAx.append(rvcCurr);
 
-      fCurr.suptitle('%s #%d' % (cellType, cellNum-1));
+      fCurr.suptitle('%s #%d [%s]' % (cellType, cellNum-1, respStr));
 
       #print('%d rows, %d cols\n' % (n_rows, n_cols));
 
@@ -1233,7 +1233,7 @@ if diffPlot != 1 or intpMod == 0:
       fCRF.append(fCurr)
       crfAx.append(crfCurr);
 
-      fCurr.suptitle('%s #%d' % (cellType, cellNum));
+      fCurr.suptitle('%s #%d [%s]' % (cellType, cellNum, respStr));
 
       resps_curr = [modAvgs[0], respMean, modAvgs[1]];
       labels     = [modLabels[0], 'data', modLabels[1]];
@@ -1265,12 +1265,12 @@ if diffPlot != 1 or intpMod == 0:
 
         crfAx[d][i].set_xlim([-0.1, 1]);
         crfAx[d][i].set_ylim([-0.1*maxResp, 1.1*maxResp]);
-        '''
+        #'''
         crfAx[d][i].set_xscale('log');
         crfAx[d][i].set_yscale('log');
         crfAx[d][i].set_xlim([1e-2, 1]);
         crfAx[d][i].set_ylim([1e-2, 1.5*maxResp]);
-        '''
+        #'''
         crfAx[d][i].set_xlabel('contrast');
 
         crfAx[d][i].set_ylabel('resp above baseline (imp/s)');
