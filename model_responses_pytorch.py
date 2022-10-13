@@ -51,7 +51,7 @@ try:
 except:
   cellNum = np.nan;
 try:
-  dataListName = hf.get_datalist(expDir, force_full=force_full); # argv[2] is expDir
+  dataListName = hf.get_datalist(expDir, force_full=force_full, new_v1=True); # argv[2] is expDir
 except:
   dataListName = None;
 
@@ -682,7 +682,7 @@ class sfNormMod(torch.nn.Module):
       # since in new method, we just return [...,0], normalize the response to the max of that component
       # --- this ensures that the amplitude is the same regardless of whether LGN is ON or OFF
       # --- added 22.10.10
-      rComplex = torch.div(rComplex, torch.max(rComplex[...,0])); # max = 1
+      rComplex = torch.div(rComplex, torch.max(_cast_as_tensor(globalMin), torch.max(rComplex[...,0]))); # max = 1
 
     if debug: # TEMPORARY?
       return P,omegas,dotprod, selSi,torch.mul(selSi,stimCo);
@@ -754,7 +754,9 @@ class sfNormMod(torch.nn.Module):
       log_sfs = torch.log(sfs);
       weight_distr = torch.distributions.normal.Normal(self.gs_mean, torch.abs(self.gs_std))
       new_weights = torch.exp(weight_distr.log_prob(log_sfs));
-      gain_curr = torch.mul(_cast_as_tensor(_sigmoidGainNorm), torch.sigmoid(self.gs_gain)) if self.normType == 5 else _cast_as_tensor(1);
+      # adding min. to ensure we don't div.by 0
+      gain_curr = torch.max(_cast_as_tensor(0.0001), torch.mul(_cast_as_tensor(_sigmoidGainNorm), torch.sigmoid(self.gs_gain))) if self.normType == 5 else _cast_as_tensor(1);
+      #gain_curr = torch.mul(_cast_as_tensor(_sigmoidGainNorm), torch.sigmoid(self.gs_gain)) if self.normType == 5 else _cast_as_tensor(1);
       new_weights = torch.mul(gain_curr, torch.mul(lgnStage, new_weights));
       if recenter_norm == 1: # we'll recenter this weighted normalization around 1 (by addition)
         normMin, normMax = torch.min(new_weights), torch.max(new_weights)
@@ -814,6 +816,7 @@ class sfNormMod(torch.nn.Module):
     #ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), 1+torch.mul(_cast_as_tensor(_sigmoidRespExp), torch.sigmoid(self.respExp)));
     # -- otherwise, this line
     if self.newMethod==1 and self.normToOne==1:
+      # even if this is just for debugging, we need to figure out WHY freq.dep effects w/o gain control
       ratio     = torch.pow(rawResp, self.respExp);
     else:
       ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), self.respExp);
@@ -924,15 +927,10 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 
 ### Now, actually do the optimization!
 
-### Now, the optimization
-# - what to specify...
-#def setParams():
-#  ''' Set the parameters of the model '''
-
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 # ---- previous to 22.10.03, batch_size=3000 (trials) ;;;;; lr was 0.001
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=10000, learning_rate=0.02, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=2500, learning_rate=0.02, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1000,7 +998,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   try:
     dataList = hf.np_smart_load(str(loc_data + dataListName));
   except:
-    dataListName = hf.get_datalist(expDir, force_full=force_full);
+    dataListName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
     dataList = hf.np_smart_load(str(loc_data + dataListName));
   dataNames = dataList['unitName'];
   if verbose:
