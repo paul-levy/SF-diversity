@@ -546,7 +546,7 @@ class sfNormMod(torch.nn.Module):
 
     return param_list
 
-  def simpleResp_matMul(self, trialInf, stimParams = [], sigmoidSigma=_sigmoidSigma, preCompOri=None):
+  def simpleResp_matMul(self, trialInf, stimParams = [], sigmoidSigma=_sigmoidSigma, preCompOri=None, debug=False, fps=120):
     # returns object with simpleResp and other things
     # --- Created 20.10.12 --- provides ~4x speed up compared to SFMSimpleResp() without need to explicit parallelization
     # --- Updated 20.10.29 --- created new method 
@@ -632,6 +632,7 @@ class sfNormMod(torch.nn.Module):
     else: # preCompOri is the same for all trials/comps --> cos(stimOr) is [0], sin(-) is [1]
       omegaX = torch.mul(stimSf, preCompOri[0]); # the stimulus in frequency space
       omegaY = torch.mul(stimSf, preCompOri[1]);
+    #omegaT = 5*stimTf/stimTf; # make them all 1??? # USED FOR DEBUGGING ODDITIES
     omegaT = stimTf;
 
     P = torch.empty((nTrials, nFrames, nStimComp, 3)); # nTrials x nFrames for number of frames x nStimComp x [two for x and y coordinate, one for time]
@@ -646,8 +647,10 @@ class sfNormMod(torch.nn.Module):
 
     # Use the effective number of frames displayed/stimulus duration
     # phase calculation -- 
-    stimFr = torch.div(torch.arange(nFrames), float(nFrames));
+    stimFr = torch.div(torch.arange(nFrames), float(fps));
+    #stimFr = torch.div(torch.arange(nFrames), float(nFrames));
     phOffset = torch.div(stimPh, torch.mul(2*np.pi, stimTf));
+    #phOffset = torch.div(100*torch.ones_like(stimPh), 2*np.pi); # USED FOR DEBUGGING ODDITIES
     # fast way?
     P3Temp = torch.add(phOffset.unsqueeze(-1), stimFr.unsqueeze(0).unsqueeze(0)).permute(0,2,1); # result is [nTrials x nFrames x nStimComp], so transpose
     P[:,:,:,2]  = 2*np.pi*P3Temp; # P(:,2) describes relative location of the filters in time.
@@ -680,6 +683,9 @@ class sfNormMod(torch.nn.Module):
       # --- this ensures that the amplitude is the same regardless of whether LGN is ON or OFF
       # --- added 22.10.10
       rComplex = torch.div(rComplex, torch.max(rComplex[...,0])); # max = 1
+
+    if debug: # TEMPORARY?
+      return P,omegas,dotprod, selSi,torch.mul(selSi,stimCo);
 
     # Store response in desired format - which is actually [nFr x nTr], so transpose it!
     if self.newMethod == 1:
@@ -807,12 +813,16 @@ class sfNormMod(torch.nn.Module):
     # -- this line if we're using sigmoid-transformed response exponent (bounded between [1,1+_sigmoidRespExp], currently [1,4]
     #ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), 1+torch.mul(_cast_as_tensor(_sigmoidRespExp), torch.sigmoid(self.respExp)));
     # -- otherwise, this line
-    ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), self.respExp);
+    if self.newMethod==1 and self.normToOne==1:
+      ratio     = torch.pow(rawResp, self.respExp);
+    else:
+      ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), self.respExp);
     # just rectify, don't even add the power
     #ratio = torch.max(_cast_as_tensor(globalMin), rawResp);
     # we're now skipping the averaging across frames...
     if self.newMethod == 1 and self.normToOne == 1:
       # in this case, only apply the noiseLate and self.scale AFTER the FT
+      # --- 22.10.13 --> don't thresh! That introduces oddities!!!
       respModel = ratio;
       return torch.transpose(respModel, 1, 0);
     elif self.newMethod == 1 and self.normToOne != 1:

@@ -75,11 +75,11 @@ def get_responses(expData, which_cell, expInd, expDir, dataPath, respMeasure, st
 
   return resps_data, respAll, respsPhAdv_mean_ref, respsPhAdv_mean_pred, baseline, adjMeansByComp, val_tr_by_cond;
 
-def get_model_responses(S, curr_fit, fitType, lossType, expInd, which_cell, excType, f1f0_rat, respMeasure, baseline):
+def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, f1f0_rat, respMeasure, baseline, lossType=1, lgnFrontEnd=0, newMethod=1, lgnConType=1, _applyLGNtoNorm=0, _sigmoidSigma=5, recenter_norm=2, normToOne=1, debug=False, use_mod_resp=2):
   # This is ONLY for getting model responses
   if use_mod_resp == 1:
     curr_fit = fitList[which_cell-1]['params'];
-    modResp = mod_resp.SFMGiveBof(curr_fit, S, normType=fitType, lossType=lossType, expInd=expInd, cellNum=which_cell, excType=excType)[1];
+    modResp = mod_resp.SFMGiveBof(curr_fit, expData, normType=fitType, lossType=lossType, expInd=expInd, cellNum=which_cell, excType=excType)[1];
     if f1f0_rat < 1: # then subtract baseline..
       modResp = modResp - baseline*hf.get_exp_params(expInd).stimDur; 
     # now organize the responses
@@ -88,9 +88,10 @@ def get_model_responses(S, curr_fit, fitType, lossType, expInd, which_cell, excT
   elif use_mod_resp == 2: # then pytorch model!
     resp_str = hf_sf.get_resp_str(respMeasure)
     curr_fit = fitList[which_cell-1][resp_str]['params'];
-    model = mrpt.sfNormMod(curr_fit, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod, lgnConType=conType, applyLGNtoNorm=_applyLGNtoNorm)
+    model = mrpt.sfNormMod(curr_fit, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod, lgnConType=lgnConType, applyLGNtoNorm=_applyLGNtoNorm, normToOne=normToOne)
     ### get the vec-corrected responses, if applicable
-    if expInd > f1_expCutoff and respMeasure == 1:
+    # NOTE: NEED TO FIX THIS, esp. for 
+    if expInd > 2 and respMeasure == 1: # only can get F1 if expInd>=2
       respOverwrite = hf.adjust_f1_byTrial(expData, expInd);
     else:
       respOverwrite = None;
@@ -109,15 +110,23 @@ def get_model_responses(S, curr_fit, fitType, lossType, expInd, which_cell, excT
     modResp_full[dw.trInf['num']] = modResp;
 
     if respMeasure == 0: # if DC, then subtract baseline..., as determined from data (why not model? we aren't yet calc. response to no stim, though it can be done)
-      modResp_full = modResp_full - baseline*hf.get_exp_params(expInd).stimDur;
+      stimDur = hf.get_exp_params(expInd).stimDur
+      if normToOne==1 and newMethod==1: # then noiseLate is exactly the noiseLate
+        modResp_full -= model.noiseLate.detach().numpy() # Model is counts --> no need to factor in stimDur
+      else: # sub the data baseline, since our model should've found that anyway...
+        modResp_full = modResp_full - baseline*stimDur;
 
     # TODO: This is a work around for which measures are in rates vs. counts (DC vs F1, model vs data...)
     stimDur = hf.get_exp_params(expInd).stimDur;
     asRates = False;
-    #divFactor = stimDur if asRates == 0 else 1;
-    #modResp_full = np.divide(modResp_full, divFactor);
+    divFactor = stimDur if asRates == 0 else 1;
+    modResp_full = np.divide(modResp_full, divFactor);
     # now organize the responses
+    #resps = hf.organize_resp(modResp_full, expData, expInd);
     resps = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp_full, respsAsRates=asRates, modsAsRate=asRates)[0];
+
+  if debug:
+    return model.respPerCell(dw.trInf, debug=True, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm);
 
   return resps;
 
@@ -302,14 +311,15 @@ def selected_supr_metrics(df):
 
   return None;
 
-def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excType=1, useHPCfit=1, conType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=False, useTex=False, simple_plot=True, altHollow=True, ltThresh=0.5, ref_line_alpha=0.5, ref_all_sfs=False, plt_supr_ind=False, supr_ind_prince=False, sum_power=2):
+def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excType=2, useHPCfit=1, lgnConType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=False, useTex=False, simple_plot=True, altHollow=True, ltThresh=0.5, ref_line_alpha=0.5, ref_all_sfs=False, plt_supr_ind=False, supr_ind_prince=False, sum_power=1):
 
   # if ref_all_sfs, then colors for superposition plots are referenced across all SFS (not just those that appear for dispersion=1)
 
   if use_mod_resp == 2:
-    rvcAdj   = -1; # this means vec corrected F1, not phase adjustment F1...
+    rvcAdj   = 0; # phAmp corr.
+    #rvcAdj   = -1; # this means vec corrected F1, not phase adjustment F1...
     _applyLGNtoNorm = 0; # don't apply the LGN front-end to the gain control weights
-    recenter_norm = 1;
+    recenter_norm = 2;
     newMethod = 1; # yes, use the "new" method for mrpt (not that new anymore, as of 21.03)
     lossType = 1; # sqrt
     _sigmoidSigma = 5;
@@ -338,20 +348,11 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
   elif use_mod_resp == 2:
     rvcName = None; # Use NONE if getting model responses, only
-    if excType == 1:
-      fitBase = 'fitList%s_210308_dG' % loc_str
-      if recenter_norm:
-        #fitBase = 'fitList%s_pyt_210312_dG' % loc_str
-        fitBase = 'fitList%s_pyt_210331_dG' % loc_str
-    elif excType == 2:
-      fitBase = 'fitList%s_pyt_210310' % loc_str
-      if recenter_norm:
-        #fitBase = 'fitList%s_pyt_210312' % loc_str
-        fitBase = 'fitList%s_pyt_210331' % loc_str
-    fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=conType, vecCorrected=-rvcAdj);
+    fitBase = 'fitList%s_pyt_221011_noRE_noSched' % loc_str
+    fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=-rvcAdj);
 
   # ^^^ EDIT rvc/descrFits/fitList names here; 
-
+  
   ############
   # Before any plotting, fix plotting paramaters
   ############
@@ -504,7 +505,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   ############
   f1f0_rat = hf.compute_f1f0(expData, which_cell, expInd, dataPath, descrFitName_f0=descrFits_f0)[0];
   curr_suppr['f1f0'] = f1f0_rat;
-  respMeasure = 1 if f1f0_rat > 1 else 0;
+  respMeasure = 1 if (f1f0_rat > 1 and expInd>2) else 0;
 
   # load rvcFits in case needed
   rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
@@ -516,7 +517,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=2, excTy
   if fitList is None:
     resps = resps_data; # otherwise, we'll still keep resps_data for reference
   elif fitList is not None: # OVERWRITE the data with the model spikes!
-    resps = get_model_responses(S, curr_fit, fitType, lossType, expInd, which_cell, excType, f1f0_rat, respMeasure, baseline);
+    resps = get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, f1f0_rat, respMeasure, baseline, lossType=lossType, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType);
 
   predResps = resps[2] if respsPhAdv_mean_preds is None else respsPhAdv_mean_preds;
   respMean = resps[0] if respsPhAdv_mean_ref is None else respsPhAdv_mean_ref; # equivalent to resps[0];
@@ -1093,7 +1094,8 @@ if __name__ == '__main__':
     else:
       supr_ind_prince = False;
 
-    fitList=None; # TEMPORARY
+    fitList='fitList%s_pyt_221011' % 'HPC'; # TEMPORARY
+    use_mod_resp = 2;
 
     if asMulti:
       from functools import partial
@@ -1102,7 +1104,7 @@ if __name__ == '__main__':
       print('***cpu count: %02d***' % nCpu);
 
       with mp.Pool(processes = nCpu) as pool:
-        sup_perCell = partial(plot_save_superposition, expDir=expDir, use_mod_resp=0, fitType=2, excType=1, useHPCfit=1, conType=None, lgnFrontEnd=None, to_save=0, plt_supr_ind=plt_supr_ind, supr_ind_prince=supr_ind_prince);
+        sup_perCell = partial(plot_save_superposition, expDir=expDir, use_mod_resp=use_mod_resp, fitType=2, excType=1, useHPCfit=1, lgnConType=1, lgnFrontEnd=1, to_save=0, plt_supr_ind=plt_supr_ind, supr_ind_prince=supr_ind_prince);
         supFits = pool.map(sup_perCell, range(start_cell, end_cell+1));
         pool.close();
 
@@ -1123,5 +1125,5 @@ if __name__ == '__main__':
         suppr_all[iii] = sup_fit;
       np.save(dataPath + super_name, suppr_all);
     else:
-      plot_save_superposition(cell_num, expDir, to_save=1, plt_supr_ind=plt_supr_ind, supr_ind_prince=supr_ind_prince);
+      plot_save_superposition(cell_num, expDir, to_save=1, plt_supr_ind=plt_supr_ind, use_mod_resp=use_mod_resp, supr_ind_prince=supr_ind_prince, lgnConType=1, lgnFrontEnd=0);
 
