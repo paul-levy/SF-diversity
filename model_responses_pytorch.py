@@ -20,7 +20,7 @@ torch.autograd.set_detect_anomaly(True)
 ### Some global things...
 #########
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
-force_earlyNoise = None; # if None, allow it as parameter; otherwise, force it to this value; used 0 for 210308-210315; None for 210321
+force_earlyNoise = 0; # if None, allow it as parameter; otherwise, force it to this value; used 0 for 210308-210315; None for 210321
 recenter_norm = 2;
 _schedule = False; # use scheduler or not??? True or False
 #_schedule = True; # use scheduler or not??? True or False
@@ -239,7 +239,7 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
 
 ### Datawrapper/loader
 
-def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTrials=None):
+def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTrials=None, shufflePh=False, shuffleTf=False):
   ''' Process the trial-by-trial stimulus information for ease of use with the model
       Specifically, we stack the stimuli to be [nTr x nStimComp], where 
       - [:,0] is base, [:,1] is mask, respectively for sfBB
@@ -313,8 +313,21 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
   # for expInd == -1, this means mask [ind=0], then base [ind=1]
   trInf['num'] = whichTrials;
   trInf['ori'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['ori']), (1,0))[whichTrials, :])
-  trInf['tf'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :])
-  trInf['ph'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['ph']), (1,0))[whichTrials, :])
+  if shuffleTf:
+    arr = np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :]
+    np.random.shuffle(arr);
+    trInf['tf'] = _cast_as_tensor(arr)
+    #trInf['tf'] = _cast_as_tensor(0.1)*_cast_as_tensor(arr)
+    #trInf['tf'] = _cast_as_tensor(15)*torch.ones_like(_cast_as_tensor(np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :]));
+  else:
+    trInf['tf'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :])
+  if shufflePh:
+    arr = np.transpose(np.vstack(trialInf['ph']), (1,0))[whichTrials, :]
+    np.random.shuffle(arr);
+    trInf['ph'] = _cast_as_tensor(arr)
+    #trInf['ph'] = torch.zeros_like(_cast_as_tensor(np.transpose(np.vstack(trialInf['ph']), (1,0))[whichTrials, :]));
+  else:
+    trInf['ph'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['ph']), (1,0))[whichTrials, :])
   trInf['sf'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['sf']), (1,0))[whichTrials, :])
   trInf['con'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['con']), (1,0))[whichTrials, :])
   resp = _cast_as_tensor(resp);
@@ -322,12 +335,12 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
   return trInf, resp;
 
 class dataWrapper(torchdata.Dataset):
-    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None, respOverwrite=None):
+    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None, respOverwrite=None, shufflePh=False, shuffleTf=False):
         # if respMeasure == 0, then we're getting DC; otherwise, F1
         # respOverwrite means overwrite the responses; used only for expInd>=0 for now
 
         super().__init__();
-        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite)
+        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite, shufflePh=shufflePh, shuffleTf=shuffleTf)
 
         self.trInf = trInf;
         self.resp = resp;
@@ -392,6 +405,10 @@ class sfNormMod(torch.nn.Module):
 
     ### all modparams
     self.modParams = modParams;
+
+    ### Keep an empty space for calculations which are independent of model (i.e. stimulus only) --> that way we don't re-compute
+    # ---- todo: make sure this doesn't hurt memory too much? 22.10.13
+    self.stimRealImag = None; # defaults to None so that we know to compute it the first time around
 
     ### now, establish the parameters to optimize
     # Get parameter values
@@ -625,52 +642,58 @@ class sfNormMod(torch.nn.Module):
     elif self.excType == 2:
       selSf = flexible_Gauss([0,1,self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf),self.sigLow,self.sigHigh], stimSf, minThresh=0, sigmoidValue=sigmoidSigma);
  
-    # II. Phase, space and time
-    if preCompOri is None:
-      omegaX = torch.mul(stimSf, torch.cos(stimOr)); # the stimulus in frequency space
-      omegaY = torch.mul(stimSf, torch.sin(stimOr));
-    else: # preCompOri is the same for all trials/comps --> cos(stimOr) is [0], sin(-) is [1]
-      omegaX = torch.mul(stimSf, preCompOri[0]); # the stimulus in frequency space
-      omegaY = torch.mul(stimSf, preCompOri[1]);
-    #omegaT = 5*stimTf/stimTf; # make them all 1??? # USED FOR DEBUGGING ODDITIES
-    omegaT = stimTf;
-
-    P = torch.empty((nTrials, nFrames, nStimComp, 3)); # nTrials x nFrames for number of frames x nStimComp x [two for x and y coordinate, one for time]
-    P[:,:,:,0] = torch.full((nTrials, nFrames, nStimComp), 2*np.pi*xCo);  # P is the matrix that contains the relative location of each filter in space-time (expressed in radians)
-    P[:,:,:,1] = torch.full((nTrials, nFrames, nStimComp), 2*np.pi*yCo);  # P(:,0) and p(:,1) describe location of the filters in space
-
-    # NEW: 20.07.16 -- why divide by 2 for the LGN stage? well, if selectivity is at peak for M and P, sum will be 2 (both are already normalized) // could also just sum...
     if self.lgnFrontEnd > 0:
       selSi = torch.mul(selSf, lgnSel); # filter sensitivity for the sinusoid in the frequency domain
     else:
       selSi = selSf;
 
-    # Use the effective number of frames displayed/stimulus duration
-    # phase calculation -- 
-    stimFr = torch.div(torch.arange(nFrames), float(fps));
-    #stimFr = torch.div(torch.arange(nFrames), float(nFrames));
-    phOffset = torch.div(stimPh, torch.mul(2*np.pi, stimTf));
-    #phOffset = torch.div(100*torch.ones_like(stimPh), 2*np.pi); # USED FOR DEBUGGING ODDITIES
-    # fast way?
-    P3Temp = torch.add(phOffset.unsqueeze(-1), stimFr.unsqueeze(0).unsqueeze(0)).permute(0,2,1); # result is [nTrials x nFrames x nStimComp], so transpose
-    P[:,:,:,2]  = 2*np.pi*P3Temp; # P(:,2) describes relative location of the filters in time.
+    # II. Phase, space and time
+    if self.stimRealImag is None:
+      if preCompOri is None:
+        omegaX = torch.mul(stimSf, torch.cos(stimOr)); # the stimulus in frequency space
+        omegaY = torch.mul(stimSf, torch.sin(stimOr));
+      else: # preCompOri is the same for all trials/comps --> cos(stimOr) is [0], sin(-) is [1]
+        omegaX = torch.mul(stimSf, preCompOri[0]); # the stimulus in frequency space
+        omegaY = torch.mul(stimSf, preCompOri[1]);
+      #omegaT = 5*stimTf/stimTf; # make them all 1??? # USED FOR DEBUGGING ODDITIES
+      omegaT = stimTf;
 
-    # per LCV code: preallocation and then filling in is much more efficient than using stack
-    omegas = torch.empty((*omegaX.shape,3), device=omegaX.device);
-    omegas[..., 0] = omegaX;
-    omegas[..., 1] = omegaY;
-    omegas[..., 2] = omegaT;
-    dotprod = torch.einsum('ijkl,ikl->ijk',P,omegas); # dotproduct over the "3" to get [nTr x nSC x nFr]
+      P = torch.empty((nTrials, nFrames, nStimComp, 3)); # nTrials x nFrames for number of frames x nStimComp x [two for x and y coordinate, one for time]
+      P[:,:,:,0] = torch.full((nTrials, nFrames, nStimComp), 2*np.pi*xCo);  # P is the matrix that contains the relative location of each filter in space-time (expressed in radians)
+      P[:,:,:,1] = torch.full((nTrials, nFrames, nStimComp), 2*np.pi*yCo);  # P(:,0) and p(:,1) describe location of the filters in space
 
-    # as of 20.10.14, torch doesn't handle complex numbers
-    # since we're just computing e^(iX), we can simply code the real (cos(x)) and imag (sin(x)) parts separately
-    # -- by virtue of e^(iX) = cos(x) + i*sin(x) // Euler's identity
-    realPart = torch.cos(dotprod);
-    imagPart = torch.sin(dotprod);
-    # per LCV code: preallocation and then filling in is much more efficient than using stack
-    realImag = torch.empty((*realPart.shape,2), device=realPart.device);
-    realImag[...,0] = realPart;
-    realImag[...,1] = imagPart;
+      # Use the effective number of frames displayed/stimulus duration
+      # phase calculation -- 
+      stimFr = torch.div(torch.arange(nFrames), float(fps));
+      #stimFr = torch.div(torch.arange(nFrames), float(nFrames));
+      phOffset = torch.div(stimPh, torch.mul(2*np.pi, stimTf));
+      #pdb.set_trace();
+      #phOffset = torch.div(100*torch.ones_like(stimPh), 2*np.pi); # USED FOR DEBUGGING ODDITIES
+      # fast way?
+      P3Temp = torch.add(phOffset.unsqueeze(-1), stimFr.unsqueeze(0).unsqueeze(0)).permute(0,2,1); # result is [nTrials x nFrames x nStimComp], so transpose
+      P[:,:,:,2]  = 2*np.pi*P3Temp; # P(:,2) describes relative location of the filters in time.
+
+      # per LCV code: preallocation and then filling in is much more efficient than using stack
+      omegas = torch.empty((*omegaX.shape,3), device=omegaX.device);
+      omegas[..., 0] = omegaX;
+      omegas[..., 1] = omegaY;
+      omegas[..., 2] = omegaT;
+      dotprod = torch.einsum('ijkl,ikl->ijk',P,omegas); # dotproduct over the "3" to get [nTr x nSC x nFr]
+
+      # as of 20.10.14, torch doesn't handle complex numbers
+      # since we're just computing e^(iX), we can simply code the real (cos(x)) and imag (sin(x)) parts separately
+      # -- by virtue of e^(iX) = cos(x) + i*sin(x) // Euler's identity
+      realPart = torch.cos(dotprod);
+      imagPart = torch.sin(dotprod);
+      # per LCV code: preallocation and then filling in is much more efficient than using stack
+      realImag = torch.empty((*realPart.shape,2), device=realPart.device);
+      realImag[...,0] = realPart;
+      realImag[...,1] = imagPart;
+
+      self.stimRealImag = realImag;
+    else:
+      realImag = self.stimRealImag;
+
     # NOTE: here, I use the term complex to denote that it is a complex number NOT
     # - that it reflects a complex cell (i.e. this is still a simple cell response)
     if self.lgnFrontEnd > 0: # contrast already included: TRY 22.10.12
@@ -689,7 +712,7 @@ class sfNormMod(torch.nn.Module):
       #rComplexC = torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,1]))); # max = 1
 
     if debug: # TEMPORARY?
-      return P,omegas,dotprod, selSi,torch.mul(selSi,stimCo);
+      return realImag,selSi,torch.mul(selSi,stimCo);
 
     # Store response in desired format - which is actually [nFr x nTr], so transpose it!
     if self.newMethod == 1:
@@ -843,7 +866,7 @@ class sfNormMod(torch.nn.Module):
 
   def forward(self, trialInf, respMeasure=0, returnPsth=0, debug=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, preCompOri=None): # expInd=-1 for sfBB
     # respModel is the psth! [nTr x nFr]
-    respModel = self.respPerCell(trialInf, debug, sigmoidSigma=sigmoidSigma, recenter_norm=recenter_norm, preCompOri=preCompOri);
+    respModel = self.respPerCell(trialInf, sigmoidSigma=sigmoidSigma, recenter_norm=recenter_norm, preCompOri=preCompOri, debug=debug); # debug=debug
 
     if debug:
       return respModel
@@ -1174,7 +1197,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         minResp, maxResp = np.nanmin(expByCond[0]), np.nanmax(expByCond[0]);
       else:
         minResp, maxResp = np.nanmin(expByCond), np.nanmax(expByCond);
-      noiseEarly = np.random.uniform(-0.03, 0) if initFromCurr==0 else curr_params[5]; # negative noiseEarly gives ODD results! helpful for strong, tuned suppression, but not good as a start
+      if force_earlyNoise is None:
+        noiseEarly = np.random.uniform(-0.03, 0) if initFromCurr==0 else curr_params[5]; # negative noiseEarly gives ODD results! helpful for strong, tuned suppression, but not good as a start
+      else:
+        noiseEarly = force_earlyNoise
       noiseLate = np.random.uniform(0.7, 1.3) * minResp if initFromCurr==0 else curr_params[6];
       respScalar = np.random.uniform(0.9, 1.1) * (maxResp - noiseLate) if initFromCurr==0 else curr_params[4];
       normStd = np.random.uniform(0.3, 2) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
@@ -1218,6 +1244,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     return param_list;
 
   ###  data wrapping
+  #dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite, shufflePh=True, shuffleTf=True);
   dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
   exp_length = expInfo['num'][-1] if expInd!=-1 else expInfo['trial']['con'].shape[-1];
   dl_shuffle = batch_size<2000 # i.e. if batch_size<2000, then shuffle!
