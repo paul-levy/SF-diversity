@@ -409,6 +409,7 @@ class sfNormMod(torch.nn.Module):
     ### Keep an empty space for calculations which are independent of model (i.e. stimulus only) --> that way we don't re-compute
     # ---- todo: make sure this doesn't hurt memory too much? 22.10.13
     self.stimRealImag = None; # defaults to None so that we know to compute it the first time around
+    self.lgnCalcDone  = False;
 
     ### now, establish the parameters to optimize
     # Get parameter values
@@ -604,23 +605,36 @@ class sfNormMod(torch.nn.Module):
     ### Assumptions: No interaction between SF/con -- which we know is not true...
     # - first, SF tuning: model 2 (Tony)
     if self.lgnFrontEnd > 0:
-      resps_m = get_descrResp(self.dog_m, stimSf, self.LGNmodel, minThresh=globalMin)
-      resps_p = get_descrResp(self.dog_p, stimSf, self.LGNmodel, minThresh=globalMin)
-      # -- make sure we normalize by the true max response:
-      sfTest = _cast_as_tensor(np.geomspace(0.1, 15, 1000));
-      max_m = torch.max(get_descrResp(self.dog_m, sfTest, self.LGNmodel, minThresh=globalMin));
-      max_p = torch.max(get_descrResp(self.dog_p, sfTest, self.LGNmodel, minThresh=globalMin));
-      # -- then here's our selectivity per component for the current stimulus
-      selSf_m = torch.div(resps_m, max_m);
-      selSf_p = torch.div(resps_p, max_p);
-      # - then RVC response: # ASSUMES rvcMod 0 (Movshon)
-      # --- the following commented out lines show how we could evaluate the rvc at one contrast for all components -->
-      # -----> HOWEVER, this is how we factor in contrast, so likely this will be useful only for eval. SF at diff. con, if we introduce LGN shifts [22.10.03]
-      #scm = torch.max(stimCo, axis=1)[0];
-      #selCon_m = get_rvc_model(self.rvc_m, scm).unsqueeze(dim=1);
-      #selCon_p = get_rvc_model(self.rvc_p, scm).unsqueeze(dim=1);
-      selCon_m = get_rvc_model(self.rvc_m, stimCo); # could evaluate at torch.max(stimCo,axis=1)[0] rather than stimCo, i.e. highest grating con, not per grating
-      selCon_p = get_rvc_model(self.rvc_p, stimCo);
+      if self.lgnCalcDone:
+        selCon_p = self.selCon_p;
+        selCon_m = self.selCon_m;
+        selSf_p = self.selSf_p;
+        selSf_m = self.selSf_m;
+      else:
+        resps_m = get_descrResp(self.dog_m, stimSf, self.LGNmodel, minThresh=globalMin)
+        resps_p = get_descrResp(self.dog_p, stimSf, self.LGNmodel, minThresh=globalMin)
+        # -- make sure we normalize by the true max response:
+        sfTest = _cast_as_tensor(np.geomspace(0.1, 15, 1000));
+        max_m = torch.max(get_descrResp(self.dog_m, sfTest, self.LGNmodel, minThresh=globalMin));
+        max_p = torch.max(get_descrResp(self.dog_p, sfTest, self.LGNmodel, minThresh=globalMin));
+        # -- then here's our selectivity per component for the current stimulus
+        selSf_m = torch.div(resps_m, max_m);
+        selSf_p = torch.div(resps_p, max_p);
+        # - then RVC response: # ASSUMES rvcMod 0 (Movshon)
+        # --- the following commented out lines show how we could evaluate the rvc at one contrast for all components -->
+        # -----> HOWEVER, this is how we factor in contrast, so likely this will be useful only for eval. SF at diff. con, if we introduce LGN shifts [22.10.03]
+        #scm = torch.max(stimCo, axis=1)[0];
+        #selCon_m = get_rvc_model(self.rvc_m, scm).unsqueeze(dim=1);
+        #selCon_p = get_rvc_model(self.rvc_p, scm).unsqueeze(dim=1);
+        selCon_m = get_rvc_model(self.rvc_m, stimCo); # could evaluate at torch.max(stimCo,axis=1)[0] rather than stimCo, i.e. highest grating con, not per grating
+        selCon_p = get_rvc_model(self.rvc_p, stimCo);
+
+        # and save the values/flag that we 've done it
+        self.selSf_p = selSf_p;
+        self.selSf_m = selSf_m;
+        self.selCon_p = selCon_p;
+        self.selCon_m = selCon_m;
+        self.lgnCalcDone = True;
 
       if self.lgnConType == 1: # DEFAULT
         # -- then here's our final responses per component for the current stimulus
