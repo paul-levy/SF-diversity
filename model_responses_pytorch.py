@@ -314,11 +314,11 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
   trInf['num'] = whichTrials;
   trInf['ori'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['ori']), (1,0))[whichTrials, :])
   if shuffleTf:
-    arr = np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :]
-    np.random.shuffle(arr);
-    trInf['tf'] = _cast_as_tensor(arr)
+    #arr = np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :]
+    #np.random.shuffle(arr);
+    #trInf['tf'] = _cast_as_tensor(arr)
     #trInf['tf'] = _cast_as_tensor(0.1)*_cast_as_tensor(arr)
-    #trInf['tf'] = _cast_as_tensor(4)*torch.ones_like(_cast_as_tensor(np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :]));
+    trInf['tf'] = _cast_as_tensor(5)*torch.ones_like(_cast_as_tensor(np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :]));
   else:
     trInf['tf'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :])
   if shufflePh:
@@ -564,7 +564,7 @@ class sfNormMod(torch.nn.Module):
 
     return param_list
 
-  def simpleResp_matMul(self, trialInf, stimParams = [], sigmoidSigma=_sigmoidSigma, preCompOri=None, debug=False, fps=120):
+  def simpleResp_matMul(self, trialInf, stimParams = [], sigmoidSigma=_sigmoidSigma, preCompOri=None, debug=False, fps=120, quadrature=False):
     # returns object with simpleResp and other things
     # --- Created 20.10.12 --- provides ~4x speed up compared to SFMSimpleResp() without need to explicit parallelization
     # --- Updated 20.10.29 --- created new method 
@@ -719,33 +719,32 @@ class sfNormMod(torch.nn.Module):
       # since in new method, we just return [...,0], normalize the response to the max of that component
       # --- this ensures that the amplitude is the same regardless of whether LGN is ON or OFF
       # --- added 22.10.10
-      #rComplex = torch.div(rComplex, torch.max(_cast_as_tensor(globalMin), torch.max(torch.abs(rComplex[...,0])))); # abs(max) = 1
       rComplex = torch.div(rComplex, torch.max(_cast_as_tensor(globalMin), torch.max(rComplex[...,0]))); # max = 1
-      # Only used for debugging purposes/looking into quadrature (in pair with the commented out line in the return of self.newMethod == 1
-      rComplexA = torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(rComplex[...,1]))); # max = 1
-      rComplexB = torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,0]))); # max = 1
-      rComplexC = torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,1]))); # max = 1
+      if quadrature:
+        # used for DC (i.e. if respMeasure==0)
+        rComplexA = torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(rComplex[...,1]))); # max = 1
+        rComplexB = torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,0]))); # max = 1
+        rComplexC = torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,1]))); # max = 1
 
     if debug: # TEMPORARY?
       return realImag,selSi,torch.mul(selSi,stimCo);
 
     # Store response in desired format - which is actually [nFr x nTr], so transpose it!
     if self.newMethod == 1:
-      respSimple1 = rComplexC; # we'll keep the half-wave rectification for the end...
-      #respSimple1 = rComplex[...,0]; # we'll keep the half-wave rectification for the end...
-      return torch.transpose(respSimple1, 0, 1)
+      if quadrature:
+        # i.e. complex cell
+        respSimple1 = torch.max(_cast_as_tensor(globalMin), rComplex[...,0]); # half-wave rectification,...
+        respSimple2 = torch.max(_cast_as_tensor(globalMin), rComplexB);
+        respSimple3 = torch.max(_cast_as_tensor(globalMin), rComplexA);
+        respSimple4 = torch.max(_cast_as_tensor(globalMin), rComplexC);
 
-      # complex cell?
-      '''
-      respSimple1 = torch.max(_cast_as_tensor(globalMin), rComplex[...,0]); # half-wave rectification,...
-      respSimple2 = torch.max(_cast_as_tensor(globalMin), rComplexB);
-      respSimple3 = torch.max(_cast_as_tensor(globalMin), rComplexA);
-      respSimple4 = torch.max(_cast_as_tensor(globalMin), rComplexC);
-
-      rsall = torch.sqrt(torch.div(torch.pow(respSimple1, 2) + torch.pow(respSimple2, 2) + torch.pow(respSimple3, 2) + torch.pow(respSimple4, 2), 4));
-      return torch.transpose(rsall,0,1);
-      '''
-      #return torch.transpose(respSimple1, 0, 1), torch.transpose(rComplexA,0,1), torch.transpose(rComplexB,0,1), torch.transpose(rComplexC,0,1);
+        rsall = torch.sqrt(torch.div(torch.pow(respSimple1, 2) + torch.pow(respSimple2, 2) + torch.pow(respSimple3, 2) + torch.pow(respSimple4, 2), 4));
+        return torch.transpose(rsall,0,1);
+        # the below line is useful for debugging purposes
+        #return torch.transpose(respSimple1, 0, 1), torch.transpose(rComplexA,0,1), torch.transpose(rComplexB,0,1), torch.transpose(rComplexC,0,1);
+      else:
+        respSimple1 = rComplex[...,0]; # we'll keep the half-wave rectification for the end...
+        return torch.transpose(respSimple1, 0, 1)
 
     else: # Old approach, in which we return the complex response
       # four filters placed in quadrature (only if self.newMethod == 0, which is default)
@@ -845,9 +844,9 @@ class sfNormMod(torch.nn.Module):
 
     return respPerTr; # will be [nTrials] -- later, will ensure right output size during operation
 
-  def respPerCell(self, trialInf, debug=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, preCompOri=None):
+  def respPerCell(self, trialInf, debug=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, preCompOri=None, quadrature=False):
     # excitatory filter, first
-    simpleResp = self.simpleResp_matMul(trialInf, sigmoidSigma=sigmoidSigma, preCompOri=preCompOri);
+    simpleResp = self.simpleResp_matMul(trialInf, sigmoidSigma=sigmoidSigma, preCompOri=preCompOri, quadrature=quadrature);
     normResp = self.SimpleNormResp(trialInf, recenter_norm=recenter_norm); # [nFrames x nTrials]
     if self.newMethod == 1:
       Lexc = simpleResp; # [nFrames x nTrials]
@@ -894,7 +893,8 @@ class sfNormMod(torch.nn.Module):
 
   def forward(self, trialInf, respMeasure=0, returnPsth=0, debug=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, preCompOri=None): # expInd=-1 for sfBB
     # respModel is the psth! [nTr x nFr]
-    respModel = self.respPerCell(trialInf, sigmoidSigma=sigmoidSigma, recenter_norm=recenter_norm, preCompOri=preCompOri, debug=debug);
+    use_quadr = True if respMeasure==0 else False;
+    respModel = self.respPerCell(trialInf, sigmoidSigma=sigmoidSigma, recenter_norm=recenter_norm, preCompOri=preCompOri, debug=debug, quadrature=use_quadr);
 
     if debug:
       return respModel
@@ -980,7 +980,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 # ---- previous to 22.10.03, batch_size=3000 (trials) ;;;;; lr was 0.001
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=2500, learning_rate=0.02, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=5000, learning_rate=0.02, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1033,7 +1033,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_221013%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '');
+    fL_name = 'fitList%s_pyt_221016%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1601,7 +1601,7 @@ if __name__ == '__main__':
       ### do the saving HERE!
       todoCV = 0; #  1 if whichTrials is not None else 0;
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_221013%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
+      fL_name = 'fitList%s_pyt_221016%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
