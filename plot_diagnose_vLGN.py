@@ -153,11 +153,9 @@ elif excType == 2:
     if force_full:
       fitBase = 'fitList%s_pyt_210331' % loc_str
 
-#fitBase = 'fitList%s_pyt_221007f_noRE' % loc_str
-fitBase = 'fitList%s_pyt_221011_noRE' % loc_str
-#fitBase = 'fitList%s_pyt_221011_noRE_noSched' % loc_str
-#fitBase = 'fitList%s_pyt_221012_noRE_noSched' % loc_str
-#fitBase = 'holdout_fitList_190513cA';
+fitBase = 'fitList%s_pyt_221014_noRE' % loc_str
+#fitBase = 'fitList%s_pyt_221014_noRE_noSched' % loc_str
+
 rvcDir = 1;
 vecF1 = 0;
 
@@ -167,8 +165,6 @@ else:
   vecCorrected = 0;
 
 ### RVCFITS
-#rvcBase = 'rvcFits_191023'; # direc flag & '.npy' are added
-#rvcBase = 'rvcFits_200507'; # direc flag & '.npy' are added
 rvcBase = 'rvcFits%s_220928' % loc_str; # direc flag & '.npy' are added
 
 ### Model types
@@ -319,7 +315,9 @@ if pytorch_mod == 1:
   ### now, set-up the two models
   model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm) for prms,normType,lgnType,lgnCon in zip(modFits, normTypes, lgnTypes, conTypes)]
 
-  dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
+  # vvv respOverwrite defined above (None if DC or if expInd=-1)
+  dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite, shuffleTf=True)#, shufflePh=False);
+  #dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite);
   modResps = [mod.forward(dw.trInf, respMeasure=respMeasure, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy() for mod in [model_A, model_B]];
 
   if respMeasure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
@@ -366,6 +364,10 @@ if pytorch_mod == 1:
   fitListA[cellNum-1][respStr]['varExpl_SF'] = varExplSF_A
   fitListB[cellNum-1][respStr]['varExpl_SF'] = varExplSF_B
 
+  # and also get the blank resp
+  modBlank_A = np.maximum(0, model_A.noiseLate.detach().numpy()/divFactor); # baseline 
+  modBlank_B = np.maximum(0, model_B.noiseLate.detach().numpy()/divFactor); # baseline
+
   lossByCond_A = mrpt.loss_sfNormMod(mrpt._cast_as_tensor(mr_A), mrpt._cast_as_tensor(spikes_rate), lossType=lossType, varGain=mrpt._cast_as_tensor(varGains[0]), debug=1)[1].detach().numpy();
   lossByCond_B = mrpt.loss_sfNormMod(mrpt._cast_as_tensor(mr_B), mrpt._cast_as_tensor(spikes_rate), lossType=lossType, varGain=mrpt._cast_as_tensor(varGains[1]), debug=1)[1].detach().numpy();
 
@@ -400,7 +402,8 @@ else:
   gs_mean_B, gs_std_B = None, None
 
 # now organize the responses
-orgs = [hf.organize_resp(mr, expData, expInd, respsAsRate=True) for mr in modResps];
+orgs = [hf.organize_resp(np.divide(mr, divFactor), expData, expInd) for mr in modResps];
+#orgs = [hf.organize_resp(mr, expData, expInd, respsAsRate=True) for mr in modResps];
 #orgs = [hf.organize_resp(mr, expData, expInd, respsAsRate=False) for mr in modResps];
 oriModResps = [org[0] for org in orgs]; # only non-empty if expInd = 1
 conModResps = [org[1] for org in orgs]; # only non-empty if expInd = 1
@@ -435,7 +438,12 @@ if diffPlot: # otherwise, nothing to do
   respMean = respsRecenter[0];
   modAvgs  = [respsRecenter[2], respsRecenter[1]];
 
-blankMean, blankStd, _ = hf.blankResp(expData, expInd); 
+blankMean, blankStd, _ = hf.blankResp(expData, expInd);
+
+if respMeasure == 1: # i.e. f1, then all 0
+  to_sub = [0, 0, 0];
+else: # dc
+  to_sub = [modBlank_A, blankMean, modBlank_B];
 
 # #### determine contrasts, center spatial frequency, dispersions
 all_disps = stimVals[0];
@@ -601,7 +609,7 @@ if diffPlot != 1:
       v_cons = val_con_by_disp[d];
       n_v_cons = len(v_cons);
 
-      fCurr, dispCurr = plt.subplots(1, 3, figsize=(35, 30), sharey=True); # left side for flat; middle for data; right side for weighted modelb
+      fCurr, dispCurr = plt.subplots(1, 3, figsize=(35, 30), sharex=True, sharey=True); # left side for flat; middle for data; right side for weighted modelb
       fDisp.append(fCurr)
       dispAx.append(dispCurr);
 
@@ -625,17 +633,18 @@ if diffPlot != 1:
 
             # plot data
             col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
-            plot_resp = curr_resps[d, v_sfs, v_cons[c]];
+            plot_resp = curr_resps[d, v_sfs, v_cons[c]] - to_sub[i];
 
             dispAx[d][i].plot(all_sfs[v_sfs][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', clip_on=False, \
                                            color=col, label=str(np.round(all_cons[v_cons[c]], 2)));
 
         #dispAx[d][i].set_aspect('equal', 'box'); 
         dispAx[d][i].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
-        dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
+        #dispAx[d][i].set_ylim((5e-2, 1.5*maxResp));
 
         dispAx[d][i].set_xscale('log');
-        #dispAx[d][i].set_yscale('log');
+        dispAx[d][i].set_yscale('log');
+        dispAx[d][i].axis('scaled');
         dispAx[d][i].set_xlabel('sf (c/deg)'); 
 
         dispAx[d][i].set_ylabel('resp above baseline (imp/s)');
@@ -1229,7 +1238,7 @@ if diffPlot != 1 or intpMod == 0:
 
   for d in range(nDisps):
 
-      fCurr, crfCurr = plt.subplots(1, 3, figsize=(35, 30), sharex = False, sharey = True); # left side for flat; middle for data; right side for weighted model
+      fCurr, crfCurr = plt.subplots(1, 3, figsize=(35, 30), sharex = True, sharey = True); # left side for flat; middle for data; right side for weighted model
       fCRF.append(fCurr)
       crfAx.append(crfCurr);
 
@@ -1257,7 +1266,7 @@ if diffPlot != 1 or intpMod == 0:
             n_cons = sum(v_cons);
 
             col = [sf/float(n_v_sfs), sf/float(n_v_sfs), sf/float(n_v_sfs)];
-            plot_resp = curr_resps[d, sf_ind, v_cons];
+            plot_resp = curr_resps[d, sf_ind, v_cons] - to_sub[i];
 
             line_curr, = crfAx[d][i].plot(all_cons[v_cons][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', color=col, \
                                           clip_on=False, label = str(np.round(all_sfs[sf_ind], 2)));
@@ -1268,8 +1277,9 @@ if diffPlot != 1 or intpMod == 0:
         #'''
         crfAx[d][i].set_xscale('log');
         crfAx[d][i].set_yscale('log');
-        crfAx[d][i].set_xlim([1e-2, 1]);
-        crfAx[d][i].set_ylim([1e-2, 1.5*maxResp]);
+        #crfAx[d][i].set_xlim([1e-2, 1]);
+        #crfAx[d][i].set_ylim([1e-2, 1.5*maxResp]);
+        crfAx[d][i].axis('scaled');
         #'''
         crfAx[d][i].set_xlabel('contrast');
 

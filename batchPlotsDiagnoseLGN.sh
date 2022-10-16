@@ -52,9 +52,9 @@ do
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 22 21 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
 
     # compare norm. types (w LGN)
-    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
 
     # compare norm. types (w LGN as parvo-only)
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
@@ -62,7 +62,7 @@ do
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
 
     # no LGN
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
   else

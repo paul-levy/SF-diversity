@@ -318,7 +318,7 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
     np.random.shuffle(arr);
     trInf['tf'] = _cast_as_tensor(arr)
     #trInf['tf'] = _cast_as_tensor(0.1)*_cast_as_tensor(arr)
-    #trInf['tf'] = _cast_as_tensor(15)*torch.ones_like(_cast_as_tensor(np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :]));
+    #trInf['tf'] = _cast_as_tensor(4)*torch.ones_like(_cast_as_tensor(np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :]));
   else:
     trInf['tf'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['tf']), (1,0))[whichTrials, :])
   if shufflePh:
@@ -719,20 +719,34 @@ class sfNormMod(torch.nn.Module):
       # since in new method, we just return [...,0], normalize the response to the max of that component
       # --- this ensures that the amplitude is the same regardless of whether LGN is ON or OFF
       # --- added 22.10.10
+      #rComplex = torch.div(rComplex, torch.max(_cast_as_tensor(globalMin), torch.max(torch.abs(rComplex[...,0])))); # abs(max) = 1
       rComplex = torch.div(rComplex, torch.max(_cast_as_tensor(globalMin), torch.max(rComplex[...,0]))); # max = 1
       # Only used for debugging purposes/looking into quadrature (in pair with the commented out line in the return of self.newMethod == 1
-      #rComplexA = torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(rComplex[...,1]))); # max = 1
-      #rComplexB = torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,0]))); # max = 1
-      #rComplexC = torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,1]))); # max = 1
+      rComplexA = torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(rComplex[...,1]))); # max = 1
+      rComplexB = torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,0]))); # max = 1
+      rComplexC = torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,1]))); # max = 1
 
     if debug: # TEMPORARY?
       return realImag,selSi,torch.mul(selSi,stimCo);
 
     # Store response in desired format - which is actually [nFr x nTr], so transpose it!
     if self.newMethod == 1:
-      respSimple1 = rComplex[...,0]; # we'll keep the half-wave rectification for the end...
+      respSimple1 = rComplexC; # we'll keep the half-wave rectification for the end...
+      #respSimple1 = rComplex[...,0]; # we'll keep the half-wave rectification for the end...
       return torch.transpose(respSimple1, 0, 1)
+
+      # complex cell?
+      '''
+      respSimple1 = torch.max(_cast_as_tensor(globalMin), rComplex[...,0]); # half-wave rectification,...
+      respSimple2 = torch.max(_cast_as_tensor(globalMin), rComplexB);
+      respSimple3 = torch.max(_cast_as_tensor(globalMin), rComplexA);
+      respSimple4 = torch.max(_cast_as_tensor(globalMin), rComplexC);
+
+      rsall = torch.sqrt(torch.div(torch.pow(respSimple1, 2) + torch.pow(respSimple2, 2) + torch.pow(respSimple3, 2) + torch.pow(respSimple4, 2), 4));
+      return torch.transpose(rsall,0,1);
+      '''
       #return torch.transpose(respSimple1, 0, 1), torch.transpose(rComplexA,0,1), torch.transpose(rComplexB,0,1), torch.transpose(rComplexC,0,1);
+
     else: # Old approach, in which we return the complex response
       # four filters placed in quadrature (only if self.newMethod == 0, which is default)
       respSimple1 = torch.max(_cast_as_tensor(globalMin), rComplex[...,0]); # half-wave rectification,...
@@ -880,7 +894,7 @@ class sfNormMod(torch.nn.Module):
 
   def forward(self, trialInf, respMeasure=0, returnPsth=0, debug=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, preCompOri=None): # expInd=-1 for sfBB
     # respModel is the psth! [nTr x nFr]
-    respModel = self.respPerCell(trialInf, sigmoidSigma=sigmoidSigma, recenter_norm=recenter_norm, preCompOri=preCompOri, debug=debug); # debug=debug
+    respModel = self.respPerCell(trialInf, sigmoidSigma=sigmoidSigma, recenter_norm=recenter_norm, preCompOri=preCompOri, debug=debug);
 
     if debug:
       return respModel

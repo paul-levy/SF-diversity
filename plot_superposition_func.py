@@ -91,6 +91,9 @@ def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, 
       curr_fit = fitList[which_cell-1][resp_str]['params'];
     else:
       curr_fit = fitList; # we already passed in parameters
+    # TEMP:
+    #curr_fit[5] = 0; # turn off early noise
+    # END TEMP:
     model = mrpt.sfNormMod(curr_fit, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod, lgnConType=lgnConType, applyLGNtoNorm=_applyLGNtoNorm, normToOne=normToOne)
     ### get the vec-corrected responses, if applicable
     # NOTE: NEED TO FIX THIS, esp. for 
@@ -99,7 +102,8 @@ def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, 
     else:
       respOverwrite = None;
 
-    dw = mrpt.dataWrapper(expData, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
+    dw = mrpt.dataWrapper(expData, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite);#, shufflePh=True, shuffleTf=True);
+    # ^^^ respOverwrite defined above (None if DC or if expInd=-1)
     modResp = model.forward(dw.trInf, respMeasure=respMeasure, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
 
     if respMeasure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
@@ -340,7 +344,8 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   rvcFits = None; # pre-define this as None; will be overwritten if available/needed
   if expDir == 'altExp/': # we don't adjust responses there...
     rvcName = '%s_f0' % rvcName;
-  dFits_base = 'descrFits%s_220609' % loc_str if expDir=='LGN/' else 'descrFits%s_220721' % loc_str
+  dFits_base = 'descrFits%s_220609' % 'HPC' if expDir=='LGN/' else 'descrFits%s_220721' % 'HPC'
+  #dFits_base = 'descrFits%s_220609' % loc_str if expDir=='LGN/' else 'descrFits%s_220721' % loc_str
   if use_mod_resp == 1:
     rvcName = None; # Use NONE if getting model responses, only
     if excType == 1:
@@ -351,11 +356,12 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
   elif use_mod_resp == 2:
     rvcName = None; # Use NONE if getting model responses, only
-    #fitBase = 'fitList%s_pyt_221011_noRE' % loc_str
-    fitBase = 'fitList%s_pyt_221012_noRE_noSched' % loc_str
+    fitBase = 'fitList%s_pyt_221014_noRE' % loc_str
+    #fitBase = 'fitList%s_pyt_221013_noRE_noSched' % loc_str
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=-rvcAdj);
-
   # ^^^ EDIT rvc/descrFits/fitList names here;
+
+  print('\n***Fitlist name:[%s]***\n' % fitList_nm);
 
   ############
   # Before any plotting, fix plotting paramaters
@@ -512,11 +518,14 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   respMeasure = 1 if (f1f0_rat > 1 and expInd>2) else 0;
 
   # load rvcFits in case needed
-  rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
+  try:
+    rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
+  except:
+    rvcFits = None;
 
   _, stimVals, val_con_by_disp, val_by_stim_val, _ = hf.tabulate_responses(expData, expInd); # call just to get these values (not spikes/activity)
-  resps_data, respAll, respsPhAdv_mean_ref, respsPhAdv_mean_preds, baseline, comp_resp_org, val_tr_org = get_responses(expData, which_cell, expInd, expDir, dataPath, 
-                                                                                                                       respMeasure, stimVals, val_con_by_disp, rvcFits, phAdvName, vecF1, f1_expCutoff=f1_expCutoff, rvcDir=rvcDir, val_by_stim_val=val_by_stim_val, sum_power=sum_power);
+  resps_data, respAll, respsPhAdv_mean_ref, respsPhAdv_mean_preds, baseline, comp_resp_org, val_tr_org = get_responses(expData, which_cell, expInd, expDir, dataPath, respMeasure, stimVals, 
+                                                                                                                       val_con_by_disp, rvcFits, phAdvName, vecF1, f1_expCutoff=f1_expCutoff, rvcDir=rvcDir, val_by_stim_val=val_by_stim_val, sum_power=sum_power);
 
   if fitList is None:
     resps = resps_data; # otherwise, we'll still keep resps_data for reference
@@ -663,7 +672,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   ax[sf_ref_row, sf_ref_col].set_xlim((0.1, 10));
   ax[sf_ref_row, sf_ref_col].set_xlabel('Spatial frequency (c/deg)')
   ax[sf_ref_row, sf_ref_col].set_ylabel('Response (spikes/s)')
-  ax[sf_ref_row, sf_ref_col].set_ylim((-5, 1.25*np.nanmax(sfRef)));
+  #ax[sf_ref_row, sf_ref_col].set_ylim((-5, 1.25*np.nanmax(sfRef)));
 
   #####
   ## then on the left, RVC (peak SF) --> in same position regardless of full or simplified plot
@@ -720,7 +729,8 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     if not simple_plot: # there's only summation plot here if the full plot
       ax[0, 0].plot(pred_plt, myFit(pred_plt, *fitz), 'r--', label='fit')
     ax[0, 1].plot(pred_plt, myFit(pred_plt, *fitz), 'r--', label='fit')
-
+    
+  dispRats = [];
   for d in range(nDisps):
     if d == 0: # we don't care about single gratings!
       dispRats = [];
@@ -730,6 +740,9 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
 
     # plot split out by each contrast [0,1]
     for c in reversed(range(n_v_cons)):
+      #if c!=0: # use for contrast-specific plots
+      #  continue;
+      
       v_sfs = hf.get_valid_sfs(S, d, v_cons[c], expInd)
       for iii, s in enumerate(v_sfs):
         mixResp = respMean[d, s, v_cons[c]];
@@ -759,6 +772,8 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
         except:
           pass;
 
+    ax[0,1].set_xlim([0,400]);
+    ax[0,1].axis('scaled');
     # plot averaged across all cons/sfs (i.e. average for the whole dispersion) [1,0]
     mixDisp = respMean[d, :, :].flatten();
     sumDisp = predResps[d, :, :].flatten();
@@ -908,6 +923,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     except:
       curr_suppr['sfErrsInd_VAR'] = np.nan;
       curr_suppr['sfErrsInd_VAR_prince'] = np.nan;
+      ind_var_offset = np.nan;
 
     if not simple_plot or (simple_plot and plt_supr_ind):
       ax[4+row_ind_offset,1].axhline(0, ls='--', color='k', alpha=ref_line_alpha)
@@ -1110,7 +1126,7 @@ if __name__ == '__main__':
     else:
       lgnOn = 0; # default to no LGN
 
-    fitList='fitList%s_pyt_221011' % 'HPC'; # TEMPORARY
+    fitList='fitList%s_pyt_221013' % 'HPC'; # TEMPORARY
 
     if asMulti:
       from functools import partial
