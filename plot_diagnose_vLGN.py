@@ -27,6 +27,7 @@ _sigmoidRespExp = None; # 3 or None, as of 21.03.14
 _sigmoidSigma = 5; # put a value (5, as of 21.03.10) or None (see model_responses_pytorch.py for details)
 _sigmoidGainNorm = 5;
 recenter_norm = 2;
+singleGratsOnly = True; # False;
 
 f1_expCutoff = 2; # if 1, then all but V1_orig/ are allowed to have F1; if 2, then altExp/ is also excluded
 
@@ -153,8 +154,9 @@ elif excType == 2:
     if force_full:
       fitBase = 'fitList%s_pyt_210331' % loc_str
 
-fitBase = 'fitList%s_pyt_221014_noRE' % loc_str
-#fitBase = 'fitList%s_pyt_221014_noRE_noSched' % loc_str
+#fitBase = 'fitList%s_pyt_221017_noRE' % loc_str
+fitBase = 'fitList%s_pyt_nr221018_noSched%s' % ('', '_sg' if singleGratsOnly else '')#loc_str
+#fitBase = 'fitList%s_pyt_221018_noRE_noSched%s' % ('', '_sg' if singleGratsOnly else '')#loc_str
 
 rvcDir = 1;
 vecF1 = 0;
@@ -316,8 +318,8 @@ if pytorch_mod == 1:
   model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm) for prms,normType,lgnType,lgnCon in zip(modFits, normTypes, lgnTypes, conTypes)]
 
   # vvv respOverwrite defined above (None if DC or if expInd=-1)
-  dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite, shuffleTf=True)#, shufflePh=False);
-  #dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite);
+  #dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite, shuffleTf=True)#, shufflePh=False);
+  dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite);
   modResps = [mod.forward(dw.trInf, respMeasure=respMeasure, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy() for mod in [model_A, model_B]];
 
   if respMeasure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
@@ -851,7 +853,8 @@ plt.xlabel('Con (%)', fontsize=20);
 plt.ylim([np.minimum(-5, np.nanmin(respMean[disp_rvc, sfToUse, val_cons])), 1.1*np.nanmax(respMean[disp_rvc, sfToUse, val_cons])]);
 
 # plot model details - exc/suppressive components
-omega = np.logspace(-2, 2, 1000);
+omega = np.logspace(-1.25, 1.25, 1000);
+#omega = np.logspace(-2, 2, 1000);
 sfExc = [];
 sfExcRaw = [];
 for (pltNum, modPrm),lgnType,lgnConType,mWt in zip(enumerate(modFits), lgnTypes, conTypes, [mWt_A, mWt_B]):
@@ -1098,7 +1101,7 @@ elif excType == 2:
 #respScalars = [_sigmoidScale/(1+np.exp(-x)) for x in [modFits[0][4], modFits[1][4]]];
 respScalars = [modFits[0][4], modFits[1][4]]; # don't transform them, since we want to know the real value of the optimized parameter
 plt.text(0.5, 0.3, 'response scalar: %.3f, %.3f' % (respScalars[0], respScalars[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-plt.text(0.5, 0.2, 'sigma: %.3f, %.3f | %.3f, %.3f' % (np.power(10, modFits[0][2]), np.power(10, modFits[1][2]), modFits[0][2], modFits[1][2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+plt.text(0.5, 0.2, 'sigma: %.2e, %.2e | %.3f, %.3f' % (np.power(10, modFits[0][2]), np.power(10, modFits[1][2]), modFits[0][2], modFits[1][2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 normGainA = _sigmoidGainNorm/(1+np.exp(-modFits[0][10])) if normTypes[0]==5 else np.nan;
 normGainB = _sigmoidGainNorm/(1+np.exp(-modFits[1][10])) if normTypes[1]==5 else np.nan;
 if normGainA is not None or normGainB is not None:
