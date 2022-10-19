@@ -20,10 +20,12 @@ torch.autograd.set_detect_anomaly(True)
 ### Some global things...
 #########
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
-force_earlyNoise = 0; # if None, allow it as parameter; otherwise, force it to this value; used 0 for 210308-210315; None for 210321
+force_earlyNoise = 0; #None;#None; # if None, allow it as parameter; otherwise, force it to this value; used 0 for 210308-210315; None for 210321
 recenter_norm = 2;
 _schedule = False; # use scheduler or not??? True or False
 #_schedule = True; # use scheduler or not??? True or False
+singleGratsOnly = True; # True;
+
 fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304, 210308/11/12/14, 210321
 spring2021_adj = 1; # further adjustment to make scale a sigmoid rather than abs; 210222
 if fall2020_adj:
@@ -31,6 +33,11 @@ if fall2020_adj:
   #globalMin = 1e-1 # what do we "cut off" the model response at? should be >0 but small
 else:
   globalMin = 1e-6 # what do we "cut off" the model response at? should be >0 but small
+
+#globalMin = 0;
+globalMinDiv = 1e-10; # just for terms with division, to avoid by zero
+fftMin = 1e-10; # was previously 1e-10 to avoid NaN/failure of backward pass?
+
 modRecov = 0;
 # --- for parameters that are transformed with sigmoids, what's the scalar in front of the sigmoid??
 ### WARNING: If you adjust _sigmoidRespExp, adjust the corresponding line in sfNormMod.forward (search for _sigmoidRespExp, used in ratio = ...)
@@ -204,14 +211,14 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
     '''
 
     full_fourier = [torch.rfft(x, signal_ndim=1, onesided=False) for x in psth];
-    epsil = 1e-10;
+    epsil = _cast_as_tensor(fftMin); #1e-10;
     if inclPhase:
       # NOTE: I have checked that the amplitudes (i.e. just "R" in polar coordinates, 
       # -- computed as sqrt(x^2 + y^2)) are ...
       # -- equivalent when derived from with_phase as in spectrum, below
       with_phase = fft_amplitude(full_fourier, stimDur); # passing in while still keeping the imaginary component (so that we can back out phase)
-
-    full_fourier = [torch.sqrt(epsil + torch.add(torch.pow(x[:,:,0], 2), torch.pow(x[:,:,1], 2))) for x in full_fourier]; # just get the amplitude
+    # Frustrating --> However, sqrt(0) fails in the backward pass, so we add a small value, and then subtract if off...
+    full_fourier = [torch.sqrt(epsil + torch.add(torch.pow(x[:,:,0], 2), torch.pow(x[:,:,1], 2))) - torch.sqrt(epsil) for x in full_fourier]; # just get the amplitude
     spectrum = fft_amplitude(full_fourier, stimDur);
 
     if tfs is not None:
@@ -239,7 +246,7 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
 
 ### Datawrapper/loader
 
-def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTrials=None, shufflePh=False, shuffleTf=False):
+def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTrials=None, shufflePh=False, shuffleTf=False, singleGratsOnly=False):
   ''' Process the trial-by-trial stimulus information for ease of use with the model
       Specifically, we stack the stimuli to be [nTr x nStimComp], where 
       - [:,0] is base, [:,1] is mask, respectively for sfBB
@@ -297,7 +304,12 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
       # start with all trials...
       mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
       # BUT, if we pass in trialSubset, then use this as our mask (i.e. overwrite the above mask)
-      whichTrials = np.where(~np.isnan(np.sum(coreExp['ori'], 0)))[0];
+      if singleGratsOnly:
+        # the first line (commented out now) is single gratings AND just at one SF (1.7321, in this case)
+        #whichTrials = np.where(np.logical_and(np.isclose(coreExp['sf'][0], 1.7321, atol=0.1), np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0)))[0]; # this will force singlegrats only!
+        whichTrials = np.where(np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0))[0]; # this will force singlegrats only!
+      else:
+        whichTrials = np.where(~np.isnan(np.sum(coreExp['ori'], 0)))[0];
       # TODO -- put in the proper responses...
       if respOverwrite is not None:
         resp = respOverwrite;
@@ -330,17 +342,19 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
     trInf['ph'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['ph']), (1,0))[whichTrials, :])
   trInf['sf'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['sf']), (1,0))[whichTrials, :])
   trInf['con'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['con']), (1,0))[whichTrials, :])
+  #low_isol = np.where(trInf['con'][:,0]<0.06);
+  #trInf['con'][low_isol, 0] = trInf['con'][low_isol,0]=0
   resp = _cast_as_tensor(resp);
 
   return trInf, resp;
 
 class dataWrapper(torchdata.Dataset):
-    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None, respOverwrite=None, shufflePh=False, shuffleTf=False):
+    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None, respOverwrite=None, shufflePh=False, shuffleTf=False, singleGratsOnly=False):
         # if respMeasure == 0, then we're getting DC; otherwise, F1
         # respOverwrite means overwrite the responses; used only for expInd>=0 for now
 
         super().__init__();
-        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite, shufflePh=shufflePh, shuffleTf=shuffleTf)
+        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite, shufflePh=shufflePh, shuffleTf=shuffleTf, singleGratsOnly=singleGratsOnly)
 
         self.trInf = trInf;
         self.resp = resp;
@@ -681,7 +695,6 @@ class sfNormMod(torch.nn.Module):
       stimFr = torch.div(torch.arange(nFrames), float(fps));
       #stimFr = torch.div(torch.arange(nFrames), float(nFrames));
       phOffset = torch.div(stimPh, torch.mul(2*np.pi, stimTf));
-      #pdb.set_trace();
       #phOffset = torch.div(100*torch.ones_like(stimPh), 2*np.pi); # USED FOR DEBUGGING ODDITIES
       # fast way?
       P3Temp = torch.add(phOffset.unsqueeze(-1), stimFr.unsqueeze(0).unsqueeze(0)).permute(0,2,1); # result is [nTrials x nFrames x nStimComp], so transpose
@@ -719,12 +732,12 @@ class sfNormMod(torch.nn.Module):
       # since in new method, we just return [...,0], normalize the response to the max of that component
       # --- this ensures that the amplitude is the same regardless of whether LGN is ON or OFF
       # --- added 22.10.10
-      rComplex = torch.div(rComplex, torch.max(_cast_as_tensor(globalMin), torch.max(rComplex[...,0]))); # max = 1
+      rComplex = torch.div(rComplex, torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,0]))); # max = 1
       if quadrature:
         # used for DC (i.e. if respMeasure==0)
-        rComplexA = torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(rComplex[...,1]))); # max = 1
-        rComplexB = torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,0]))); # max = 1
-        rComplexC = torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMin), torch.max(_cast_as_tensor(-1)*rComplex[...,1]))); # max = 1
+        rComplexA = torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,1]))); # max = 1
+        rComplexB = torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,0]))); # max = 1
+        rComplexC = torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,1]))); # max = 1
 
     if debug: # TEMPORARY?
       return realImag,selSi,torch.mul(selSi,stimCo);
@@ -762,7 +775,7 @@ class sfNormMod(torch.nn.Module):
 
       return torch.transpose(respComp, 0, 1);
 
-  def genNormWeightsSimple(self, trialInf, recenter_norm=recenter_norm, threshWeights=1e-3):
+  def genNormWeightsSimple(self, trialInf, recenter_norm=recenter_norm, threshWeights=1e-6):
     ''' simply evaluates the usual normalization weighting but at the frequencies of the stimuli directly
     i.e. in effect, we are eliminating the bank of filters in the norm. pool
         --- if threshWeights is None, then we won't threshold the norm. weights; 
@@ -861,8 +874,12 @@ class sfNormMod(torch.nn.Module):
     if debug:
       return Lexc, Linh, sigmaFilt;
 
-    numerator     = torch.add(self.noiseEarly, Lexc); # [nFrames x nTrials]
-    denominator   = torch.pow(sigmaFilt + torch.pow(Linh, 2), 0.5); # nTrials
+    # naka-rushton style?
+    numerator     = torch.pow(torch.add(self.noiseEarly, Lexc), self.respExp); # [nFrames x nTrials]
+    denominator   = torch.pow(sigmaFilt, self.respExp) + torch.pow(Linh, self.respExp); # nTrials
+    # original 
+    #numerator     = torch.add(self.noiseEarly, Lexc); # [nFrames x nTrials]
+    #denominator   = torch.pow(sigmaFilt + torch.pow(Linh, 2), 0.5); # nTrials
     rawResp       = torch.div(numerator, denominator.unsqueeze(0)); # unsqueeze(0) to account for the missing leading dimension (nFrames)
     # half-wave rectification??? we add a squaring after the max, then respExp will do what it does...
     #ratio         = torch.pow(torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), 2), self.respExp);
@@ -870,7 +887,9 @@ class sfNormMod(torch.nn.Module):
     # -- this line if we're using sigmoid-transformed response exponent (bounded between [1,1+_sigmoidRespExp], currently [1,4]
     #ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), 1+torch.mul(_cast_as_tensor(_sigmoidRespExp), torch.sigmoid(self.respExp)));
     # -- otherwise, this line
-    ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), self.respExp);
+    ratio         = torch.pow(_cast_as_tensor(globalMin) + rawResp, _cast_as_tensor(1)) - torch.pow(_cast_as_tensor(globalMin), _cast_as_tensor(1));
+    #ratio         = torch.pow(_cast_as_tensor(globalMin) + rawResp, self.respExp) - torch.pow(_cast_as_tensor(globalMin), self.respExp);
+    #ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), self.respExp);
 
     if self.newMethod == 1 and self.normToOne == 1:
       # in this case, only apply the noiseLate and self.scale AFTER the FT
@@ -908,20 +927,24 @@ class sfNormMod(torch.nn.Module):
       # then, get the base & mask TF
       maskInd, baseInd = hf_sfBB.get_mask_base_inds();
       maskTf, baseTf = trialInf['tf'][0, maskInd], trialInf['tf'][0, baseInd] # relies on tf being same for all trials (i.e. maskTf always same, baseTf always same)!
-      tfAsInts = np.array([int(maskTf), int(baseTf)]);
+      tfAsInts = np.array([int(maskTf), int(baseTf)]) if respMeasure==1 else None;
       # important to transpose the respModel before passing in to spike_fft
       amps, rel_amps, full_fourier = spike_fft([respModel], tfs=[tfAsInts], stimDur=stimDur, binWidth=1.0/nFrames)
     else:
-      tfAsInts = trialInf['tf']; # does not actually need to be integer values...
+      tfAsInts = trialInf['tf']  if respMeasure==1 else None;
       # important to transpose the respModel before passing in to spike_fft
       amps, rel_amps, full_fourier = spike_fft([respModel], tfs=tfAsInts, stimDur=stimDur, binWidth=1.0/nFrames)
+    # NOTE: In the above, we pass in None for tfs if getting DC (won't use F1 anyway)!
 
+      
     if respMeasure == 1: # i.e. F1
       to_use = rel_amps[0]; 
     else: # i.e. DC
       to_use = amps[0][:,0];
     if self.normToOne==1:
-      to_use = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, self.scale*to_use/torch.max(to_use)));
+      to_use = _cast_as_tensor(globalMin) + torch.add(self.noiseLate, self.scale*to_use);
+      #to_use = _cast_as_tensor(globalMin) + torch.add(self.noiseLate, self.scale*to_use/torch.max(to_use));
+      #to_use = torch.max(_cast_as_tensor(globalMin), torch.add(self.noiseLate, self.scale*to_use/torch.max(to_use)));
     if returnPsth == 1:
       return to_use, respModel;
     else:
@@ -980,7 +1003,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 # ---- previous to 22.10.03, batch_size=3000 (trials) ;;;;; lr was 0.001
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=5000, learning_rate=0.02, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=7000, learning_rate=0.01, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1033,7 +1056,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_221016%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '');
+    fL_name = 'fitList%s_pyt_nr221018%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1106,7 +1129,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       return [], []; # return two blank placeholders so that the parallelization can move on
 
   try:
-    trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite);
+    trInf, resp = process_data(expInfo, expInd=expInd, respMeasure=respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly);
     resps_detached = np.nansum(resp.detach().numpy(), axis=1);
     # however, this ignores the blanks -- so we have to reconstitute the original order/full experiment, filling in these responses in the correct trial locations
     nTrs_total = expInfo['num'][-1] if expInd != -1 else expInfo['trial']['ori'].shape[-1];
@@ -1142,7 +1165,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       curr_params = curr_fit['params'];
       # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
       testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne)
-      trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite) # warning: added respOverwrite here; also add whichTrials???
+      trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly) # warning: added respOverwrite here; also add whichTrials???
       predictions = testModel.forward(trInfTemp, respMeasure=respMeasure);
       if testModel.lossType == 3:
         loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType, varGain=testModel.varGain)
@@ -1163,7 +1186,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   prefSfEst_goal = np.random.uniform(0.75, 1.5) * pref_sf;
   sig_inv_input = (pSfFloor+prefSfEst_goal)/pSfBound;
   prefSfEst = -np.log((1-sig_inv_input)/sig_inv_input)
-  normConst = -1 if normToOne==1 else -2; # per Tony, just start with a low value (i.e. closer to linear)
+  normConst = -0.25 if normToOne==1 else -2; # per Tony, just start with a low value (i.e. closer to linear)
   if fitType == 1:
     inhAsym = 0;
   if fitType == 2 or fitType == 5:
@@ -1230,7 +1253,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       else:
         noiseEarly = force_earlyNoise
       noiseLate = np.random.uniform(0.7, 1.3) * minResp if initFromCurr==0 else curr_params[6];
-      respScalar = np.random.uniform(0.9, 1.1) * (maxResp - noiseLate) if initFromCurr==0 else curr_params[4];
+      #respScalar = np.random.uniform(0.9, 1.1) * (maxResp - noiseLate) if initFromCurr==0 else curr_params[4];
+      # why div/40? Seems that high con, pref. SF only has FFT of ~40 spks/s
+      # -- if we don't do re-scaling below
+      respScalar = np.random.uniform(0.8,1.2) * (maxResp-noiseLate)/40;
       normStd = np.random.uniform(0.3, 2) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
 
   varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
@@ -1273,7 +1299,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   ###  data wrapping
   #dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite, shufflePh=True, shuffleTf=True);
-  dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite); # respOverwrite defined above (None if DC or if expInd=-1)
+  dw = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly); # respOverwrite defined above (None if DC or if expInd=-1)
   exp_length = expInfo['num'][-1] if expInd!=-1 else expInfo['trial']['con'].shape[-1];
   dl_shuffle = batch_size<2000 # i.e. if batch_size<2000, then shuffle!
   dl_droplast = bool(np.mod(exp_length,batch_size)<10) # if the last iteration will have fewer than 10 trials, drop it!
@@ -1553,7 +1579,7 @@ if __name__ == '__main__':
     if cellNum >= 0:
       while not dcOk and nTry>0:
         try:
-          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # first do DC
+          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly); # first do DC
           dcOk = 1;
           print('passed with nTry = %d' % nTry);
         except Exception as e:
@@ -1565,7 +1591,7 @@ if __name__ == '__main__':
       nTry=3; #30; # reset nTry...
       while not f1Ok and nTry>0:
         try:
-          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule); # then F1
+          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly); # then F1
           f1Ok = 1;
           print('passed with nTry = %d' % nTry);
         except Exception as e:
@@ -1601,7 +1627,7 @@ if __name__ == '__main__':
       ### do the saving HERE!
       todoCV = 0; #  1 if whichTrials is not None else 0;
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_221016%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
+      fL_name = 'fitList%s_pyt_221017%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
