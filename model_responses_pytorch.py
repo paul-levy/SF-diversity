@@ -20,10 +20,10 @@ torch.autograd.set_detect_anomaly(True)
 ### Some global things...
 #########
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
-force_earlyNoise = 0; #None;#None; # if None, allow it as parameter; otherwise, force it to this value; used 0 for 210308-210315; None for 210321
+force_earlyNoise = 0;#None; # if None, allow it as parameter; otherwise, force it to this value; used 0 for 210308-210315; None for 210321
 recenter_norm = 2;
-_schedule = False; # use scheduler or not??? True or False
-#_schedule = True; # use scheduler or not??? True or False
+#_schedule = False; # use scheduler or not??? True or False
+_schedule = True; # use scheduler or not??? True or False
 singleGratsOnly = True; # True;
 
 fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304, 210308/11/12/14, 210321
@@ -305,8 +305,8 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
       mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
       # BUT, if we pass in trialSubset, then use this as our mask (i.e. overwrite the above mask)
       if singleGratsOnly:
-        # the first line (commented out now) is single gratings AND just at one SF (1.7321, in this case)
-        #whichTrials = np.where(np.logical_and(np.isclose(coreExp['sf'][0], 1.7321, atol=0.1), np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0)))[0]; # this will force singlegrats only!
+        # the first line (commented out now) is single gratings AND just at one SF (1.7321, for ex.)
+        #whichTrials = np.where(np.logical_and(np.isclose(coreExp['sf'][0], 2.460, atol=0.1), np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0)))[0]; # this will force singlegrats only!
         whichTrials = np.where(np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0))[0]; # this will force singlegrats only!
       else:
         whichTrials = np.where(~np.isnan(np.sum(coreExp['ori'], 0)))[0];
@@ -775,7 +775,8 @@ class sfNormMod(torch.nn.Module):
 
       return torch.transpose(respComp, 0, 1);
 
-  def genNormWeightsSimple(self, trialInf, recenter_norm=recenter_norm, threshWeights=1e-6):
+  #def genNormWeightsSimple(self, trialInf, recenter_norm=recenter_norm, threshWeights=1e-6, avg_sfs=None):
+  def genNormWeightsSimple(self, trialInf, recenter_norm=recenter_norm, threshWeights=1e-6, avg_sfs=_cast_as_tensor(np.geomspace(0.1,30,51))):
     ''' simply evaluates the usual normalization weighting but at the frequencies of the stimuli directly
     i.e. in effect, we are eliminating the bank of filters in the norm. pool
         --- if threshWeights is None, then we won't threshold the norm. weights; 
@@ -834,7 +835,11 @@ class sfNormMod(torch.nn.Module):
         if threshWeights is not None:
           new_weights = torch.max(_cast_as_tensor(threshWeights), new_weights);
       elif recenter_norm == 2: # we'll recenter this weighted normalization by division, s.t. the AVERAGE is 1
-        new_weights = new_weights/torch.max(_cast_as_tensor(0.001), torch.mean(new_weights)); # ensures no div by zero
+        if avg_sfs is None:
+          new_weights = new_weights/torch.max(_cast_as_tensor(0.001), torch.mean(new_weights)); # ensures no div by zero
+        else:
+          weights_for_avg = torch.exp(weight_distr.log_prob(torch.log(avg_sfs)));
+          new_weights = new_weights/torch.max(_cast_as_tensor(0.001), torch.mean(weights_for_avg)); # Compute the avg. 
         #new_weights = new_weights/torch.mean(new_weights);
         if threshWeights is not None:
           new_weights = torch.max(_cast_as_tensor(threshWeights), new_weights);
@@ -1003,7 +1008,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### 22.10.01 --> max_epochs was 15000
 ### --- temporarily, reduce to make faster
 # ---- previous to 22.10.03, batch_size=3000 (trials) ;;;;; lr was 0.001
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=7000, learning_rate=0.01, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=15, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=7000, learning_rate=0.01, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1023,7 +1028,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     loc_str = 'HPC';
   else:
     loc_str = '';
-  #loc_str = 'HPC';
+  #loc_str = 'HPC'; # use to override (mostly for debugging locally for HPC-based fits)
 
   if fL_name is None: # otherwise, it's already defined...
     if modRecov == 1:
@@ -1056,7 +1061,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_nr221018%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+    fL_name = 'fitList%s_pyt_nr221020%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1612,13 +1617,13 @@ if __name__ == '__main__':
       print('***cpu count: %02d***' % nCpu);
 
       # do f1 here?
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False);
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly);
       with mp.Pool(processes = nCpu) as pool:
         smFits_f1 = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
         pool.close();
 
       # First, DC? (should only do DC or F1?)
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False);
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly);
       #sm_perCell(1); # use this to debug...
       with mp.Pool(processes = nCpu) as pool:
         smFits_dc = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
@@ -1627,7 +1632,7 @@ if __name__ == '__main__':
       ### do the saving HERE!
       todoCV = 0; #  1 if whichTrials is not None else 0;
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_221017%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
+      fL_name = 'fitList%s_pyt_nr221020%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
