@@ -22,8 +22,8 @@ torch.autograd.set_detect_anomaly(True)
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
 force_earlyNoise = 0;#None; # if None, allow it as parameter; otherwise, force it to this value; used 0 for 210308-210315; None for 210321
 recenter_norm = 2;
-#_schedule = False; # use scheduler or not??? True or False
-_schedule = True; # use scheduler or not??? True or False
+_schedule = False; # use scheduler or not??? True or False
+#_schedule = True; # use scheduler or not??? True or False
 singleGratsOnly = False; # True;
 
 fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304, 210308/11/12/14, 210321
@@ -48,7 +48,7 @@ _sigmoidScale = 10
 _sigmoidDord = 5;
 _sigmoidGainNorm = 5;
 # --- and a flag for whether or not to include the LGN filter for the gain control
-_LGNforNorm = 0;
+_LGNforNorm = 1;
 ### force_full datalist?
 expDir = sys.argv[2];
 force_full = 0 if expDir == 'V1_BB/' else 1;
@@ -839,7 +839,8 @@ class sfNormMod(torch.nn.Module):
       elif recenter_norm == 2: # we'll recenter this weighted normalization by division, s.t. the AVERAGE is 1
         if avg_sfs is None:
           new_weights = new_weights/torch.max(_cast_as_tensor(0.001), torch.mean(new_weights)); # ensures no div by zero
-        else:
+        else: # THIS ONLY WORKS IF NO LGN!!! TO-DO (22.10.23): Remedy this - either compute lgn-front-end for avg_sfs OR abandon OR just wait for "proper" normalization (filters with defined bandwidth)
+          # --- furthermore -- evaluate if we really need this normalization?
           weights_for_avg = torch.exp(weight_distr.log_prob(torch.log(avg_sfs)));
           new_weights = new_weights/torch.max(_cast_as_tensor(0.001), torch.mean(weights_for_avg)); # Compute the avg. 
         #new_weights = new_weights/torch.mean(new_weights);
@@ -1625,15 +1626,17 @@ if __name__ == '__main__':
       import multiprocessing as mp
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
+      loc_str = 'HPC' if 'pl1465' in loc_data else '';
+      fL_name = 'fitList%s_pyt_nr221024%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly);
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name);
       with mp.Pool(processes = nCpu) as pool:
         smFits_f1 = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
         pool.close();
 
       # First, DC? (should only do DC or F1?)
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly);
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name);
       #sm_perCell(1); # use this to debug...
       with mp.Pool(processes = nCpu) as pool:
         smFits_dc = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
