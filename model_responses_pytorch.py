@@ -24,7 +24,7 @@ force_earlyNoise = 0;#None; # if None, allow it as parameter; otherwise, force i
 recenter_norm = 2;
 #_schedule = False; # use scheduler or not??? True or False
 _schedule = True; # use scheduler or not??? True or False
-singleGratsOnly = True; # True;
+singleGratsOnly = False; # True;
 
 fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304, 210308/11/12/14, 210321
 spring2021_adj = 1; # further adjustment to make scale a sigmoid rather than abs; 210222
@@ -775,8 +775,8 @@ class sfNormMod(torch.nn.Module):
 
       return torch.transpose(respComp, 0, 1);
 
-  #def genNormWeightsSimple(self, trialInf, recenter_norm=recenter_norm, threshWeights=1e-6, avg_sfs=None):
-  def genNormWeightsSimple(self, trialInf, recenter_norm=recenter_norm, threshWeights=1e-6, avg_sfs=_cast_as_tensor(np.geomspace(0.1,30,51))):
+  #def genNormWeightsSimple(self, trialInf, recenter_norm=recenter_norm, threshWeights=1e-6, avg_sfs=_cast_as_tensor(np.geomspace(0.1,30,51))):
+  def genNormWeightsSimple(self, trialInf, recenter_norm=recenter_norm, threshWeights=1e-6, avg_sfs=None):
     ''' simply evaluates the usual normalization weighting but at the frequencies of the stimuli directly
     i.e. in effect, we are eliminating the bank of filters in the norm. pool
         --- if threshWeights is None, then we won't threshold the norm. weights; 
@@ -785,7 +785,6 @@ class sfNormMod(torch.nn.Module):
 
     sfs = _cast_as_tensor(trialInf['sf']); # [nComps x nTrials]
     cons = _cast_as_tensor(trialInf['con']); # [nComps x nTrials]
-    consSq = np.square(cons);
 
     # apply LGN stage -
     # -- NOTE: previously, we applied equal M and P weight, since this is across a population of neurons, not just the one one neuron under consideration
@@ -811,6 +810,9 @@ class sfNormMod(torch.nn.Module):
         # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take some average in-between of the two (depending on lgnConType)
         selCon_avg = torch.sigmoid(self.mWeight)*selCon_m + (1-torch.sigmoid(self.mWeight))*selCon_p;
         lgnStage = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_avg)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_avg)));
+      #if avg_sfs is not None:
+      #  # also compute the LGN weights across
+      #  lgnStageForAvg = 
     else:
       lgnStage = torch.ones_like(sfs);
 
@@ -847,20 +849,26 @@ class sfNormMod(torch.nn.Module):
     return new_weights;
 
   def SimpleNormResp(self, trialInf, trialArtificial=None, recenter_norm=recenter_norm):
-
     if trialArtificial is not None:
       trialInf = trialArtificial;
     else:
       trialInf = trialInf;
-    consSq = torch.pow(_cast_as_tensor(trialInf['con']), 2);
     # cons (and wghts) will be (nComps x nTrials)
     wghts = self.genNormWeightsSimple(trialInf, recenter_norm=recenter_norm);
+    # UPDATE 22.10.20
+    # --- if we apply LGN to norm, then the weights already incorporate the contrast, so don't re-apply 
+    if self.lgnFrontEnd > 0 and self.applyLGNtoNorm:
+      resp = wghts;
+    else:
+      #incl_cons = _cast_as_tensor(trialInf['con'])
+      incl_cons = torch.pow(_cast_as_tensor(trialInf['con']), self.respExp); 
+      resp = torch.mul(wghts, incl_cons);
+    resp = torch.pow(resp, self.respExp);
 
     # now put it all together
-    resp = torch.mul(wghts, consSq);
-    respPerTr = torch.sqrt(resp.sum(1)); # i.e. sum over components, then sqrt
-
-    return respPerTr; # will be [nTrials] -- later, will ensure right output size during operation
+    respPerTr = resp.sum(1); # i.e. sum over components
+    #respPerTr = torch.pow(resp.sum(1), 1./self.respExp); # i.e. sum over components, then sqrt
+    return respPerTr; # will be [nTrials] -- later, will ensure right output size during operation    
 
   def respPerCell(self, trialInf, debug=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, preCompOri=None, quadrature=False):
     # excitatory filter, first
@@ -881,7 +889,8 @@ class sfNormMod(torch.nn.Module):
 
     # naka-rushton style?
     numerator     = torch.pow(torch.add(self.noiseEarly, Lexc), self.respExp); # [nFrames x nTrials]
-    denominator   = torch.pow(sigmaFilt, self.respExp) + torch.pow(Linh, self.respExp); # nTrials
+    denominator   = torch.pow(sigmaFilt, self.respExp) + Linh; # NOTE 22.10.24 - already did respExp there
+    #denominator   = torch.pow(sigmaFilt, self.respExp) + torch.pow(Linh, self.respExp); # nTrials
     # original 
     #numerator     = torch.add(self.noiseEarly, Lexc); # [nFrames x nTrials]
     #denominator   = torch.pow(sigmaFilt + torch.pow(Linh, 2), 0.5); # nTrials
@@ -1061,7 +1070,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_nr221020%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+    fL_name = 'fitList%s_pyt_nr221024%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1191,7 +1200,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   prefSfEst_goal = np.random.uniform(0.75, 1.5) * pref_sf;
   sig_inv_input = (pSfFloor+prefSfEst_goal)/pSfBound;
   prefSfEst = -np.log((1-sig_inv_input)/sig_inv_input)
-  normConst = -0.25 if normToOne==1 else -2; # per Tony, just start with a low value (i.e. closer to linear)
+  # 22.10.24 --> make normConst start out at 0 rather than -0.25 if LGN front end is on!
+  normConst = -0.25 + 0.25*lgnFrontEnd if normToOne==1 else -2; # per Tony, just start with a low value (i.e. closer to linear)
   if fitType == 1:
     inhAsym = 0;
   if fitType == 2 or fitType == 5:
@@ -1632,7 +1642,7 @@ if __name__ == '__main__':
       ### do the saving HERE!
       todoCV = 0; #  1 if whichTrials is not None else 0;
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221020%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
+      fL_name = 'fitList%s_pyt_nr221024%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); # figure out how to pass the name into setModel, too, so names are same regardless of call?
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
