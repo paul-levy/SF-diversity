@@ -744,6 +744,7 @@ class sfNormMod(torch.nn.Module):
 
     # Store response in desired format - which is actually [nFr x nTr], so transpose it!
     if self.newMethod == 1:
+      # NOTE: 22.10.24 -- SHOULD ADD noiseEarly HERE before/at rectification, NOT afterward
       if quadrature:
         # i.e. complex cell
         respSimple1 = torch.max(_cast_as_tensor(globalMin), rComplex[...,0]); # half-wave rectification,...
@@ -751,12 +752,14 @@ class sfNormMod(torch.nn.Module):
         respSimple3 = torch.max(_cast_as_tensor(globalMin), rComplexA);
         respSimple4 = torch.max(_cast_as_tensor(globalMin), rComplexC);
 
-        rsall = torch.sqrt(torch.div(torch.pow(respSimple1, 2) + torch.pow(respSimple2, 2) + torch.pow(respSimple3, 2) + torch.pow(respSimple4, 2), 4));
+        rsall = torch.div(torch.pow(respSimple1, self.respExp) + torch.pow(respSimple2, self.respExp) + torch.pow(respSimple3, self.respExp) + torch.pow(respSimple4, self.respExp), 4);
+        #rsall = torch.sqrt(torch.div(torch.pow(respSimple1, 2) + torch.pow(respSimple2, 2) + torch.pow(respSimple3, 2) + torch.pow(respSimple4, 2), 4));
         return torch.transpose(rsall,0,1);
         # the below line is useful for debugging purposes
         #return torch.transpose(respSimple1, 0, 1), torch.transpose(rComplexA,0,1), torch.transpose(rComplexB,0,1), torch.transpose(rComplexC,0,1);
       else:
-        respSimple1 = rComplex[...,0]; # we'll keep the half-wave rectification for the end...
+        respSimple1 = torch.pow(torch.max(_cast_as_tensor(globalMin), rComplex[...,0]), self.respExp);
+        #respSimple1 = rComplex[...,0]; # we'll keep the half-wave rectification for the end...
         return torch.transpose(respSimple1, 0, 1)
 
     else: # Old approach, in which we return the complex response
@@ -820,6 +823,8 @@ class sfNormMod(torch.nn.Module):
       self.inhAsym = _cast_as_tensor(0);
       new_weights = 1 + self.inhAsym*(torch.log(sfs) - torch.mean(torch.log(sfs)));
       new_weights = torch.mul(lgnStage, new_weights);
+      # new change on 22.10.24
+      new_weights = new_weights/torch.max(_cast_as_tensor(0.001), torch.mean(new_weights)); # ensures no div by zero
     elif self.normType == 2 or self.normType == 5:
       # Relying on https://pytorch.org/docs/stable/distributions.html#torch.distributions.normal.Normal.log_prob
       log_sfs = torch.log(sfs);
@@ -889,7 +894,8 @@ class sfNormMod(torch.nn.Module):
       return Lexc, Linh, sigmaFilt;
 
     # naka-rushton style?
-    numerator     = torch.pow(torch.add(self.noiseEarly, Lexc), self.respExp); # [nFrames x nTrials]
+    numerator     = Lexc; # [nFrames x nTrials]
+    #numerator     = torch.pow(torch.add(self.noiseEarly, Lexc), self.respExp); # [nFrames x nTrials]
     denominator   = torch.pow(sigmaFilt, self.respExp) + Linh; # NOTE 22.10.24 - already did respExp there
     #denominator   = torch.pow(sigmaFilt, self.respExp) + torch.pow(Linh, self.respExp); # nTrials
     # original 
