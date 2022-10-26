@@ -26,8 +26,10 @@ import pdb
 _sigmoidRespExp = None; # 3 or None, as of 21.03.14
 _sigmoidSigma = 5; # put a value (5, as of 21.03.10) or None (see model_responses_pytorch.py for details)
 _sigmoidGainNorm = 5;
+_applyLGNtoNorm = 1;
 recenter_norm = 2;
-singleGratsOnly = True; # False;
+#singleGratsOnly = True;
+singleGratsOnly = False;
 
 f1_expCutoff = 2; # if 1, then all but V1_orig/ are allowed to have F1; if 2, then altExp/ is also excluded
 
@@ -124,7 +126,6 @@ else:
 ### DATALIST
 expName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
 ### FITLIST
-_applyLGNtoNorm = 0;
 # -- some params are sigmoid, we'll use this to unpack the true parameter
 _sigmoidScale = 10
 _sigmoidDord = 5;
@@ -154,9 +155,13 @@ elif excType == 2:
     if force_full:
       fitBase = 'fitList%s_pyt_210331' % loc_str
 
-#fitBase = 'fitList%s_pyt_221017_noRE' % loc_str
-fitBase = 'fitList%s_pyt_nr221018_noSched%s' % ('', '_sg' if singleGratsOnly else '')#loc_str
-#fitBase = 'fitList%s_pyt_221018_noRE_noSched%s' % ('', '_sg' if singleGratsOnly else '')#loc_str
+#fitBase = 'fitList%s_pyt_221017_noRE_noSched_sg' % loc_str
+#fitBase = 'fitList%s_pyt_221017_noSched_sg' % loc_str
+#fitBase = 'fitList%s_pyt_nr221019_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221021_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221024_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr221025_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221024a%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
 vecF1 = 0;
@@ -345,6 +350,7 @@ if pytorch_mod == 1:
   divFactor = stimDur if respMeasure == 0 else 1;
   _, _, modByCondA, _ = hf.organize_resp(np.divide(mr_A, divFactor), trialInf, expInd); # divFactor was previously stimDur
   _, _, modByCondB, _ = hf.organize_resp(np.divide(mr_B, divFactor), trialInf, expInd);
+
   # - and now compute varExpl - first for SF tuning curves, then for RVCs...
   nDisp, nSf, nCon = expByCond.shape;
   varExplSF_A = np.nan * np.zeros((nDisp, nCon));
@@ -1142,10 +1148,11 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
       fRVC.append(fCurr);
       rvcAx.append(rvcCurr);
 
-      fCurr.suptitle('%s #%d [%s]' % (cellType, cellNum-1, respStr));
+      fCurr.suptitle('%s #%d [%s]' % (cellType, cellNum, respStr));
 
       #print('%d rows, %d cols\n' % (n_rows, n_cols));
-
+      all_rvc_loss_A = [];
+      all_rvc_loss_B = [];
       for sf in range(n_v_sfs):
 
           row_ind = int(sf/n_cols);
@@ -1213,6 +1220,12 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
           '''
 
           rvcAx[plt_x][plt_y].text(min(all_cons[v_cons]), 0.8*maxResp, '%.2f, %.2f' % (varExplCon_A[d, sf_ind], varExplCon_B[d, sf_ind]), ha='left', wrap=True, fontsize=25);
+          # ALSO compute loss for these data:
+          all_trials = [hf.get_valid_trials(expData, d, vc, sf, expInd, stimVals, validByStimVal)[0][0] for vc in v_cons];
+          rvc_loss = [np.sum([lbc_curr[vt] for vt in all_trials]) for lbc_curr in [lossByCond_A, lossByCond_B]];
+          rvcAx[plt_x][plt_y].text(min(all_cons[v_cons]), 0.6*maxResp, '%.2f, %.2f' % (*rvc_loss, ), ha='left', wrap=True, fontsize=25);
+          all_rvc_loss_A.append(rvc_loss[0]);
+          all_rvc_loss_B.append(rvc_loss[1]);
 
           rvcAx[plt_x][plt_y].set_xscale('log', base=10); # was previously symlog, linthreshx=0.01
           if col_ind == 0:
@@ -1220,7 +1233,7 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
             rvcAx[plt_x][plt_y].set_ylabel('response (spikes/s)', fontsize='medium');
             rvcAx[plt_x][plt_y].legend();
 
-          rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f' % (d+1, all_sfs[sf_ind]), fontsize='large');
+          rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f [%d,%d]' % (d+1, all_sfs[sf_ind], np.sum(all_rvc_loss_A), np.sum(all_rvc_loss_B)), fontsize='large');
 
 
   saveName = "/cell_%03d.pdf" % (cellNum)

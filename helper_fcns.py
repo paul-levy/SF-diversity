@@ -40,6 +40,7 @@ import warnings
 # fitType_suffix  - get the string corresponding to a fit (i.e. normalization) type
 # lossType_suffix - get the string corresponding to a loss type
 # chiSq_suffix    - what suffix (e.g. 'a' or 'c') given the chiSq multiplier value
+# excType_suffix  - added Oct 2022 --> nothing to add if flex. gauss filter; _dG for deriv. gauss
 # fitList_name    - put together the name for the fitlist 
 # phase_fit_name  
 # is_mod_DoG      - returns True if the model is a simple DoG, otherise False
@@ -609,7 +610,13 @@ def chiSq_suffix(kMult):
     # why? don't want (e.g.) Z0.02, just Z02 - we know multiplier values are 0<x<<1
     return 'z%s' % afterDec;
 
-def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrected=0, CV=0, fixRespExp=None, kMult=0.1):
+def excType_suffix(excType):
+   if excType is None or excType == 2: # default, more or less
+      return '';
+   elif excType == 1: # derivative gaussian 
+      return '_dG';
+
+def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrected=0, CV=0, fixRespExp=None, kMult=0.1, excType=None):
   ''' use this to get the proper name for the full model fits
       - kMult used iff lossType == 4
   '''
@@ -625,10 +632,11 @@ def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrect
   vecSuf = '_vecF1' if vecCorrected else '';
   CVsuf = '_CV' if CV else '';
   reSuf = np.round(fixRespExp*10) if fixRespExp is not None else ''; # for fixing response exponent (round to nearest tenth)
-  kMult = chiSq_suffix(kMult) if lossType == 4 else '';  
+  kMult = chiSq_suffix(kMult) if lossType == 4 else ''; 
+  excSuf = excType_suffix(excType);
 
   # order is as follows
-  return str(base + kMult + vecSuf + CVsuf + reSuf + lgnSuf + fitSuf + lossSuf);
+  return str(base + kMult + vecSuf + CVsuf + reSuf + lgnSuf + excSuf + fitSuf + lossSuf);
 
 def phase_fit_name(base, dir, byTrial=0):
   ''' Given the base name for a file, append the flag for the phase direction (dir)

@@ -23,6 +23,8 @@ import sys # so that we can import model_responses (in different folder)
 
 ####### TO USE ########
 ### akin to other parallelized functions, call 'python3.6 plot_superposition_func.py -181 LGN/' for example
+### 'python3.6 plot_superposition_func.py 4 altExp/ 1 1 2 1 0'
+### - cellNum, expDir, plot suppression index, prince corr. to suprInd, modResp (2 for pyt; 0 for data rather than model); normType (1/2 - flat/gain), lgnOn (0/1)
 
 import warnings
 warnings.filterwarnings('once');
@@ -318,14 +320,14 @@ def selected_supr_metrics(df):
 
   return None;
 
-def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excType=2, useHPCfit=1, lgnConType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=False, useTex=False, simple_plot=True, altHollow=True, ltThresh=0.5, ref_line_alpha=0.5, ref_all_sfs=False, plt_supr_ind=False, supr_ind_prince=False, sum_power=1):
+def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excType=2, useHPCfit=1, lgnConType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=False, useTex=False, simple_plot=True, altHollow=True, ltThresh=0.5, ref_line_alpha=0.5, ref_all_sfs=False, plt_supr_ind=False, supr_ind_prince=False, sum_power=1, spec_disp = None, spec_con = None):
 
   # if ref_all_sfs, then colors for superposition plots are referenced across all SFS (not just those that appear for dispersion=1)
 
   if use_mod_resp == 2:
     rvcAdj   = 0; # phAmp corr.
     #rvcAdj   = -1; # this means vec corrected F1, not phase adjustment F1...
-    _applyLGNtoNorm = 0; # don't apply the LGN front-end to the gain control weights
+    _applyLGNtoNorm = 1; # don't apply the LGN front-end to the gain control weights
     recenter_norm = 2;
     newMethod = 1; # yes, use the "new" method for mrpt (not that new anymore, as of 21.03)
     lossType = 1; # sqrt
@@ -356,12 +358,13 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
   elif use_mod_resp == 2:
     rvcName = None; # Use NONE if getting model responses, only
-    fitBase = 'fitList%s_pyt_221014_noRE' % loc_str
+    fitBase = 'fitList%s_pyt_Fnr221021' % loc_str
     #fitBase = 'fitList%s_pyt_221013_noRE_noSched' % loc_str
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=-rvcAdj);
   # ^^^ EDIT rvc/descrFits/fitList names here;
 
-  print('\n***Fitlist name:[%s]***\n' % fitList_nm);
+  if use_mod_resp>0:
+    print('\n***Fitlist name:[%s]***\n' % fitList_nm);
 
   ############
   # Before any plotting, fix plotting paramaters
@@ -731,7 +734,8 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     ax[0, 1].plot(pred_plt, myFit(pred_plt, *fitz), 'r--', label='fit')
     
   dispRats = [];
-  for d in range(nDisps):
+  disps_plt = range(0,nDisps) if spec_disp is None else range(spec_disp,spec_disp+1);
+  for d in disps_plt: #range(0,nDisps):#nDisps):
     if d == 0: # we don't care about single gratings!
       dispRats = [];
       continue; 
@@ -740,8 +744,9 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
 
     # plot split out by each contrast [0,1]
     for c in reversed(range(n_v_cons)):
-      #if c!=0: # use for contrast-specific plots
-      #  continue;
+      if spec_con is not None:
+        if c!=spec_con: # use for contrast-specific plots
+          continue;
       
       v_sfs = hf.get_valid_sfs(S, d, v_cons[c], expInd)
       for iii, s in enumerate(v_sfs):
@@ -1055,10 +1060,19 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   #if not simple_plot:
   fSuper.tight_layout();
 
-  if fitList is None:
-    save_name = 'cell_%03d.pdf' % (which_cell);
+  if spec_disp is None:
+    disp_str = '';
   else:
-    save_name = 'cell_%03d_mod%s%s.pdf' % (which_cell, hf.fitType_suffix(fitType), hf.lgnType_suffix(lgnFrontEnd, lgnConType=1))
+    disp_str = '_disp%d' % spec_disp;
+  if spec_con is None:
+    con_str = '';
+  else:
+    con_str = '_con%d' % spec_con;
+
+  if fitList is None:
+    save_name = 'cell_%03d%s%s.pdf' % (which_cell, disp_str, con_str);
+  else:
+    save_name = 'cell_%03d_mod%s%s%s%s.pdf' % (which_cell, hf.fitType_suffix(fitType), hf.lgnType_suffix(lgnFrontEnd, lgnConType=1), disp_str, con_str)
   pdfSv = pltSave.PdfPages(str(save_locSuper + save_name));
   pdfSv.savefig(fSuper)
   pdfSv.close();
@@ -1125,8 +1139,16 @@ if __name__ == '__main__':
       lgnOn = int(sys.argv[7]);
     else:
       lgnOn = 0; # default to no LGN
+    if len(sys.argv)>8:
+      spec_disp = int(sys.argv[8]);
+    else:
+      spec_disp = None;
+    if len(sys.argv)>9:
+      spec_con = int(sys.argv[9]);
+    else:
+      spec_con = None;
 
-    fitList='fitList%s_pyt_221013' % 'HPC'; # TEMPORARY
+    fitList='fitList%s_pyt_nr221021' % 'HPC'; # TEMPORARY
 
     if asMulti:
       from functools import partial
@@ -1135,7 +1157,7 @@ if __name__ == '__main__':
       print('***cpu count: %02d***' % nCpu);
 
       with mp.Pool(processes = nCpu) as pool:
-        sup_perCell = partial(plot_save_superposition, expDir=expDir, use_mod_resp=use_mod_resp, fitType=normType, useHPCfit=1, lgnConType=1, lgnFrontEnd=lgnOn, to_save=0, plt_supr_ind=plt_supr_ind, supr_ind_prince=supr_ind_prince);
+        sup_perCell = partial(plot_save_superposition, expDir=expDir, use_mod_resp=use_mod_resp, fitType=normType, useHPCfit=1, lgnConType=1, lgnFrontEnd=lgnOn, to_save=0, plt_supr_ind=plt_supr_ind, supr_ind_prince=supr_ind_prince, spec_disp=spec_disp, spec_con=spec_con);
         supFits = pool.map(sup_perCell, range(start_cell, end_cell+1));
         pool.close();
 
@@ -1157,5 +1179,5 @@ if __name__ == '__main__':
       np.save(dataPath + super_name, suppr_all);
 
     else: # i.e. not multi
-      plot_save_superposition(cell_num, expDir, to_save=1, plt_supr_ind=plt_supr_ind, use_mod_resp=use_mod_resp, supr_ind_prince=supr_ind_prince, lgnConType=1, lgnFrontEnd=lgnOn, fitType=normType);
+      plot_save_superposition(cell_num, expDir, to_save=1, plt_supr_ind=plt_supr_ind, use_mod_resp=use_mod_resp, supr_ind_prince=supr_ind_prince, lgnConType=1, lgnFrontEnd=lgnOn, fitType=normType, spec_disp=spec_disp, spec_con=spec_con);
 
