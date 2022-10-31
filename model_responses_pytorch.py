@@ -997,50 +997,24 @@ class sfNormMod(torch.nn.Module):
         rComplex = torch.einsum('fij,ikjz->fikz', torch.mul(selSi,stimCo.unsqueeze(0)), self.stimRealImag)
 
       # Now, get each filter as in quadrature set, rectify, apply non-linearity
-      ''' # This set is just for debugging purposes (no rectification)
-      rSimple1 = torch.div(rComplex[...,0], torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,0]))); # max = 1
-      rSimple2 = torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,1]))); # max = 1
-      rSimple3 = torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,0]))); # max = 1
-      rSimple4 = torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,1]))); # max = 1
-      '''
-      # below is original calc:
-      #rSimple1 = torch.max(_cast_as_tensor(globalMin), torch.div(rComplex[...,0], torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,0])))); # max = 1
-      #rSimple2 = torch.max(_cast_as_tensor(globalMin), torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,1])))); # max = 1
-      #rSimple3 = torch.max(_cast_as_tensor(globalMin), torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,0])))); # max = 1
-      #rSimple4 = torch.max(_cast_as_tensor(globalMin), torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,1])))); # max = 1
-
-      # here is (hopefully) slightly faster!
-      #'''
-      #to_div = _cast_as_tensor([torch.max(rComplex[...,0]), torch.max(rComplex[...,1])]).view(1,1,1,2); # pack into nFilt x nTr x nComp x two-complex-dimensions
-      #to_div = torch.max(torch.abs(rComplex)); # 22.10.30 - might not need to divide by max of each, separately? --> slower than the below equivalent
+      # --- here is (hopefully) slightly faster!
       to_div = torch.max(torch.max(rComplex), -torch.min(rComplex)); # 22.10.30 - might not need to divide by max of each, separately?
       # --- clamp is faster than max
       rsAlt = torch.div(rComplex, torch.max(_cast_as_tensor(globalMinDiv), to_div));
       rsAlt_pos = torch.pow(torch.clamp(rsAlt, min=_cast_as_tensor(globalMin)), self.respExp);
       rsAlt_neg = torch.pow(torch.clamp(_cast_as_tensor(-1)*rsAlt, min=_cast_as_tensor(globalMin)), self.respExp);
-      #rsAlt_pos = torch.pow(torch.max(_cast_as_tensor(globalMin), rsAlt), self.respExp);
-      #rsAlt_neg = torch.pow(torch.max(_cast_as_tensor(globalMin), _cast_as_tensor(-1)*rsAlt), self.respExp);
       rSimple1 = rsAlt_pos[...,0];
       rSimple2 = rsAlt_pos[...,1];
       rSimple3 = rsAlt_neg[...,0];
       rSimple4 = rsAlt_neg[...,1];
-      #'''
-      #pdb.set_trace();
-      #rs1 = torch.max(_cast_as_tensor(globalMin), rsAlt[...,0]);
-      #rs2 = torch.max(_cast_as_tensor(globalMin), rsAlt[...,1]);
-      #rs3 = torch.max(_cast_as_tensor(globalMin), _cast_as_tensor(-1)*rsAlt[...,0]);
-      #rs4 = torch.max(_cast_as_tensor(globalMin), _cast_as_tensor(-1)*rsAlt[...,1]);
 
       if debugQuadrature:
-        #return torch.pow(rSimple1, self.respExp), torch.pow(rSimple2, self.respExp), torch.pow(rSimple3, self.respExp), torch.pow(rSimple4, self.respExp);
         return rSimple1, rSimple2, rSimple3, rSimple4;
 
-      #rsall = torch.div(torch.pow(rSimple1, 1) + torch.pow(rSimple2, 1) + torch.pow(rSimple3, 1) + torch.pow(rSimple4, 1), 4); # keep for debugging purposes (per filter)
       if debugFilterTemporal:
         rsall = torch.div(torch.pow(rSimple1, self.respExp) + torch.pow(rSimple2, self.respExp) + torch.pow(rSimple3, self.respExp) + torch.pow(rSimple4, self.respExp), 4);
       else:
         rsall = torch.div(rSimple1 + rSimple2 + rSimple3 + rSimple4, 4).mean(0);
-        #rsall = torch.div(torch.pow(rSimple1, self.respExp) + torch.pow(rSimple2, self.respExp) + torch.pow(rSimple3, self.respExp) + torch.pow(rSimple4, self.respExp), 4).mean(0);
       # at this point, rsall is [nTr x nFrames]
       rsall = rsall/torch.max(torch.mean(rsall, axis=1)); # take avg. across frames (i.e. per trial) and normalize all to the max avg.
       rsall = rsall.transpose(1,0); # transpose to make [nFr x nTr]
@@ -1060,7 +1034,6 @@ class sfNormMod(torch.nn.Module):
     #normResp = self.FullNormResp(trialInf); # [nFrames x nTrials]
     #pdb.set_trace();
     #cProfile.runctx('self.FullNormResp(trialInf)', {'self':self}, locals())
-    #cProfile.runctx('self.SimpleNormResp(trialInf, recenter_norm=recenter_norm)', {'self':self}, locals())
 
     if self.useFullNormResp:
       normResp = self.FullNormResp(trialInf); # [nFrames x nTrials]
@@ -1082,26 +1055,12 @@ class sfNormMod(torch.nn.Module):
 
     # naka-rushton style?
     numerator     = Lexc; # [nFrames x nTrials]
-    #numerator     = torch.pow(torch.add(self.noiseEarly, Lexc), self.respExp); # [nFrames x nTrials]
     denominator   = sigmaFilt + Linh; # NOTE 22.10.24 - already did respExp there
-    #denominator   = torch.pow(sigmaFilt, self.respExp) + torch.pow(Linh, self.respExp); # nTrials
-    # original 
-    #numerator     = torch.add(self.noiseEarly, Lexc); # [nFrames x nTrials]
-    #denominator   = torch.pow(sigmaFilt + torch.pow(Linh, 2), 0.5); # nTrials
     if self.useFullNormResp:
       rawResp       = torch.div(numerator, denominator);
     else:
       rawResp       = torch.div(numerator, denominator.unsqueeze(0)); # unsqueeze(0) to account for the missing leading dimension (nFrames)
-    # half-wave rectification??? we add a squaring after the max, then respExp will do what it does...
-    #ratio         = torch.pow(torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), 2), self.respExp);
-    # just rectify, forget the squaring
-    # -- this line if we're using sigmoid-transformed response exponent (bounded between [1,1+_sigmoidRespExp], currently [1,4]
-    #ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), 1+torch.mul(_cast_as_tensor(_sigmoidRespExp), torch.sigmoid(self.respExp)));
-    # -- otherwise, this line
     ratio         = _cast_as_tensor(globalMin) + rawResp;
-    #ratio         = torch.pow(_cast_as_tensor(globalMin) + rawResp, _cast_as_tensor(1)) - torch.pow(_cast_as_tensor(globalMin), _cast_as_tensor(1));
-    #ratio         = torch.pow(_cast_as_tensor(globalMin) + rawResp, self.respExp) - torch.pow(_cast_as_tensor(globalMin), self.respExp);
-    #ratio         = torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), self.respExp);
 
     if self.newMethod == 1 and self.normToOne == 1:
       # in this case, only apply the noiseLate and self.scale AFTER the FT
