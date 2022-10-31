@@ -592,7 +592,7 @@ def lgnType_suffix(lgnType, lgnConType=1):
   elif lgnConType == 4: # parvo-only front-end
     conSuf = 'p';
 
-  return '%s%s' % (lgnSuf, conSuf);
+  return '%s%s' % (lgnSuf, conSuf if lgnType>0 else ''); # i.e. don't apply the lgnCon suffix if the lgn isn't on anyway!
 
 def chiSq_suffix(kMult):
   ''' We need a multiplying constant when using the chiSquared loss (see chiSq within this file)

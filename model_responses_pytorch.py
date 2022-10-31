@@ -27,7 +27,7 @@ _schedule = True; # use scheduler or not??? True or False
 singleGratsOnly = False; # True;
 
 fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304, 210308/11/12/14, 210321
-spring2021_adj = 1; # further adjustment to make scale a sigmoid rather than abs; 210222
+spring2021_adj = 1; # further adjustment to make scale a sigmoid rather than abs; 2102622
 if fall2020_adj:
   globalMin = 1e-10 # what do we "cut off" the model response at? should be >0 but small
   #globalMin = 1e-1 # what do we "cut off" the model response at? should be >0 but small
@@ -399,7 +399,7 @@ class dataWrapper(torchdata.Dataset):
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module()
 
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True):
 
     super().__init__();
 
@@ -492,6 +492,21 @@ class sfNormMod(torch.nn.Module):
       self.gs_std = _cast_as_param(normParams[1]);
     else:
       self.inhAsym = _cast_as_param(normParams);
+
+    # also initialize the full normalizaton model/pool!
+    self.useFullNormResp = useFullNormResp; # are we computing full normalization?
+    self.normFull = dict({'nFilters': norm_nFilters, 'dOrd': _cast_as_tensor(norm_dOrd), 'norm_gain': _cast_as_tensor(norm_gain)})
+    # and make the prefSfs
+    psfs = None;
+    for i,nFilt in enumerate(norm_nFilters):
+      psfs_curr = _cast_as_tensor(np.geomspace(norm_range[0], norm_range[1], nFilt));
+      if psfs is None:
+        psfs = [psfs_curr];
+      else:
+        psfs.append(psfs_curr);
+    self.normFull['prefSfs'] = psfs;
+    self.normFilters = None; # have we computed the filters?
+    self.normCalc = None; # have we made the full calculation (w/stimulus?)
 
     ### LGN front parameters
     self.LGNmodel = 2; # parameterized as DiffOfGauss (not DoGsach)
@@ -724,6 +739,7 @@ class sfNormMod(torch.nn.Module):
     # NOTE: here, I use the term complex to denote that it is a complex number NOT
     # - that it reflects a complex cell (i.e. this is still a simple cell response)
     if self.lgnFrontEnd > 0: # contrast already included: TRY 22.10.12
+      # selSi is [nTr x nComp], realImag is [nTr x nComp x nComp x 2]
       rComplex = torch.einsum('ij,ikjz->ikz', selSi, realImag) # mult. to get [nTr x nFr x 2] response
     else: # need to include contrast here
       rComplex = torch.einsum('ij,ikjz->ikz', torch.mul(selSi,stimCo), realImag) # mult. to get [nTr x nFr x 2] response
@@ -896,10 +912,161 @@ class sfNormMod(torch.nn.Module):
     #respPerTr = torch.pow(resp.sum(1), 1./self.respExp); # i.e. sum over components, then sqrt
     return respPerTr; # will be [nTrials] -- later, will ensure right output size during operation    
 
+  def FullNormResp(self, trialInf, trialArtificial=None, debugFilters=False, debugQuadrature=False, debugFilterTemporal=False):
+    ''' Per discussions with Tony and Eero (Oct. 2022), need to re-incorporate a more realistic normalization signal
+        --- 1. Including temporal dynamics
+        --- 2. Allow for interactions between stimulus components if they appear within the filter pass-band
+        --- 3. Multiple (or at least flexibly defined) filters rather than just one filter!
+        As of 22.10.28, will assume that the image is already calculated!
+        --- also start with filter construction from Robbe
+    '''
+
+    assert self.stimRealImag is not None; # temporary?
+    assert self.normFull is not None;
+    assert self.lgnCalcDone is not None;
+
+    any_debug = debugFilters or debugQuadrature or debugFilterTemporal;
+
+    # get the current SFs and Cons (all other stimulus features are in stimRealImag or are irrelevant to this calculation
+    stimSf = _cast_as_tensor(trialInf['sf'], self.device);
+    stimCo = _cast_as_tensor(trialInf['con'], self.device);
+    nStimComp     = hf.get_exp_params(self.expInd).nStimComp;
+
+    if trialArtificial is not None:
+      trialInf = trialArtificial;
+    else:
+      trialInf = trialInf;
+
+    # Now, construct the filter bank if it's not already constructed
+    if self.normFilters is None: # if the norm. is untuned, then we'll just compute once
+      # Compute SF tuning
+      for iB in range(len(self.normFull['nFilters'])):
+        sfRel = stimSf.unsqueeze(-1) / self.normFull['prefSfs'][iB].unsqueeze(0).unsqueeze(0)
+        s     = torch.pow(stimSf.unsqueeze(-1), self.normFull['dOrd'][iB]) \
+                    * torch.exp(-self.normFull['dOrd'][iB]/2 * torch.pow(sfRel, 2));
+        sMax  = torch.pow(self.normFull['prefSfs'][iB], self.normFull['dOrd'][iB]) * torch.exp(-self.normFull['dOrd'][iB]/2);
+        if iB == 0:
+            selSf = self.normFull['norm_gain'][iB] * s / sMax.unsqueeze(0).unsqueeze(0);
+        else:
+            selSf = [selSf, self.normFull['norm_gain'][iB] * s/sMax.unsqueeze(0).unsqueeze(0)];
+            
+      # unfold the selSf into [nTr x nComp x nFilters] --> but permute to [nFilters x nTr x nComp]
+      selSf = torch.cat(selSf, dim=-1).permute((-1,0,1));
+      self.normFilters = selSf;
+    else:
+      selSf = self.normFilters;
+
+    # Now, apply the LGN, if needed --> or we're done!
+    if self.lgnFrontEnd > 0:
+      # unpack/fully compute LGN front end:
+      selCon_p = self.selCon_p;
+      selCon_m = self.selCon_m;
+      selSf_p = self.selSf_p;
+      selSf_m = self.selSf_m;
+
+      if self.lgnConType == 1: # DEFAULT
+        # -- then here's our final responses per component for the current stimulus
+        # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
+        lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
+      elif self.lgnConType == 2 or self.lgnConType == 3 or self.lgnConType == 4:
+        # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
+        avgWt = torch.sigmoid(self.mWeight);
+        selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
+        lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_avg)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_avg)));
+
+      # normalize LGN s.t. max is 1
+      lgnSel = torch.div(lgnSel, torch.max(lgnSel));
+      #lgnSel = torch.div(lgnSel, torch.median(lgnSel)); # weird --> ignore
+      # and apply to selSf
+      # --- note: selSf is [nFilt x nTr x nComps] while lgnSel is [nTr x nComps] --> unsqueeze in zero dim to [1 x nTr x nComps]
+      selSi = torch.mul(selSf, lgnSel.unsqueeze(0)); # filter sensitivity for the sinusoid in the frequency domain
+    else:
+      selSi = selSf;
+    # all of LGN filtering, if applicable, is done!
+
+    if debugFilters:
+      return selSi, stimSf;
+
+    if self.normCalc is None or any_debug:
+      # Here is the core computation - multiply the filter(s) with the stimulus image
+      # --- however, because each filter will have it's own rectification, we have to do this operation separately per filter
+      if self.lgnFrontEnd > 0: # contrast already included: TRY 22.10.12
+        # selSf is now [nTr x nFr x nFilt]
+        rComplex = torch.einsum('fij,ikjz->fikz', selSi, self.stimRealImag) # mult. to get [nFilt x nTr x nFr x 2] response
+      else: # need to include contrast here
+        rComplex = torch.einsum('fij,ikjz->fikz', torch.mul(selSi,stimCo.unsqueeze(0)), self.stimRealImag)
+
+      # Now, get each filter as in quadrature set, rectify, apply non-linearity
+      ''' # This set is just for debugging purposes (no rectification)
+      rSimple1 = torch.div(rComplex[...,0], torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,0]))); # max = 1
+      rSimple2 = torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,1]))); # max = 1
+      rSimple3 = torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,0]))); # max = 1
+      rSimple4 = torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,1]))); # max = 1
+      '''
+      # below is original calc:
+      #rSimple1 = torch.max(_cast_as_tensor(globalMin), torch.div(rComplex[...,0], torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,0])))); # max = 1
+      #rSimple2 = torch.max(_cast_as_tensor(globalMin), torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,1])))); # max = 1
+      #rSimple3 = torch.max(_cast_as_tensor(globalMin), torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,0])))); # max = 1
+      #rSimple4 = torch.max(_cast_as_tensor(globalMin), torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,1])))); # max = 1
+
+      # here is (hopefully) slightly faster!
+      #'''
+      #to_div = _cast_as_tensor([torch.max(rComplex[...,0]), torch.max(rComplex[...,1])]).view(1,1,1,2); # pack into nFilt x nTr x nComp x two-complex-dimensions
+      #to_div = torch.max(torch.abs(rComplex)); # 22.10.30 - might not need to divide by max of each, separately? --> slower than the below equivalent
+      to_div = torch.max(torch.max(rComplex), -torch.min(rComplex)); # 22.10.30 - might not need to divide by max of each, separately?
+      # --- clamp is faster than max
+      rsAlt = torch.div(rComplex, torch.max(_cast_as_tensor(globalMinDiv), to_div));
+      rsAlt_pos = torch.pow(torch.clamp(rsAlt, min=_cast_as_tensor(globalMin)), self.respExp);
+      rsAlt_neg = torch.pow(torch.clamp(_cast_as_tensor(-1)*rsAlt, min=_cast_as_tensor(globalMin)), self.respExp);
+      #rsAlt_pos = torch.pow(torch.max(_cast_as_tensor(globalMin), rsAlt), self.respExp);
+      #rsAlt_neg = torch.pow(torch.max(_cast_as_tensor(globalMin), _cast_as_tensor(-1)*rsAlt), self.respExp);
+      rSimple1 = rsAlt_pos[...,0];
+      rSimple2 = rsAlt_pos[...,1];
+      rSimple3 = rsAlt_neg[...,0];
+      rSimple4 = rsAlt_neg[...,1];
+      #'''
+      #pdb.set_trace();
+      #rs1 = torch.max(_cast_as_tensor(globalMin), rsAlt[...,0]);
+      #rs2 = torch.max(_cast_as_tensor(globalMin), rsAlt[...,1]);
+      #rs3 = torch.max(_cast_as_tensor(globalMin), _cast_as_tensor(-1)*rsAlt[...,0]);
+      #rs4 = torch.max(_cast_as_tensor(globalMin), _cast_as_tensor(-1)*rsAlt[...,1]);
+
+      if debugQuadrature:
+        #return torch.pow(rSimple1, self.respExp), torch.pow(rSimple2, self.respExp), torch.pow(rSimple3, self.respExp), torch.pow(rSimple4, self.respExp);
+        return rSimple1, rSimple2, rSimple3, rSimple4;
+
+      #rsall = torch.div(torch.pow(rSimple1, 1) + torch.pow(rSimple2, 1) + torch.pow(rSimple3, 1) + torch.pow(rSimple4, 1), 4); # keep for debugging purposes (per filter)
+      if debugFilterTemporal:
+        rsall = torch.div(torch.pow(rSimple1, self.respExp) + torch.pow(rSimple2, self.respExp) + torch.pow(rSimple3, self.respExp) + torch.pow(rSimple4, self.respExp), 4);
+      else:
+        rsall = torch.div(rSimple1 + rSimple2 + rSimple3 + rSimple4, 4).mean(0);
+        #rsall = torch.div(torch.pow(rSimple1, self.respExp) + torch.pow(rSimple2, self.respExp) + torch.pow(rSimple3, self.respExp) + torch.pow(rSimple4, self.respExp), 4).mean(0);
+      # at this point, rsall is [nTr x nFrames]
+      rsall = rsall/torch.max(torch.mean(rsall, axis=1)); # take avg. across frames (i.e. per trial) and normalize all to the max avg.
+      rsall = rsall.transpose(1,0); # transpose to make [nFr x nTr]
+      if not any_debug and not self.mWeight.requires_grad: # only overwrite (and only save if LGN is not optimized-for) if no debugging!
+        self.normCalc = rsall;
+      return rsall;
+
+    else: # we've already computed the normalization pool (only applies if norm. is flat - incl. LGN stage)!
+      return self.normCalc;
+
   def respPerCell(self, trialInf, debug=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, preCompOri=None, quadrature=False):
+    import cProfile
     # excitatory filter, first
     simpleResp = self.simpleResp_matMul(trialInf, sigmoidSigma=sigmoidSigma, preCompOri=preCompOri, quadrature=quadrature);
-    normResp = self.SimpleNormResp(trialInf, recenter_norm=recenter_norm); # [nFrames x nTrials]
+
+    # use below block for debugging speed of FullNormResp!
+    #normResp = self.FullNormResp(trialInf); # [nFrames x nTrials]
+    #pdb.set_trace();
+    #cProfile.runctx('self.FullNormResp(trialInf)', {'self':self}, locals())
+    #cProfile.runctx('self.SimpleNormResp(trialInf, recenter_norm=recenter_norm)', {'self':self}, locals())
+
+    if self.useFullNormResp:
+      normResp = self.FullNormResp(trialInf); # [nFrames x nTrials]
+    else:
+      normResp = self.SimpleNormResp(trialInf, recenter_norm=recenter_norm); # [nFrames x nTrials]
+
     if self.newMethod == 1:
       Lexc = simpleResp; # [nFrames x nTrials]
       Linh = normResp; # un-normalized...
@@ -921,7 +1088,10 @@ class sfNormMod(torch.nn.Module):
     # original 
     #numerator     = torch.add(self.noiseEarly, Lexc); # [nFrames x nTrials]
     #denominator   = torch.pow(sigmaFilt + torch.pow(Linh, 2), 0.5); # nTrials
-    rawResp       = torch.div(numerator, denominator.unsqueeze(0)); # unsqueeze(0) to account for the missing leading dimension (nFrames)
+    if self.useFullNormResp:
+      rawResp       = torch.div(numerator, denominator);
+    else:
+      rawResp       = torch.div(numerator, denominator.unsqueeze(0)); # unsqueeze(0) to account for the missing leading dimension (nFrames)
     # half-wave rectification??? we add a squaring after the max, then respExp will do what it does...
     #ratio         = torch.pow(torch.pow(torch.max(_cast_as_tensor(globalMin), rawResp), 2), self.respExp);
     # just rectify, forget the squaring
@@ -1043,7 +1213,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 
 ### 22.10.01 --> max_epochs was 15000 ---> temporarily, reduce to make faster
 # ---- previous to 22.10.03, batch_size=3000 (trials) ;;;;; lr was 0.001
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=500, learning_rate=0.05, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=500, learning_rate=0.01, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1096,7 +1266,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_nr221026d%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+    fL_name = 'fitList%s_pyt_nr221029b%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1204,7 +1374,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       curr_fit = fitList[cellNum-1][respStr];
       curr_params = curr_fit['params'];
       # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
-      testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne)
+      testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp)
       trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly) # warning: added respOverwrite here; also add whichTrials???
       predictions = testModel.forward(trInfTemp, respMeasure=respMeasure);
       if testModel.lossType == 3:
@@ -1333,7 +1503,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     param_list = param_list[0:-1];   
 
   ### define model, grab training parameters
-  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound, pSfBound_low=pSfFloor, normToOne=normToOne)
+  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound, pSfBound_low=pSfFloor, normToOne=normToOne, useFullNormResp=useFullNormResp)
 
   training_parameters = [p for p in model.parameters() if p.requires_grad]
   if verbose:
@@ -1620,11 +1790,16 @@ if __name__ == '__main__':
   
     start = time.process_time();
     dcOk = 0; f1Ok = 0 if (expDir == 'V1/' or expDir == 'V1_BB/') else 1; # i.e. we don't bother fitting F1 if fit is from V1_orig/ or altExp/
-    nTry = 3; # 30
+    nTry = 1; # 30
     if cellNum >= 0:
       while not dcOk and nTry>0:
         try:
           setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly); # first do DC
+
+          #import cProfile
+          #cProfile.runctx('setModel(cellNum, expDir, excType, lossType, fitType, 1, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel': setModel}, locals())
+          #cProfile.runctx('setModel(cellNum, expDir, excType, lossType, fitType, 0, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel': setModel}, locals())
+
           dcOk = 1;
           print('passed with nTry = %d' % nTry);
         except Exception as e:
@@ -1633,7 +1808,7 @@ if __name__ == '__main__':
         nTry -= 1;
       # now, do F1 fits
 
-      nTry=3; #30; # reset nTry...
+      nTry=1; #30; # reset nTry...
       while not f1Ok and nTry>0:
         try:
           setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly); # then F1
@@ -1656,7 +1831,7 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221026d%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr221029b%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name);

@@ -1022,7 +1022,7 @@ def SFMNormResp(unitName, loadPath, normPool, stimParams = [], expInd = 1, overw
     M['normResp'] = numpy.zeros((nTrials, nSf, nFrames));
     
     # Compute normalization response for all trials
-    if not make_own_stim:
+    if not make_own_stim and isinstance(unitName, str):
         print('Computing normalization response for ' + unitName + ' ...');
 
     for p in range(nTrials):
@@ -1205,7 +1205,6 @@ def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None, overwrite
     gain = numpy.array([.57, .614]);
 
     normPool = {'n': n, 'nUnits': nUnits, 'gain': gain};
-
     curr_dir = '' if expDir=='' else str(expDir + 'structures/'); # i.e. if expDir=='', then we've already passed in the full path
     loadPath = loadPath + curr_dir; # the loadPath passed in is the base path, then we add the directory for the specific experiment
     
@@ -1217,7 +1216,8 @@ def GetNormResp(iU, loadPath, stimParams = [], expDir=[], expInd=None, overwrite
         M = SFMNormResp(unitName, loadPath, normPool, expInd=expInd, overwrite=overwrite);
     else:
         unitName = iU;
-        M = SFMNormResp(unitName, [], normPool, stimParams, expInd=expInd, overwrite=overwrite);
+        M = SFMNormResp(unitName, '', normPool, stimParams, expInd=expInd, overwrite=1); # <--- for debugging
+        #M = SFMNormResp(unitName, [], normPool, stimParams, expInd=expInd, overwrite=overwrite); # <--- this was existing version (not sure if it works)
 
     return M;
 
@@ -1393,6 +1393,7 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
         else:
           lgnPass = None;
         Linh = SimpleNormResp(structureSFM, expInd, gs_mean, gs_std, normType, lgnFrontParams=lgnPass); # [nFrames x nTrials]
+        normResp = GetNormResp(structureSFM, loadPath='', expDir='', expInd=expInd);
  
         # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
         numerator     = noiseEarly + Lexc;
@@ -1495,7 +1496,6 @@ def SFMGiveBof(params, structureSFM, normType=1, lossType=1, trialSubset=None, m
       loss_glob.append(NLL);
       resp_glob.append(respModel);
 
-    #pdb.set_trace();
     return NLL, respModel, nll_notSum, vE_SF, vE_con; # add varExpl stuff here...
 
 def sfmToPartial(ind, cellN, sfm, rvc, eInd, mask, params, lgn_params, n_params, normType, lossType, trackSteps, overwriteSpikes, kMult, excType, compute_varExpl, lgnFrontEnd):
@@ -1643,7 +1643,7 @@ def SFMsimulateNew(params, structureSFM, disp, con, sf_c, normType=1, expInd=1, 
   normResp = GetNormResp(structureSFM, [], stimParams, expInd=expInd);
   if unweighted == 1:
     return [], [], Lexc, normResp['normResp'], [];
-  #Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
+  Linh = numpy.sqrt((inhWeightMat*normResp['normResp']).sum(1)).transpose();
   '''
   # Compute full model response (the normalization signal is the same as the subtractive suppressive signal)
   numerator     = noiseEarly + Lexc;
@@ -2076,9 +2076,10 @@ def setModel(cellNum, expDir, lossType = 1, fitType = 1, initFromCurr = 1, fL_na
     ## NOW: set up the objective function
     obj = lambda params: SFMGiveBof(params, structureSFM=S, normType=fitType, lossType=lossType, maskIn=~mask, expInd=expInd, rvcFits=rvcFits, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult, excType=excType, lgnFrontEnd=lgnFrontEnd)[0];
 
+    '''
     import cProfile
     oyvey= cProfile.runctx('obj(param_list)', None, locals());
-    pdb.set_trace();
+    '''
 
     print('...now minimizing!'); 
     if 'TNC' in fL_name:
@@ -2443,9 +2444,11 @@ def setModel_joint(cellNums, expDir, lossType = 1, fitType = 1, initFromCurr = 1
     noPar = '''SFMGiveBof_joint(cellNums, SFMs, rvcs, expInds, masksIn, params, normType=fitType, lossType=lossType, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult, excType=excType, lgnFrontEnd=lgnFrontEnd, toPar=0)[0];'''
     par = '''SFMGiveBof_joint(cellNums, SFMs, rvcs, expInds, masksIn, params, normType=fitType, lossType=lossType, trackSteps=trackSteps, overwriteSpikes=recovSpikes, kMult=kMult, excType=excType, lgnFrontEnd=lgnFrontEnd, toPar=1)[0];'''
 
+    '''
     import timeit
     timePar = timeit.timeit(stmt=noPar, globals={'cellNums': cellNums, 'SFMs': SFMs, 'rvcs': rvcs, 'expInds': expInds, 'masksIn': masksIn, 'params': all_init_params, 'fitType': fitType, 'lossType':lossType, 'trackSteps': trackSteps, 'recovSpikes': recovSpikes, 'kMult': kMult, 'excType': excType, 'lgnFrontEnd': lgnFrontEnd, 'SFMGiveBof_joint': SFMGiveBof_joint}, number=2);
     timeNo = timeit.timeit(stmt=par, globals={'cellNums': cellNums, 'SFMs': SFMs, 'rvcs': rvcs, 'expInds': expInds, 'masksIn': masksIn, 'params': all_init_params, 'fitType': fitType, 'lossType':lossType, 'trackSteps': trackSteps, 'recovSpikes': recovSpikes, 'kMult': kMult, 'excType': excType, 'lgnFrontEnd': lgnFrontEnd, 'SFMGiveBof_joint': SFMGiveBof_joint}, number=2);
+    '''
 
     print('...now minimizing!'); 
     if 'TNC' in fL_name:
