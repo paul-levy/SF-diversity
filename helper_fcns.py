@@ -1993,6 +1993,8 @@ def descr_prefSf(modParams, dog_model=2, all_sfs=numpy.logspace(-1, 1, 11), base
   sf_bound = (numpy.min(all_sfs), numpy.max(all_sfs));
   if dog_model == 0:
     return modParams[2]; # direct read out in this model!
+  if dog_model == -1: # code for deriv. gauss
+    return modParams[0]; # direct read out
   # if the solution is not analytical, then we compute
   sf_samps = np.geomspace(all_sfs[0], all_sfs[-1], nSamps);
   tuning = get_descrResp(modParams, sf_samps, dog_model, ref_params=ref_params, ref_rc_val=ref_rc_val);
@@ -3636,6 +3638,8 @@ def get_descrResp(params, stim_sf, DoGmodel, minThresh=0.1, baseline=0, fracSig=
     pred_spikes, _ = DoGsachVol(*params, stim_sf=stim_sf, baseline=baseline);
   elif DoGmodel == 5: # if isMult is False, then this is the Hawken parameterization of the d-DoG-S model
     pred_spikes = parker_hawken(params, stim_sf, isMult=False, baseline=baseline);
+  elif DoGmodel == -1: # deriv. gauss
+    pred_spikes = deriv_gauss(params, stim_sf)[0];
   return pred_spikes;
 
 def get_rvcResp(params, curr_cons, rvcMod):

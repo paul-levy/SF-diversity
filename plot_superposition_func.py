@@ -327,8 +327,9 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   if use_mod_resp == 2:
     rvcAdj   = 0; # phAmp corr.
     #rvcAdj   = -1; # this means vec corrected F1, not phase adjustment F1...
-    _applyLGNtoNorm = 1; # don't apply the LGN front-end to the gain control weights
-    recenter_norm = 2;
+    _applyLGNtoNorm = 1; # apply the LGN front-end to the gain control weights??
+    #recenter_norm = 2;
+    recenter_norm = 0;
     newMethod = 1; # yes, use the "new" method for mrpt (not that new anymore, as of 21.03)
     lossType = 1; # sqrt
     _sigmoidSigma = 5;
@@ -358,7 +359,8 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
   elif use_mod_resp == 2:
     rvcName = None; # Use NONE if getting model responses, only
-    fitBase = 'fitList%s_pyt_Fnr221021' % loc_str
+    fitBase = 'fitList%s_pyt_nr221029a_noRE' % '' # loc_str
+    #fitBase = 'fitList%s_pyt_Fnr221021' % loc_str
     #fitBase = 'fitList%s_pyt_221013_noRE_noSched' % loc_str
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=-rvcAdj);
   # ^^^ EDIT rvc/descrFits/fitList names here;
@@ -533,7 +535,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   if fitList is None:
     resps = resps_data; # otherwise, we'll still keep resps_data for reference
   elif fitList is not None: # OVERWRITE the data with the model spikes!
-    resps = get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, f1f0_rat, respMeasure, baseline, lossType=lossType, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType);
+    resps = get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, f1f0_rat, respMeasure, baseline, lossType=lossType, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, _applyLGNtoNorm=_applyLGNtoNorm, recenter_norm=recenter_norm);
 
   predResps = resps[2] if respsPhAdv_mean_preds is None else respsPhAdv_mean_preds;
   respMean = resps[0] if respsPhAdv_mean_ref is None else respsPhAdv_mean_ref; # equivalent to resps[0];
@@ -543,6 +545,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   findNaN = np.isnan(respAll);
   nonNaN  = np.sum(findNaN == False, axis=-1);
   respSem = np.nanstd(respAll, -1) / np.sqrt(nonNaN);
+  #pdb.set_trace();
 
   ############
   ### zeroth...just organize into pandas for some potential/future processing

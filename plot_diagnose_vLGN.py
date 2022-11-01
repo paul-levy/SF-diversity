@@ -27,7 +27,8 @@ _sigmoidRespExp = None; # 3 or None, as of 21.03.14
 _sigmoidSigma = 5; # put a value (5, as of 21.03.10) or None (see model_responses_pytorch.py for details)
 _sigmoidGainNorm = 5;
 _applyLGNtoNorm = 1;
-recenter_norm = 2;
+recenter_norm = 0;
+#recenter_norm = 3;
 #singleGratsOnly = True;
 singleGratsOnly = False;
 
@@ -129,38 +130,14 @@ expName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
 # -- some params are sigmoid, we'll use this to unpack the true parameter
 _sigmoidScale = 10
 _sigmoidDord = 5;
-#fitBase = 'fitList_190513cA'; # NOTE: THIS VERSION USED FOR VSS2019 poster
-if excType == 1:
-  #fitBase = 'fitList_200417'; # excType 1
-  #fitBase = 'fitList_pyt_210226_dG'
-  fitBase = 'fitList%s_pyt_210308_dG' % loc_str
-  if recenter_norm:
-    #fitBase = 'fitList%s_pyt_210314%s_dG' % (loc_str, rExpStr)
-    #fitBase = 'fitList%s_pyt_210312_dG' % loc_str
-    fitBase = 'fitList%s_pyt_210321_dG' % loc_str
-    if force_full:
-      fitBase = 'fitList%s_pyt_210331_dG' % loc_str
-elif excType == 2:
-  #fitBase = 'fitList_200507'; # excType 2
-  #fitBase = 'fitList_pyt_210121' # excType 2
-  #fitBase = 'fitList_pyt_210226'
-  if _sigmoidSigma is None:
-    fitBase = 'fitList%s_pyt_210308' % loc_str
-  else:
-    fitBase = 'fitList%s_pyt_210310' % loc_str
-  if recenter_norm:
-    #fitBase = 'fitList%s_pyt_210314%s' % (loc_str, rExpStr)
-    #fitBase = 'fitList%s_pyt_210312' % loc_str
-    fitBase = 'fitList%s_pyt_210321' % loc_str
-    if force_full:
-      fitBase = 'fitList%s_pyt_210331' % loc_str
 
 #fitBase = 'fitList%s_pyt_221017_noRE_noSched_sg' % loc_str
 #fitBase = 'fitList%s_pyt_221017_noSched_sg' % loc_str
 #fitBase = 'fitList%s_pyt_nr221019_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221021_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221024_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-fitBase = 'fitList%s_pyt_nr221025_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr221029c_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221029%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221024a%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
@@ -179,8 +156,8 @@ rvcBase = 'rvcFits%s_220928' % loc_str; # direc flag & '.npy' are added
 normA, normB = int(np.floor(normTypesIn/10)), np.mod(normTypesIn, 10)
 conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
 lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
-fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
-fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
+fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
+fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
 # what's the shorthand we use to refer to these models...
 wtStr = 'wt';
 # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
@@ -193,10 +170,11 @@ modB_str = '%s%s' % ('fl' if normB==1 else bWtStr, lgnStrB if lgnB>0 else 'V1');
 
 # set the save directory to save_loc, then create the save directory if needed
 lossSuf = hf.lossType_suffix(lossType).replace('.npy', ''); # get the loss suffix, remove the file type ending
+excType_str = hf.excType_suffix(excType);
 if diffPlot == 1:
-  compDir  = str(fitBase + '_diag_%s_%s' % (modA_str, modB_str) + lossSuf + '/diff');
+  compDir  = str(fitBase + '_diag%s_%s_%s' % (excType_str, modA_str, modB_str) + lossSuf + '/diff');
 else:
-  compDir  = str(fitBase + '_diag_%s_%s' % (modA_str, modB_str) + lossSuf);
+  compDir  = str(fitBase + '_diag%s_%s_%s' % (excType_str, modA_str, modB_str) + lossSuf);
 if intpMod == 1:
   compDir = str(compDir + '/intp');
 subDir   = compDir.replace('fitList', 'fits').replace('.npy', '');
@@ -321,6 +299,8 @@ else:
 if pytorch_mod == 1:
   ### now, set-up the two models
   model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm) for prms,normType,lgnType,lgnCon in zip(modFits, normTypes, lgnTypes, conTypes)]
+  # these values will be the same for all models
+  minPrefSf, maxPrefSf = model_A.minPrefSf.detach().numpy(), model_A.maxPrefSf.detach().numpy()
 
   # vvv respOverwrite defined above (None if DC or if expInd=-1)
   #dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite, shuffleTf=True)#, shufflePh=False);
@@ -864,7 +844,8 @@ omega = np.logspace(-1.25, 1.25, 1000);
 sfExc = [];
 sfExcRaw = [];
 for (pltNum, modPrm),lgnType,lgnConType,mWt in zip(enumerate(modFits), lgnTypes, conTypes, [mWt_A, mWt_B]):
-  prefSf = modPrm[0];
+  #prefSf = modPrm[0];
+  prefSf = minPrefSf + maxPrefSf*hf.sigmoid(modPrm[0])
 
   if excType == 1:
     ### deriv. gauss
@@ -1036,17 +1017,19 @@ plt.ylabel('Normalized response (a.u.)', fontsize=12);
 # Now, plot the full denominator (including the constant term) at a few contrasts
 # --- use the debug flag to get the tuned component of the gain control as computed in the full model
 curr_ax = plt.subplot2grid(detailSize, (1, 2));
-modRespsDebug = [mod.forward(dw.trInf, respMeasure=respMeasure, debug=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm) for mod in [model_A, model_B]];
+modRespsDebug = [mod.forward(dw.trInf, respMeasure=respMeasure, debug=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, normOverwrite=True) for mod in [model_A, model_B]];
 modA_norm, modA_sigma = [modRespsDebug[0][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
 modB_norm, modB_sigma = [modRespsDebug[1][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
 # --- then, simply mirror the calculation as done in the full model
-full_denoms = [np.power(sigmaFilt + np.power(norm, 2), 0.5) for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
+full_denoms = [sigmaFilt+norm for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
+#full_denoms = [np.power(sigmaFilt + np.power(norm, 2), 0.5) for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
 # --- use hf.get_valid_trials to get high/low con, single gratings
 disp = 0;
 v_cons = np.array(val_con_by_disp[disp]);
 conVals = [0.10, 0.33, 1]; # try to get the normResp at these contrast values
 modTrials = dw.trInf['num']; # these are the trials eval. by the model
 # then, let's go through for the above contrasts and get the in-model response
+#pdb.set_trace();
 for cI, conVal in enumerate(conVals):
   closest_ind = np.argmin(np.abs(conVal - all_cons[v_cons]));
   close_enough = np.abs(all_cons[v_cons[closest_ind]] - conVal) < 0.03 # must be within 3% contrast
@@ -1056,8 +1039,12 @@ for cI, conVal in enumerate(conVals):
     all_trials = [hf.get_valid_trials(expData, disp, v_cons[closest_ind], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in valSfInds];
     # then, find which corresponding index into model-eval-only trials this is
     all_trials_modInd = [np.intersect1d(modTrials, trs, return_indices=True)[1] for trs in all_trials];
-    modA_resps = [np.mean(full_denoms[0][trs]) for trs in all_trials_modInd];
-    modB_resps = [np.mean(full_denoms[1][trs]) for trs in all_trials_modInd];
+    if model_A.useFullNormResp:
+      modA_resps = [np.mean(full_denoms[0][:, trs]) for trs in all_trials_modInd];
+      modB_resps = [np.mean(full_denoms[1][:, trs]) for trs in all_trials_modInd];
+    else:
+      modA_resps = [np.mean(full_denoms[0][trs]) for trs in all_trials_modInd];
+      modB_resps = [np.mean(full_denoms[1][trs]) for trs in all_trials_modInd];
     sf_vals = all_sfs[valSfInds];
     [plt.semilogx(sf_vals, denom, alpha=conVal, color=clr) for clr,denom in zip(modColors, [modA_resps, modB_resps])]
     plt.title('Normalization term by contrast, model');
