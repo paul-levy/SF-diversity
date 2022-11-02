@@ -471,8 +471,8 @@ class sfNormMod(torch.nn.Module):
 
     ### Normalization parameters
     normParams = hf.getNormParams(modParams, normType);
-    if self.normType == 1:
-      self.inhAsym = _cast_as_tensor(normParams); # then it's not really meant to be optimized, should be just zero
+    if self.normType == 1 or self.normType == 0:
+      self.inhAsym = _cast_as_tensor(normParams) if self.normType==1 else _cast_as_param(normParams); # then it's not really meant to be optimized, should be just zero
       self.gs_mean = None; self.gs_std = None; # replacing the "else" in commented out 'if normType == 2 or normType == 4' below
     elif self.normType == 2 or self.normType == 5:
       self.gs_mean = _cast_as_param(normParams[0]);
@@ -554,6 +554,7 @@ class sfNormMod(torch.nn.Module):
     if self.lgnFrontEnd > 0:
       mWt = torch.sigmoid(self.mWeight).item() if transformed else self.mWeight.item();
       print('mWeight: %.2f (orig %.2f)' % (mWt, self.mWeight.item()));
+      print('\tapplying the LGN filter for the gain control' if self.applyLGNtoNorm else 'No LGN for GC')
     else:
       print('No LGN!');
     scale = torch.mul(_cast_as_tensor(_sigmoidScale), torch.sigmoid(self.scale)).item() if transformed else self.scale.item();
@@ -566,15 +567,13 @@ class sfNormMod(torch.nn.Module):
       print('tuned norm mn|std: %.2f|%.2f' % (normMn, torch.abs(self.gs_std).item()));
       if self.normType == 5:
         print('\tAnd the norm gain (transformed|untransformed) is: %.2f|%.2f' % (torch.mul(_cast_as_tensor(_sigmoidGainNorm), torch.sigmoid(self.gs_gain)).item(), self.gs_gain.item()));
-    print('still applying the LGN filter for the gain control' if self.applyLGNtoNorm else 'No LGN for GC')
-    #print('still applying the LGN filter for the gain control') if self.applyLGNtoNorm else print('No LGN for GC')
     print('********END OF MODEL PARAMETERS********\n');
 
     return None;
 
   def return_params(self):
     # return a list of the parameters
-    if self.normType == 1:
+    if self.normType <= 1:
         if self.excType == 1:
           param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.inhAsym.item(), self.mWeight.item()];
         elif self.excType == 2:
@@ -845,7 +844,7 @@ class sfNormMod(torch.nn.Module):
     lgnStage = torch.div(lgnStage, torch.mean(lgnStage)); # make average=1 for LGN stage
       
     if self.gs_mean is None or self.gs_std is None: # we assume inhAsym is 0
-      self.inhAsym = _cast_as_tensor(0);
+      #self.inhAsym = _cast_as_tensor(0);
       new_weights = 1 + self.inhAsym*(torch.log(sfs) - torch.mean(torch.log(sfs)));
       new_weights = torch.mul(lgnStage, new_weights);
       # AS of 22.10.26 -- stop doing the normalization of weights!
@@ -913,7 +912,7 @@ class sfNormMod(torch.nn.Module):
     #respPerTr = torch.pow(resp.sum(1), 1./self.respExp); # i.e. sum over components, then sqrt
     return respPerTr; # will be [nTrials] -- later, will ensure right output size during operation    
 
-  def FullNormResp(self, trialInf, trialArtificial=None, debugFilters=False, debugQuadrature=False, debugFilterTemporal=False, gs_std_min=_cast_as_tensor(0), forceExpAt2=True, normOverwrite=False):
+  def FullNormResp(self, trialInf, trialArtificial=None, debugFilters=False, debugQuadrature=False, debugFilterTemporal=False, gs_std_min=_cast_as_tensor(0.3), forceExpAt2=True, normOverwrite=False):
     ''' Per discussions with Tony and Eero (Oct. 2022), need to re-incorporate a more realistic normalization signal
         --- 1. Including temporal dynamics
         --- 2. Allow for interactions between stimulus components if they appear within the filter pass-band
@@ -979,12 +978,17 @@ class sfNormMod(torch.nn.Module):
       for iB, filts in zip(range(len(self.normFull['nFilters'])), basic_filters):
         if self.normType == 1: # i.e. flat weights
           curr_resp = self.normFull['norm_gain'][iB] * filts;
+        elif self.normType == 0: # inhAsym neq 0
+          curr_resp = self.normFull['norm_gain'][iB] + torch.clamp(self.inhAsym,-0.3,0.3) * torch.log(self.normFull['prefSfs'][iB])/torch.mean(torch.log(self.normFull['prefSfs'][iB])) * filts
         elif self.normType == 2: # i.e. tuned weights
           # --- here, we'll ensure that the average weight is equal to self.normFull['norm_gain'][iB]
           avg_match = self.normFull['norm_gain'][iB];
           log_sfs = torch.log(self.normFull['prefSfs'][iB]);
-          weight_distr = torch.distributions.normal.Normal(self.gs_mean, torch.clamp(self.gs_std, min=gs_std_min));
+          # NOTE: 22.10.31 --> clamp the gs_mean at the 1st/last filters of the 1st bank of filters
+          weight_distr = torch.distributions.normal.Normal(torch.clamp(self.gs_mean, min=self.normFull['prefSfs'][0][0], max=self.normFull['prefSfs'][0][-1]), torch.clamp(self.gs_std, min=gs_std_min));
           new_weights = torch.exp(weight_distr.log_prob(log_sfs));
+          if torch.mean(new_weights).item() < 1e-2:
+            print('bad weight! --> mn, std = %.2f, %.2f' % (self.gs_mean, self.gs_std));
           avg_weights = avg_match * new_weights/torch.mean(new_weights);
           curr_resp = avg_weights * filts
         if iB == 0:
@@ -1277,7 +1281,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_nr221029d%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+    fL_name = 'fitList%s_pyt_nr221031b%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1411,7 +1415,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   normConst = 0.5 if normToOne==1 else -2; # per Tony, just start with a low value (i.e. closer to linear)
   # the above is when we normalize the FFT first; the below is when we don't? as of 22.10.25
   #normConst = -0.25 + 0.75*lgnFrontEnd if normToOne==1 else -2; # per Tony, just start with a low value (i.e. closer to linear)
-  if fitType == 1:
+  if fitType <= 1:
     inhAsym = 0;
   if fitType == 2 or fitType == 5:
     # see modCompare.ipynb, "Smarter initialization" for details
@@ -1494,7 +1498,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     mWeight = -99; # just a "dummy" value
 
   # --- finally, actually create the parameter list
-  if fitType == 1:
+  if fitType <= 1:
     if excType == 1:
       param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym, mWeight);
     elif excType == 2:
@@ -1842,7 +1846,7 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221029d%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr221031b%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name);

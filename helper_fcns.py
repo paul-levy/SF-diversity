@@ -548,6 +548,8 @@ def fitType_suffix(fitType):
   '''
   if fitType == 1:
     fitSuf = '_flat';
+  elif fitType == 0:
+    fitSuf = '_asym';
   elif fitType == 2:
     fitSuf = '_wght';
   elif fitType == 3:
@@ -5593,10 +5595,10 @@ def makeStimulus(stimFamily, conLevel, sf_c, template, expInd=1):
     
     return {'Ori': Or, 'Tf' : Tf, 'Con': Co, 'Ph': Ph, 'Sf': Sf, 'trial_used': trial_used}
 
-def getNormParams(params, normType, forceAsymZero=True):
+def getNormParams(params, normType, forceAsymZero=False):
   ''' pass in param list, normType (1=original "tilt'; 2=gaussian weighting (wght); 3=con-dep sigma)
   '''
-  if normType == 1:
+  if normType == 1 or normType == 0:
     if len(params) > 8:
       inhAsym = params[8];
     else:
@@ -5812,7 +5814,7 @@ def setNormTypeArr(params, normTypeArr = []):
           filt_peak = random_in_range([1, 6])[0]; 
       normTypeArr = [norm_type, filt_offset, std_l, std_r, filt_peak];
 
-    elif norm_type == 1:
+    elif norm_type == 1 or norm_type == 0:
       if len(params) == gauss_len: # we've optimized for these parameters
         gs_mean = params[8];
         gs_std = params[9];
