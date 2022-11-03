@@ -399,7 +399,7 @@ class dataWrapper(torchdata.Dataset):
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module()
 
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=True):
 
     super().__init__();
 
@@ -416,6 +416,7 @@ class sfNormMod(torch.nn.Module):
     self.maxPrefSf = _cast_as_tensor(pSfBound); # don't allow the max prefSf to exceed this value (will enforce via sigmoid)
     self.minPrefSf = _cast_as_tensor(pSfBound_low); # don't allow the prefSf to go below this value (will avoid div by 0)
     self.normToOne = normToOne;
+    self.normFiltersToOne = normFiltersToOne; # normalize the quadrature filters?
     self.fullDataset = fullDataset; # are we fitting the full dataset at once?
 
     ### all modparams
@@ -471,7 +472,7 @@ class sfNormMod(torch.nn.Module):
       self.varGain    = _cast_as_tensor(modParams[7]);  # NOT optimized in this case
 
     ### Normalization parameters
-    normParams = hf.getNormParams(modParams, normType);
+    normParams = hf.getNormParams(modParams, normType, forceAsymZero=toFit);
     if self.normType == 1 or self.normType == 0:
       self.inhAsym = _cast_as_tensor(normParams) if self.normType==1 else _cast_as_param(normParams); # then it's not really meant to be optimized, should be just zero
       self.gs_mean = None; self.gs_std = None; # replacing the "else" in commented out 'if normType == 2 or normType == 4' below
@@ -748,12 +749,21 @@ class sfNormMod(torch.nn.Module):
       # since in new method, we just return [...,0], normalize the response to the max of that component
       # --- this ensures that the amplitude is the same regardless of whether LGN is ON or OFF
       # --- added 22.10.10
-      rComplex = torch.div(rComplex, torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,0]))); # max = 1
-      if quadrature:
-        # used for DC (i.e. if respMeasure==0)
-        rComplexA = torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,1]))); # max = 1
-        rComplexB = torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,0]))); # max = 1
-        rComplexC = torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,1]))); # max = 1
+      if self.normFiltersToOne:
+        rComplex = torch.div(rComplex, torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,0]))); # max = 1
+        if quadrature:
+          # used for DC (i.e. if respMeasure==0)
+          rComplexA = torch.div(rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(rComplex[...,1]))); # max = 1
+          rComplexB = torch.div(_cast_as_tensor(-1)*rComplex[...,0], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,0]))); # max = 1
+          rComplexC = torch.div(_cast_as_tensor(-1)*rComplex[...,1], torch.max(_cast_as_tensor(globalMinDiv), torch.max(_cast_as_tensor(-1)*rComplex[...,1]))); # max = 1
+      else: # no intermediate norm, just keep the filters as is
+        rComplex = rComplex;
+        if quadrature:
+          # used for DC (i.e. if respMeasure==0)
+          rComplexA = rComplex[...,1];
+          rComplexB = _cast_as_tensor(-1)*rComplex[...,0];
+          rComplexC = _cast_as_tensor(-1)*rComplex[...,1];
+
 
     if debug: # TEMPORARY?
       return realImag,selSi,torch.mul(selSi,stimCo);
@@ -981,9 +991,9 @@ class sfNormMod(torch.nn.Module):
           curr_resp = self.normFull['norm_gain'][iB] * filts;
         elif self.normType == 0: # inhAsym neq 0
           # weights relative to mean of pool
-          #curr_resp = self.normFull['norm_gain'][iB] + torch.clamp(self.inhAsym,-0.3,0.3) * torch.log(self.normFull['prefSfs'][iB])/torch.mean(torch.log(self.normFull['prefSfs'][iB])) * filts
+          #curr_resp = (self.normFull['norm_gain'][iB] + torch.clamp(self.inhAsym,-0.3,0.3) * (torch.log(self.normFull['prefSfs'][iB]) - torch.mean(torch.log(self.normFull['prefSfs'][iB])))) * filts
           # weights relative to cell preference
-          curr_resp = self.normFull['norm_gain'][iB] + torch.clamp(self.inhAsym,-0.3,0.3) * torch.log(self.normFull['prefSfs'][iB])/torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)) * filts
+          curr_resp = (self.normFull['norm_gain'][iB] + torch.clamp(self.inhAsym,-0.3,0.3) * (torch.log(self.normFull['prefSfs'][iB]) - torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)))) * filts
         elif self.normType == 2: # i.e. tuned weights
           # --- here, we'll ensure that the average weight is equal to self.normFull['norm_gain'][iB]
           avg_match = self.normFull['norm_gain'][iB];
@@ -1026,9 +1036,10 @@ class sfNormMod(torch.nn.Module):
         selCon_avg = avgWt*selCon_m + (1-avgWt)*selCon_p;
         lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_avg)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_avg)));
 
-      # normalize LGN s.t. max is 1
-      lgnSel = torch.div(lgnSel, torch.max(lgnSel));
-      #lgnSel = torch.div(lgnSel, torch.median(lgnSel)); # weird --> ignore
+      if self.normFiltersToOne:
+        # normalize LGN s.t. max is 1
+        lgnSel = torch.div(lgnSel, torch.max(lgnSel));
+        #lgnSel = torch.div(lgnSel, torch.median(lgnSel)); # weird --> ignore
       # and apply to selSf
       # --- note: selSf is [nFilt x nTr x nComps] while lgnSel is [nTr x nComps] --> unsqueeze in zero dim to [1 x nTr x nComps]
       selSi = torch.mul(selSf, lgnSel.unsqueeze(0)); # filter sensitivity for the sinusoid in the frequency domain
@@ -1052,11 +1063,15 @@ class sfNormMod(torch.nn.Module):
         rComplex = torch.einsum('fij,ikjz->fikz', torch.mul(selSi,stimCo.unsqueeze(0)), self.stimRealImag)
 
       # Now, get each filter as in quadrature set, rectify, apply non-linearity
-      # --- here is (hopefully) slightly faster!
-      to_div = torch.max(torch.max(rComplex), -torch.min(rComplex)); # 22.10.30 - might not need to divide by max of each, separately?
-      # --- clamp is faster than max
-      rsAlt = torch.div(rComplex, torch.max(_cast_as_tensor(globalMinDiv), to_div));
-      if forceExpAt2:
+      if self.normFiltersToOne:
+        # --- here is (hopefully) slightly faster!
+        to_div = torch.max(torch.max(rComplex), -torch.min(rComplex)); # 22.10.30 - might not need to divide by max of each, separately?
+        # --- clamp is faster than max
+        rsAlt = torch.div(rComplex, torch.max(_cast_as_tensor(globalMinDiv), to_div));
+      else: # no intermediate norm.
+        rsAlt = rComplex;
+
+      if forceExpAt2: # this is faster, even though respExp is just one value
         rsAlt_pos = torch.pow(torch.clamp(rsAlt, min=_cast_as_tensor(globalMin)), 2);
         rsAlt_neg = torch.pow(torch.clamp(_cast_as_tensor(-1)*rsAlt, min=_cast_as_tensor(globalMin)), 2);
       else:
@@ -1075,7 +1090,9 @@ class sfNormMod(torch.nn.Module):
       else:
         rsall = torch.div(rSimple1 + rSimple2 + rSimple3 + rSimple4, 4).mean(0);
       # at this point, rsall is [nTr x nFrames]
-      rsall = rsall/torch.max(torch.mean(rsall, axis=1)); # take avg. across frames (i.e. per trial) and normalize all to the max avg.
+      if self.normFiltersToOne:
+        rsall = rsall/torch.max(torch.mean(rsall, axis=1)); # take avg. across frames (i.e. per trial) and normalize all to the max avg.
+
       rsall = rsall.transpose(1,0); # transpose to make [nFr x nTr]
       if not any_debug and not self.mWeight.requires_grad and self.normType==1 and self.fullDataset: # we can only save the full calc IF the norm. is untuned
         # only overwrite/save if LGN and filter weights are not optimized-for (and if no debugging)!
@@ -1230,7 +1247,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 
 ### Now, actually do the optimization!
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=2500, learning_rate=0.01, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=2500, learning_rate=0.01, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1283,7 +1300,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_nr221031e%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+    fL_name = 'fitList%s_pyt_nr221031f%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1392,7 +1409,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       curr_params = curr_fit['params'];
       # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
       testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp)
-      trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly) # warning: added respOverwrite here; also add whichTrials???
+      trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly, normFiltersToOne=normFiltersToOne) # warning: added respOverwrite here; also add whichTrials???
       predictions = testModel.forward(trInfTemp, respMeasure=respMeasure);
       if testModel.lossType == 3:
         loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType, varGain=testModel.varGain)
@@ -1485,8 +1502,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       noiseLate = np.random.uniform(0.7, 1.3) * minResp if initFromCurr==0 else curr_params[6];
       #respScalar = np.random.uniform(0.9, 1.1) * (maxResp - noiseLate) if initFromCurr==0 else curr_params[4];
       # why div/40? Seems that high con, pref. SF only has FFT of ~40 spks/s
+      # --- note: it WAS div/40 or div/20 when not full normResp --> not that it is, we use the below
       # -- if we don't do re-scaling below
-      respScalar = 2 * np.random.uniform(0.8,1.2) * (maxResp-noiseLate)/40;
+      respScalar = np.random.uniform(0.6,1.2) * (maxResp-noiseLate)/2; # all heuristics...
+      if lgnFrontEnd>0:
+        respScalar *= 2; # double resp scalar if LGN on
+      if normFiltersToOne and lgnFrontEnd>0:
+        respScalar /= 500; # completely a heuristic!!!
       #normStd = np.random.uniform(0.3, 2) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
       # increased starting value for width as of 22.10.25
       normStd = np.random.uniform(1.25, 2.25) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
@@ -1520,7 +1542,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     param_list = param_list[0:-1];   
 
   ### define model, grab training parameters
-  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound, pSfBound_low=pSfFloor, normToOne=normToOne, useFullNormResp=useFullNormResp, fullDataset=batch_size>2000)
+  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound, pSfBound_low=pSfFloor, normToOne=normToOne, useFullNormResp=useFullNormResp, fullDataset=batch_size>2000, normFiltersToOne=normFiltersToOne)
 
   training_parameters = [p for p in model.parameters() if p.requires_grad]
   if verbose:
@@ -1848,7 +1870,7 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221031e%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr221031f%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name);
