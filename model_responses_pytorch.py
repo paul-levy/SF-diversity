@@ -1319,7 +1319,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_nr221031g%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+    fL_name = 'fitList%s_pyt_nr221031h%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1449,8 +1449,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   prefSfEst_goal = np.random.uniform(0.75, 1.5) * pref_sf;
   sig_inv_input = (pSfFloor+prefSfEst_goal)/pSfBound;
   prefSfEst = -np.log((1-sig_inv_input)/sig_inv_input)
-  # 22.10.24 --> make normConst start out at 0 rather than -0.25 if LGN front end is on!
-  normConst = 0.5 if normToOne==1 else -2; # per Tony, just start with a low value (i.e. closer to linear)
+  # 22.11.03 --> with not NormFiltersToOne, -1.5 works as a start except when lgnFrontEnd is on --> then make the normConst stronger to start
+  normConst = 0.5 if normToOne==1 and normFiltersToOne else -1.5 + 2*np.sign(lgnFrontEnd); # per Tony, just start with a low value (i.e. closer to linear)
   # the above is when we normalize the FFT first; the below is when we don't? as of 22.10.25
   #normConst = -0.25 + 0.75*lgnFrontEnd if normToOne==1 else -2; # per Tony, just start with a low value (i.e. closer to linear)
   if fitType <= 1:
@@ -1524,11 +1524,12 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       # --- note: it WAS div/40 or div/20 when not full normResp --> not that it is, we use the below
       # -- if we don't do re-scaling below
       respScalar = np.random.uniform(0.6,1.2) * (maxResp-noiseLate)/2; # all heuristics...
-      if lgnFrontEnd>0:
-        respScalar *= 2; # double resp scalar if LGN on
       if normFiltersToOne and lgnFrontEnd>0:
         respScalar /= 500; # completely a heuristic!!!
-      #normStd = np.random.uniform(0.3, 2) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
+      elif not normFiltersToOne:
+        respScalar /= 750; # completely heuristic :(
+      if fitType==2: # i.e. tuned gain
+        respScalar *= 3; # need slighly stronger respScalar in these cases?
       # increased starting value for width as of 22.10.25
       normStd = np.random.uniform(1.25, 2.25) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
 
@@ -1889,7 +1890,7 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221031g%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr221031h%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name);
