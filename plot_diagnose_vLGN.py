@@ -131,14 +131,13 @@ expName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
 _sigmoidScale = 10
 _sigmoidDord = 5;
 
-#fitBase = 'fitList%s_pyt_221017_noRE_noSched_sg' % loc_str
-#fitBase = 'fitList%s_pyt_221017_noSched_sg' % loc_str
-#fitBase = 'fitList%s_pyt_nr221019_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221021_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221024_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-fitBase = 'fitList%s_pyt_nr221029c_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221029%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221024a%s' % (loc_str, '_sg' if singleGratsOnly else '')
+
+fitBase = 'fitList%s_pyt_nr221031b_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221031b_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
 vecF1 = 0;
@@ -159,10 +158,9 @@ lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
 fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
 fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
 # what's the shorthand we use to refer to these models...
-wtStr = 'wt';
 # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
-aWtStr = 'wt%s' % ('' if normA==2 else 'Gn');
-bWtStr = 'wt%s' % ('' if normB==2 else 'Gn');
+aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn');
+bWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normB<=2 else 'Gn');
 lgnStrA = hf.lgnType_suffix(lgnA, conA);
 lgnStrB = hf.lgnType_suffix(lgnB, conB);
 modA_str = '%s%s' % ('fl' if normA==1 else aWtStr, lgnStrA if lgnA>0 else 'V1');
@@ -1099,7 +1097,7 @@ normGainA = _sigmoidGainNorm/(1+np.exp(-modFits[0][10])) if normTypes[0]==5 else
 normGainB = _sigmoidGainNorm/(1+np.exp(-modFits[1][10])) if normTypes[1]==5 else np.nan;
 if normGainA is not None or normGainB is not None:
   plt.text(0.5, 0.1, 'normGain: %.2f, %.2f' % (normGainA, normGainB), fontsize=12, horizontalalignment='center', verticalalignment='center');
-
+plt.axis('off');
 
 # Now, space out the subplots...
 #f.tight_layout(pad=0.1)

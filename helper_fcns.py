@@ -5595,7 +5595,7 @@ def makeStimulus(stimFamily, conLevel, sf_c, template, expInd=1):
     
     return {'Ori': Or, 'Tf' : Tf, 'Con': Co, 'Ph': Ph, 'Sf': Sf, 'trial_used': trial_used}
 
-def getNormParams(params, normType, forceAsymZero=False):
+def getNormParams(params, normType, forceAsymZero=True):
   ''' pass in param list, normType (1=original "tilt'; 2=gaussian weighting (wght); 3=con-dep sigma)
   '''
   if normType == 1 or normType == 0:
@@ -5855,7 +5855,7 @@ def nParamsByType(fitType, excType, lgnType=0):
   # For tuned gain control model
   # 9, 10, 11, 10 -- before excType == 2, before any lgnType
   try:
-    if fitType == 1:
+    if fitType == 1 or fitType == 0:
       nParams = 9; 
     elif fitType == 2 or fitType == 4:
       nParams = 10;

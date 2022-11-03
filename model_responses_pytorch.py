@@ -979,7 +979,10 @@ class sfNormMod(torch.nn.Module):
         if self.normType == 1: # i.e. flat weights
           curr_resp = self.normFull['norm_gain'][iB] * filts;
         elif self.normType == 0: # inhAsym neq 0
-          curr_resp = self.normFull['norm_gain'][iB] + torch.clamp(self.inhAsym,-0.3,0.3) * torch.log(self.normFull['prefSfs'][iB])/torch.mean(torch.log(self.normFull['prefSfs'][iB])) * filts
+          # weights relative to mean of pool
+          #curr_resp = self.normFull['norm_gain'][iB] + torch.clamp(self.inhAsym,-0.3,0.3) * torch.log(self.normFull['prefSfs'][iB])/torch.mean(torch.log(self.normFull['prefSfs'][iB])) * filts
+          # weights relative to cell preference
+          curr_resp = self.normFull['norm_gain'][iB] + torch.clamp(self.inhAsym,-0.3,0.3) * torch.log(self.normFull['prefSfs'][iB])/torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)) * filts
         elif self.normType == 2: # i.e. tuned weights
           # --- here, we'll ensure that the average weight is equal to self.normFull['norm_gain'][iB]
           avg_match = self.normFull['norm_gain'][iB];
@@ -1281,7 +1284,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_nr221031b%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+    fL_name = 'fitList%s_pyt_nr221031c%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1846,7 +1849,7 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221031b%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr221031c%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name);
