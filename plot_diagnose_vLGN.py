@@ -136,7 +136,7 @@ _sigmoidDord = 5;
 #fitBase = 'fitList%s_pyt_nr221029%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221024a%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
-fitBase = 'fitList%s_pyt_nr221031b_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr221031d_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221031b_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
@@ -160,7 +160,7 @@ fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, f
 # what's the shorthand we use to refer to these models...
 # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
 aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn');
-bWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normB<=2 else 'Gn');
+bWtStr = '%s%s' % ('wt' if normB>1 else 'asym', '' if normB<=2 else 'Gn');
 lgnStrA = hf.lgnType_suffix(lgnA, conA);
 lgnStrB = hf.lgnType_suffix(lgnB, conB);
 modA_str = '%s%s' % ('fl' if normA==1 else aWtStr, lgnStrA if lgnA>0 else 'V1');
@@ -240,7 +240,7 @@ else:
   loss_A = fitListA[cellNum-1]['NLL']
   loss_B = fitListB[cellNum-1]['NLL']
 modFits = [modFit_A, modFit_B];
-normTypes = [normA, normB]; # weighted, then flat
+normTypes = [normA, normB]; # weighted, then flat (typically, but NOT always)
 lgnTypes = [lgnA, lgnB];
 conTypes = [conA, conB];
 
@@ -296,7 +296,7 @@ else:
 
 if pytorch_mod == 1:
   ### now, set-up the two models
-  model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm) for prms,normType,lgnType,lgnCon in zip(modFits, normTypes, lgnTypes, conTypes)]
+  model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm, toFit=False) for prms,normType,lgnType,lgnCon in zip(modFits, normTypes, lgnTypes, conTypes)]
   # these values will be the same for all models
   minPrefSf, maxPrefSf = model_A.minPrefSf.detach().numpy(), model_A.maxPrefSf.detach().numpy()
 
@@ -1097,6 +1097,11 @@ normGainA = _sigmoidGainNorm/(1+np.exp(-modFits[0][10])) if normTypes[0]==5 else
 normGainB = _sigmoidGainNorm/(1+np.exp(-modFits[1][10])) if normTypes[1]==5 else np.nan;
 if normGainA is not None or normGainB is not None:
   plt.text(0.5, 0.1, 'normGain: %.2f, %.2f' % (normGainA, normGainB), fontsize=12, horizontalalignment='center', verticalalignment='center');
+if normTypes[0]==0 or normTypes[1]==0:
+  # assume it's inhAsym -->
+  inhA = modFits[0][8] if normTypes[0] == 0 else np.nan;
+  inhB = modFits[1][8] if normTypes[1] == 0 else np.nan;
+  plt.text(0.5, 0, 'inhAsym: %.2f, %.2f' % (inhA, inhB), fontsize=12, horizontalalignment='center', verticalalignment='center');
 plt.axis('off');
 
 # Now, space out the subplots...

@@ -20,7 +20,7 @@ torch.autograd.set_detect_anomaly(True)
 ### Some global things...
 #########
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
-force_earlyNoise = None; # if None, allow it as parameter; otherwise, force it to this value; used 0 for 210308-210315; None for 210321
+force_earlyNoise = 0; # if None, allow it as parameter; otherwise, force it to this value (e.g. 0)
 recenter_norm = 0;
 #_schedule = False; # use scheduler or not??? True or False
 _schedule = True; # use scheduler or not??? True or False
@@ -399,7 +399,7 @@ class dataWrapper(torchdata.Dataset):
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module()
 
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True):
 
     super().__init__();
 
@@ -416,6 +416,7 @@ class sfNormMod(torch.nn.Module):
     self.maxPrefSf = _cast_as_tensor(pSfBound); # don't allow the max prefSf to exceed this value (will enforce via sigmoid)
     self.minPrefSf = _cast_as_tensor(pSfBound_low); # don't allow the prefSf to go below this value (will avoid div by 0)
     self.normToOne = normToOne;
+    self.fullDataset = fullDataset; # are we fitting the full dataset at once?
 
     ### all modparams
     self.modParams = modParams;
@@ -634,7 +635,7 @@ class sfNormMod(torch.nn.Module):
     ### Assumptions: No interaction between SF/con -- which we know is not true...
     # - first, SF tuning: model 2 (Tony)
     if self.lgnFrontEnd > 0:
-      if self.lgnCalcDone:
+      if self.lgnCalcDone and self.fullDataset: # only skip if already done AND full dataset
         selCon_p = self.selCon_p;
         selCon_m = self.selCon_m;
         selSf_p = self.selSf_p;
@@ -663,7 +664,7 @@ class sfNormMod(torch.nn.Module):
         self.selSf_m = selSf_m;
         self.selCon_p = selCon_p;
         self.selCon_m = selCon_m;
-        self.lgnCalcDone = True;
+        self.lgnCalcDone = True; # save the LGN calc --> but we'll overwrite if not full dataset
 
       if self.lgnConType == 1: # DEFAULT
         # -- then here's our final responses per component for the current stimulus
@@ -691,7 +692,7 @@ class sfNormMod(torch.nn.Module):
       selSi = selSf;
 
     # II. Phase, space and time
-    if self.stimRealImag is None:
+    if self.stimRealImag is None or not self.fullDataset: # i.e. if it's not full dataset, then we need to overwrite the dataset
       if preCompOri is None:
         omegaX = torch.mul(stimSf, torch.cos(stimOr)); # the stimulus in frequency space
         omegaY = torch.mul(stimSf, torch.sin(stimOr));
@@ -731,8 +732,7 @@ class sfNormMod(torch.nn.Module):
       realImag = torch.empty((*realPart.shape,2), device=realPart.device);
       realImag[...,0] = realPart;
       realImag[...,1] = imagPart;
-
-      self.stimRealImag = realImag;
+      self.stimRealImag = realImag; # write the current image REGARDLESS of 
     else:
       realImag = self.stimRealImag;
 
@@ -968,7 +968,8 @@ class sfNormMod(torch.nn.Module):
             basic_filters = [s/sMax.unsqueeze(0).unsqueeze(0)];
           else:
             basic_filters.append(s/sMax.unsqueeze(0).unsqueeze(0));
-        self.normFiltersBasic = basic_filters;
+        if self.fullDataset: # as always, only save calculations if full dataset
+          self.normFiltersBasic = basic_filters;
       else:
         basic_filters = self.normFiltersBasic;
       ########
@@ -1000,7 +1001,7 @@ class sfNormMod(torch.nn.Module):
             selSf = [selSf, curr_resp];
       # unfold the selSf into [nTr x nComp x nFilters] --> but permute to [nFilters x nTr x nComp]
       selSf = torch.cat(selSf, dim=-1).permute((-1,0,1));
-      if self.normType == 1: # we can only save the full calc IF the norm. is untuned
+      if self.normType == 1 and self.fullDataset: # we can only save the full calc IF the norm. is untuned
         self.normFilters = selSf;
     else:
       selSf = self.normFilters;
@@ -1076,7 +1077,7 @@ class sfNormMod(torch.nn.Module):
       # at this point, rsall is [nTr x nFrames]
       rsall = rsall/torch.max(torch.mean(rsall, axis=1)); # take avg. across frames (i.e. per trial) and normalize all to the max avg.
       rsall = rsall.transpose(1,0); # transpose to make [nFr x nTr]
-      if not any_debug and not self.mWeight.requires_grad and self.normType==1: 
+      if not any_debug and not self.mWeight.requires_grad and self.normType==1 and self.fullDataset: # we can only save the full calc IF the norm. is untuned
         # only overwrite/save if LGN and filter weights are not optimized-for (and if no debugging)!
         self.normCalc = rsall;
       return rsall;
@@ -1229,9 +1230,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 
 ### Now, actually do the optimization!
 
-### 22.10.01 --> max_epochs was 15000 ---> temporarily, reduce to make faster
-# ---- previous to 22.10.03, batch_size=3000 (trials) ;;;;; lr was 0.001
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.01, batch_size=2048, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=2500, learning_rate=0.01, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1284,7 +1283,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if force_full:
             fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
     # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_nr221031c%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+    fL_name = 'fitList%s_pyt_nr221031e%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1521,7 +1520,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     param_list = param_list[0:-1];   
 
   ### define model, grab training parameters
-  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound, pSfBound_low=pSfFloor, normToOne=normToOne, useFullNormResp=useFullNormResp)
+  model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound, pSfBound_low=pSfFloor, normToOne=normToOne, useFullNormResp=useFullNormResp, fullDataset=batch_size>2000)
 
   training_parameters = [p for p in model.parameters() if p.requires_grad]
   if verbose:
@@ -1849,7 +1848,7 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221031c%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr221031e%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name);
