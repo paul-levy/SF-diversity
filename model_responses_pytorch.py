@@ -1194,9 +1194,9 @@ class sfNormMod(torch.nn.Module):
       # then, get the base & mask TF
       maskInd, baseInd = hf_sfBB.get_mask_base_inds();
       maskTf, baseTf = trialInf['tf'][0, maskInd], trialInf['tf'][0, baseInd] # relies on tf being same for all trials (i.e. maskTf always same, baseTf always same)!
-      tfAsInts = np.array([int(maskTf), int(baseTf)]) if respMeasure==1 else None;
+      tfAsInts = [np.array([int(maskTf), int(baseTf)])] if respMeasure==1 else None;
       # important to transpose the respModel before passing in to spike_fft
-      amps, rel_amps, full_fourier = spike_fft([respModel], tfs=[tfAsInts], stimDur=stimDur, binWidth=1.0/nFrames)
+      amps, rel_amps, full_fourier = spike_fft([respModel], tfs=tfAsInts, stimDur=stimDur, binWidth=1.0/nFrames)
     else:
       tfAsInts = trialInf['tf']  if respMeasure==1 else None;
       # important to transpose the respModel before passing in to spike_fft
@@ -1526,10 +1526,12 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       respScalar = np.random.uniform(0.6,1.2) * (maxResp-noiseLate)/2; # all heuristics...
       if normFiltersToOne and lgnFrontEnd>0:
         respScalar /= 500; # completely a heuristic!!!
-      elif not normFiltersToOne:
+      elif not normFiltersToOne and lgnFrontEnd>0:
+        respScalar /= 250; # completely heuristic :(
+      elif not normFiltersToOne and lgnFrontEnd==0:
         respScalar /= 750; # completely heuristic :(
-      if fitType==2: # i.e. tuned gain
-        respScalar *= 3; # need slighly stronger respScalar in these cases?
+      if fitType==2 and lgnFrontEnd==0: # i.e. tuned gain
+        respScalar *= 1.5; # need slighly stronger respScalar in these cases?
       # increased starting value for width as of 22.10.25
       normStd = np.random.uniform(1.25, 2.25) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
 
