@@ -22,8 +22,8 @@ torch.autograd.set_detect_anomaly(True)
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
 force_earlyNoise = 0; # if None, allow it as parameter; otherwise, force it to this value (e.g. 0)
 recenter_norm = 0;
-#_schedule = False; # use scheduler or not??? True or False
-_schedule = True; # use scheduler or not??? True or False
+_schedule = False; # use scheduler or not??? True or False
+#_schedule = True; # use scheduler or not??? True or False
 singleGratsOnly = False; # True;
 
 fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304, 210308/11/12/14, 210321
@@ -1266,7 +1266,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 
 ### Now, actually do the optimization!
 
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=500, learning_rate=0.01, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=750, learning_rate=0.01, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False, preLoadDataList=None): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1292,34 +1292,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
-      if excType == 1: #dG for derivative of Gaussian
-        #fL_name = 'fitList%s_pyt_201017' % (loc_str); # pyt for pytorch
-        #fL_name = 'fitList%s_pyt_210226_dG' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
-        fL_name = 'fitList%s_pyt_210308_dG' % (loc_str); # pyt for pytorch
-        if recenter_norm:
-          #fL_name = 'fitList%s_pyt_210312_dG' % (loc_str); # pyt for pytorch
-          #fL_name = 'fitList%s_pyt_210314%s_dG' % (loc_str, rExpStr); # pyt for pytorch
-          fL_name = 'fitList%s_pyt_210321_dG' % (loc_str); # pyt for pytorch
-          if force_full:
-            fL_name = 'fitList%s_pyt_210331_dG' % (loc_str); # pyt for pytorch
-        #fL_name = 'fitList%s_pyt_210304_dG' % (loc_str); # pyt for pytorch; FULL datalists for V1_orig, altExpl
-      elif excType == 2:
-        #fL_name = 'fitList%s_pyt_201107' % (loc_str); # pyt for pytorch
-        #fL_name = 'fitList%s_pyt_210121' % (loc_str); # pyt for pytorch - lgn flat vs. V1 weight
-        #fL_name = 'fitList%s_pyt_210226' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
-        if sigmoidSigma is None:
-          fL_name = 'fitList%s_pyt_210308' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
-        else:
-          fL_name = 'fitList%s_pyt_210310' % (loc_str); # pyt for pytorch - 2x2 matrix of fit type (all with at least SOME LGN front-end)
-        # overwriting...
-        if recenter_norm:
-          #fL_name = 'fitList%s_pyt_210312' % (loc_str); # pyt for pytorch
-          #fL_name = 'fitList%s_pyt_210314%s' % (loc_str, rExpStr); # pyt for pytorch
-          fL_name = 'fitList%s_pyt_210321' % (loc_str);
-          if force_full:
-            fL_name = 'fitList%s_pyt_210331' % (loc_str); # pyt for pytorch
-    # TEMP: Just overwrite any of the above with this name
-    fL_name = 'fitList%s_pyt_nr221031h%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_nr221031j%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1331,11 +1304,15 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     print('\nFitList: %s [expDir is %s]' % (fitListName, expDir));
 
   # Load datalist, then specific cell
-  try:
-    dataList = hf.np_smart_load(str(loc_data + dataListName));
-  except:
-    dataListName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
-    dataList = hf.np_smart_load(str(loc_data + dataListName));
+  if preLoadDataList is None:
+    try:
+      dataList = hf.np_smart_load(str(loc_data + dataListName));
+    except:
+      dataListName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
+      dataList = hf.np_smart_load(str(loc_data + dataListName));
+  else: # avoid loading it in mp.pool
+    dataList = preLoadDataList;
+    
   dataNames = dataList['unitName'];
   if verbose:
     print('loading data structure from %s...' % loc_data);
@@ -1892,16 +1869,16 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221031h%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
-
+      fL_name = 'fitList%s_pyt_nr221031j%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      
       # do f1 here?
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name);
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList);
       with mp.Pool(processes = nCpu) as pool:
         smFits_f1 = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
         pool.close();
 
       # First, DC? (should only do DC or F1?)
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name);
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList);
       #sm_perCell(1); # use this to debug...
       with mp.Pool(processes = nCpu) as pool:
         smFits_dc = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
