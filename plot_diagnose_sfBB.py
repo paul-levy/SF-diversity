@@ -23,6 +23,9 @@ plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/p
 from matplotlib import rcParams
 
 ### Some globals
+singleGratsOnly = False;
+_applyLGNtoNorm = True;
+
 maskInd, baseInd = hf_sf.get_mask_base_inds();
 expInd = -1;
 newMethod = 1;
@@ -66,30 +69,33 @@ cellNum  = int(sys.argv[1]);
 excType  = int(sys.argv[2]);
 lossType = int(sys.argv[3]);
 expDir   = sys.argv[4]; 
-lgnFrontEnd = int(sys.argv[5]);
-kMult  = float(sys.argv[6]);
-whichPlots = int(sys.argv[7]); # which plots to make
+normTypesIn = int(sys.argv[5]);
+conTypesIn = int(sys.argv[6]);
+lgnFrontEnd = int(sys.argv[7]);
+kMult  = float(sys.argv[8]);
+whichPlots = int(sys.argv[9]); # which plots to make
+useHPCfit = int(sys.argv[10]);
 
-if len(sys.argv) > 8:
-  fixRespExp = float(sys.argv[8]);
+if len(sys.argv) > 11:
+  fixRespExp = float(sys.argv[11]);
   if fixRespExp <= 0: # this is the code to not fix the respExp
     fixRespExp = None;
 else:
   fixRespExp = None; # default (see modCompare.ipynb for details)
 
-if len(sys.argv) > 9:
-  respVar = int(sys.argv[9]);
+if len(sys.argv) > 11:
+  respVar = int(sys.argv[11]);
 else:
   respVar = 1;
 
-vecCorrected = 1; # all "modern" fits are vecCorrected
+vecCorrected = 0; # we do phAdj, not vecCorr as of late 2022
 
 ### Then start to load the data, set directories, etc
 loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
 save_loc = loc_base + expDir + 'figures/';
 
-if 'pl1465' in loc_base:
+if 'pl1465' in loc_base or useHPCfit:
   loc_str = 'HPC';
 else:
   loc_str = '';
@@ -106,66 +112,32 @@ expInfo = cell[expName]
 byTrial = expInfo['trial'];
 
 ### FITLIST
-if excType == 1:
-  fitBase = 'fitList_pyt_200417'; # excType 1
-  #fitBase = 'fitList_pyt_201017'; # excType 1
-elif excType == 2:
-  #fitBase = 'fitList_pyt_200507'; # excType 2
-  #fitBase = 'fitList_pyt_201107'; # excType 2
-  fitBase = 'fitList_pyt_210121'; # excType 2
-  #fitBase = 'fitList_pyt_210107'; # excType 2
-else:
-  fitBase = None;
+fitBase = 'fitList%s_pyt_nr221031j_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
-if vecCorrected:
-  fitBase = '%s_vecF1' % fitBase;
+### Model types
+# 0th: Unpack the norm types, con types, lgnTypes
+normA, normB = int(np.floor(normTypesIn/10)), np.mod(normTypesIn, 10)
+conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
+lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
+fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
+fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
+# what's the shorthand we use to refer to these models...
+# -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
+aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn');
+bWtStr = '%s%s' % ('wt' if normB>1 else 'asym', '' if normB<=2 else 'Gn');
+lgnStrA = hf.lgnType_suffix(lgnA, conA);
+lgnStrB = hf.lgnType_suffix(lgnB, conB);
+modA_str = '%s%s' % ('fl' if normA==1 else aWtStr, lgnStrA if lgnA>0 else 'V1');
+modB_str = '%s%s' % ('fl' if normB==1 else bWtStr, lgnStrB if lgnB>0 else 'V1');
 
 if fitBase is not None:
-  if lossType == 4: # chiSq...
-    fitBase = '%s%s' % (fitBase, hf.chiSq_suffix(kMult));
-
-  if fixRespExp is not None:
-    fitBase = '%s_re%d' % (fitBase, np.round(fixRespExp*10)); # suffix to indicate that the response exponent is fixed...
-
-  # now, LGN-specific naming
-  if fixRespExp is not None:
-    fitBase_lgn = '%s_re%d' % (fitBase, np.round(fixRespExp*10)); # suffix to indicate that the response exponent is fixed...
-  else:
-    fitBase_lgn = fitBase;
-
-  if lgnFrontEnd == 1:
-    fitBase_lgn = '%s_LGN' % fitBase_lgn
-  elif lgnFrontEnd == 2:
-    fitBase_lgn = '%s_LGNb' % fitBase_lgn
-  elif lgnFrontEnd == 99:
-    fitBase_lgn = '%s_jLGN' % fitBase_lgn
-
-  # first the fit type
-  fitSuf_fl = '_flat';
-  fitSuf_wg = '_wght';
-  # then the loss type
-  if lossType == 1:
-    lossSuf = '_sqrt.npy';
-    loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
-  elif lossType == 2:
-    lossSuf = '_poiss.npy';
-    loss = lambda resp, pred: poisson.logpmf(resp, pred);
-  elif lossType == 3:
-    lossSuf = '_modPoiss.npy';
-    loss = lambda resp, r, p: np.log(nbinom.pmf(resp, r, p));
-  elif lossType == 4:
-    lossSuf = '_chiSq.npy';
-    # LOSS HERE IS TEMPORARY
-    loss = lambda resp, pred: np.sum(np.square(np.sqrt(resp) - np.sqrt(pred)));
 
   # NOTE: We choose weighted gain control for non-LGN model, flat gain control for the model with the LGN front end
-  fitName = str(fitBase + fitSuf_wg + lossSuf);
-  fitName_lgn = str(fitBase_lgn + fitSuf_fl + lossSuf);
-
-  fitList = hf.np_smart_load(data_loc + fitName); # V1 only
-  fitList_lgn = hf.np_smart_load(data_loc + fitName_lgn); # with LGN, no tuned gain control
+  fitListA = hf.np_smart_load(data_loc + fitNameA);
+  fitListB = hf.np_smart_load(data_loc + fitNameB);
 
   # -- update the save_loc
+  lossSuf = hf.lossType_suffix(lossType).replace('.npy', ''); # get the loss suffix, remove the file type ending
   compDir  = str(fitBase + '_diag' + lossSuf);
   subDir   = compDir.replace('fitList', 'fits').replace('.npy', '');
   save_loc = str(save_loc + subDir + '/');
@@ -174,30 +146,33 @@ if fitBase is not None:
   dc_str = hf_sf.get_resp_str(respMeasure=0);
   f1_str = hf_sf.get_resp_str(respMeasure=1);
 
-  modFit_V1_dc = fitList[cellNum-1][dc_str]['params']; # 
-  modFit_lgn_dc = fitList_lgn[cellNum-1][dc_str]['params']; # 
-  modFit_V1_f1 = fitList[cellNum-1][f1_str]['params']; # 
-  modFit_lgn_f1 = fitList_lgn[cellNum-1][f1_str]['params']; # 
+  modFitA_dc = fitListA[cellNum-1][dc_str]['params']; # 
+  modFitB_dc = fitListB[cellNum-1][dc_str]['params']; # 
+  modFitA_f1 = fitListA[cellNum-1][f1_str]['params']; # 
+  modFitB_f1 = fitListB[cellNum-1][f1_str]['params']; # 
 
-  normTypes = [2, 1]; # weighted, then flat
-  lgnTypes = [0, lgnFrontEnd];
+  modFits_dc = [modFitA_dc, modFitB_dc];
+  modFits_f1 = [modFitA_f1, modFitB_f1];
+  normTypes = [normA, normB]; # weighted, then flat (typically, but NOT always)
+  lgnTypes = [lgnA, lgnB];
+  conTypes = [conA, conB];
 
   # set the models up
-  mod_V1_dc  = mrpt.sfNormMod(modFit_V1_dc, expInd=expInd, excType=excType, normType=2, lossType=lossType, lgnFrontEnd=0, newMethod=newMethod)
-  mod_LGN_dc = mrpt.sfNormMod(modFit_lgn_dc, expInd=expInd, excType=excType, normType=1, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod)
-  mod_V1_f1  = mrpt.sfNormMod(modFit_V1_f1, expInd=expInd, excType=excType, normType=2, lossType=lossType, lgnFrontEnd=0, newMethod=newMethod)
-  mod_LGN_f1 = mrpt.sfNormMod(modFit_lgn_f1, expInd=expInd, excType=excType, normType=1, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod)
+  modA_dc, modB_dc = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False) for prms,normType,lgnType,lgnCon in zip(modFits_dc, normTypes, lgnTypes, conTypes)]
+  modA_f1, modB_f1 = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False) for prms,normType,lgnType,lgnCon in zip(modFits_dc, normTypes, lgnTypes, conTypes)]
 
   # get the correct trInf
   trInf_dc, gt_resp_DC = mrpt.process_data(expInfo, expInd=expInd, respMeasure=0); 
   trInf_f1, gt_resp_F1 = mrpt.process_data(expInfo, expInd=expInd, respMeasure=1); 
   val_trials = trInf_dc['num']; # these are the indices of valid, original trials
+  gt_resp_DC = gt_resp_DC.detach().numpy();
+  gt_resp_F1 = gt_resp_F1.detach().numpy();
 
   # get the corresponding DC & F1 responses
-  resp_V1_dc  = mod_V1_dc.forward(trInf_dc, respMeasure=0).detach().numpy();
-  resp_LGN_dc = mod_LGN_dc.forward(trInf_dc, respMeasure=0).detach().numpy();
-  resp_V1_f1  = mod_V1_f1.forward(trInf_f1, respMeasure=1).detach().numpy();
-  resp_LGN_f1 = mod_LGN_f1.forward(trInf_f1, respMeasure=1).detach().numpy();
+  respA_dc  = modA_dc.forward(trInf_dc, respMeasure=0).detach().numpy();
+  respB_dc = modB_dc.forward(trInf_dc, respMeasure=0).detach().numpy();
+  respA_f1  = modA_f1.forward(trInf_f1, respMeasure=1).detach().numpy();
+  respB_f1 = modB_f1.forward(trInf_f1, respMeasure=1).detach().numpy();
 
 # organize the responses!
 
@@ -211,17 +186,17 @@ _, respMatrixF1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, vecC
 
 if fitBase is not None:
    # ---- V1 model responses
-  respMatrix_V1_dc, respMatrix_V1_f1, respMatrix_V1_dc_all, respMatrix_V1_f1_all = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, dc_resp=resp_V1_dc, f1_base=resp_V1_f1[:,baseInd], f1_mask=resp_V1_f1[:,maskInd], val_trials=val_trials, returnByTr=1); # i.e. get the base response for F1
+  respMatrixA_dc, respMatrixA_f1, respMatrixA_dc_all, respMatrixA_f1_all = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, dc_resp=respA_dc, f1_base=respA_f1[:,baseInd], f1_mask=respA_f1[:,maskInd], val_trials=val_trials, returnByTr=1); # i.e. get the base response for F1
   # and get the mask only response (f1 at mask TF)
-  respMatrix_V1_dc_onlyMask, respMatrix_V1_f1_onlyMask, respMatrix_V1_dc_onlyMask_all, respMatrix_V1_f1_onlyMask_all = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, dc_resp=resp_V1_dc, f1_base=resp_V1_f1[:,baseInd], f1_mask=resp_V1_f1[:,maskInd], val_trials=val_trials, returnByTr=1); # i.e. get the maskONLY response
+  respMatrixA_dc_onlyMask, respMatrixA_f1_onlyMask, respMatrixA_dc_onlyMask_all, respMatrixA_f1_onlyMask_all = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, dc_resp=respA_dc, f1_base=respA_f1[:,baseInd], f1_mask=respA_f1[:,maskInd], val_trials=val_trials, returnByTr=1); # i.e. get the maskONLY response
   # and get the mask+base response (but f1 at mask TF)
-  _, respMatrix_V1_f1_maskTf, _, respMatrix_V1_f1_maskTf_all = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=resp_V1_dc, f1_base=resp_V1_f1[:,baseInd], f1_mask=resp_V1_f1[:,maskInd], val_trials=val_trials, returnByTr=1); # i.e. get the maskONLY response
+  _, respMatrixA_f1_maskTf, _, respMatrixA_f1_maskTf_all = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=respA_dc, f1_base=respA_f1[:,baseInd], f1_mask=respA_f1[:,maskInd], val_trials=val_trials, returnByTr=1); # i.e. get the maskONLY response
   # ---- LGN model responses
-  respMatrix_LGN_dc, respMatrix_LGN_f1, respMatrix_LGN_dc_all, respMatrix_LGN_f1_all = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, dc_resp=resp_LGN_dc, f1_base=resp_LGN_f1[:,baseInd], f1_mask=resp_LGN_f1[:,maskInd], val_trials=val_trials, returnByTr=1); # i.e. get the base response for F1
+  respMatrixB_dc, respMatrixB_f1, respMatrixB_dc_all, respMatrixB_f1_all = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, dc_resp=respB_dc, f1_base=respB_f1[:,baseInd], f1_mask=respB_f1[:,maskInd], val_trials=val_trials, returnByTr=1); # i.e. get the base response for F1
   # and get the mask only response (f1 at mask TF)
-  respMatrix_LGN_dc_onlyMask, respMatrix_LGN_f1_onlyMask, respMatrix_LGN_dc_onlyMask_all, respMatrix_LGN_f1_onlyMask_all = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, dc_resp=resp_LGN_dc, f1_base=resp_LGN_f1[:,baseInd], f1_mask=resp_LGN_f1[:,maskInd], val_trials=val_trials, returnByTr=1); # i.e. get the maskONLY response
+  respMatrixB_dc_onlyMask, respMatrixB_f1_onlyMask, respMatrixB_dc_onlyMask_all, respMatrixB_f1_onlyMask_all = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, dc_resp=respB_dc, f1_base=respB_f1[:,baseInd], f1_mask=respB_f1[:,maskInd], val_trials=val_trials, returnByTr=1); # i.e. get the maskONLY response
   # and get the mask+base response (but f1 at mask TF)
-  _, respMatrix_LGN_f1_maskTf, _, respMatrix_LGN_f1_maskTf_all = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=resp_LGN_dc, f1_base=resp_LGN_f1[:,baseInd], f1_mask=resp_LGN_f1[:,maskInd], val_trials=val_trials, returnByTr=1); # i.e. get the maskONLY response
+  _, respMatrixB_f1_maskTf, _, respMatrixB_f1_maskTf_all = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=respB_dc, f1_base=respB_f1[:,baseInd], f1_mask=respB_f1[:,maskInd], val_trials=val_trials, returnByTr=1); # i.e. get the maskONLY response
 
   if whichPlots <= 0:
 
@@ -234,7 +209,7 @@ if fitBase is not None:
     data_respFixed[1][trInf_f1['con'][:,maskInd]==0, maskInd] = 1e-10 # force F1 ~ 0 if con of that stim is 0
     data_respFixed[1][trInf_f1['con'][:,baseInd]==0, baseInd] = 1e-10 # force F1 ~ 0 if con of that stim is 0
 
-    mod_resp = [[resp_V1_dc, resp_V1_f1], [resp_LGN_dc, resp_LGN_f1]]; # first V1 model [dc, f1]; then LGN model [dc, f1]
+    mod_resp = [[respA_dc, respA_f1], [respB_dc, respB_f1]]; # first V1 model [dc, f1]; then LGN model [dc, f1]
 
     for mod in range(nMods):
       for respMeasure, curr_data in enumerate(data_respFixed): # two resp measures - DC [0], and F1 [1]
@@ -322,7 +297,7 @@ if fitBase is not None:
     nCons, nSfs = len(maskCons), len(maskSfs);
 
     datAll = [respMatrixDC_onlyMask_all, respMatrixF1_onlyMask_all]
-    modAll = [[respMatrix_V1_dc_onlyMask_all, respMatrix_V1_f1_onlyMask_all], [respMatrix_LGN_dc_onlyMask_all, respMatrix_LGN_f1_onlyMask_all]]; # first V1 mod [dc, f1]; then LGN [dc, f1]
+    modAll = [[respMatrixA_dc_onlyMask_all, respMatrixA_f1_onlyMask_all], [respMatrixB_dc_onlyMask_all, respMatrixB_f1_onlyMask_all]]; # first V1 mod [dc, f1]; then LGN [dc, f1]
 
     for mod in range(nMods):
       for respMeasure, curr_data in enumerate(datAll): # two resp measures - DC [0], and F1 [1]

@@ -136,8 +136,9 @@ _sigmoidDord = 5;
 #fitBase = 'fitList%s_pyt_nr221029%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221024a%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
-fitBase = 'fitList%s_pyt_nr221031d_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr221031b_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221031i%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221031i_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr221031j_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
 vecF1 = 0;
@@ -259,7 +260,7 @@ if rvcAdj >= 0:
   if rvcAdj == 1:
     rvcFlag = '';
     rvcFits = hf.get_rvc_fits(data_loc, expInd, cellNum, rvcName=rvcBase, rvcMod=rvcMod, direc=rvcDir, vecF1=vecF1);
-    asRates = True;
+    asRates = False; #True;
     force_dc = False
   elif rvcAdj == 0:
     rvcFlag = '_f0';
@@ -296,7 +297,7 @@ else:
 
 if pytorch_mod == 1:
   ### now, set-up the two models
-  model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm, toFit=False) for prms,normType,lgnType,lgnCon in zip(modFits, normTypes, lgnTypes, conTypes)]
+  model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False) for prms,normType,lgnType,lgnCon in zip(modFits, normTypes, lgnTypes, conTypes)]
   # these values will be the same for all models
   minPrefSf, maxPrefSf = model_A.minPrefSf.detach().numpy(), model_A.maxPrefSf.detach().numpy()
 
@@ -1048,7 +1049,7 @@ for cI, conVal in enumerate(conVals):
     plt.title('Normalization term by contrast, model');
 # plot just the constant term (i.e. if there is NO g.c. pooled response)
 sf_vals = all_sfs[valSfInds];
-onlySigma = [np.power(sigmaFilt + np.power(0, 2), 0.5) for sigmaFilt in [modA_sigma, modB_sigma]];
+onlySigma = [sigmaFilt for sigmaFilt in [modA_sigma, modB_sigma]];
 [plt.plot(xCoord*sf_vals[0], sig, color=clr, marker='>') for xCoord,sig,clr in zip([0.95, 0.85], onlySigma, modColors)]
 plt.xlim([omega[0], omega[-1]]);
 #plt.xlim([1e-1, 1e1]);

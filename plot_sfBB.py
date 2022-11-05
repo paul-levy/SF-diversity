@@ -36,6 +36,7 @@ recenter_norm = 1; # recenter the tuned normalization around 1?
 #######
 useCoreFit = 0; # if useCoreFit, then we'll plot the model response to the sfBB_var* experiments, if applicable
 #######
+singleGratsOnly = False
 _globalMin = 1e-10;
 # if None, then we keep the plots as is; if a number, then we create a gray shaded box encompassing that much STD of the base response
 # -- by plotting a range of base responses rather than just the mean, we can see how strong the variations in base or base+mask responses are
@@ -99,7 +100,7 @@ else:
 if len(sys.argv) > 15:
   useHPCfit = int(sys.argv[15]);
 else:
-  useHPCfit = 0;
+  useHPCfit = 1;
 
 ## Unlikely to be changed, but keep flexibility
 baselineSub = 0;
@@ -150,34 +151,12 @@ else:
 expInd = -1;
 
 ### FITLIST
-_applyLGNtoNorm = 0;
+_applyLGNtoNorm = 1;
 # -- some params are sigmoid, we'll use this to unpack the true parameter
 _sigmoidScale = 10
 _sigmoidDord = 5;
-if excType == 1:
-  fitBase = 'fitList%s_pyt_210308_dG' % loc_str
-  if recenter_norm:
-    #fitBase = 'fitList%s_pyt_210314%s_dG' % (loc_str, rExpStr)
-    #fitBase = 'fitList%s_pyt_210312_dG' % loc_str
-    fitBase = 'fitList%s_pyt_210321_dG' % loc_str
-  #fitBase = 'fitList_pyt_210226_dG'
-  #fitBase = 'fitList_pyt_200417'; # excType 1
-  #fitBase = 'fitList_pyt_201017'; # excType 1
-elif excType == 2:
-  #fitBase = 'fitList_pyt_200507'; # excType 2
-  #fitBase = 'fitList_pyt_210121'; # excType 2
-  #fitBase = 'fitList_pyt_210206'; # excType 2
-  #fitBase = 'fitList_pyt_210226'
-  if _sigmoidSigma is None:
-    fitBase = 'fitList%s_pyt_210308' % loc_str
-  else:
-    fitBase = 'fitList%s_pyt_210310' % loc_str
-  if recenter_norm:
-    #fitBase = 'fitList%s_pyt_210314%s' % (loc_str, rExpStr)
-    #fitBase = 'fitList%s_pyt_210312' % loc_str
-    fitBase = 'fitList%s_pyt_210321' % loc_str
-else:
-  fitBase = None;
+
+fitBase = 'fitList%s_pyt_nr221031j_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 if fitBase is not None:
   if vecCorrected:
@@ -191,8 +170,8 @@ if fitBase is not None:
   conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
   lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
 
-  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
-  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult)
+  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
+  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
   # what's the shorthand we use to refer to these models...
   wtStr = 'wt';
   # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
@@ -207,11 +186,10 @@ if fitBase is not None:
   fitListB = hf.np_smart_load(data_loc + fitNameB);
 
   try:
-    # using context manager approach to save memory
-    with hf.np_smart_load(data_loc + fitNameA.replace('.npy', '_details.npy')) as fit_detailsA_all:
-      fit_detailsA = fit_detailsA_all[cellNum-1];
-    with hf.np_smart_load(data_loc + fitNameB.replace('.npy', '_details.npy')) as fit_detailsB_all:
-      fit_detailsB = fit_detailsB_all[cellNum-1];
+    fit_detailsA_all = hf.np_smart_load(data_loc + fitNameA.replace('.npy', '_details.npy'));
+    fit_detailsA = fit_detailsA_all[cellNum-1];
+    fit_detailsB_all = hf.np_smart_load(data_loc + fitNameB.replace('.npy', '_details.npy'));
+    fit_detailsB = fit_detailsB_all[cellNum-1];
   except:
     fit_detailsA = None; fit_detailsB = None;
 
@@ -230,10 +208,10 @@ if fitBase is not None:
 
   newMethod = 1;
 
-  mod_A_dc  = mrpt.sfNormMod(modFit_A_dc, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm)
-  mod_B_dc = mrpt.sfNormMod(modFit_B_dc, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm)
-  mod_A_f1  = mrpt.sfNormMod(modFit_A_f1, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm)
-  mod_B_f1 = mrpt.sfNormMod(modFit_B_f1, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm)
+  mod_A_dc  = mrpt.sfNormMod(modFit_A_dc, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
+  mod_B_dc = mrpt.sfNormMod(modFit_B_dc, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
+  mod_A_f1  = mrpt.sfNormMod(modFit_A_f1, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
+  mod_B_f1 = mrpt.sfNormMod(modFit_B_f1, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
 
   # get varGain values...
   if lossType == 3: # i.e. modPoiss
@@ -436,8 +414,8 @@ for measure in [0,1]:
           data_B_onlyMask = respMatrix_B_f1_onlyMask;
           data_A_baseTf = respMatrix_A_f1;
           data_B_baseTf = respMatrix_B_f1;
-          mod_mean_A = baseMean_mod_f1[0];
-          mod_mean_B = baseMean_mod_f1[1];
+          mod_mean_A = baseMean_mod_f1[0][0];
+          mod_mean_B = baseMean_mod_f1[1][0];
 
     # Now, subtract the baseOnly response from the base+mask response (only used if measure=0, i.e. DC)
     # -- but store it separately 
@@ -897,8 +875,8 @@ if fitBase is not None: # then we can plot some model details
     modB_exc, modB_norm, modB_sigma = [modRespsDebug[1][x].detach().numpy() for x in [0,1,2]]; # returns are exc, inh, sigmaFilt (c50)
     # --- then, simply mirror the calculation as done in the full model
     full_nums   = [np.add(modPrms[5], excs) for modPrms, excs in zip(currPrms, [modA_exc, modB_exc])]; # X is the index for early noise
-    full_denoms = [np.power(sigmaFilt + np.power(norm, 2), 0.5) for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
-    full_ratio = [np.divide(num, np.tile(denom, (num.shape[0], 1))) for num, denom in zip(full_nums, full_denoms)];
+    full_denoms = [sigmaFilt + norm for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
+    full_ratio = [np.divide(num, denom) for num, denom in zip(full_nums, full_denoms)];
     # --- full response (with actual respExp, and with respExp=1)
     full_resp_dcs = [];
     for rExp in [[currPrms[0][3], currPrms[1][3]], [1, 1]]:
