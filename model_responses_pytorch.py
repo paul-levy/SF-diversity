@@ -1198,7 +1198,7 @@ class sfNormMod(torch.nn.Module):
       # important to transpose the respModel before passing in to spike_fft
       amps, rel_amps, full_fourier = spike_fft([respModel], tfs=tfAsInts, stimDur=stimDur, binWidth=1.0/nFrames)
     else:
-      tfAsInts = trialInf['tf']  if respMeasure==1 else None;
+      tfAsInts = trialInf['tf'] if respMeasure==1 else None;
       # important to transpose the respModel before passing in to spike_fft
       amps, rel_amps, full_fourier = spike_fft([respModel], tfs=tfAsInts, stimDur=stimDur, binWidth=1.0/nFrames)
     # NOTE: In the above, we pass in None for tfs if getting DC (won't use F1 anyway)!
@@ -1286,7 +1286,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     loc_str = 'HPC';
   else:
     loc_str = '';
-  #loc_str = 'HPC'; # use to override (mostly for debugging locally for HPC-based fits)
+  loc_str = 'HPC'; # use to override (mostly for debugging locally for HPC-based fits)
 
   if fL_name is None: # otherwise, it's already defined...
     if modRecov == 1:
@@ -1404,8 +1404,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       curr_fit = fitList[cellNum-1][respStr];
       curr_params = curr_fit['params'];
       # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
-      testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp)
-      trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly, normFiltersToOne=normFiltersToOne) # warning: added respOverwrite here; also add whichTrials???
+      testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False)
+      trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly) # warning: added respOverwrite here; also add whichTrials???
       predictions = testModel.forward(trInfTemp, respMeasure=respMeasure);
       if testModel.lossType == 3:
         loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType, varGain=testModel.varGain)
@@ -1599,10 +1599,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if respMeasure == 1: # figure out which stimulus components were blank for the given trials
             if expInd == -1:
               maskInd, baseInd = hf_sfBB.get_mask_base_inds();
-              target['resp'][target['maskCon']==0,0] = 1e-6 # force F1 ~ 0 if con of that stim is 0
-              target['resp'][target['baseCon']==0,1] = 1e-6 # force F1 ~ 0 if con of that stim is 0
-              predictions[target['maskCon']==0,0] = 1e-6 # force F1 ~ 0 if con of that stim is 0
-              predictions[target['baseCon']==0,1] = 1e-6 # force F1 ~ 0 if con of that stim is 0
+              target['resp'][target['maskCon']==0, maskInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
+              target['resp'][target['baseCon']==0, baseInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
+              predictions[target['maskCon']==0, maskInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
+              predictions[target['baseCon']==0, baseInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
             else:
               blanks = np.where(target['cons']==0);
               target['resp'][blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
