@@ -156,7 +156,8 @@ _applyLGNtoNorm = 1;
 _sigmoidScale = 10
 _sigmoidDord = 5;
 
-fitBase = 'fitList%s_pyt_nr221031j_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221031j_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr221106_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 if fitBase is not None:
   if vecCorrected:
@@ -207,7 +208,6 @@ if fitBase is not None:
   conTypes = [conA, conB];
 
   newMethod = 1;
-
   mod_A_dc  = mrpt.sfNormMod(modFit_A_dc, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
   mod_B_dc = mrpt.sfNormMod(modFit_B_dc, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
   mod_A_f1  = mrpt.sfNormMod(modFit_A_f1, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
@@ -272,14 +272,17 @@ f1f0_rat = hf_sf.compute_f1f0(expInfo)[0];
 
 ### Now, if we've got the models, get and organize those responses...
 if fitBase is not None:
-  trInf_dc, _ = mrpt.process_data(expInfo, expInd=expInd, respMeasure=0); 
-  trInf_f1, _ = mrpt.process_data(expInfo, expInd=expInd, respMeasure=1); 
+  trInf_dc, resps_dc = mrpt.process_data(expInfo, expInd=expInd, respMeasure=0); 
+  trInf_f1, resps_f1 = mrpt.process_data(expInfo, expInd=expInd, respMeasure=1); 
   val_trials = trInf_dc['num']; # these are the indices of valid, original trials
 
   resp_A_dc  = mod_A_dc.forward(trInf_dc, respMeasure=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
   resp_B_dc = mod_B_dc.forward(trInf_dc, respMeasure=0, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
   resp_A_f1  = mod_A_f1.forward(trInf_f1, respMeasure=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
   resp_B_f1 = mod_B_f1.forward(trInf_f1, respMeasure=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
+
+  loss_A = [mrpt.loss_sfNormMod(mrpt._cast_as_tensor(mr_curr), mrpt._cast_as_tensor(resps_curr), lossType=lossType, varGain=mrpt._cast_as_tensor(varGain)).detach().numpy() for mr_curr, resps_curr, varGain in zip([resp_A_dc, resp_A_f1], [resps_dc, resps_f1], varGains_A)]
+  loss_B = [mrpt.loss_sfNormMod(mrpt._cast_as_tensor(mr_curr), mrpt._cast_as_tensor(resps_curr), lossType=lossType, varGain=mrpt._cast_as_tensor(varGain)).detach().numpy() for mr_curr, resps_curr, varGain in zip([resp_B_dc, resp_B_f1], [resps_dc, resps_f1], varGains_B)]
 
   # now get the mask+base response (f1 at base TF)
   maskInd, baseInd = hf_sf.get_mask_base_inds();
@@ -288,18 +291,19 @@ if fitBase is not None:
   baseMean_mod_dc = [hf_sf.get_baseOnly_resp(expInfo, dc_resp=x, val_trials=val_trials)[1][0][0][0] for x in [resp_A_dc, resp_B_dc]];
   baseMean_mod_f1 = [hf_sf.get_baseOnly_resp(expInfo, f1_base=x[:,baseInd], val_trials=val_trials)[1][1][0][0] for x in [resp_A_f1, resp_B_f1]];
 
+  # ------ note: for all model responses, flag vecCorrectedF1 != 1 so that we make sure to use the passed-in model responses
   # ---- model A responses
-  respMatrix_A_dc, respMatrix_A_f1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, dc_resp=resp_A_dc, f1_base=resp_A_f1[:,baseInd], f1_mask=resp_A_f1[:,maskInd], val_trials=val_trials); # i.e. get the base response for F1
+  respMatrix_A_dc, respMatrix_A_f1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, dc_resp=resp_A_dc, f1_base=resp_A_f1[:,baseInd], f1_mask=resp_A_f1[:,maskInd], val_trials=val_trials, vecCorrectedF1=0); # i.e. get the base response for F1
   # and get the mask only response (f1 at mask TF)
-  respMatrix_A_dc_onlyMask, respMatrix_A_f1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, dc_resp=resp_A_dc, f1_base=resp_A_f1[:,baseInd], f1_mask=resp_A_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
+  respMatrix_A_dc_onlyMask, respMatrix_A_f1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, dc_resp=resp_A_dc, f1_base=resp_A_f1[:,baseInd], f1_mask=resp_A_f1[:,maskInd], val_trials=val_trials, vecCorrectedF1=0); # i.e. get the maskONLY response
   # and get the mask+base response (but f1 at mask TF)
-  _, respMatrix_A_f1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=resp_A_dc, f1_base=resp_A_f1[:,baseInd], f1_mask=resp_A_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
+  _, respMatrix_A_f1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=resp_A_dc, f1_base=resp_A_f1[:,baseInd], f1_mask=resp_A_f1[:,maskInd], val_trials=val_trials, vecCorrectedF1=0); # i.e. get the maskONLY response
   # ---- model B responses
-  respMatrix_B_dc, respMatrix_B_f1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, dc_resp=resp_B_dc, f1_base=resp_B_f1[:,baseInd], f1_mask=resp_B_f1[:,maskInd], val_trials=val_trials); # i.e. get the base response for F1
+  respMatrix_B_dc, respMatrix_B_f1 = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=0, dc_resp=resp_B_dc, f1_base=resp_B_f1[:,baseInd], f1_mask=resp_B_f1[:,maskInd], val_trials=val_trials, vecCorrectedF1=0); # i.e. get the base response for F1
   # and get the mask only response (f1 at mask TF)
-  respMatrix_B_dc_onlyMask, respMatrix_B_f1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, dc_resp=resp_B_dc, f1_base=resp_B_f1[:,baseInd], f1_mask=resp_B_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
+  respMatrix_B_dc_onlyMask, respMatrix_B_f1_onlyMask = hf_sf.get_mask_resp(expInfo, withBase=0, maskF1=1, dc_resp=resp_B_dc, f1_base=resp_B_f1[:,baseInd], f1_mask=resp_B_f1[:,maskInd], val_trials=val_trials, vecCorrectedF1=0); # i.e. get the maskONLY response
   # and get the mask+base response (but f1 at mask TF)
-  _, respMatrix_B_f1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=resp_B_dc, f1_base=resp_B_f1[:,baseInd], f1_mask=resp_B_f1[:,maskInd], val_trials=val_trials); # i.e. get the maskONLY response
+  _, respMatrix_B_f1_maskTf = hf_sf.get_mask_resp(expInfo, withBase=1, maskF1=1, dc_resp=resp_B_dc, f1_base=resp_B_f1[:,baseInd], f1_mask=resp_B_f1[:,maskInd], val_trials=val_trials, vecCorrectedF1=0); # i.e. get the maskONLY response
 
 ### Get the responses - base only, mask+base [base F1], mask only (mask F1)
 baseDistrs, baseSummary, baseConds = hf_sf.get_baseOnly_resp(expInfo);

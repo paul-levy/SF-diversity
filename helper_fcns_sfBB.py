@@ -332,7 +332,7 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
           refPhi = phAdv_model(*curr_params, curr_r);
           new_r = np.multiply(curr_r, np.cos(np.deg2rad(refPhi)-np.deg2rad(curr_phi)));
           respMatrixF1[mcI, msI,0,0] = new_r;
-               
+
     maskResp_dc.append(respMatrixDC); maskResp_f1.append(respMatrixF1);
     maskResp_dcAll.append(respMatrixDCall); maskResp_f1All.append(respMatrixF1all);
 
@@ -390,7 +390,7 @@ def adjust_f1_byTrial(expInfo, onsetTransient=None, maskF1byPhAmp=None):
           resp_amp, phase_rel_stim = vec_byTrial[0], vec_byTrial[1];
           # finally, project the response as usual
           resp_proj = np.multiply(resp_amp, np.cos(np.deg2rad(mean_phi)-np.deg2rad(phase_rel_stim)));
-          if maskF1byPhAmp is not None and maskOn==1:
+          if maskF1byPhAmp is not None and maskOn==1 and baseOn==0: # this only applies with no base stimulus!
             updMask[val_trials] = maskF1byPhAmp[whichCon, whichSf, 0:len(val_trials), 0]; # just unpack from the already processed maskF1 responses (corrected by phAmp) --> must be by trial 
           else:
             updMask[val_trials] = resp_proj[:,maskInd];
