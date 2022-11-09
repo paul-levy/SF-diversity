@@ -399,7 +399,7 @@ class dataWrapper(torchdata.Dataset):
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module()
 
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=True):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=False, forceLateNoise=None):
 
     super().__init__();
 
@@ -461,11 +461,14 @@ class sfNormMod(torch.nn.Module):
     self.scale    = _cast_as_param(modParams[4]); # response scalar
 
     # Noise parameters
-    if force_earlyNoise is None:
+    if force_earlyNoise is None or not toFit:
       self.noiseEarly = _cast_as_param(modParams[5]);   # early additive noise
     else:
       self.noiseEarly = _cast_as_tensor(force_earlyNoise); # early additive noise - fixed value, i.e. NOT optimized in this case
-    self.noiseLate  = _cast_as_param(modParams[6]);  # late additive noise
+    if forceLateNoise is None or not toFit:
+      self.noiseLate  = _cast_as_param(modParams[6]);  # late additive noise
+    else:
+      self.noiseLate  = _cast_as_param(forceLateNoise); # could be set to 0 (eg. for F1)
     if self.lossType == 3:
       self.varGain    = _cast_as_param(modParams[7]);  # multiplicative noise
     else:
