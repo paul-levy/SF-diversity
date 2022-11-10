@@ -24,20 +24,17 @@
 
 source activate pytorch-lcv
 
-WHICH_PLOT=${1:-1}
+VEC_F1=${1:-0}
 
-if [[ $WHICH_PLOT -eq 1 ]]; then
-  PYCALL="plot_sfBB.py"
-else
-  PYCALL="plot_sfBB_sep.py"
-fi
 
-for run in {1..23} # was ..58 before cutting dataList_210721
+# 20 cells if original datalist; 41 cells if dataList_210222
+for run in {1..47} # was ..58 before cutting dataList_210721
 do
-  python3.6 plot_sfBB.py $run -1 2 V1_BB/ 1 0 0 0 0 0 0 1 0 &
+  python3.6 plot_sfBB.py $run -1 -1 V1_BB/ -1 -1 -1 -1 -1 -1 $VEC_F1 -1
+  # --------------------------e-l--dir----dif--kmul--rExp------
+  # ------------------------------------lgn-inp----corr-sem-------
+
 done
-wait
-for run in {24..47} # was ..58 before cutting dataList_210721
-do
-  python3.6 plot_sfBB.py $run -1 2 V1_BB/ 1 0 0 0 0 0 0 1 0 &
-done
+
+# leave a blank line at the end
+
