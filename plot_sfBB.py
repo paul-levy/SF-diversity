@@ -157,7 +157,11 @@ _sigmoidScale = 10
 _sigmoidDord = 5;
 
 #fitBase = 'fitList%s_pyt_nr221031j_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-fitBase = 'fitList%s_pyt_nr221106_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr221108a_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221106a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+
+if excType <= 0:
+  fitBase = None;
 
 if fitBase is not None:
   if vecCorrected:
@@ -171,8 +175,10 @@ if fitBase is not None:
   conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
   lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
 
-  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
-  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
+  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
+  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
+  #fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
+  #fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
   # what's the shorthand we use to refer to these models...
   wtStr = 'wt';
   # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
@@ -233,8 +239,8 @@ if onsetCurr is None:
 else:
   onsetStr = '_onset%s_%03d_%03d' % (onsetMod_str, onsetDur, halfWidth)
 
-lossSuf = hf.lossType_suffix(lossType).replace('.npy', ''); # get the loss suffix, remove the file type ending
 if fitBase is not None:
+  lossSuf = hf.lossType_suffix(lossType).replace('.npy', ''); # get the loss suffix, remove the file type ending
   if diffPlot == 1: 
     compDir  = str(fitBase + '_diag_%s_%s' % (modA_str, modB_str) + lossSuf + '/diff');
   else:
@@ -701,7 +707,7 @@ if fitBase is not None: # then we can plot some model details
 
     # plot model details - exc/suppressive components
     ########### as copied, and now edited, from plot_diagnose_vLGN
-    omega = np.logspace(-2, 2, 1000);
+    omega = np.logspace(-1.25, 1.25, 1000);
     sfExc = [];
     sfExcRaw = [];
     sfNorms = [];
@@ -838,11 +844,11 @@ if fitBase is not None: # then we can plot some model details
     # Now, plot the full denominator (including the constant term) at a few contrasts
     # --- use the debug flag to get the tuned component of the gain control as computed in the full model
     curr_ax = plt.subplot2grid(detailSize, (1, 2+colAdd));
-    modRespsDebug = [mod.forward(trInf, respMeasure=respMeas, debug=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm) for mod in currMods];
+    modRespsDebug = [mod.forward(trInf, respMeasure=respMeas, debug=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, normOverwrite=True) for mod in currMods];
     modA_norm, modA_sigma = [modRespsDebug[0][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
     modB_norm, modB_sigma = [modRespsDebug[1][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
     # --- then, simply mirror the calculation as done in the full model
-    full_denoms = [np.power(sigmaFilt + np.power(norm, 2), 0.5) for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
+    full_denoms = [sigmaFilt + norm for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
     # --- use hf.get_valid_trials to get high/low con, single gratings
     conVals = [maskCon[-5], maskCon[-3], maskCon[-1]]; # try to get the normResp at these contrast values
     modTrials = trInf['num']; # these are the trials eval. by the model
@@ -851,19 +857,25 @@ if fitBase is not None: # then we can plot some model details
       closest_ind = np.argmin(np.abs(conVal - maskCon));
       close_enough = np.abs(maskCon[closest_ind] - conVal) < 0.03 # must be within 3% contrast
       if close_enough:
-        # highest contrast, first; for all, no base, only mask
-        all_trials = [hf_sf.get_valid_trials(expInfo, 1, 0, closest_ind, sfI)[0] for sfI,_ in enumerate(maskSf)];
+        # highest contrast, first; for all, maskOn [1] and baseOff [0]
+        all_trials = [hf_sf.get_valid_trials(expInfo, 1, 0, whichCon=closest_ind, whichSf=sfI)[0] for sfI,_ in enumerate(maskSf)];
         # then, find which corresponding index into model-eval-only trials this is
         all_trials_modInd = [np.intersect1d(modTrials, trs, return_indices=True)[1] for trs in all_trials];
-        modA_resps = [np.mean(full_denoms[0][trs]) for trs in all_trials_modInd];
-        modB_resps = [np.mean(full_denoms[1][trs]) for trs in all_trials_modInd];
+        if currMods[0].useFullNormResp:
+            modA_resps = [np.mean(full_denoms[0][:, trs]) for trs in all_trials_modInd];
+        else:
+            modA_resps = [np.mean(full_denoms[0][trs]) for trs in all_trials_modInd];
+        if currMods[1].useFullNormResp:
+            modB_resps = [np.mean(full_denoms[1][:, trs]) for trs in all_trials_modInd];
+        else:
+            modB_resps = [np.mean(full_denoms[1][trs]) for trs in all_trials_modInd];
         # -- take sqrt of con val so that it's not SO dim...
         [plt.semilogx(maskSf, denom, alpha=np.sqrt(conVal), color=clr) for clr,denom in zip(modColors, [modA_resps, modB_resps])]
         plt.title('Normalization term by contrast, model');
     # plot just the constant term (i.e. if there is NO g.c. pooled response)
     sf_vals = maskSf;
-    onlySigma = [np.power(sigmaFilt + np.power(0, 2), 0.5) for sigmaFilt in [modA_sigma, modB_sigma]];
-    [plt.plot(xCoord*sf_vals[0], sig, color=clr, marker='>') for xCoord,sig,clr in zip([0.95, 0.85], onlySigma, modColors)]
+    onlySigma = [sigmaFilt for sigmaFilt in [modA_sigma, modB_sigma]];
+    #[plt.plot(xCoord*sf_vals[0], sig, color=clr, marker='>') for xCoord,sig,clr in zip([0.95, 0.85], onlySigma, modColors)]
     plt.xlim([omega[0], omega[-1]]);
     #plt.xlim([1e-1, 1e1]);
 
@@ -933,14 +945,15 @@ if fitBase is not None: # then we can plot some model details
           else:
             [plt.semilogx(maskSf, resp/max_resp, alpha=np.sqrt(conVal), color=clr) for clr,resp in zip(modColors, [modA_resps[0], modB_resps[0]])]
             [plt.semilogx(maskSf, resp/max_resp_noExp, alpha=np.sqrt(conVal), color=clr, linestyle='--') for clr,resp in zip(modColors, [modA_resps[1], modB_resps[1]])]
-          plt.axhline(_globalMin, linestyle='--', color='k');
+          #plt.axhline(_globalMin, linestyle='--', color='k');
           plt.axvline(0.1, linestyle='--', color='k');
           plt.axvline(1, linestyle='--', color='k');
           plt.axvline(10, linestyle='--', color='k');
       #plt.xlim([0.1, 10]);
       plt.xlim([omega[0], omega[-1]]);
       if row < 2:
-        plt.yscale('symlog', linthresh=1e-10);
+        plt.yscale('symlog', linthresh=1e-2);
+        #plt.yscale('symlog', linthresh=1e-10);
       plt.ylim(ylim); #plt.ylim([0, 1]);
       plt.title(title);
     ##################
@@ -997,7 +1010,8 @@ pdfSv.close()
 #######################
 # Do this only if we are't plotting model fits
 ### --- TODO: Must make fits to sfBB_var* expts...
-if fitBase is None or useCoreFit:
+#'''
+if fitBase is not None and useCoreFit:
 
   # first, load the sfBB_core experiment to get reference tuning
   expInfo_base = cell['sfBB_core']
@@ -1311,7 +1325,6 @@ if fitBase is None or useCoreFit:
           except:
             ax[4, 1+2*measure].axis('off');
           '''
-
           ### SF tuning with R(m+b) - R(m) - R(b) // for DC only
           nCons = len(maskCon);
           for mcI, mC in enumerate(maskCon):
@@ -1380,3 +1393,4 @@ if fitBase is None or useCoreFit:
         pdfSv.savefig(f)
         plt.close(f)
         pdfSv.close()
+#'''

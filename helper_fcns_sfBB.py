@@ -199,7 +199,6 @@ def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecC
 
   return [baseResp_dc, baseResp_f1], [baseSummary_dc, baseSummary_f1], unique_pairs;
 
-
 def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=1, onsetTransient=None, resample=False, phAdvCorr=True):
   ''' return the DC, F1 matrices [mean, s.e.m.] for responses to the mask only in the sfBB_* series 
       For programs (e.g. sfBB_varSF) with multiple base conditions, the order returned here is guaranteed

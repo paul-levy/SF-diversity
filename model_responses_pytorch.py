@@ -20,7 +20,8 @@ torch.autograd.set_detect_anomaly(True)
 ### Some global things...
 #########
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
-force_earlyNoise = 0; # if None, allow it as parameter; otherwise, force it to this value (e.g. 0)
+#force_earlyNoise = 0; # if None, allow it as parameter; otherwise, force it to this value (e.g. 0)
+force_earlyNoise = None; # if None, allow it as parameter; otherwise, force it to this value (e.g. 0)
 recenter_norm = 0;
 _schedule = False; # use scheduler or not??? True or False
 #_schedule = True; # use scheduler or not??? True or False
@@ -307,6 +308,9 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
       if singleGratsOnly:
         # the first line (commented out now) is single gratings AND just at one SF (1.7321, for ex.)
         #whichTrials = np.where(np.logical_and(np.isclose(coreExp['sf'][0], 2.460, atol=0.1), np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0)))[0]; # this will force singlegrats only!
+        # single gratings AND 1.5<=sf<=4
+        #whichTrials = np.where(np.logical_and(np.logical_and(coreExp['sf'][0]>1.5, coreExp['sf'][0]<4), np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0)))[0]; # this will force singlegrats only!
+        # DEFAULT: just single gratings
         whichTrials = np.where(np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0))[0]; # this will force singlegrats only!
       else:
         whichTrials = np.where(~np.isnan(np.sum(coreExp['ori'], 0)))[0];
@@ -1087,7 +1091,7 @@ class sfNormMod(torch.nn.Module):
           # weights relative to cell preference
           all_weights = 1 + torch.clamp(self.inhAsym,-0.3,0.3) * (torch.log(filt_sfs) - torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)))
 
-        elif self.normType == 2: # i.e. tuned weights
+        elif self.normType == 2 or self.normType == 5: # i.e. tuned weights
           all_weights = [];
           for iB, filt_sfs in zip(range(len(self.normFull['nFilters'])), self.normFull['prefSfs']):
             log_sfs = torch.log(filt_sfs);
@@ -1095,6 +1099,8 @@ class sfNormMod(torch.nn.Module):
             weight_distr = torch.distributions.normal.Normal(torch.clamp(self.gs_mean, min=self.normFull['prefSfs'][0][0], max=self.normFull['prefSfs'][0][-1]), torch.clamp(self.gs_std, min=gs_std_min));
             # clamp the weights to avoid near-zero values
             new_weights = torch.clamp(torch.exp(weight_distr.log_prob(log_sfs)), min=minWeight);
+            if self.normType == 5:
+              new_weights = torch.pow(new_weights, self.gs_gain); # temporary!!! (22.11.08 --> make the gs_gain act as a power on the weights?)
             if torch.mean(new_weights).item() < 1e-2:
               print('bad weight! --> mn, std = %.2f, %.2f' % (self.gs_mean, self.gs_std));
             avg_weights = new_weights/torch.mean(new_weights); # make avg. weight = 1
@@ -1289,13 +1295,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     loc_str = 'HPC';
   else:
     loc_str = '';
-  loc_str = 'HPC'; # use to override (mostly for debugging locally for HPC-based fits)
+  #loc_str = 'HPC'; # use to override (mostly for debugging locally for HPC-based fits)
 
   if fL_name is None: # otherwise, it's already defined...
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
-      fL_name = 'fitList%s_pyt_nr221031j%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_nr221108b%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   todoCV = 1 if whichTrials is not None else 0;
 
@@ -1514,6 +1520,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         respScalar *= 1.5; # need slighly stronger respScalar in these cases?
       # increased starting value for width as of 22.10.25
       normStd = np.random.uniform(1.25, 2.25) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
+  # TEMP...
+  normGain = np.random.uniform(0.5, 1) if initFromCurr == 0 else curr_params[10]; # will be a sigmoid-ed value...
 
   varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
   if lgnFrontEnd > 0:
@@ -1602,8 +1610,11 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           if respMeasure == 1: # figure out which stimulus components were blank for the given trials
             if expInd == -1:
               maskInd, baseInd = hf_sfBB.get_mask_base_inds();
+              # [commented out] TEMPORARY!!! make all mask same value (i.e. do not optimize for these values)
+              #target['resp'][:, maskInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
               target['resp'][target['maskCon']==0, maskInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
               target['resp'][target['baseCon']==0, baseInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
+              #predictions[:, maskInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
               predictions[target['maskCon']==0, maskInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
               predictions[target['baseCon']==0, baseInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
             else:
@@ -1872,7 +1883,7 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221031j%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr221108b%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
       
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList);

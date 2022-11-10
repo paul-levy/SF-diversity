@@ -93,10 +93,7 @@ def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, 
       curr_fit = fitList[which_cell-1][resp_str]['params'];
     else:
       curr_fit = fitList; # we already passed in parameters
-    # TEMP:
-    #curr_fit[5] = 0; # turn off early noise
-    # END TEMP:
-    model = mrpt.sfNormMod(curr_fit, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod, lgnConType=lgnConType, applyLGNtoNorm=_applyLGNtoNorm, normToOne=normToOne)
+    model = mrpt.sfNormMod(curr_fit, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod, lgnConType=lgnConType, applyLGNtoNorm=_applyLGNtoNorm, normToOne=normToOne, normFiltersToOne=False, toFit=False)
     ### get the vec-corrected responses, if applicable
     # NOTE: NEED TO FIX THIS, esp. for 
     if expInd > 2 and respMeasure == 1: # only can get F1 if expInd>=2
@@ -320,7 +317,7 @@ def selected_supr_metrics(df):
 
   return None;
 
-def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excType=2, useHPCfit=1, lgnConType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=False, useTex=False, simple_plot=True, altHollow=True, ltThresh=0.5, ref_line_alpha=0.5, ref_all_sfs=False, plt_supr_ind=False, supr_ind_prince=False, sum_power=1, spec_disp = None, spec_con = None):
+def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excType=1, useHPCfit=1, lgnConType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=False, useTex=False, simple_plot=True, altHollow=True, ltThresh=0.5, ref_line_alpha=0.5, ref_all_sfs=False, plt_supr_ind=False, supr_ind_prince=False, sum_power=1, spec_disp = None, spec_con = None):
 
   # if ref_all_sfs, then colors for superposition plots are referenced across all SFS (not just those that appear for dispersion=1)
 
@@ -359,10 +356,9 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
   elif use_mod_resp == 2:
     rvcName = None; # Use NONE if getting model responses, only
-    fitBase = 'fitList%s_pyt_nr221029a_noRE' % '' # loc_str
-    #fitBase = 'fitList%s_pyt_Fnr221021' % loc_str
-    #fitBase = 'fitList%s_pyt_221013_noRE_noSched' % loc_str
-    fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=-rvcAdj);
+    #fitBase = 'fitList%s_pyt_nr221106_noRE_noSched' % loc_str
+    fitBase = 'fitList%s_pyt_nr221106d_noSched' % loc_str
+    fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=-rvcAdj, excType=excType);
   # ^^^ EDIT rvc/descrFits/fitList names here;
 
   if use_mod_resp>0:
