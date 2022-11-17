@@ -41,46 +41,47 @@ fi
 # default is zero, i.e. not HPC fits...
 
 # 20 cells if original datalist; 41 cells if dataList_210222
-for run in {1..47} # was ..58 before cutting dataList_210721
+for run in {1..24} # was ..58 before cutting dataList_210721
 do
   ######
   ## New version, model fits - the doubled (i.e. two-digit) inputs are, in order, normTypes, (lgn)conTypes, lgnFrontEnd
   ######
-  # --------------------------e-------l------dir--nrm---lgn-dif-kmul--onsr--sem-----
-  # -------------------------------------------------con---inp----cor-rExp-------
-  if [[ $NORM_TYPE -eq 1 ]]; then
-    # modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
-    # modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
-    # modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
-    # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
-    # modA: flat, no LGN; modB: wght, no LGN
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
-    # modA: flat, no LGN; modB: asym, no LGN
-    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 10 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
-  else
-    ### ALT of the above (with wghtGain (normType=5) instead of wght (norm=2))
-    # modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 15 44 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
-    # modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 15 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
-    # modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 15 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
-    # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 55 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
-  fi
+  # ------------------------e-------l------dir--nrm---lgn-dif-kmul--onsr--sem-----
+  # -----------------------------------------------con---inp----cor-rExp-------
+  # modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  # modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  # modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  # modA: flat, no LGN; modB: wght, no LGN
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  # modA: flat, no LGN; modB: asym, no LGN
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 10 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
 
+done
+wait
+for run in {25..47} # was ..58 before cutting dataList_210721
+do
   ######
-  ## End of new version
+  ## New version, model fits - the doubled (i.e. two-digit) inputs are, in order, normTypes, (lgn)conTypes, lgnFrontEnd
   ######
-
-  # DATA ONLY, WITH PHASE CORRECTION  
-  #python3.6 plot_sfBB.py $run -1 2 V1_BB/ 1 0 0 0.05 1 80 -1 1 & # no diff, not interpolated
-  # --------------------------e-l--dir----dif--kmul--rExp------
-  # ------------------------------------lgn-inp----corr-sem-------
+  # ------------------------e-------l------dir--nrm---lgn-dif-kmul--onsr--sem-----
+  # -----------------------------------------------con---inp----cor-rExp-------
+  # modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  # modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  # modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  # modA: flat, no LGN; modB: wght, no LGN
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  # modA: flat, no LGN; modB: asym, no LGN
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 10 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
 
 done
 

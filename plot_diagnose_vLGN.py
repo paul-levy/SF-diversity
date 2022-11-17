@@ -131,15 +131,10 @@ expName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
 _sigmoidScale = 10
 _sigmoidDord = 5;
 
-#fitBase = 'fitList%s_pyt_nr221021_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr221024_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr221029%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr221024a%s' % (loc_str, '_sg' if singleGratsOnly else '')
-
-#fitBase = 'fitList%s_pyt_nr221031i%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr221031i_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr221106d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-fitBase = 'fitList%s_pyt_nr221106d_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221109e_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221109e_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr221116d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221116c_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
 vecF1 = 0;

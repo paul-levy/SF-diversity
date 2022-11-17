@@ -157,8 +157,8 @@ _sigmoidScale = 10
 _sigmoidDord = 5;
 
 #fitBase = 'fitList%s_pyt_nr221031j_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-fitBase = 'fitList%s_pyt_nr221108a_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr221106a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr221109f_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+#fitBase = 'fitList%s_pyt_nr221109e_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 if excType <= 0:
   fitBase = None;
@@ -241,10 +241,11 @@ else:
 
 if fitBase is not None:
   lossSuf = hf.lossType_suffix(lossType).replace('.npy', ''); # get the loss suffix, remove the file type ending
+  excType_str = hf.excType_suffix(excType);
   if diffPlot == 1: 
-    compDir  = str(fitBase + '_diag_%s_%s' % (modA_str, modB_str) + lossSuf + '/diff');
+    compDir  = str(fitBase + '_diag%s_%s_%s' % (excType_str, modA_str, modB_str) + lossSuf + '/diff');
   else:
-    compDir  = str(fitBase + '_diag_%s_%s' % (modA_str, modB_str) + lossSuf);
+    compDir  = str(fitBase + '_diag%s_%s_%s' % (excType_str, modA_str, modB_str) + lossSuf);
   if intpMod == 1:
     compDir = str(compDir + '/intp');
   subDir   = compDir.replace('fitList', 'fits').replace('.npy', '');

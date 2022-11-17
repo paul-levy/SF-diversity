@@ -403,7 +403,7 @@ class dataWrapper(torchdata.Dataset):
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module()
 
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[1.25, 2.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=False, forceLateNoise=None):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=False, forceLateNoise=None):
 
     super().__init__();
 
