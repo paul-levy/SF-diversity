@@ -199,7 +199,7 @@ def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecC
 
   return [baseResp_dc, baseResp_f1], [baseSummary_dc, baseSummary_f1], unique_pairs;
 
-def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=1, onsetTransient=None, resample=False, phAdvCorr=True):
+def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=1, onsetTransient=None, resample=False, phAdvCorr=True, opt_params=None, debugPhAdv=False):
   ''' return the DC, F1 matrices [mean, s.e.m.] for responses to the mask only in the sfBB_* series 
       For programs (e.g. sfBB_varSF) with multiple base conditions, the order returned here is guaranteed
       to be the same as the unique base conditions given in get_baseOnly_resp
@@ -284,9 +284,9 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
             trialsOk_match = np.where(np.logical_and(currTr, np.logical_and(conOk, sfOk))[val_trials])[0];
 
             # - ternary operator (should be straightforward)
-            dc_indexing = trialsOk_match if dc_len_match else baseOnly_curr;
-            f1Mask_indexing = trialsOk_match if f1Mask_len_match else baseOnly_curr;
-            f1Base_indexing = trialsOk_match if f1Base_len_match else baseOnly_curr;
+            dc_indexing = trialsOk_match if dc_len_match else trialsOk;
+            f1Mask_indexing = trialsOk_match if f1Mask_len_match else trialsOk;
+            f1Base_indexing = trialsOk_match if f1Base_len_match else trialsOk;
             ### then get the responses...DC, first
             currDC = dc_resp[dc_indexing];
             nTr = len(currDC);
@@ -323,7 +323,13 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
 
     # Now, here (after organizing all of the responses by con x sf), we can apply any vecF1 correction, if applicable
     if phAdvCorr and vecCorrectedF1:
-      opt_params, phAdv_model = phase_advance_fit_core(respMatrixF1[:,:,0], respMatrixF1[:,:,1], maskCon, maskSf);
+      if opt_params is None: # otherwise, we can pass in the values in advance
+        opt_params, phAdv_model = phase_advance_fit_core(respMatrixF1[:,:,0], respMatrixF1[:,:,1], maskCon, maskSf);
+        
+        if debugPhAdv:
+          return opt_params;
+      else:
+        phAdv_model = hf.get_phAdv_model();
       for msI, mS in enumerate(maskSf):
         curr_params = opt_params[msI]; # the phAdv model applies per-SF
         for mcI, mC in enumerate(maskCon):

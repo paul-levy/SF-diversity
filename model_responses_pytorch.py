@@ -264,8 +264,15 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
   ### first, find out which trials we should be analyzing
   if expInd == -1: # i.e. sfBB
     trialInf = coreExp['trial'];
+    ######
+    # First, get the valid trials (here either mask and/or base present)
+    ######
+    valTrials = np.where(np.logical_or(trialInf['maskOn'], trialInf['baseOn']))[0]
     if whichTrials is None: # if whichTrials is None, then we're using ALL non-blank trials (i.e. fitting 100% of data)
-      whichTrials = np.where(np.logical_or(trialInf['maskOn'], trialInf['baseOn']))[0]
+      whichTrials = valTrials;
+    else: # if we did specify whichTrials, then just filter out trials that do not have either mask or base on!
+      whichTrials = np.intersect1d(valTrials, whichTrials);
+      #### TODO: verify this!
     if respMeasure == 0:
       resp = np.expand_dims(coreExp['spikeCounts'][whichTrials], axis=1); # make (nTr, 1)
     elif respMeasure == 1: # then we're getting F1 -- first at baseTF, then maskTF
@@ -278,55 +285,67 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
   # --- first step, but for older experiments    
   elif expInd == 1: # i.e. sfMix original
     trialInf = coreExp;
+    ######
+    # First, filter out the orientation trials and blank/NaN trials!
+    ######
+    mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
+    # and get rid of orientation tuning curve trials
+    oriBlockIDs = np.hstack((np.arange(131, 155+1, 2), np.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
+    oriInds = np.empty((0,));
+    for iB in oriBlockIDs:
+        indCond = np.where(coreExp['blockID'] == iB);
+        if len(indCond[0]) > 0:
+            oriInds = np.append(oriInds, indCond);
+    mask[oriInds.astype(np.int64)] = False;
+    # and also blank/NaN trials
+    whereOriNan = np.where(np.isnan(coreExp['ori'][0]))[0];
+    mask[whereOriNan] = False;
     if whichTrials is None: # if whichTrials is None, then we're using ALL non-blank trials (i.e. fitting 100% of data)
-      mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
-      # and get rid of orientation tuning curve trials
-      oriBlockIDs = np.hstack((np.arange(131, 155+1, 2), np.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
-      oriInds = np.empty((0,));
-      for iB in oriBlockIDs:
-          indCond = np.where(coreExp['blockID'] == iB);
-          if len(indCond[0]) > 0:
-              oriInds = np.append(oriInds, indCond);
-      mask[oriInds.astype(np.int64)] = False;
-      # and also blank/NaN trials
-      whereOriNan = np.where(np.isnan(coreExp['ori'][0]))[0];
-      mask[whereOriNan] = False;
       whichTrials = np.where(mask)[0];
-      # now, finally get ths responses
-      if respOverwrite is not None:
-        resp = respOverwrite;
+    else: # then take the specified trials that also meet the mask!
+      whichTrials = np.intersect1d(np.where(mask)[0], whichTrials);
+      # TODO: verify this!
+    # now, finally get ths responses
+    if respOverwrite is not None:
+      resp = respOverwrite;
+    else:
+      if respMeasure == 0:
+        resp = coreExp['spikeCount'].astype(int); # cast as int, since some are as uint
       else:
-        if respMeasure == 0:
-          resp = coreExp['spikeCount'].astype(int); # cast as int, since some are as uint
-        else:
-          resp = coreExp['f1'];
-        resp = np.expand_dims(resp, axis=1); # expand dimensions to make it (nTr, 1)
-      resp = resp[whichTrials];
+        resp = coreExp['f1'];
+      resp = np.expand_dims(resp, axis=1); # expand dimensions to make it (nTr, 1)
+    resp = resp[whichTrials];
   elif expInd >= 2: # the updated sfMix experiments
     trialInf = coreExp;
-    if whichTrials is None:
-      # start with all trials...
-      mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
-      # BUT, if we pass in trialSubset, then use this as our mask (i.e. overwrite the above mask)
-      if singleGratsOnly:
-        # the first line (commented out now) is single gratings AND just at one SF (1.7321, for ex.)
-        #whichTrials = np.where(np.logical_and(np.isclose(coreExp['sf'][0], 2.460, atol=0.1), np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0)))[0]; # this will force singlegrats only!
-        # single gratings AND 1.5<=sf<=4
-        #whichTrials = np.where(np.logical_and(np.logical_and(coreExp['sf'][0]>1.5, coreExp['sf'][0]<4), np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0)))[0]; # this will force singlegrats only!
-        # DEFAULT: just single gratings
-        whichTrials = np.where(np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0))[0]; # this will force singlegrats only!
-      else:
-        whichTrials = np.where(~np.isnan(np.sum(coreExp['ori'], 0)))[0];
-      # TODO -- put in the proper responses...
-      if respOverwrite is not None:
-        resp = respOverwrite;
-      else:
-        if respMeasure == 0:
-          resp = coreExp['spikeCount'].astype(int); # cast as int, since some are as uint
-        elif respMeasure == 1:
-          resp = coreExp['f1'];
-        resp = np.expand_dims(resp, axis=1);
-      resp = resp[whichTrials];
+    ######
+    # First, filter the correct/valid trials!
+    ######
+    # start with all trials...
+    mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
+    # BUT, if we pass in trialSubset, then use this as our mask (i.e. overwrite the above mask)
+    if singleGratsOnly:
+      # the first line (commented out now) is single gratings AND just at one SF (1.7321, for ex.)
+      #valTrials = np.where(np.logical_and(np.isclose(coreExp['sf'][0], 2.460, atol=0.1), np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0)))[0]; # this will force singlegrats only!
+      # single gratings AND 1.5<=sf<=4
+      #valTrials = np.where(np.logical_and(np.logical_and(coreExp['sf'][0]>1.5, coreExp['sf'][0]<4), np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0)))[0]; # this will force singlegrats only!
+      # DEFAULT: just single gratings
+      valTrials = np.where(np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0))[0]; # this will force singlegrats only!
+    else:
+      valTrials = np.where(~np.isnan(np.sum(coreExp['ori'], 0)))[0];
+    if whichTrials is None: # take all valid trials
+      whichTrials = valTrials;
+    else: # then we need to find the intersection of valid trials (currently called whichTrials) and 
+      whichTrials = np.intersect1d(valTrials, whichTrials);
+    # TODO -- put in the proper responses... NOTE AS OF 22.11.19 -- I think these responses below are OK, already?
+    if respOverwrite is not None:
+      resp = respOverwrite;
+    else:
+      if respMeasure == 0:
+        resp = coreExp['spikeCount'].astype(int); # cast as int, since some are as uint
+      elif respMeasure == 1:
+        resp = coreExp['f1'];
+      resp = np.expand_dims(resp, axis=1);
+    resp = resp[whichTrials];
 
   # then, process the raw data such that trInf is [nTr x nComp]
   # for expInd == -1, this means mask [ind=0], then base [ind=1]
@@ -554,6 +573,15 @@ class sfNormMod(torch.nn.Module):
     ### END OF INIT
 
   #######
+  def clear_saved_calcs(self):
+    # reset the images/pre-computed calculations in case the dataset has changed (i.e. cross-validation!)
+    self.stimRealImag = None; # defaults to None so that we know to compute it the first time around
+    self.lgnCalcDone  = False;
+    self.normFilters  = None;
+    self.normFiltersBasic  = None;
+    self.normCalc     = None;
+
+
   def print_params(self, transformed=1):
     # return a list of the parameters
     print('\n********MODEL PARAMETERS********');
@@ -1104,8 +1132,10 @@ class sfNormMod(torch.nn.Module):
             new_weights = torch.clamp(torch.exp(weight_distr.log_prob(log_sfs)), min=minWeight);
             if self.normType == 5:
               new_weights = torch.pow(new_weights, self.gs_gain); # temporary!!! (22.11.08 --> make the gs_gain act as a power on the weights?)
+            '''
             if torch.mean(new_weights).item() < 1e-2:
               print('bad weight! --> mn, std = %.2f, %.2f' % (self.gs_mean, self.gs_std));
+            '''
             avg_weights = new_weights/torch.mean(new_weights); # make avg. weight = 1
             if all_weights == []:
               all_weights = [avg_weights];
@@ -1279,9 +1309,9 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ### Now, actually do the optimization!
 
 # learning_rate guide, as of 22.11.16:
-# --- 0.01 if all data (e.g. batch_size=3000)
+# ---def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=300, learning_rate=0.001, batch_size=128, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None# --- 0.01 if all data (e.g. batch_size=3000)
 # --- 0.002 if batch_size = 256
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.001, batch_size=128, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False, preLoadDataList=None, k_fold=None, k_fold_shuff=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.01, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False, preLoadDataList=None, k_fold=None, k_fold_shuff=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1307,7 +1337,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
-      fL_name = 'fitList%s_pyt_nr221116wwww%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_nr221119a%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   k_fold = 1 if k_fold is None else k_fold; # i.e. default to one "fold"
   todoCV = 1 if whichTrials is not None or k_fold>1 else 0;
@@ -1387,6 +1417,11 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   if k_fold>1:
     nTrs_total = expInfo['num'][-1] if expInd != -1 else expInfo['trial']['ori'].shape[-1];
     cv_gen = KFold(n_splits=k_fold, shuffle=k_fold_shuff).split(range(nTrs_total));
+    # and pre-create lists for relevant info:
+    NLL_cv = [];
+    testNLL_cv = [];
+    params_cv = [];
+    init_params_cv = [];
   else:
     cv_gen = range(1);
 
@@ -1405,7 +1440,6 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   #####  ----------- package it all in an easy to unpack way --> c'est la vie!
   ###################
   for iii, fold_i in enumerate(cv_gen):
-    pdb.set_trace();
     if k_fold == 1:
       whichTrials = whichTrials
     else:
@@ -1733,10 +1767,14 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       nll_history = np.array([]);
 
     ##############
-    # NOW - handle any cross-validation stuff?
+    # NOW - handle any cross-validation stuff
+    # ----- pass the test trials into the datawrapper
+    # ----- run those trials through the model
+    # ----- evaluate the loss
     ##############
     if k_fold>1:
       dw_test = dataWrapper(expInfo, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly, whichTrials=testTrials);
+      model.clear_saved_calcs();
       curr_resp = model.forward(dw_test.trInf, respMeasure=respMeasure, preCompOri=preCompOri, normOverwrite=True); # need to re-do the normalization!
       gt_resp = _cast_as_tensor(dw_test.resp);
       # fix up responses if respMeasure == 1 (i.e. if mask or base con is 0, match the data & model responses...)
@@ -1756,6 +1794,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         testNLL = loss_sfNormMod(curr_resp.flatten(), gt_resp.flatten(), model.lossType, varGain=model.varGain).detach().numpy();
       else:
         testNLL = loss_sfNormMod(curr_resp.flatten(), gt_resp.flatten(), model.lossType).detach().numpy();
+      
+      # Since this is a C-V fit, save the NLL, testNLL, params as a list!
+      NLL_cv.append(NLL);
+      testNLL_cv.append(testNLL);
+      params_cv.append(opt_params);
+      init_params_cv.append(param_list);
+      print('finished fold %d of %d' % (iii+1, k_fold))
 
   ########
   ### END OF k-fold loop!
@@ -1769,31 +1814,53 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     fitList = hf.np_smart_load(str(loc_data + fitListName));
   # else, nothing to reload!!!
   # but...if we reloaded fitList and we don't have this key (cell) saved yet, recreate the key entry...
-  # TODO: Make this smarter for doing cross-validation...
 
   # curr_fit will slot into fitList[cellNum-1][respStr]
-
-  # now, if the NLL is now the best, update this
-  if NLL < currNLL:
+  if k_fold>1: # i.e. if it's a cross-val thing, then we must update regardless
     curr_fit = dict();
-    curr_fit['NLL'] = NLL;
-    curr_fit['params'] = opt_params;
+    curr_fit['NLL_train'] = NLL_cv;
+    curr_fit['NLL_test'] = testNLL_cv;
+    curr_fit['params'] = params_cv;
     # NEW: Also save *when* this most recent fit was made (19.02.04); and nll_history below
     curr_fit['time'] = datetime.datetime.now();
     # NEW: Also also save entire loss/optimizaiotn structure
     optInfo = dict();
     optInfo['call'] = optimizer;
+    # now, include some info about the cross-val!
+    optInfo['k_fold'] = k_fold;
+    optInfo['k_fold_random'] = k_fold_shuff;
+    optInfo['test_len'] = dw.trInf['con'].shape[0];
+    optInfo['train_len'] = dw_test.trInf['con'].shape[0];
     optInfo['epochs'] = max_epochs;
     optInfo['batch_size'] = batch_size;
     optInfo['learning_rate'] = learning_rate;
     optInfo['shuffle'] = dl_shuffle;
     optInfo['dropLast'] = dl_droplast;
-    optInfo['init_params'] = param_list; # should be helpful to know starting values
+    optInfo['init_params'] = init_params_cv; # should be helpful to know starting values
     curr_fit['opt'] = optInfo;
-    curr_fit['nll_history'] = np.append(nll_history, NLL);
+    curr_fit['nll_history'] = np.append(nll_history, NLL); # NOTE: The nll_history is just for the last fold!
   else:
-    if verbose:
-      print('new NLL not less than currNLL, not saving result, but updating overall fit list (i.e. tracking each fit)');
+    # now, if the NLL is now the best, update this
+    if NLL < currNLL:
+      curr_fit = dict();
+      curr_fit['NLL'] = NLL;
+      curr_fit['params'] = opt_params;
+      # NEW: Also save *when* this most recent fit was made (19.02.04); and nll_history below
+      curr_fit['time'] = datetime.datetime.now();
+      # NEW: Also also save entire loss/optimizaiotn structure
+      optInfo = dict();
+      optInfo['call'] = optimizer;
+      optInfo['epochs'] = max_epochs;
+      optInfo['batch_size'] = batch_size;
+      optInfo['learning_rate'] = learning_rate;
+      optInfo['shuffle'] = dl_shuffle;
+      optInfo['dropLast'] = dl_droplast;
+      optInfo['init_params'] = param_list; # should be helpful to know starting values
+      curr_fit['opt'] = optInfo;
+      curr_fit['nll_history'] = np.append(nll_history, NLL);
+    else:
+      if verbose:
+        print('new NLL not less than currNLL, not saving result, but updating overall fit list (i.e. tracking each fit)');
 
   if to_save:
     if cellNum-1 not in fitList:
@@ -1909,13 +1976,13 @@ if __name__ == '__main__':
     else:
       toPar = False;
 
-
+    start = time.process_time();
     dcOk = 0; f1Ok = 0 if (expDir == 'V1/' or expDir == 'V1_BB/') else 1; # i.e. we don't bother fitting F1 if fit is from V1_orig/ or altExp/
     nTry = 1; # 30
     if cellNum >= 0:
       while not dcOk and nTry>0:
         try:
-          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly); # first do DC
+          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly, k_fold=kfold); # first do DC
 
           #import cProfile
           #cProfile.runctx('setModel(cellNum, expDir, excType, lossType, fitType, 1, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel': setModel}, locals())
@@ -1932,7 +1999,7 @@ if __name__ == '__main__':
       nTry=1; #30; # reset nTry...
       while not f1Ok and nTry>0:
         try:
-          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly); # then F1
+          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly, k_fold=kfold); # then F1
           f1Ok = 1;
           print('passed with nTry = %d' % nTry);
         except Exception as e:
@@ -1952,16 +2019,16 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221116wwww%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr221119a%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList);
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold);
       with mp.Pool(processes = nCpu) as pool:
         smFits_f1 = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
         pool.close();
 
       # First, DC? (should only do DC or F1?)
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList);
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold);
       #sm_perCell(1); # use this to debug...
       with mp.Pool(processes = nCpu) as pool:
         smFits_dc = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
