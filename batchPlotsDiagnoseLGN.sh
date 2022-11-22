@@ -36,6 +36,7 @@ NORM_TYPE=$5 # 1 means the original type of weighted gain control; 2 means the n
 START=$6
 END=$7
 VEC_F1=${8:-0}
+KFOLD=${9:-0}
 
 ### for run in {1..N_CELLS}
 
@@ -43,43 +44,43 @@ for (( run=$START; run<=$END; run++ ))
 do
   if [[ $NORM_TYPE -eq 1 ]]; then
     # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 22 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 22 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 21 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 21 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     # pytorch mod; modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 22 21 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 22 21 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
 
     # compare norm. types (w LGN)
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 10 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 10 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
 
     # compare norm. types (w LGN as parvo-only)
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
 
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 11 01 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 14 01 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 11 01 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 14 01 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
 
     # no LGN
-    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 10 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 10 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   else
     # ALT
     # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 44 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     # pytorch mod; modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 41 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 41 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     # pytorch mod; modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 55 41 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 55 41 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   fi
 
   # jointLGN plots

@@ -102,6 +102,14 @@ if len(sys.argv) > 15:
 else:
   useHPCfit = 1;
 
+if len(sys.argv) > 16:
+  whichKfold = int(sys.argv[16]);
+  if whichKfold<0:
+    whichKfold = None
+else:
+  whichKfold = None;
+isCV = False if whichKfold is None else True;
+
 ## Unlikely to be changed, but keep flexibility
 baselineSub = 0;
 fix_ylim = 0;
@@ -122,6 +130,7 @@ if 'pl1465' in loc_base or useHPCfit:
   loc_str = 'HPC';
 else:
   loc_str = '';
+#loc_str = ''; # TEMP
 
 if _sigmoidRespExp is not None:
   rExpStr = 're';
@@ -157,8 +166,11 @@ _sigmoidScale = 10
 _sigmoidDord = 5;
 
 #fitBase = 'fitList%s_pyt_nr221031j_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-fitBase = 'fitList%s_pyt_nr221109f_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-#fitBase = 'fitList%s_pyt_nr221109e_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221109f_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+#fitBase = 'fitList%s_pyt_nr221116wwww_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+fitBase = 'fitList%s_pyt_nr221119a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+
+_CV=isCV
 
 if excType <= 0:
   fitBase = None;
@@ -175,8 +187,8 @@ if fitBase is not None:
   conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
   lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
 
-  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
-  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
+  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=_CV)
+  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=_CV)
   #fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
   #fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
   # what's the shorthand we use to refer to these models...
@@ -203,11 +215,15 @@ if fitBase is not None:
   dc_str = hf_sf.get_resp_str(respMeasure=0);
   f1_str = hf_sf.get_resp_str(respMeasure=1);
 
-  modFit_A_dc = fitListA[cellNum-1][dc_str]['params'];
-  modFit_B_dc = fitListB[cellNum-1][dc_str]['params'];
-  modFit_A_f1 = fitListA[cellNum-1][f1_str]['params'];
-  modFit_B_f1 = fitListB[cellNum-1][f1_str]['params'];
-  lossVals = [[x[cellNum-1][y]['NLL'] for x in [fitListA, fitListB]] for y in [dc_str, f1_str]]
+  modFit_A_dc = fitListA[cellNum-1][dc_str]['params'][whichKfold] if _CV else fitListA[cellNum-1][dc_str]['params'];
+  modFit_B_dc = fitListB[cellNum-1][dc_str]['params'][whichKfold] if _CV else fitListB[cellNum-1][dc_str]['params'];
+  modFit_A_f1 = fitListA[cellNum-1][f1_str]['params'][whichKfold] if _CV else fitListA[cellNum-1][f1_str]['params'];
+  modFit_B_f1 = fitListB[cellNum-1][f1_str]['params'][whichKfold] if _CV else fitListB[cellNum-1][f1_str]['params'];
+  if _CV:
+      lossVals = [[np.mean(x[cellNum-1][y]['NLL%s' % ('_train' if isCV else '')][whichKfold]) for x in [fitListA, fitListB]] for y in [dc_str, f1_str]]
+  else:
+      lossVals = [[np.mean(x[cellNum-1][y]['NLL']) for x in [fitListA, fitListB]] for y in [dc_str, f1_str]]
+  kstr = '_k%d' % whichKfold if _CV else '';
 
   normTypes = [normA, normB];
   lgnTypes = [lgnA, lgnB];
@@ -571,8 +587,8 @@ for measure in [0,1]:
     ax[4, 2*measure].set_title('Joint REF tuning (%s)' % lbl)
     try:
       curr_str = hf_sf.get_resp_str(respMeasure=measure);
-      ax[4, 1+2*measure].plot(fit_detailsA[curr_str]['loss'], color=modColors[0]);
-      ax[4, 1+2*measure].plot(fit_detailsB[curr_str]['loss'], color=modColors[1]);
+      ax[4, 1+2*measure].plot([np.mean(x) for x in fit_detailsA[curr_str]['loss']], color=modColors[0]);
+      ax[4, 1+2*measure].plot([np.mean(x) for x in fit_detailsB[curr_str]['loss']], color=modColors[1]);
       ax[4, 1+2*measure].set_xscale('log');
       ax[4, 1+2*measure].set_yscale('symlog');
       ax[4, 1+2*measure].set_xlabel('Optimization epoch');
@@ -990,7 +1006,7 @@ else:
   print('here');
 
 ### now save all figures (incl model details, if specified)
-saveName = "/cell_%03d_both.pdf" % (cellNum)
+saveName = "/cell_%03d_both%s.pdf" % (cellNum, kstr)
 full_save = os.path.dirname(str(save_loc + 'core%s/' % onsetStr));
 if not os.path.exists(full_save):
     os.makedirs(full_save);
@@ -1386,7 +1402,7 @@ if fitBase is not None and useCoreFit:
         #sns.despine(offset=10)
         f.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-        saveName = "/cell_%03d_both_sf%03d_con%03d.pdf" % (cellNum, np.int(100*baseSf_curr), np.int(100*baseCon_curr))
+        saveName = "/cell_%03d_both_sf%03d_con%03d%s.pdf" % (cellNum, np.int(100*baseSf_curr), np.int(100*baseCon_curr), kstr)
         full_save = os.path.dirname(str(save_loc + '%s/cell_%03d/' % (expName, cellNum)));
         if not os.path.exists(full_save):
             os.makedirs(full_save);

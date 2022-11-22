@@ -102,6 +102,14 @@ if len(sys.argv) > 16:
 else:
   useHPCfit = 0;
 
+if len(sys.argv) > 17:
+  whichKfold = int(sys.argv[17]);
+  if whichKfold<0:
+    whichKfold = None
+else:
+  whichKfold = None;
+isCV = False if whichKfold is None else True;
+
 ## used for interpolation plot
 sfSteps  = 45; # i.e. how many steps between bounds of interest
 conSteps = -1;
@@ -133,7 +141,7 @@ _sigmoidDord = 5;
 
 #fitBase = 'fitList%s_pyt_nr221109e_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221109e_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-fitBase = 'fitList%s_pyt_nr221116d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr221119b_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221116c_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
@@ -152,8 +160,8 @@ rvcBase = 'rvcFits%s_220928' % loc_str; # direc flag & '.npy' are added
 normA, normB = int(np.floor(normTypesIn/10)), np.mod(normTypesIn, 10)
 conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
 lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
-fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
-fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
+fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV)
+fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV)
 # what's the shorthand we use to refer to these models...
 # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
 aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn');
@@ -213,8 +221,16 @@ if pytorch_mod == 1:
   respStr = hf_sf.get_resp_str(respMeasure);
   modFit_A = fitListA[cellNum-1][respStr]['params'];
   modFit_B = fitListB[cellNum-1][respStr]['params'];
-  loss_A = fitListA[cellNum-1][respStr]['NLL']
-  loss_B = fitListB[cellNum-1][respStr]['NLL']
+  loss_A = fitListA[cellNum-1][respStr]['NLL%s' % ('_train' if isCV else '')]
+  loss_B = fitListB[cellNum-1][respStr]['NLL%s' % ('_train' if isCV else '')]
+  if isCV:
+    modFit_A = modFit_A[whichKfold]
+    modFit_B = modFit_B[whichKfold]
+    loss_A = np.mean(loss_A[whichKfold])
+    loss_B = np.mean(loss_B[whichKfold])
+    kstr = '_k%d' % whichKfold
+  else:
+    kstr = '';
   # load details, too, if possible
   try:
     try:
@@ -570,7 +586,7 @@ for d in range(nDisps):
 if not os.path.exists(save_loc):
   os.makedirs(save_loc);
 
-saveName = "/cell_%03d.pdf" % (cellNum)
+saveName = "/cell_%03d%s.pdf" % (cellNum, kstr)
 full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
@@ -634,7 +650,7 @@ if diffPlot != 1:
         dispAx[d][i].set_title('D%02d - sf tuning %s' % (d, labels[i]));
         dispAx[d][i].legend(); 
 
-  saveName = "/allCons_cell_%03d.pdf" % (cellNum)
+  saveName = "/allCons_cell_%03d%s.pdf" % (cellNum, kstr)
   full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
   if not os.path.exists(full_save):
     os.makedirs(full_save);
@@ -1107,7 +1123,7 @@ fDetails.tight_layout(pad=0.1)
 
 ### now save all figures (sfMix contrasts, details, normalization stuff)
 allFigs = [f, fDetails];
-saveName = "/cell_%03d.pdf" % (cellNum)
+saveName = "/cell_%03d%s.pdf" % (cellNum, kstr)
 full_save = os.path.dirname(str(save_loc + 'sfMixOnly%s/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
@@ -1223,7 +1239,7 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
           rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f [%d,%d]' % (d+1, all_sfs[sf_ind], np.sum(all_rvc_loss_A), np.sum(all_rvc_loss_B)), fontsize='large');
 
 
-  saveName = "/cell_%03d.pdf" % (cellNum)
+  saveName = "/cell_%03d%s.pdf" % (cellNum, kstr)
   full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
   if not os.path.exists(full_save):
     os.makedirs(full_save);
@@ -1290,7 +1306,7 @@ if diffPlot != 1 or intpMod == 0:
         crfAx[d][i].set_title('D%d: sf:all - log resp %s' % (d, labels[i]));
         crfAx[d][i].legend();
 
-  saveName = "/allSfs_cell_%03d.pdf" % (cellNum)
+  saveName = "/allSfs_cell_%03d%s.pdf" % (cellNum, kstr)
   full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
   if not os.path.exists(full_save):
     os.makedirs(full_save);
