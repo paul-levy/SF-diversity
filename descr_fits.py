@@ -9,6 +9,14 @@ from scipy.stats import sem, poisson
 import warnings
 import pdb
 
+#########
+### setting to avoid overtaxing CPU?
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
+###
+#########
+
 basePath = os.getcwd() + '/';
 data_suff = 'structures/';
 
@@ -17,16 +25,19 @@ if 'pl1465' in basePath:
 else:
   hpcSuff = '';
 
-expName = hf.get_datalist(sys.argv[3], force_full=1); # sys.argv[3] is experiment dir
-dogName = 'descrFits%s_220926vEs' % hpcSuff;
+expName = hf.get_datalist(sys.argv[3], force_full=1, new_v1=True); # sys.argv[3] is experiment dir
+dogName = 'descrFits%s_221126vEs' % hpcSuff;
+#dogName = 'descrFits%s_220926vEs' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220928' % hpcSuff
   rvcName_f1 = 'rvcFits%s_220928' % hpcSuff;
   rvcName_f0 = 'rvcFits_220928_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 else:
-  phAdvName = 'phaseAdvanceFits%s_220928' % hpcSuff
-  rvcName_f1 = 'rvcFits%s_220928' % hpcSuff;
-  rvcName_f0 = 'rvcFits%s_220928_f0' % hpcSuff; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
+  dt_suff = '221126' # intended largely for V1, now that we've trimmed non-V1 cells
+  #dt_suff = '220928' # as used for ch. 1
+  phAdvName = 'phaseAdvanceFits%s_%s' % (hpcSuff, dt_suff)
+  rvcName_f1 = 'rvcFits%s_%s' % (hpcSuff, dt_suff)
+  rvcName_f0 = 'rvcFits%s_%s_f0' % (hpcSuff, dt_suff) # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 
 ##########
 ### TODO:
@@ -708,6 +719,7 @@ def fit_descr_DoG(cell_num, data_loc, n_repeats=1, loss_type=3, DoGmodel=1, forc
   print('Making descriptive SF fits for cell %d in %s [%s]\n' % (cell_num,data_loc,expName));
 
   phAdj = None if vecF1==1 else 1;
+  phAdj = None if 'V1_orig' in data_loc else phAdj; # because we are NOT doing phAdj if that is true..
   jointFits=None; # pre-define this as none, since it's only defined in a small set of uses
   if joint>0:
     try: # load non_joint fits as a reference (see hf.dog_fit or S. Sokol thesis for details)
@@ -1194,7 +1206,7 @@ if __name__ == '__main__':
     if asMulti:
       from functools import partial
       import multiprocessing as mp
-      nCpu = mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
+      nCpu = np.min(20, mp.cpu_count()-1); # heuristics say you should reqeuest at least one fewer processes than their are CPU; otherwise, we cap at 20 (per HPC)
       print('***cpu count: %02d***' % nCpu);
 
       ### Phase fits
@@ -1264,6 +1276,7 @@ if __name__ == '__main__':
         print('debug');
         ### do the saving HERE!
         phAdj = None if vecF1==1 else 1;
+        phAdj = None if 'V1_orig' in dataPath else phAdj;
         dogNameFinal = hf.descrFit_name(loss_type, descrBase=dogName, modelName=hf.descrMod_name(dog_model), modRecov=modRecov, joint=joint, phAdj=phAdj);
         if os.path.isfile(dataPath + dogNameFinal):
           dogFitNPY = hf.np_smart_load(dataPath + dogNameFinal);

@@ -18,9 +18,14 @@ else:
 
 expName = hf.get_datalist('V1_BB/', force_full=1);
 
-sfName = 'descrFits%s_220826vEs' % hpcSuff;
+sfName = 'descrFits%s_221126vEs' % hpcSuff;
+rvcName = 'rvcFits%s_221126' % hpcSuff;
+
+#sfName = 'descrFits%s_220826vEs' % hpcSuff;
+#rvcName = 'rvcFits%s_220718' % hpcSuff;
+
+# --- older
 #sfName = 'descrFits%s_220801vEs' % hpcSuff;
-rvcName = 'rvcFits%s_220718' % hpcSuff;
 #sfName = 'descrFits%s_220609' % hpcSuff;
 #rvcName = 'rvcFits%s_220609' % hpcSuff;
 

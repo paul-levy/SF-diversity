@@ -68,6 +68,8 @@ PH_ADJ=${9:-1} # used only for LGN
 DOGMOD=${10:-3} # used only for V1
 
 if [ "$EXP_DIR" = "V1/" ]; then
+  #NCELLS=-181
+  NCELLS=-156  
   if [[ $PH_ADJ -eq 1 ]]; then
       DIR=1
   else
@@ -76,18 +78,18 @@ if [ "$EXP_DIR" = "V1/" ]; then
   echo $DIR
   if [[ $RVC_FIT -eq 1 ]]; then
     # -- Naka-Rushton
-    python3.6 descr_fits.py -181 0 V1/ $PH_ADJ 1 0 1 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
-    python3.6 descr_fits.py -181 1 V1/ $PH_ADJ 1 0 1 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
-    python3.6 descr_fits.py -181 2 V1/ $PH_ADJ 1 0 1 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
-    python3.6 descr_fits.py -181 3 V1/ $PH_ADJ 1 0 1 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py $NCELLS 0 V1/ $PH_ADJ 1 0 1 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py $NCELLS 1 V1/ $PH_ADJ 1 0 1 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py $NCELLS 2 V1/ $PH_ADJ 1 0 1 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py $NCELLS 3 V1/ $PH_ADJ 1 0 1 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
     # -- Movshon RVC
-    python3.6 descr_fits.py -181 0 V1/ $PH_ADJ 1 0 0 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
-    python3.6 descr_fits.py -181 1 V1/ $PH_ADJ 1 0 0 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
-    python3.6 descr_fits.py -181 2 V1/ $PH_ADJ 1 0 0 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
-    python3.6 descr_fits.py -181 3 V1/ $PH_ADJ 1 0 0 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py $NCELLS 0 V1/ $PH_ADJ 1 0 0 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py $NCELLS 1 V1/ $PH_ADJ 1 0 0 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py $NCELLS 2 V1/ $PH_ADJ 1 0 0 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
+    python3.6 descr_fits.py $NCELLS 3 V1/ $PH_ADJ 1 0 0 0 0 $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL
   fi
   if [[ $DESCR_FIT -eq 1 ]]; then
-    python3.6 descr_fits.py -181 0 V1/ $PH_ADJ 0 0 1 1 $DOGMOD $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL # d-DoG-S or Sach
+    python3.6 descr_fits.py $NCELLS 0 V1/ $PH_ADJ 0 0 1 1 $DOGMOD $LOSS $BOOT_REPS $JOINT $DIR $MOD_RECOV $CROSS_VAL # d-DoG-S or Sach
   fi
 fi
 

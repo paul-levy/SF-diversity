@@ -513,8 +513,11 @@ class sfNormMod(torch.nn.Module):
     if self.normType == 1 or self.normType == 0:
       self.inhAsym = _cast_as_tensor(normParams) if self.normType==1 else _cast_as_param(normParams); # then it's not really meant to be optimized, should be just zero
       self.gs_mean = None; self.gs_std = None; # replacing the "else" in commented out 'if normType == 2 or normType == 4' below
-    elif self.normType == 2 or self.normType == 5:
-      self.gs_mean = _cast_as_param(normParams[0]);
+    elif self.normType == 2 or self.normType == 5 or self.normType == 6:
+      if self.normType == 6: # just cast as tensor, since we will NOT optimize for it [yoked to filter prefSf]
+        self.gs_mean = _cast_as_tensor(torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)));
+      else:
+        self.gs_mean = _cast_as_param(normParams[0]);
       self.gs_std  = _cast_as_param(normParams[1]);
       if self.normType == 5:
         self.gs_gain = _cast_as_param(normParams[2]);
@@ -610,7 +613,7 @@ class sfNormMod(torch.nn.Module):
       scale = self.scale.item();
     print('scalar|early|late: %.3f|%.3f|%.3f' % (scale, self.noiseEarly.item(), self.noiseLate.item()));
     print('norm. const.: %.2f' % self.sigma.item());
-    if self.normType == 2 or self.normType == 5:
+    if self.normType == 2 or self.normType == 5 or self.normType == 6:
       normMn = torch.exp(self.gs_mean).item() if transformed else self.gs_mean.item();
       print('tuned norm mn|std: %.2f|%.2f' % (normMn, torch.abs(self.gs_std).item()));
       if self.normType == 5:
@@ -628,7 +631,7 @@ class sfNormMod(torch.nn.Module):
           param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.inhAsym.item(), self.mWeight.item()];
         elif self.excType == 2:
           param_list = [self.prefSf.item(), self.sigLow.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.inhAsym.item(), self.sigHigh.item(), self.mWeight.item()];
-    elif self.normType == 2:
+    elif self.normType == 2 or self.normType == 6:
         if self.excType == 1:
           param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.gs_mean.item(), self.gs_std.item(), self.mWeight.item()];
         elif self.excType == 2:
@@ -908,10 +911,14 @@ class sfNormMod(torch.nn.Module):
       # AS of 22.10.26 -- stop doing the normalization of weights!
       # new change on 22.10.24
       #new_weights = new_weights/torch.max(_cast_as_tensor(0.001), torch.mean(new_weights)); # ensures no div by zero
-    elif self.normType == 2 or self.normType == 5:
+    elif self.normType == 2 or self.normType == 5 or self.normType == 6:
       # Relying on https://pytorch.org/docs/stable/distributions.html#torch.distributions.normal.Normal.log_prob
       log_sfs = torch.log(sfs);
-      weight_distr = torch.distributions.normal.Normal(self.gs_mean, torch.clamp(self.gs_std, min=_cast_as_tensor(gs_std_min)));
+      if self.normType == 6:
+        # simply compute the prefSf, and take the log of it
+        weight_distr = torch.distributions.normal.Normal(torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)), torch.clamp(self.gs_std, min=_cast_as_tensor(gs_std_min)));
+      else:
+        weight_distr = torch.distributions.normal.Normal(self.gs_mean, torch.clamp(self.gs_std, min=_cast_as_tensor(gs_std_min)));
       #weight_distr = torch.distributions.normal.Normal(self.gs_mean, torch.abs(self.gs_std))
       new_weights = torch.exp(weight_distr.log_prob(log_sfs));
       # --- 221026a --> normalize by the average across a reasonable range?
@@ -1130,12 +1137,15 @@ class sfNormMod(torch.nn.Module):
           # weights relative to cell preference
           all_weights = 1 + torch.clamp(self.inhAsym,-0.3,0.3) * (torch.log(filt_sfs) - torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)))
 
-        elif self.normType == 2 or self.normType == 5: # i.e. tuned weights
+        elif self.normType == 2 or self.normType == 5 or self.normType == 6: # i.e. tuned weights
           all_weights = [];
           for iB, filt_sfs in zip(range(len(self.normFull['nFilters'])), self.normFull['prefSfs']):
             log_sfs = torch.log(filt_sfs);
             # NOTE: 22.10.31 --> clamp the gs_mean at the 1st/last filters of the 1st bank of filters
-            weight_distr = torch.distributions.normal.Normal(torch.clamp(self.gs_mean, min=torch.log(self.normFull['prefSfs'][0][0]), max=torch.log(self.normFull['prefSfs'][0][-1])), torch.clamp(self.gs_std, min=gs_std_min));
+            if self.normType == 6:# here, norm yoked to filter --> compute prefSf, and take the log of it
+              weight_distr = torch.distributions.normal.Normal(torch.clamp(torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)), min=torch.log(self.normFull['prefSfs'][0][0]), max=torch.log(self.normFull['prefSfs'][0][-1])), torch.clamp(self.gs_std, min=gs_std_min));
+            else:
+              weight_distr = torch.distributions.normal.Normal(torch.clamp(self.gs_mean, min=torch.log(self.normFull['prefSfs'][0][0]), max=torch.log(self.normFull['prefSfs'][0][-1])), torch.clamp(self.gs_std, min=gs_std_min));
             # clamp the weights to avoid near-zero values
             new_weights = torch.clamp(torch.exp(weight_distr.log_prob(log_sfs)), min=minWeight);
             if self.normType == 5:
@@ -1522,7 +1532,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     #normConst = -0.25 + 0.75*lgnFrontEnd if normToOne==1 else -2; # per Tony, just start with a low value (i.e. closer to linear)
     if fitType <= 1:
       inhAsym = 0;
-    if fitType == 2 or fitType == 5:
+    if fitType == 2 or fitType == 5 or fitType == 6:
       # see modCompare.ipynb, "Smarter initialization" for details
       normMean = np.random.uniform(0.75, 1.25) * np.log10(prefSfEst_goal) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
       normStd = np.random.uniform(0.3, 2) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
@@ -1597,7 +1607,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           respScalar /= 250; # completely heuristic :(
         elif not normFiltersToOne and lgnFrontEnd==0:
           respScalar /= 750; # completely heuristic :(
-        if fitType==2 and lgnFrontEnd==0: # i.e. tuned gain
+        if (fitType==2 or fitType==6) and lgnFrontEnd==0: # i.e. tuned gain
           respScalar *= 1.5; # need slighly stronger respScalar in these cases?
         # increased starting value for width as of 22.10.25
         normStd = np.random.uniform(1.25, 2.25) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
@@ -1618,7 +1628,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym, mWeight);
       elif excType == 2:
         param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym, sigHigh, mWeight);
-    elif fitType == 2:
+    elif fitType == 2 or fitType == 6:
       if excType == 1:
         param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, mWeight);
       elif excType == 2:

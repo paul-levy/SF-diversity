@@ -558,6 +558,8 @@ def fitType_suffix(fitType):
     fitSuf = '_flex';
   elif fitType == 5:
     fitSuf = '_wghtGain';
+  elif fitType == 6:
+    fitSuf = '_wghtYoke'; # center of weight yoked to the prefSf
   return fitSuf;
 
 def lossType_suffix(lossType):
@@ -5618,10 +5620,10 @@ def getNormParams(params, normType, forceAsymZero=True):
       inhAsym = 0;
 
     return inhAsym;
-  elif normType == 2 or normType == 5:
+  elif normType == 2 or normType == 5 or normType == 6:
     gs_mean = params[8];
     gs_std  = params[9];
-    if normType == 2:
+    if normType == 2 or normType == 6:
       return gs_mean, gs_std;
     elif normType == 5:
       gs_gain = params[10]; # just one parameter after gs_std
@@ -5867,7 +5869,7 @@ def nParamsByType(fitType, excType, lgnType=0):
   try:
     if fitType == 1 or fitType == 0:
       nParams = 9; 
-    elif fitType == 2 or fitType == 4:
+    elif fitType == 2 or fitType == 4 or fitType == 6:
       nParams = 10;
     elif fitType == 3 or fitType == 5:
       nParams = 11;
@@ -5937,7 +5939,7 @@ def getConstraints(fitType, excType = 1, fixRespExp = None):
       elif excType == 2:
         nine = (np.maximum(0.1, min_bw/(2*np.sqrt(2*np.log(2)))), max_bw/(2*np.sqrt(2*np.log(2)))); # Gaussian at half-height
         return (zero,one,two,three,four,five,six,seven,eight,nine,minusOne);
-    if fitType == 2:
+    if fitType == 2 or fitType == 6:
       eight = (-2, None);
       nine = (5e-1, None);
       if excType == 1:

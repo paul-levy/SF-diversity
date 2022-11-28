@@ -69,7 +69,7 @@ if area == 'V1':
   if jointType == 10:
     #dogNames = ['descrFitsHPC_220811vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy']
     # TEMPORARY UNTIL WE RUN V1/joint10 on the V1-only dataList [currently running on 22.11.27]
-    dogNames = ['descrFitsHPC_221126vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_221126vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_221126vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_220826vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy']
+    dogNames = ['descrFitsHPC_221126vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_221126vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_221126vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_221126vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy']
   # THE BELOW ARE NOT UPDATED AS OF 22.11.27
   if jointType == 0:
     dogNames = ['descrFitsHPC_220811vEs_sqrt_ddogs.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs.npy'];
