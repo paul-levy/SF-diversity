@@ -17,6 +17,14 @@ import pdb
 torch.autograd.set_detect_anomaly(True)
 
 #########
+### setting to avoid overtaxing CPU?
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
+###
+#########
+
+#########
 ### Some global things...
 #########
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
@@ -1308,10 +1316,12 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 
 ### Now, actually do the optimization!
 
+# ---def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=500, learning_rate=0.001, batch_size=128, scheduler=True
+# ---def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.01, batch_size=3000, scheduler=True
 # learning_rate guide, as of 22.11.16:
-# ---def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=300, learning_rate=0.001, batch_size=128, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None# --- 0.01 if all data (e.g. batch_size=3000)
+# --- 0.01 if all data (e.g. batch_size=3000)
 # --- 0.002 if batch_size = 256
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.01, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False, preLoadDataList=None, k_fold=None, k_fold_shuff=True): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.005, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False, preLoadDataList=None, k_fold=None, k_fold_shuff=True, k_fold_state=None): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1337,7 +1347,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
-      fL_name = 'fitList%s_pyt_nr221119a%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_nr221119d%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   k_fold = 1 if k_fold is None else k_fold; # i.e. default to one "fold"
   todoCV = 1 if whichTrials is not None or k_fold>1 else 0;
@@ -1416,7 +1426,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   if k_fold>1:
     nTrs_total = expInfo['num'][-1] if expInd != -1 else expInfo['trial']['ori'].shape[-1];
-    cv_gen = KFold(n_splits=k_fold, shuffle=k_fold_shuff).split(range(nTrs_total));
+    k_fold_state = k_fold_state if k_fold_state is None else cellNum; # why make the random state based on cell#? To make all model iterations for a given cell fit the same sets of trials!
+    cv_gen = KFold(n_splits=k_fold, shuffle=k_fold_shuff, random_state=k_fold_state).split(range(nTrs_total));
     # and pre-create lists for relevant info:
     NLL_cv = [];
     testNLL_cv = [];
@@ -1434,7 +1445,6 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   #####  ------- if we ARE doing cross-val, then 
   #####  --------- we unpack the SKlearn KFold().split() call into train/test
   #####  --------- our code already handles the training easily!
-  #####  --------- THUS, the add/TODO is as follows:
   #####  ----------- at the end, evaluate the loss on the heldout/test data
   #####  ----------- decide what to include in the saving of each cell's optimization
   #####  ----------- package it all in an easy to unpack way --> c'est la vie!
@@ -2019,7 +2029,7 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221119a%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr221119d%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold);
@@ -2035,7 +2045,7 @@ if __name__ == '__main__':
         pool.close();
 
       ### do the saving HERE!
-      todoCV = 0; #  1 if whichTrials is not None else 0;
+      todoCV = 1 if kfold>1 else 0;
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
