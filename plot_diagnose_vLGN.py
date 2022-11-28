@@ -139,9 +139,9 @@ expName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
 _sigmoidScale = 10
 _sigmoidDord = 5;
 
-#fitBase = 'fitList%s_pyt_nr221109e_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221106_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221109e_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-fitBase = 'fitList%s_pyt_nr221119b_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr221119d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221116c_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;

@@ -53,7 +53,7 @@ do
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 22 21 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
 
     # compare norm. types (w LGN)
-    #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 10 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated

@@ -56,11 +56,11 @@ if [ "$EXP_DIR" = "V1/" ]; then
   do 
     python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 1 $SEM &
   done
-  wait
-  for run in {61..81}
-  do 
-    python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 1 $SEM &
-  done
+  #wait
+  #for run in {61..81}
+  #do 
+  #  python3.6 plot_descr.py $run V1/ $DOG_MOD $LOSS_TYPE $JOINT $PHADJ 1 1 $HPC 1 $SEM &
+  #done
   wait
 fi
 if [ "$EXP_DIR" = "LGN/" ]; then

@@ -87,27 +87,29 @@ fracSig = 1;
 #fracSig = 0 if expDir == 'LGN/' else 1; # we only enforce the "upper-half sigma as fraction of lower half" for V1 cells! 
 
 ### DATALIST
-expName = hf.get_datalist(expDir, force_full=1);
+expName = hf.get_datalist(expDir, force_full=1, new_v1=True); # new_v1 True means the newer datalist with no V2/other cells
 ### DESCRLIST
 hpc_str = 'HPC' if isHPC else '';
 if expDir == 'LGN/':
   descrBase = 'descrFits%s_221001vEs' % hpc_str;
   #descrBase = 'descrFits%s_220810vEs' % hpc_str;
 else:
-  descrBase = 'descrFits%s_221001vEs' % hpc_str;
+  descrBase = 'descrFits%s_221126vEs' % hpc_str;
+  #descrBase = 'descrFits%s_221001vEs' % hpc_str;
   #descrBase = 'descrFits%s_220811vEs' % hpc_str;
 if expDir == 'LGN/':
   rvcBase = 'rvcFits%s_220928' % hpc_str;
   #rvcBase = 'rvcFits%s_220531' % hpc_str;
 else:
-  rvcBase = 'rvcFits%s_220928' % hpc_str;
+  rvcBase = 'rvcFits%s_221126' % hpc_str;
+  #rvcBase = 'rvcFits%s_220928' % hpc_str;
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
 
 if rvcAdjSigned==1 and phAmpByMean: # i.e. phAdv correction
-    phBase = 'phaseAdvanceFits%s_220928' % hpc_str
-    #phBase = 'phaseAdvanceFits%s_220926' % hpc_str
+    #phBase = 'phaseAdvanceFits%s_220928' % hpc_str
+    phBase = 'phaseAdvanceFits%s_221126' % hpc_str
     #phBase = 'phaseAdvanceFits%s_220531' % (hpc_str) if expDir=='LGN/' else 'phaseAdvanceFits%s_220609' % (hpc_str)
     print(phBase);
     phAdvFits = hf.np_smart_load(data_loc + hf.phase_fit_name(phBase, dir=1));

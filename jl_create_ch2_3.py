@@ -17,45 +17,60 @@ if area == 'V1':
   #### V1
   ########################
 
-  # expDirs (and expNames must always be of the right length, i.e. specify for each expt dir 
-  ## V1 version
-  #expDirs = ['V1/']
-  #expNames = ['dataList_210721.npy']
-  #expDirs = ['altExp/', 'V1/']
-  #expNames = ['dataList.npy', 'dataList_210721.npy']
-  #expDirs = ['altExp/', 'V1/', 'V1_BB/']
-  #expNames = ['dataList.npy', 'dataList_210721.npy', 'dataList_210721.npy']
-  #expDirs = ['V1_orig/', 'altExp/', 'V1/', 'V1_BB/']
-  #expNames = ['dataList.npy', 'dataList.npy', 'dataList_210721.npy', 'dataList_210721.npy']
+  expDirs = ['V1_orig/', 'altExp/', 'V1/', 'V1_BB/']
+  expNames = ['dataList.npy', 'dataList.npy', 'dataList_221011.npy', 'dataList_210721.npy']
 
   nExpts = len(expDirs);
 
   # these are usually same for all expts...we'll "tile" below
-  pytorch_mod = 1; #
-  excType, lossType = 2, 1
-  vecCorrected = 1
   useHPCfit = 1;
-  normA, normB = 5, 1; # for weighted, 5 is wghtGain (2 is "old" weighted model)
-  lgnA, lgnB = 1, 1; # (1) means have an LGN, original filters
+
+  ### model specifications
+  vecCorrected = 0
+  pytorch_mod = 1; #
+  excType, lossType = 1, 1
+  fixRespExp = 2; # i
+  scheduler = False;
+  normA, normB = 2, 1; # for weighted, 5 is wghtGain (2 is "old" weighted model)
+  lgnA, lgnB = 0, 0; # (1) means have an LGN, original filters
   conA, conB = 1, 1; # (1) separate M&P; (2) is equal M+P; (4) is all parvo
   loc_str = 'HPC' if useHPCfit else '';
-  fitBase = 'fitList%s_pyt_210331' % loc_str
-  fitNamesWght = [hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=None)]
-  fitNamesFlat = [hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=None)]
+  ### organize the mod specs....
+  modSpecs = dict();
+  wght_specs = dict([('excType', excType),
+                     ('lossType', lossType),
+                     ('normType', normA),
+                     ('lgnOn', lgnA),
+                     ('lgnType', conA),
+                     ('fixRespExp', fixRespExp),
+                     ('scheduler', scheduler),
+                   ])
+  flat_specs = dict([('excType', excType),
+                     ('lossType', lossType),
+                     ('normType', normB),
+                     ('lgnOn', lgnB),
+                     ('lgnType', conB),
+                     ('fixRespExp', fixRespExp),
+                     ('scheduler', scheduler),
+                   ])
+  modSpecs['wght'] = wght_specs;
+  modSpecs['flat'] = flat_specs;
+  ### organize the mod specs....
+  fitBase = 'fitList%s_pyt_nr221119d%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '');
+  fitNamesWght = [hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=None, excType=excType)]
+  fitNamesFlat = [hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=None, excType=excType)]
+  cv_fitNamesWght = [hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=None, CV=True, excType=excType)]
+  cv_fitNamesFlat = [hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=None, CV=True, excType=excType)]
   ####
   # descrFits - loss type determined by comparison (choose best; see modCompare.ipynb::Descriptive Fits)
   ####
-  #dogMod = 1; # 1 (sach), 2 (Tony), 3 (d-DoG-S), 4 (N/A), 5 (d-DoG-S Hawk)
-  #jointType = 0; # 0/1/2 --> none/[g,S]/[*, surr1_rad, surr2_rad]
-  #dogNames = ['descrFitsHPC_220609_sqrt_sach.npy'];
-  #jointType = 7;
-  #dogNames = ['descrFitsHPC_220718vEs_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
-  #dogNames = ['descrFitsHPC_220720vEs_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_220721vEs_phAdj_sqrt_sach_JTsurrShapeCtrRaSlope.npy', 'descrFitsHPC_220720vEs_sqrt_sach_JTsurrShapeCtrRaSlope.npy']
-  #dogNames = ['descrFitsHPC_220609_sqrt_sach_JTsurrShapeCtrRaSlope.npy'];
-
   dogMod = 3; # 1 (sach), 2 (Tony), 3 (d-DoG-S), 4 (N/A), 5 (d-DoG-S Hawk)
+  # dir. order is 'V1_orig/', 'altExp/', 'V1/', 'V1_BB/'
   if jointType == 10:
-    dogNames = ['descrFitsHPC_220811vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy']
+    #dogNames = ['descrFitsHPC_220811vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy']
+    # TEMPORARY UNTIL WE RUN V1/joint10 on the V1-only dataList [currently running on 22.11.27]
+    dogNames = ['descrFitsHPC_221126vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_221126vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_221126vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_220826vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy']
+  # THE BELOW ARE NOT UPDATED AS OF 22.11.27
   if jointType == 0:
     dogNames = ['descrFitsHPC_220811vEs_sqrt_ddogs.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs.npy'];
   if jointType == 7:
@@ -68,10 +83,10 @@ if area == 'V1':
     #dogNames = ['descrFitsHPC_220707vEs_sqrt_ddogs_JTflankFixedCopyCtrRaSlope.npy']
 
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
-  descrNames = ['descrFits_210914_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210916_sqrt_flex.npy'];
+  descrNames = ['descrFits_210304_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210916_sqrt_flex.npy'];
   #descrNames = ['descrFits_190503_sqrt_flex.npy', 'descrFits_190503_sqrt_flex.npy', 'descrFits_191023_sqrt_flex.npy'];
 
-  rvcNames = ['rvcFitsHPC_220928_NR_pos.npy']
+  rvcNames = ['rvcFitsHPC_221126_f0_NR.npy', 'rvcFitsHPC_221126_f0_NR.npy', 'rvcFitsHPC_221126_NR_pos.npy', 'rvcFitsHPC_221126_vecF1_NR.npy']
   #rvcNames = ['rvcFitsHPC_220609_vecF1_NR.npy']
   #rvcNames = ['rvcFitsHPC_220609_f0_NR.npy', 'rvcFitsHPC_220609_vecF1_NR.npy']
   #rvcNames = ['rvcFitsHPC_220609_f0_NR.npy', 'rvcFitsHPC_220609_vecF1_NR.npy', 'V1_BB/structures/rvcFitsHPC_220609_vecF1_NR.npy']
@@ -81,12 +96,12 @@ if area == 'V1':
   #rvcMods = [1,1,1,1]; # 0-mov; 1-Nakarushton; 2-Peirce
   # rvcNames   = ['rvcFits_f0.npy'];
   # pack to easily tile
-  expt = [expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods];
+  expt = [expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, cv_fitNamesWght, cv_fitNamesFlat];
   for exp_i in range(len(expt)):
       if len(expt[exp_i]) == 1:
           expt[exp_i] = expt[exp_i] * nExpts;
   # now unpack for use
-  expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods = expt;
+  expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, cv_fitNamesWght, cv_fitNamesFlat = expt;
 
   base_dir = os.getcwd() + '/';
 
@@ -113,7 +128,7 @@ if area == 'V1':
   # WARNING: This takes [~/<]10 minutes (as of 20.04.14)
   # jointList_V1full = hf.jl_create(base_dir, [expDirs[-1]], [expNames[-1]], [fitNamesWght[-1]], [fitNamesFlat[-1]], [descrNames[-1]], [dogNames[-1]], [rvcNames[-1]], [rvcMods[-1]])
 
-  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType, reducedSave=True, briefVersion=brief)
+  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType, reducedSave=True, briefVersion=brief,  cv_fitNamesWght=cv_fitNamesWght, cv_fitNamesFlat=cv_fitNamesFlat, toPar=True, modSpecs=modSpecs)
 
   from datetime import datetime
   suffix = datetime.today().strftime('%y%m%d')

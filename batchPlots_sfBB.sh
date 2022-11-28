@@ -30,6 +30,7 @@ HPC=$3
 NORM_TYPE=$4
 WHICH_PLOT=$5
 VEC_F1=${6:-0}
+KFOLD=${7:--1}
 
 if [[ $WHICH_PLOT -eq 1 ]]; then
   PYCALL="plot_sfBB.py"
@@ -49,17 +50,17 @@ do
   # ------------------------e-------l------dir--nrm---lgn-dif-kmul--onsr--sem-----
   # -----------------------------------------------con---inp----cor-rExp-------
   # modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, no LGN; modB: wght, no LGN
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, no LGN; modB: asym, no LGN
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 10 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 10 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
 
 done
 wait
@@ -71,17 +72,17 @@ do
   # ------------------------e-------l------dir--nrm---lgn-dif-kmul--onsr--sem-----
   # -----------------------------------------------con---inp----cor-rExp-------
   # modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, no LGN; modB: wght, no LGN
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, no LGN; modB: asym, no LGN
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 10 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 10 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
 
 done
 

@@ -93,6 +93,13 @@ if len(sys.argv) > 15:
   useHPCfit = int(sys.argv[15]);
 else:
   useHPCfit = 0;
+if len(sys.argv) > 16:
+  whichKfold = int(sys.argv[16]);
+  if whichKfold<0:
+    whichKfold = None
+else:
+  whichKfold = None;
+isCV = False if whichKfold is None else True;
 
 ## Unlikely to be changed, but keep flexibility
 baselineSub = 0;
@@ -146,12 +153,14 @@ _applyLGNtoNorm = 0;
 _sigmoidScale = 10
 _sigmoidDord = 5;
 if excType==1 or excType == 2:
-  fitBase = 'fitList%s_pyt_nr221109e_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+  #fitBase = 'fitList%s_pyt_nr221109e_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
   #fitBase = 'fitList%s_pyt_nr221109e_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+  fitBase = 'fitList%s_pyt_nr221119d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 else:
   fitBase = None;
 
 if fitBase is not None:
+  _CV=isCV
   if vecCorrected:
     vecCorrected = 1;
   else:
@@ -163,8 +172,8 @@ if fitBase is not None:
   conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
   lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
 
-  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
-  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
+  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=_CV)
+  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=_CV)
   # what's the shorthand we use to refer to these models...
   wtStr = 'wt';
   # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
@@ -190,11 +199,22 @@ if fitBase is not None:
   dc_str = hf_sf.get_resp_str(respMeasure=0);
   f1_str = hf_sf.get_resp_str(respMeasure=1);
 
-  modFit_A_dc = fitListA[cellNum-1][dc_str]['params'];
-  modFit_B_dc = fitListB[cellNum-1][dc_str]['params'];
-  modFit_A_f1 = fitListA[cellNum-1][f1_str]['params'];
-  modFit_B_f1 = fitListB[cellNum-1][f1_str]['params'];
-  lossVals = [[x[cellNum-1][y]['NLL'] for x in [fitListA, fitListB]] for y in [dc_str, f1_str]]
+  #modFit_A_dc = fitListA[cellNum-1][dc_str]['params'];
+  #modFit_B_dc = fitListB[cellNum-1][dc_str]['params'];
+  #modFit_A_f1 = fitListA[cellNum-1][f1_str]['params'];
+  #modFit_B_f1 = fitListB[cellNum-1][f1_str]['params'];
+  #lossVals = [[x[cellNum-1][y]['NLL'] for x in [fitListA, fitListB]] for y in [dc_str, f1_str]]
+
+  modFit_A_dc = fitListA[cellNum-1][dc_str]['params'][whichKfold] if _CV else fitListA[cellNum-1][dc_str]['params'];
+  modFit_B_dc = fitListB[cellNum-1][dc_str]['params'][whichKfold] if _CV else fitListB[cellNum-1][dc_str]['params'];
+  modFit_A_f1 = fitListA[cellNum-1][f1_str]['params'][whichKfold] if _CV else fitListA[cellNum-1][f1_str]['params'];
+  modFit_B_f1 = fitListB[cellNum-1][f1_str]['params'][whichKfold] if _CV else fitListB[cellNum-1][f1_str]['params'];
+  if _CV:
+      lossVals = [[np.mean(x[cellNum-1][y]['NLL%s' % ('_train' if isCV else '')][whichKfold]) for x in [fitListA, fitListB]] for y in [dc_str, f1_str]]
+  else:
+      lossVals = [[np.mean(x[cellNum-1][y]['NLL']) for x in [fitListA, fitListB]] for y in [dc_str, f1_str]]
+  kstr = '_k%d' % whichKfold if _CV else '';
+
 
   normTypes = [normA, normB];
   lgnTypes = [lgnA, lgnB];
