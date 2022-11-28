@@ -3661,7 +3661,8 @@ def get_rvcResp(params, curr_cons, rvcMod):
 ##################################################################
 ##################################################################
 
-def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0, reducedSave=False, briefVersion=False):
+#def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0, reducedSave=False, briefVersion=False, fitListWght=None, fitListFlat=None, cv_fitListWght=None, cv_fitListFlat=None):
+def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0, reducedSave=False, briefVersion=False, modSpecs=None):
 
    ''' - bootThresh (fraction of time for which a boot metric must be defined in order to be included in analysis)
    '''
@@ -4327,65 +4328,65 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
 
    ###########
    ### model
+   ##### -- as of 22.11.26, we assume it's a pytorch fit!
    ###########
-   if 'pyt' in fLW_nm: # i.e. it's a pytorch fit; we'll assume that if one is pytorch fit, the other is, too!
-      try: # F1 or F0
-         respStr = get_resp_str(respMeasure);
-         nllW, paramsW = [fitListWght[cell_ind][respStr]['NLL'], fitListWght[cell_ind][respStr]['params']];
-         nllF, paramsF = [fitListFlat[cell_ind][respStr]['NLL'], fitListFlat[cell_ind][respStr]['params']];
-         try:
-            # first, for weighted model
-            varExplW = fitListWght[cell_ind][respStr]['varExpl'];
-            varExplW_SF = fitListWght[cell_ind][respStr]['varExpl_SF'];
-            varExplW_con = fitListWght[cell_ind][respStr]['varExpl_con'];
-            # then, flat model
-            varExplF = fitListFlat[cell_ind][respStr]['varExpl'];
-            varExplF_SF = fitListFlat[cell_ind][respStr]['varExpl_SF'];
-            varExplF_con = fitListFlat[cell_ind][respStr]['varExpl_con'];
-         except:
-            varExplW, varExplW_SF, varExplW_con = None, None, None
-            varExplF, varExplF_SF, varExplF_con = None, None, None
-
-         model = dict([('NLL_wght', nllW),
-                     ('params_wght', paramsW),
-                     ('NLL_flat', nllF),
-                     ('params_flat', paramsF),
-                     ('varExplW', varExplW),
-                     ('varExplW_SF', varExplW_SF),
-                     ('varExplW_con', varExplW_con),
-                     ('varExplF', varExplF),
-                     ('varExplF_SF', varExplF_SF),
-                     ('varExplF_con', varExplF_con)
-                    ])
+   try: # F1 or F0
+      respStr = get_resp_str(respMeasure);
+      nllW, paramsW = [fitListWght[cell_ind][respStr]['NLL'], fitListWght[cell_ind][respStr]['params']];
+      nllF, paramsF = [fitListFlat[cell_ind][respStr]['NLL'], fitListFlat[cell_ind][respStr]['params']];
+      try:
+         # first, for weighted model
+         varExplW = fitListWght[cell_ind][respStr]['varExpl'];
+         varExplW_SF = fitListWght[cell_ind][respStr]['varExpl_SF'];
+         varExplW_con = fitListWght[cell_ind][respStr]['varExpl_con'];
       except:
-         model = dict([('NLL_wght', np.nan),
-                       ('params_wght', []),
-                       ('NLL_flat', np.nan),
-                       ('params_flat', []),
-                       ('varExplW', None),
-                       ('varExplW_SF', None),
-                       ('varExplW_con', None),
-                       ('varExplF', None),
-                       ('varExplF_SF', None),
-                       ('varExplF_con', None)
-                    ])
-   else:
-     try:
-       nllW, paramsW = [fitListWght[cell_ind]['NLL'], fitListWght[cell_ind]['params']];
-       nllF, paramsF = [fitListFlat[cell_ind]['NLL'], fitListFlat[cell_ind]['params']];
-       # and other other future measures?
+         varExplW, varExplW_SF, varExplW_con = None, None, None
+      try:
+         # then, flat model
+         varExplF = fitListFlat[cell_ind][respStr]['varExpl'];
+         varExplF_SF = fitListFlat[cell_ind][respStr]['varExpl_SF'];
+         varExplF_con = fitListFlat[cell_ind][respStr]['varExpl_con'];
+      except:
+         varExplF, varExplF_SF, varExplF_con = None, None, None
 
-       model = dict([('NLL_wght', nllW),
-                    ('params_wght', paramsW),
-                    ('NLL_flat', nllF),
-                    ('params_flat', paramsF)
-                   ])
-     except: # then no model fit!
-       model = dict([('NLL_wght', np.nan),
+      model = dict([('NLL_wght', nllW),
+                  ('params_wght', paramsW),
+                  ('NLL_flat', nllF),
+                  ('params_flat', paramsF),
+                  ('varExplW', varExplW),
+                  ('varExplW_SF', varExplW_SF),
+                  ('varExplW_con', varExplW_con),
+                  ('varExplF', varExplF),
+                  ('varExplF_SF', varExplF_SF),
+                  ('varExplF_con', varExplF_con),
+                  ('modSpecs_flat', modSpecs['flat']), 
+                  ('modSpecs_wght', modSpecs['wght'])
+                ])
+   except:
+      model = dict([('NLL_wght', np.nan),
                     ('params_wght', []),
                     ('NLL_flat', np.nan),
-                    ('params_flat', [])
-                   ])
+                    ('params_flat', []),
+                    ('varExplW', None),
+                    ('varExplW_SF', None),
+                    ('varExplW_con', None),
+                    ('varExplF', None),
+                    ('varExplF_SF', None),
+                    ('varExplF_con', None),
+                    ('modSpecs_flat', None), 
+                    ('modSpecs_wght', None)
+                 ])
+   # Now, if available, add the C-V fit info to 'model'
+   try:
+      respStr = get_resp_str(respMeasure);
+      cv_nllW_tr, cv_nllW_te = [cv_fitListWght[cell_ind][respStr]['NLL_train'], cv_fitListWght[cell_ind][respStr]['NLL_test']];
+      cv_nllF_tr, cv_nllF_te = [cv_fitListFlat[cell_ind][respStr]['NLL_train'], cv_fitListFlat[cell_ind][respStr]['NLL_test']];
+   except:
+      cv_nllW_tr, cv_nllW_te, cv_nllF_tr, cv_nllF_te = [np.nan, np.nan, np.nan, np.nan]
+   model['cv_NLL_wght_tr'] = cv_nllW_tr
+   model['cv_NLL_wght_te'] = cv_nllW_te
+   model['cv_NLL_flat_tr'] = cv_nllF_tr
+   model['cv_NLL_flat_te'] = cv_nllF_te
 
    ###########
    ### now, gather all together in one dictionary
@@ -4399,7 +4400,7 @@ def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc
    return cellSummary;
 
 def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods,
-              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, jointType=0, reducedSave=False, briefVersion=False):
+              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, jointType=0, reducedSave=False, briefVersion=False, cv_fitNamesWght=None, cv_fitNamesFlat=None, modSpecs=None):
   ''' create the "super structure" that we use to analyze data across multiple versions of the experiment
       TODO: update this to get proper spikes/tuning measures based on f1/f0 ratio (REQUIRES descrFits to be like rvcFits, i.e. fit F1 or F0 responses, accordingly)
       inputs:
@@ -4426,16 +4427,25 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
   jointListAsDict = dict();
   totCells = 0;
 
-  for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, rvcMod in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods):
+  for expDir, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, rvcMod, cv_fLW_nm, cv_fLF_nm in zip(expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, cv_fitNamesWght, cv_fitNamesFlat):
 
     #if expDir != 'V1_BB/':
     #   continue;
 
     # get the current directory, load data list
+    # DECLARE THESE AS GLOBAL?
+    global dataList, fitListWght, fitListFlat, cv_fitListWght, cv_fitListFlat, descrFits, dogFits, rvcFits, superAnalysis
+
     data_loc = base_dir + expDir + 'structures/';    
     dataList = np_smart_load(data_loc + dL_nm);
     fitListWght = np_smart_load(data_loc + fLW_nm);
     fitListFlat = np_smart_load(data_loc + fLF_nm);
+    try:
+       cv_fitListWght = np_smart_load(data_loc + cv_fLW_nm);
+       cv_fitListFlat = np_smart_load(data_loc + cv_fLF_nm);
+    except:
+       cv_fitListWght = None;
+       cv_fitListFlat = None;
     descrFits = np_smart_load(data_loc + dF_nm);
     dogFits = np_smart_load(data_loc + dog_nm);
     rvcFits = np_smart_load(data_loc + rv_nm);
@@ -4456,13 +4466,13 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     isBB = 1 if 'BB' in expDir else 0;
 
     if toPar:
-      perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType, reducedSave=reducedSave, briefVersion=briefVersion)
+      perCell_summary = partial(jl_perCell, dataList=dataList, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType, reducedSave=reducedSave, briefVersion=briefVersion, modSpecs=modSpecs)
+      #perCell_summary = partial(jl_perCell, dataList=dataList, descrFits=descrFits, dogFits=dogFits, rvcFits=rvcFits, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType, reducedSave=reducedSave, briefVersion=briefVersion, fitListWght=fitListWght, fitListFlat=fitListFlat, cv_fitListWght=cv_fitListWght, cv_fitListFlat=cv_fitListFlat)
 
       #if isBB:
       #  oh = perCell_summary(30);
       #  pdb.set_trace();
-
-      nCpu = mp.cpu_count();
+      nCpu = np.minimum(20, mp.cpu_count()-5);
       with mp.Pool(processes = nCpu) as pool:
          cellSummaries = pool.map(perCell_summary, range(nCells));
       for cell_ind, cellSummary in enumerate(cellSummaries):
