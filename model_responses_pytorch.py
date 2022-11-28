@@ -1321,7 +1321,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 # learning_rate guide, as of 22.11.16:
 # --- 0.01 if all data (e.g. batch_size=3000)
 # --- 0.002 if batch_size = 256
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.005, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False, preLoadDataList=None, k_fold=None, k_fold_shuff=True, k_fold_state=None): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.005, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, trackStepsReduced=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False, preLoadDataList=None, k_fold=None, k_fold_shuff=True, k_fold_state=None): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1426,7 +1426,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   if k_fold>1:
     nTrs_total = expInfo['num'][-1] if expInd != -1 else expInfo['trial']['ori'].shape[-1];
-    k_fold_state = k_fold_state if k_fold_state is None else cellNum; # why make the random state based on cell#? To make all model iterations for a given cell fit the same sets of trials!
+    k_fold_state = k_fold_state if k_fold_state is not None else cellNum; # why make the random state based on cell#? To make all model iterations for a given cell fit the same sets of trials!
     cv_gen = KFold(n_splits=k_fold, shuffle=k_fold_shuff, random_state=k_fold_state).split(range(nTrs_total));
     # and pre-create lists for relevant info:
     NLL_cv = [];
@@ -1720,8 +1720,11 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
                 curr_loss = loss_curr.item();
                 accum += curr_loss;
 
-            loss_history[t].append(loss_curr.item())
-            time_history[t].append(time.time() - start_time)
+            if trackStepsReduced==False: # only then, track time_history
+              loss_history[t].append(loss_curr.item())
+              time_history[t].append(time.time() - start_time)
+            else: # track only the loss, and make it float16 for smaller size!
+              loss_history[t].append(np.float16(loss_curr.item()))
             if np.isnan(loss_curr.item()) or np.isinf(loss_curr.item()):
               if to_save: # we raise an exception here and then try again.
                 raise Exception("Loss is nan or inf on epoch %s, batch %s!" % (t, 0))
@@ -1902,9 +1905,11 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   # now the step list, if needed
   if trackSteps and NLL < currNLL:
     curr_steplist = dict(); # again, will slot into stepList[cellNum-1][respStr]
+    if trackStepsReduced==False: # only then, track time_history
+      curr_steplist['time'] = time_history;
+    # but always track loss_history
     curr_steplist['loss'] = loss_history;
-    curr_steplist['time'] = time_history;
-
+ 
     if to_save:
       if cellNum-1 not in stepList:
         print('[steplist] cell did not exist yet');
@@ -2045,7 +2050,7 @@ if __name__ == '__main__':
         pool.close();
 
       ### do the saving HERE!
-      todoCV = 1 if kfold>1 else 0;
+      todoCV = 0 if kfold is None else 1;
       fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
