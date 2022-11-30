@@ -5695,7 +5695,7 @@ def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2, tr
     inhAsym = 0;
     new_weights = 1 + inhAsym*(np.log(sfs) - np.nanmean(np.log(sfs)));
     new_weights = np.multiply(lgnStage, new_weights);
-  elif normType == 2:
+  elif normType == 2 or normType == 6:
     log_sfs = np.log(sfs);
     new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
     new_weights = np.multiply(lgnStage, new_weights);
@@ -5732,7 +5732,7 @@ def genNormWeights(cellStruct, nInhChan, gs_mean, gs_std, nTrials, expInd, normT
     # if asym, put where '0' is
     curr_chan = len(T['mod']['normalization']['pref']['sf'][iP]);
     log_sfs = np.log(T['mod']['normalization']['pref']['sf'][iP]);
-    if normType == 2:
+    if normType == 2 or normType == 6:
       new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
     elif normType == 4:
       sfs_l = log_sfs[log_sfs<gs_mean];

@@ -1363,6 +1363,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   todoCV = 1 if whichTrials is not None or k_fold>1 else 0;
 
   fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType);
+  if fitType != 1: # i.e. not flat, then let's make the flat name and see if we can load those parameters
+    fitListName_flat = hf.fitList_name(base=fL_name, fitType=1, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType);
   # get the name for the stepList name, regardless of whether or not we keep this now
   stepListName = str(fitListName.replace('.npy', '_details.npy'));
 
@@ -1498,21 +1500,47 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
     respStr = hf_sfBB.get_resp_str(respMeasure);
 
-    if os.path.isfile(loc_data + fitListName):
+    if initFromCurr == -1: # try to load the flat parameters and go from there...
+      try:
+        fitList_fl = hf.np_smart_load(str(loc_data + fitListName_flat));
+        curr_fit_fl = fitList_fl[cellNum-1][respStr];
+        curr_params = curr_fit_fl['params'];
+        testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=1, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False)
+        # now, we should re-package the parameters into the shape they would be for the current fitType
+        # --- note: assumes fitType = 2 or 6
+        # --- furthermore, we start with high normStd [to mimic flat] and normMean near prefSf
+        init_gs_mean = _cast_as_tensor(torch.log(testModel.minPrefSf + testModel.maxPrefSf*torch.sigmoid(testModel.prefSf)));
+        init_gs_std = 3.5
+        # create interim initial param list
+        cp = np.zeros((hf.nParamsByType(fitType=2, excType=excType, lgnType=lgnFrontEnd), ));
+        # first 8 params will be in common
+        cp[0:8] = curr_params[0:8];
+        cp[8] = init_gs_mean; #
+        cp[9] = init_gs_std;
+        if lgnFrontEnd>0:
+          cp[-1] = curr_params[-1];
+        # and copy it back
+        curr_params = np.copy(cp);
+      except:
+        initFromCurr = 0; # then we will not initFromCurr...
+        pass; # we'll just proceed below (and will skip any initFromCurr later on)
+
+    if os.path.isfile(loc_data + fitListName): # do not overwrite our curr_params if -1
       fitList = hf.np_smart_load(str(loc_data + fitListName));
       try:
         curr_fit = fitList[cellNum-1][respStr];
-        curr_params = curr_fit['params'];
-        # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
-        testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False)
-        trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly) # warning: added respOverwrite here; also add whichTrials???
-        predictions = testModel.forward(trInfTemp, respMeasure=respMeasure);
-        if testModel.lossType == 3:
-          loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType, varGain=testModel.varGain)
-        else:
-          loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType)
-        if np.isnan(loss_test.item()):
-          initFromCurr = 0; # then we've saved bad parameters -- force new ones!
+        if initFromCurr != -1: # then we want to get initial parameters; otherwise, we already set up initial parameters!
+          curr_params = curr_fit['params'];
+          # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
+          testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False)
+          trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly) # warning: added respOverwrite here; also add whichTrials???
+          predictions = testModel.forward(trInfTemp, respMeasure=respMeasure);
+          if testModel.lossType == 3:
+            loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType, varGain=testModel.varGain)
+          else:
+            loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType)
+            if np.isnan(loss_test.item()):
+              initFromCurr = 0; # then we've saved bad parameters -- force new ones!
       except:
         initFromCurr = 0; # force the old parameters
     else:
@@ -1609,11 +1637,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           respScalar /= 750; # completely heuristic :(
         if (fitType==2 or fitType==6) and lgnFrontEnd==0: # i.e. tuned gain
           respScalar *= 1.5; # need slighly stronger respScalar in these cases?
+        # overwrite respScalar if initFromCurr!=0
+        if initFromCurr!=0:
+          respScalar = curr_params[4];
         # increased starting value for width as of 22.10.25
         normStd = np.random.uniform(1.25, 2.25) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
-    # TEMP...
-    normGain = np.random.uniform(0.5, 1) if initFromCurr == 0 else curr_params[10]; # will be a sigmoid-ed value...
-
+    # TEMP...???
+    normGain = np.random.uniform(0.5, 1) if (initFromCurr == 0 or fitType!=5) else curr_params[10]; # will be a sigmoid-ed value...
     varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
     if lgnFrontEnd > 0:
       # Now, the LGN weighting 
