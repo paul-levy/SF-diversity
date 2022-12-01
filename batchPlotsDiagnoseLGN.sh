@@ -68,6 +68,8 @@ do
 
     # no LGN
     python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 16 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 26 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 10 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 11 00 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
@@ -81,6 +83,14 @@ do
     python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 15 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
     python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 55 41 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  fi
+
+  # Check how many background jobs there are, and if it
+  # is equal to the number of cores, wait for anyone to
+  # finish before continuing.
+  background=( $(jobs -p) )
+  if (( ${#background[@]} == cores )); then
+      wait -n
   fi
 
   # jointLGN plots

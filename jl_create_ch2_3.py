@@ -8,6 +8,11 @@ import itertools, pdb
 
 area = sys.argv[1];
 jointType = int(sys.argv[2]);
+if len(sys.argv)>3:
+  normIn = int(sys.argv[3]);
+  normA,normB = int(np.floor(normIn/10)), int(np.mod(normIn, 10))
+else:
+  normA = None; normB = None;
 
 brief=True; # save boot iter metrics, too?
 
@@ -29,9 +34,11 @@ if area == 'V1':
   vecCorrected = 0
   pytorch_mod = 1; #
   excType, lossType = 1, 1
-  fixRespExp = 2; # i
+  fixRespExp = None; # i
   scheduler = False;
-  normA, normB = 2, 1; # for weighted, 5 is wghtGain (2 is "old" weighted model)
+  if normA is None or normB is None: # otherwise, already defined
+    # note that 'a' should be the more weighted/heavily parameterized normalization
+    normA, normB = 2, 1;
   lgnA, lgnB = 0, 0; # (1) means have an LGN, original filters
   conA, conB = 1, 1; # (1) separate M&P; (2) is equal M+P; (4) is all parvo
   loc_str = 'HPC' if useHPCfit else '';
@@ -136,7 +143,7 @@ if area == 'V1':
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
-  np.save(base_dir + 'jointList_V1_%svE_vT%02d_dvT%02d_m%dj%d' % (suffix, varExplThresh_str, dog_varExplThresh_str, dogMod, jointType), jointList)
+  np.save(base_dir + 'jointList_wMods_freeRE_V1_%svE_vT%02d_dvT%02d_m%dj%d_mA%dmB%d' % (suffix, varExplThresh_str, dog_varExplThresh_str, dogMod, jointType, normA, normB), jointList)
 
 ########################
 #### END V1

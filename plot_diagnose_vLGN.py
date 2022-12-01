@@ -164,8 +164,8 @@ fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, f
 fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV)
 # what's the shorthand we use to refer to these models...
 # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
-aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn');
-bWtStr = '%s%s' % ('wt' if normB>1 else 'asym', '' if normB<=2 else 'Gn');
+aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn' if normA==5 else 'Yk');
+bWtStr = '%s%s' % ('wt' if normB>1 else 'asym', '' if normB<=2 else 'Gn' if normA==5 else 'Yk');
 lgnStrA = hf.lgnType_suffix(lgnA, conA);
 lgnStrB = hf.lgnType_suffix(lgnB, conB);
 modA_str = '%s%s' % ('fl' if normA==1 else aWtStr, lgnStrA if lgnA>0 else 'V1');
@@ -390,13 +390,17 @@ elif pytorch_mod == 0:
 
 # Now, continue with organizing things
 if normA > 1:
-  gs_mean_A = modFit_A[8]; 
-  gs_std_A = modFit_A[9];
+  gs_mean_A = model_A.gs_mean.detach().numpy();
+  gs_std_A = model_A.gs_std.detach().numpy();
+  #gs_mean_A = modFit_A[8];
+  #gs_std_A = modFit_A[9];
 else:
   gs_mean_A, gs_std_A = None, None
 if normB > 1:
-  gs_mean_B = modFit_B[8]; 
-  gs_std_B = modFit_B[9];
+  gs_mean_B = model_B.gs_mean.detach().numpy();
+  gs_std_B = model_B.gs_std.detach().numpy();
+  #gs_mean_B = modFit_B[8]; 
+  #gs_std_B = modFit_B[9];
 else:
   gs_mean_B, gs_std_B = None, None
 
