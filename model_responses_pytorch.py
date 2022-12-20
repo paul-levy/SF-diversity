@@ -4,15 +4,16 @@ from torch.utils import data as torchdata
 from sklearn.model_selection import KFold
 
 import numpy as np
-
-import helper_fcns as hf
-import helper_fcns_sfBB as hf_sfBB
+import scipy.stats as ss
 import time
 import datetime
 import sys, os
 import warnings
 from functools import partial
 import pdb
+
+import helper_fcns as hf
+import helper_fcns_sfBB as hf_sfBB
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -566,11 +567,39 @@ class sfNormMod(torch.nn.Module):
     self.P_js = _cast_as_tensor(0.4); # relative char. freq of surround
     if self.lgnFrontEnd == 2:
       self.M_fc = _cast_as_tensor(6); # different variant (make magno f_c=6, not 3)
-    elif self.lgnFrontEnd == 3: # Here, we center the LGN fc around the pref. sf
+    elif self.lgnFrontEnd == 3:
       self.lgnOctDiff = _cast_as_tensor(_lgnOctDiff);
-      prefSf = _cast_as_tensor(torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)));
-      self.M_fc = prefSf * torch.power(2, -self.lgnOctDiff/2); # half of the oct. diff below
-      self.P_fc = prefSf * torch.power(2, self.lgnOctDiff/2) # half of the oct. diff above
+      prefSf = self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf).item();
+      # With the preferred SF, we'll make a somewhat convoluted calculation:
+      # - 1. We can analatically determine the relationship between f_c and psf
+      # ---- Note that this relationship depends on surround strength and gain for the DoG model
+      # - 2. Using, the pre-described relationship between M and P char. freq (3x, or np.log2(3) in log2)...
+      # ---- ...get the equivalent M and P pSf
+      # ---- Note that based on the note in 1., we use a different calculation for M and P
+      # - THUS: Here, we compute the mapping for pSf to f_c, which is fixed based on surround gain/radius
+      sfs_test = np.geomspace(1e-10, 100, 100); # over what range of Sfs do we allow for a preferred SF; since it's model, say wide
+      f_cs = np.geomspace(0.5, 15, 100);
+      p_psfs = np.array([hf.descr_prefSf([self.P_k.item(), fc_curr, self.P_ks.item(), self.P_js.item()], self.LGNmodel, all_sfs=sfs_test) for fc_curr in f_cs]);
+      m_psfs = np.array([hf.descr_prefSf([self.M_k.item(), fc_curr, self.M_ks.item(), self.M_js.item()], self.LGNmodel, all_sfs=sfs_test) for fc_curr in f_cs]);
+      m_mapping = ss.linregress(f_cs, m_psfs);
+      p_mapping = ss.linregress(f_cs, p_psfs);
+      # now, with the slope/intercept from mapping, make lambda to get the equiv. psf from the f_c
+      get_eqv_psf_m = lambda fc: m_mapping.intercept + fc*m_mapping.slope
+      get_eqv_psf_p = lambda fc: p_mapping.intercept + fc*p_mapping.slope
+      # --- plus the mapping from pSf to desired fc
+      self.get_eqv_cf_m = lambda psf: (psf - m_mapping.intercept)/m_mapping.slope
+      self.get_eqv_cf_p = lambda psf: (psf - p_mapping.intercept)/p_mapping.slope
+      # --- the below (oct_range_in_psf) gives the equivalent range in PSF for lgnOctDiff-fold fc difference
+      # ------ why? P_fc is np.power(2, lgnOctDiff) while M_fc is 1, thus P_fc is 2^lgnOctDiff times M_fc
+      m_fc_at_psf = self.get_eqv_cf_m(prefSf);
+      p_fc_at_psf = self.get_eqv_cf_m(prefSf);
+      log_mn_fc_at_psf = m_fc_at_psf * np.power(2, np.log2(p_fc_at_psf/m_fc_at_psf));
+      self.oct_range_in_psf = np.log2(get_eqv_psf_p(log_mn_fc_at_psf*np.power(2, self.lgnOctDiff/2))/get_eqv_psf_m(log_mn_fc_at_psf*np.power(2, -self.lgnOctDiff/2)))
+      # Now, get the desired pSf/mPsf, and go back to charFreq
+      p_sf, m_sf = [prefSf * np.power(2, self.oct_range_in_psf/2), prefSf * np.power(2, -self.oct_range_in_psf/2)]
+      # now, back out the f_c from the expected psf
+      self.M_fc = self.get_eqv_cf_m(m_sf)
+      self.P_fc = self.get_eqv_cf_p(p_sf)
     elif self.lgnFrontEnd == 99: # 99 is code for fitting an LGN front end which is common across all cells in the dataset...
       # parameters are passed as [..., m_fc, p_fc, m_ks, p_ks, m_js, p_js]
       self.M_fc = _cast_as_param(self.modParams[-6]);
@@ -591,6 +620,27 @@ class sfNormMod(torch.nn.Module):
     ### END OF INIT
 
   #######
+  def update_manual(self, verbose=False):
+    # update fields (NOT PARAMETERS) which are dep. on parameters
+    # --- two of the possible updates (as of 22.12.20) rely on prefSf
+    prefSf = self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf);
+
+    if self.lgnFrontEnd == 3: # Then we have to update the M/P_fc
+      # Now, get the desired pSf/mPsf, and go back to charFreq
+      p_sf, m_sf = [prefSf * np.power(2, self.oct_range_in_psf/2), prefSf * np.power(2, -self.oct_range_in_psf/2)]
+      # now, back out the f_c from the expected psf
+      self.M_fc = self.get_eqv_cf_m(m_sf)
+      self.P_fc = self.get_eqv_cf_p(p_sf)
+      # --- and pack the DoG parameters we specified above
+      self.dog_m = [self.M_k, self.M_fc, self.M_ks, self.M_js] 
+      self.dog_p = [self.P_k, self.P_fc, self.P_ks, self.P_js]
+      # --- finally, set lgnCalcDone to False (we'll need to recalculate)
+      self.lgnCalcDone = False;
+      if verbose:
+        print('M/P fc are %.2f/%.2f [done? %r]' % (self.M_fc, self.P_fc, self.lgnCalcDone))
+    if self.normType == 6: # norm pool mn eq. to prefSf
+      self.gs_mean = prefSf
+
   def clear_saved_calcs(self):
     # reset the images/pre-computed calculations in case the dataset has changed (i.e. cross-validation!)
     self.stimRealImag = None; # defaults to None so that we know to compute it the first time around
@@ -598,7 +648,6 @@ class sfNormMod(torch.nn.Module):
     self.normFilters  = None;
     self.normFiltersBasic  = None;
     self.normCalc     = None;
-
 
   def print_params(self, transformed=1):
     # return a list of the parameters
@@ -723,7 +772,8 @@ class sfNormMod(torch.nn.Module):
         self.selSf_m = selSf_m;
         self.selCon_p = selCon_p;
         self.selCon_m = selCon_m;
-        self.lgnCalcDone = True; # save the LGN calc --> but we'll overwrite if not full dataset
+        self.lgnCalcDone = True; # save the LGN calc --> but fear not, we'll overwrite if not full dataset
+        # NOTE: We will turn lgnCalcDone back to False when we update the m/p params (i.e. lgnFrontEnd==3)
 
       if self.lgnConType == 1: # DEFAULT
         # -- then here's our final responses per component for the current stimulus
@@ -1023,6 +1073,7 @@ class sfNormMod(torch.nn.Module):
     if self.normFilters is None or normOverwrite: 
       ########
       # a. First, construct the filter bank if it's not already constructed
+      # --- independent of LGN and gain control tuning
       ########
       # if we don't have the full calculation, then we'll do the following:
       # --- compute the underlying filters, if needed (otherwise skip that calculation)
@@ -1057,7 +1108,7 @@ class sfNormMod(torch.nn.Module):
             selSf = [selSf, curr_resp];
       # unfold the selSf into [nTr x nComp x nFilters] --> but permute to [nFilters x nTr x nComp]
       selSf = torch.cat(selSf, dim=-1).permute((-1,0,1));
-      if self.fullDataset: # we can only save the full calc IF the norm. is untuned
+      if self.fullDataset: # we can only save the full filters w/initial gain if full dataset
         self.normFilters = selSf;
     else:
       selSf = self.normFilters;
@@ -1067,6 +1118,8 @@ class sfNormMod(torch.nn.Module):
     ########
     if (self.lgnFrontEnd > 0 and self.normCalc is None) or normOverwrite: # why if self.normCalc is None, we've already saved the calc we need
       # unpack/fully compute LGN front end:
+      # --- NOTE: Even if the LGN is being updated (i.e. lgnFrontEnd==3), we'll have called simpleResp_matMul before getting here
+      # ----- this, these values will be updated to reflected any shift in the SF=
       selCon_p = self.selCon_p;
       selCon_m = self.selCon_m;
       selSf_p = self.selSf_p;
@@ -1180,7 +1233,7 @@ class sfNormMod(torch.nn.Module):
         rsall = rsall/torch.max(torch.mean(rsall, axis=1)); # take avg. across frames (i.e. per trial) and normalize all to the max avg.
 
       rsall = rsall.transpose(1,0); # transpose to make [nFr x nTr]
-      if not any_debug and not self.mWeight.requires_grad and self.normType==1 and self.fullDataset: # we can only save the full calc IF the norm. is untuned
+      if not any_debug and not self.mWeight.requires_grad and self.normType==1 and self.fullDataset and self.lgnFrontEnd != 3: # we can only save the full calc IF the norm. is untuned AND the lgnFrontEnd is fixed
         # only overwrite/save if LGN and filter weights are not optimized-for (and if no debugging)!
         self.normCalc = rsall;
       return rsall;
@@ -1364,7 +1417,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
-      fL_name = 'fitList%s_pyt_nr221119d%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_nr221220%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   k_fold = 1 if k_fold is None else k_fold; # i.e. default to one "fold"
   todoCV = 1 if whichTrials is not None or k_fold>1 else 0;
@@ -1492,7 +1545,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       unique_sfs = np.unique(trInf['sf'][:,0])
       pref_sf = unique_sfs[np.argmax(expByCond[0,:,-1])] if expInd != -1 else expInfo['baseSF'][0]; # we can just use baseSf
       if verbose:
-        print('prefSf: %.2f' % pref_sf);
+        print('prefSf: %.2f [will initialize at this + some jitter]' % pref_sf);
     except:
       if to_save:
         raise Exception("Could not process_data in mrpt.setModel --> cell %d, respMeasure %d" % (cellNum, respMeasure))
@@ -1782,6 +1835,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
             optimizer.step()
             if scheduler:
               LR_scheduler.step(loss_curr.item());
+            model.update_manual(verbose=False);
 
         model.eval()
         model.train()
@@ -2081,7 +2135,7 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221119d%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr221220%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold);
