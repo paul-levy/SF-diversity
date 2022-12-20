@@ -582,8 +582,10 @@ def lgnType_suffix(lgnType, lgnConType=1):
     lgnSuf = '';
   elif lgnType == 1:
     lgnSuf = '_LGN';
-  elif lgnType == 2:
+  elif lgnType == 2: # this just shifts the magno char. freq higher than lgnType==1
     lgnSuf = '_LGNb';
+  elif lgnType == 3: # lgn filters shift with V1 filter, s.t. they are centered around V1 pref.
+    lgnSuf = '_LGNyk'; # 'yk' for yoked
   elif lgnType == 9:
     lgnSuf = '_jLGN';
 

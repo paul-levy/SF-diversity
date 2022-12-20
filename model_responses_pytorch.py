@@ -433,7 +433,7 @@ class dataWrapper(torchdata.Dataset):
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module()
 
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=False, forceLateNoise=None):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=False, forceLateNoise=None, _lgnOctDiff=np.log2(9/3)):
 
     super().__init__();
 
@@ -469,6 +469,8 @@ class sfNormMod(torch.nn.Module):
     if self.lgnFrontEnd == 99:
       self.mWeight = _cast_as_param(modParams[nParams-1]);
     elif self.lgnFrontEnd == 1 and self.lgnConType == 1:
+      self.mWeight = _cast_as_param(modParams[-1]);
+    elif self.lgnFrontEnd == 3 and self.lgnConType == 1: # yoked LGN; mWeight is still treated the same way
       self.mWeight = _cast_as_param(modParams[-1]);
     elif self.lgnConType == 2: # FORCE at 0.5
        self.mWeight = _cast_as_tensor(0); # then it's NOT a parameter, and is fixed at 0, since as input to sigmoid, this gives 0.5
@@ -564,6 +566,11 @@ class sfNormMod(torch.nn.Module):
     self.P_js = _cast_as_tensor(0.4); # relative char. freq of surround
     if self.lgnFrontEnd == 2:
       self.M_fc = _cast_as_tensor(6); # different variant (make magno f_c=6, not 3)
+    elif self.lgnFrontEnd == 3: # Here, we center the LGN fc around the pref. sf
+      self.lgnOctDiff = _cast_as_tensor(_lgnOctDiff);
+      prefSf = _cast_as_tensor(torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)));
+      self.M_fc = prefSf * torch.power(2, -self.lgnOctDiff/2); # half of the oct. diff below
+      self.P_fc = prefSf * torch.power(2, self.lgnOctDiff/2) # half of the oct. diff above
     elif self.lgnFrontEnd == 99: # 99 is code for fitting an LGN front end which is common across all cells in the dataset...
       # parameters are passed as [..., m_fc, p_fc, m_ks, p_ks, m_js, p_js]
       self.M_fc = _cast_as_param(self.modParams[-6]);
