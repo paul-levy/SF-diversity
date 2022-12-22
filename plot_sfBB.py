@@ -758,21 +758,10 @@ if fitBase is not None: # then we can plot some model details
         sfExcLGN = s; # will be used IF there isn't an LGN front-end...
       # BUT. if this is an LGN model, we'll apply the filtering, eval. at 100% contrast
       if lgnType == 1 or lgnType == 2 or lgnType == 3:
-        '''
-        params_m = [0, 12.5, 0.05];
-        params_p = [0, 17.5, 0.50];
-        DoGmodel = 2;
-        if lgnType == 1:
-          dog_m = [1, 3, 0.3, 0.4]; # k, f_c, k_s, j_s
-          dog_p = [1, 9, 0.5, 0.4];
-        elif lgnType == 2:
-          dog_m = [1, 6, 0.3, 0.4]; # k, f_c, k_s, j_s
-          dog_p = [1, 9, 0.5, 0.4];
-        '''
-        params_m = modObj.rvc_m.detach().numpy();
+        params_m = modObj.rvc_m.detach().numpy(); # one tensor array, so just detach
         params_p = modObj.rvc_p.detach().numpy();
         DoGmodel = modObj.LGNmodel; # what DoG parameterization?
-        dog_m = np.array([x.item() for x in modObj.dog_m])
+        dog_m = np.array([x.item() for x in modObj.dog_m]) # a list of tensors, so do list comp. to undo into a normal/numpy array
         dog_p = np.array([x.item() for x in modObj.dog_p])
         # now compute with these parameters
         resps_m = hf.get_descrResp(dog_m, omega, DoGmodel, minThresh=0.1)
