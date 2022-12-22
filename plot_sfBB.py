@@ -411,6 +411,7 @@ for measure in [0,1]:
         xlim_base = overall_ylim;
         ylim_diffsAbLe = AbLe_bounds;
         lbl = 'DC' 
+        modelsAsObj = [mod_A_dc, mod_B_dc]
         if fitBase is not None:
           data_A = respMatrix_A_dc;
           data_B = respMatrix_B_dc;
@@ -434,6 +435,7 @@ for measure in [0,1]:
         refSf_pref = prefSf_F1;
         xlim_base = overall_ylim
         lbl = 'F1'
+        modelsAsObj = [mod_A_f1, mod_B_f1]
         if fitBase is not None:
           data_A = respMatrix_A_f1_maskTf;
           data_B = respMatrix_B_f1_maskTf;
@@ -729,7 +731,7 @@ if fitBase is not None: # then we can plot some model details
     sfExcRaw = [];
     sfNorms = [];
 
-    for (pltNum, modPrm),lgnType,lgnConType,normType in zip(enumerate(currPrms), lgnTypes, conTypes, normTypes):
+    for (pltNum, modPrm),modObj,lgnType,lgnConType,normType in zip(enumerate(currPrms), modelsAsObj, lgnTypes, conTypes, normTypes):
       # First, excitatory stuff
       prefSf = modPrm[0];
       mWt = 1/(1+np.exp(-modPrm[-1])); # either this is mWeight parameter, or we're not fitting an LGN model anyway (ignored)
@@ -755,7 +757,8 @@ if fitBase is not None: # then we can plot some model details
         sfExcV1 = s;
         sfExcLGN = s; # will be used IF there isn't an LGN front-end...
       # BUT. if this is an LGN model, we'll apply the filtering, eval. at 100% contrast
-      if lgnType == 1 or lgnType == 2:
+      if lgnType == 1 or lgnType == 2 or lgnType == 3:
+        '''
         params_m = [0, 12.5, 0.05];
         params_p = [0, 17.5, 0.50];
         DoGmodel = 2;
@@ -765,6 +768,12 @@ if fitBase is not None: # then we can plot some model details
         elif lgnType == 2:
           dog_m = [1, 6, 0.3, 0.4]; # k, f_c, k_s, j_s
           dog_p = [1, 9, 0.5, 0.4];
+        '''
+        params_m = modObj.rvc_m.detach().numpy();
+        params_p = modObj.rvc_p.detach().numpy();
+        DoGmodel = modObj.LGNmodel; # what DoG parameterization?
+        dog_m = np.array([x.item() for x in modObj.dog_m])
+        dog_p = np.array([x.item() for x in modObj.dog_p])
         # now compute with these parameters
         resps_m = hf.get_descrResp(dog_m, omega, DoGmodel, minThresh=0.1)
         resps_p = hf.get_descrResp(dog_p, omega, DoGmodel, minThresh=0.1)
@@ -793,8 +802,8 @@ if fitBase is not None: # then we can plot some model details
 
         # Then, plot LGN front-end, if we're here
         curr_ax = plt.subplot2grid(detailSize, (1+pltNum, colAdd));
-        plt.semilogx(omega, selSf_m, label='magno', color='r', linestyle='--');
-        plt.semilogx(omega, selSf_p, label='parvo', color='b', linestyle='--');
+        plt.semilogx(omega, selSf_m, label='magno [%.1f]' % dog_m[1], color='r', linestyle='--');
+        plt.semilogx(omega, selSf_p, label='parvo [%.1f]' % dog_p[1], color='b', linestyle='--');
         max_joint = np.max(lgnSel);
         plt.semilogx(omega, np.divide(lgnSel, max_joint), label='joint - 100% contrast', color='k');
         conMatch = 0.20
