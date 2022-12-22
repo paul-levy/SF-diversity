@@ -1116,7 +1116,7 @@ class sfNormMod(torch.nn.Module):
     ########
     # c. Now, apply the LGN, if needed --> or we're done!
     ########
-    if (self.lgnFrontEnd > 0 and self.normCalc is None) or normOverwrite: # why if self.normCalc is None, we've already saved the calc we need
+    if self.applyLGNtoNorm and ((self.lgnFrontEnd > 0 and self.normCalc is None) or normOverwrite): # why if self.normCalc is None, we've already saved the calc we need
       # unpack/fully compute LGN front end:
       # --- NOTE: Even if the LGN is being updated (i.e. lgnFrontEnd==3), we'll have called simpleResp_matMul before getting here
       # ----- this, these values will be updated to reflected any shift in the SF=
