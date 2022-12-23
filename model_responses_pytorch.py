@@ -58,7 +58,7 @@ _sigmoidScale = 10
 _sigmoidDord = 5;
 _sigmoidGainNorm = 5;
 # --- and a flag for whether or not to include the LGN filter for the gain control
-_LGNforNorm = 1;
+#_LGNforNorm = 1;
 ### force_full datalist?
 try:
   expDir = sys.argv[2];
@@ -1417,14 +1417,14 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
-      fL_name = 'fitList%s_pyt_nr221220%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_nr221223%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   k_fold = 1 if k_fold is None else k_fold; # i.e. default to one "fold"
   todoCV = 1 if whichTrials is not None or k_fold>1 else 0;
 
-  fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType);
+  fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm);
   if fitType != 1: # i.e. not flat, then let's make the flat name and see if we can load those parameters
-    fitListName_flat = hf.fitList_name(base=fL_name, fitType=1, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType);
+    fitListName_flat = hf.fitList_name(base=fL_name, fitType=1, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm);
   # get the name for the stepList name, regardless of whether or not we keep this now
   stepListName = str(fitListName.replace('.npy', '_details.npy'));
 
@@ -2085,7 +2085,12 @@ if __name__ == '__main__':
       kfold = None; # i.e. not doing cross-val
 
     if len(sys.argv) > 15:
-      toPar = int(sys.argv[15]); # 1 for True, 0 for False
+      _LGNforNorm = int(sys.argv[15]);
+    else:
+      _LGNforNorm = 1; # default to applying the LGN filters to the front-end
+      
+    if len(sys.argv) > 16:
+      toPar = int(sys.argv[16]); # 1 for True, 0 for False
       # Then, create the pool paramemeter globally (i.e. how many CPUs?)
       if toPar == 1:
         nCpu = mp.cpu_count()
@@ -2135,7 +2140,7 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221220%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr221223%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold);
@@ -2152,7 +2157,7 @@ if __name__ == '__main__':
 
       ### do the saving HERE!
       todoCV = 0 if kfold is None else 1;
-      fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType)
+      fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=_LGNforNorm)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
         fitListNPY = hf.np_smart_load(loc_data + fitListName);

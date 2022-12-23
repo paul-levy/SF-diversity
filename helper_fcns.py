@@ -575,7 +575,7 @@ def lossType_suffix(lossType):
     lossSuf = '_chiSq.npy';
   return lossSuf;
 
-def lgnType_suffix(lgnType, lgnConType=1):
+def lgnType_suffix(lgnType, lgnConType=1, applyLGNtoNorm=1):
   ''' Use this to get the string referring to a given loss function
   '''
   if lgnType == 0:
@@ -597,8 +597,8 @@ def lgnType_suffix(lgnType, lgnConType=1):
     conSuf = 'y'; # "yoked"
   elif lgnConType == 4: # parvo-only front-end
     conSuf = 'p';
-
-  return '%s%s' % (lgnSuf, conSuf if lgnType>0 else ''); # i.e. don't apply the lgnCon suffix if the lgn isn't on anyway!
+  # prepend 'nn' for no norm when applyLGNtoNorm is not eq. 1
+  return '%s%s%s' % ('' if applyLGNtoNorm==1 else 'nn', lgnSuf, conSuf if lgnType>0 else ''); # i.e. don't apply the lgnCon suffix if the lgn isn't on anyway!
 
 def chiSq_suffix(kMult):
   ''' We need a multiplying constant when using the chiSquared loss (see chiSq within this file)
@@ -622,7 +622,7 @@ def excType_suffix(excType):
    elif excType == 1: # derivative gaussian 
       return '_dG';
 
-def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrected=0, CV=0, fixRespExp=None, kMult=0.1, excType=None):
+def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrected=0, CV=0, fixRespExp=None, kMult=0.1, excType=None, lgnForNorm=1):
   ''' use this to get the proper name for the full model fits
       - kMult used iff lossType == 4
   '''
@@ -632,7 +632,7 @@ def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrect
   lossSuf = lossType_suffix(lossType);
   # IF lgnType/lgnConType are given, then we can add that, too
   if lgnType is not None:
-    lgnSuf = lgnType_suffix(lgnType, lgnConType);
+    lgnSuf = lgnType_suffix(lgnType, lgnConType, applyLGNtoNorm=lgnForNorm);
   else:
     lgnSuf = '';
   vecSuf = '_vecF1' if vecCorrected else '';
