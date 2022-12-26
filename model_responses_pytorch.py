@@ -471,7 +471,7 @@ class sfNormMod(torch.nn.Module):
       self.mWeight = _cast_as_param(modParams[nParams-1]);
     elif self.lgnFrontEnd == 1 and self.lgnConType == 1:
       self.mWeight = _cast_as_param(modParams[-1]);
-    elif self.lgnFrontEnd == 3 and self.lgnConType == 1: # yoked LGN; mWeight is still treated the same way
+    elif (self.lgnFrontEnd == 3 or self.lgnFrontEnd == 4) and self.lgnConType == 1: # yoked LGN; mWeight is still treated the same way
       self.mWeight = _cast_as_param(modParams[-1]);
     elif self.lgnConType == 2: # FORCE at 0.5
        self.mWeight = _cast_as_tensor(0); # then it's NOT a parameter, and is fixed at 0, since as input to sigmoid, this gives 0.5
@@ -482,6 +482,11 @@ class sfNormMod(torch.nn.Module):
     # make sure mWeight is 0 if LGN is not on (this will also ensure it's defined)
     if lgnFrontEnd<=0: # i.e. no LGN, then overwrite this!
       self.mWeight = _cast_as_tensor(-np.Inf); # not used anyway!
+    # LGN front end - separate center SF for LGN?
+    if self.lgnFrontEnd == 4:
+      self.lgnCtrSf    = _cast_as_param(modParams[7]);  # multiplicative noise
+    else: # ignored in these cases, anyway
+      self.lgnCtrSf    = _cast_as_tensor(modParams[7]);  # NOT optimized and fully ignored, as of 22.12.26
       
     self.prefSf = _cast_as_param(modParams[0]);
     if self.excType == 1:
@@ -506,10 +511,6 @@ class sfNormMod(torch.nn.Module):
       self.noiseLate  = _cast_as_param(modParams[6]);  # late additive noise
     else:
       self.noiseLate  = _cast_as_param(forceLateNoise); # could be set to 0 (eg. for F1)
-    if self.lossType == 3:
-      self.varGain    = _cast_as_param(modParams[7]);  # multiplicative noise
-    else:
-      self.varGain    = _cast_as_tensor(modParams[7]);  # NOT optimized in this case
 
     ### Normalization parameters
     normParams = hf.getNormParams(modParams, normType, forceAsymZero=toFit);
@@ -567,9 +568,12 @@ class sfNormMod(torch.nn.Module):
     self.P_js = _cast_as_tensor(0.4); # relative char. freq of surround
     if self.lgnFrontEnd == 2:
       self.M_fc = _cast_as_tensor(6); # different variant (make magno f_c=6, not 3)
-    elif self.lgnFrontEnd == 3:
+    elif self.lgnFrontEnd == 3 or self.lgnFrontEnd == 4:
       self.lgnOctDiff = _cast_as_tensor(_lgnOctDiff);
-      prefSf = self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf).item();
+      if self.lgnFrontEnd == 3:
+        ctrSf = self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf).item();
+      elif self.lgnFrontEnd == 4:
+        ctrSf = self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.lgnCtrSf).item();
       # With the preferred SF, we'll make a somewhat convoluted calculation:
       # - 1. We can analatically determine the relationship between f_c and psf
       # ---- Note that this relationship depends on surround strength and gain for the DoG model
@@ -591,12 +595,12 @@ class sfNormMod(torch.nn.Module):
       self.get_eqv_cf_p = lambda psf: (psf - p_mapping.intercept)/p_mapping.slope
       # --- the below (oct_range_in_psf) gives the equivalent range in PSF for lgnOctDiff-fold fc difference
       # ------ why? P_fc is np.power(2, lgnOctDiff) while M_fc is 1, thus P_fc is 2^lgnOctDiff times M_fc
-      m_fc_at_psf = self.get_eqv_cf_m(prefSf);
-      p_fc_at_psf = self.get_eqv_cf_m(prefSf);
+      m_fc_at_psf = self.get_eqv_cf_m(ctrSf);
+      p_fc_at_psf = self.get_eqv_cf_m(ctrSf);
       log_mn_fc_at_psf = m_fc_at_psf * np.power(2, np.log2(p_fc_at_psf/m_fc_at_psf));
       self.oct_range_in_psf = np.log2(get_eqv_psf_p(log_mn_fc_at_psf*np.power(2, self.lgnOctDiff/2))/get_eqv_psf_m(log_mn_fc_at_psf*np.power(2, -self.lgnOctDiff/2)))
       # Now, get the desired pSf/mPsf, and go back to charFreq
-      p_sf, m_sf = [prefSf * np.power(2, self.oct_range_in_psf/2), prefSf * np.power(2, -self.oct_range_in_psf/2)]
+      p_sf, m_sf = [ctrSf * np.power(2, self.oct_range_in_psf/2), ctrSf * np.power(2, -self.oct_range_in_psf/2)]
       # now, back out the f_c from the expected psf
       self.M_fc = self.get_eqv_cf_m(m_sf)
       self.P_fc = self.get_eqv_cf_p(p_sf)
@@ -625,9 +629,14 @@ class sfNormMod(torch.nn.Module):
     # --- two of the possible updates (as of 22.12.20) rely on prefSf
     prefSf = self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf);
 
-    if self.lgnFrontEnd == 3: # Then we have to update the M/P_fc
+    if self.lgnFrontEnd == 3 or self.lgnFrontEnd == 4: # Then we have to update the M/P_fc
+      if self.lgnFrontEnd == 4: # then actually LGN filters placed on their own
+        ctrSf = self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.lgnCtrSf);
+      else:
+        ctrSf = prefSf;
+
       # Now, get the desired pSf/mPsf, and go back to charFreq
-      p_sf, m_sf = [prefSf * np.power(2, self.oct_range_in_psf/2), prefSf * np.power(2, -self.oct_range_in_psf/2)]
+      p_sf, m_sf = [ctrSf * np.power(2, self.oct_range_in_psf/2), ctrSf * np.power(2, -self.oct_range_in_psf/2)]
       # now, back out the f_c from the expected psf
       self.M_fc = self.get_eqv_cf_m(m_sf)
       self.P_fc = self.get_eqv_cf_p(p_sf)
@@ -653,6 +662,9 @@ class sfNormMod(torch.nn.Module):
     # return a list of the parameters
     print('\n********MODEL PARAMETERS********');
     print('prefSf: %.2f' % (self.minPrefSf.item() + self.maxPrefSf.item()*torch.sigmoid(self.prefSf).item())); # was just self.prefSf.item()
+    # only if lgnFrontEnd==4
+    if self.lgnFrontEnd==4:
+      print('\tLGN filters centered around: %.2f' % (self.minPrefSf.item() + self.maxPrefSf.item()*torch.sigmoid(self.lgnCtrSf).item()));
     if self.excType == 1:
       dord = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.dordSp)) if transformed else self.dordSp.item();
       print('deriv. order: %.2f' % dord);
@@ -684,19 +696,19 @@ class sfNormMod(torch.nn.Module):
     # return a list of the parameters
     if self.normType <= 1:
         if self.excType == 1:
-          param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.inhAsym.item(), self.mWeight.item()];
+          param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.inhAsym.item(), self.mWeight.item()];
         elif self.excType == 2:
-          param_list = [self.prefSf.item(), self.sigLow.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.inhAsym.item(), self.sigHigh.item(), self.mWeight.item()];
+          param_list = [self.prefSf.item(), self.sigLow.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.inhAsym.item(), self.sigHigh.item(), self.mWeight.item()];
     elif self.normType == 2 or self.normType == 6:
         if self.excType == 1:
-          param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.gs_mean.item(), self.gs_std.item(), self.mWeight.item()];
+          param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.gs_mean.item(), self.gs_std.item(), self.mWeight.item()];
         elif self.excType == 2:
-          param_list = [self.prefSf.item(), self.sigLow.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.gs_mean.item(), self.gs_std.item(), self.sigHigh.item(), self.mWeight.item()];
+          param_list = [self.prefSf.item(), self.sigLow.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.gs_mean.item(), self.gs_std.item(), self.sigHigh.item(), self.mWeight.item()];
     elif self.normType == 5:
         if self.excType == 1:
-          param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.gs_mean.item(), self.gs_std.item(), self.gs_gain.item(), self.mWeight.item()];
+          param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.gs_mean.item(), self.gs_std.item(), self.gs_gain.item(), self.mWeight.item()];
         elif self.excType == 2:
-          param_list = [self.prefSf.item(), self.sigLow.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.varGain.item(), self.gs_mean.item(), self.gs_std.item(), self.gs_gain.item(), self.sigHigh.item(), self.mWeight.item()];
+          param_list = [self.prefSf.item(), self.sigLow.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.gs_mean.item(), self.gs_std.item(), self.gs_gain.item(), self.sigHigh.item(), self.mWeight.item()];
     if self.lgnFrontEnd == 0: # then we'll trim off the last constraint, which is mWeight bounds (and the last param, which is mWeight)
       param_list = param_list[0:-1];
 
@@ -773,7 +785,7 @@ class sfNormMod(torch.nn.Module):
         self.selCon_p = selCon_p;
         self.selCon_m = selCon_m;
         self.lgnCalcDone = True; # save the LGN calc --> but fear not, we'll overwrite if not full dataset
-        # NOTE: We will turn lgnCalcDone back to False when we update the m/p params (i.e. lgnFrontEnd==3)
+        # NOTE: We will turn lgnCalcDone back to False when we update the m/p params (i.e. lgnFrontEnd==3 or 4)
 
       if self.lgnConType == 1: # DEFAULT
         # -- then here's our final responses per component for the current stimulus
@@ -1118,7 +1130,7 @@ class sfNormMod(torch.nn.Module):
     ########
     if self.applyLGNtoNorm and ((self.lgnFrontEnd > 0 and self.normCalc is None) or normOverwrite): # why if self.normCalc is None, we've already saved the calc we need
       # unpack/fully compute LGN front end:
-      # --- NOTE: Even if the LGN is being updated (i.e. lgnFrontEnd==3), we'll have called simpleResp_matMul before getting here
+      # --- NOTE: Even if the LGN is being updated (i.e. lgnFrontEnd==3 or 4), we'll have called simpleResp_matMul before getting here
       # ----- this, these values will be updated to reflected any shift in the SF=
       selCon_p = self.selCon_p;
       selCon_m = self.selCon_m;
@@ -1233,7 +1245,7 @@ class sfNormMod(torch.nn.Module):
         rsall = rsall/torch.max(torch.mean(rsall, axis=1)); # take avg. across frames (i.e. per trial) and normalize all to the max avg.
 
       rsall = rsall.transpose(1,0); # transpose to make [nFr x nTr]
-      if not any_debug and not self.mWeight.requires_grad and self.normType==1 and self.fullDataset and self.lgnFrontEnd != 3: # we can only save the full calc IF the norm. is untuned AND the lgnFrontEnd is fixed
+      if not any_debug and not self.mWeight.requires_grad and self.normType==1 and self.fullDataset and (self.lgnFrontEnd != 3 or self.lgnFrontEnd != 4): # we can only save the full calc IF the norm. is untuned AND the lgnFrontEnd is fixed
         # only overwrite/save if LGN and filter weights are not optimized-for (and if no debugging)!
         self.normCalc = rsall;
       return rsall;
@@ -1353,7 +1365,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
         per_cond = _cast_as_tensor([poiss_loss(x,y) for x,y in zip(respModel, respData)]);
       NLL = poiss_loss(respModel, respData); # previously was respData, respModel
 
-  if lossType == 3:
+  if lossType == 3: # DEPRECATED AS OF 22.12.26 -- why? Used varGain 'place' in param_list for lgnCtfSf
       # varGain, respData, respMeans
       # -- all_counts is the spike count from every trial
       # -- count_mean is averaged across condition
@@ -1595,7 +1607,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False)
           trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly) # warning: added respOverwrite here; also add whichTrials???
           predictions = testModel.forward(trInfTemp, respMeasure=respMeasure);
-          if testModel.lossType == 3:
+          if testModel.lossType == 3: # DEPRECATED AS OF 22.12.16 - SHOULD NOT REACH HERE
             loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType, varGain=testModel.varGain)
           else:
             loss_test = loss_sfNormMod(_cast_as_tensor(predictions.flatten()), _cast_as_tensor(respTemp.flatten()), testModel.lossType)
@@ -1702,9 +1714,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           respScalar = curr_params[4];
         # increased starting value for width as of 22.10.25
         normStd = np.random.uniform(1.25, 2.25) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
-    # TEMP...???
     normGain = np.random.uniform(0.5, 1) if (initFromCurr == 0 or fitType!=5) else curr_params[10]; # will be a sigmoid-ed value...
-    varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
+    # varGain is DEPRECATED AS OF 22.12.26
+    #varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
+    lgnCtrSf = pref_sf # initialize to the same value as preferred SF (i.e. LGN centered around V1 prefSF)
     if lgnFrontEnd > 0:
       # Now, the LGN weighting 
       mWt_preSigmoid = np.random.uniform(0.25, 0.75); # this is what we want the real/effective mWeight initialization to be
@@ -1715,20 +1728,20 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     # --- finally, actually create the parameter list
     if fitType <= 1:
       if excType == 1:
-        param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym, mWeight);
+        param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, inhAsym, mWeight);
       elif excType == 2:
-        param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, inhAsym, sigHigh, mWeight);
+        param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, inhAsym, sigHigh, mWeight);
     elif fitType == 2 or fitType == 6:
       if excType == 1:
-        param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, mWeight);
+        param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, normMean, normStd, mWeight);
       elif excType == 2:
-        param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, sigHigh, mWeight);
+        param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, normMean, normStd, sigHigh, mWeight);
     elif fitType == 5:
       ### TODO: make this less redundant???
       if excType == 1:
-        param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, normGain, mWeight);
+        param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, normMean, normStd, normGain, mWeight);
       elif excType == 2:
-        param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, varGain, normMean, normStd, normGain, sigHigh, mWeight);
+        param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, normMean, normStd, normGain, sigHigh, mWeight);
     if lgnFrontEnd == 0: # then we'll trim off the last constraint, which is mWeight bounds (and the last param, which is mWeight)
       param_list = param_list[0:-1];   
 
@@ -1804,7 +1817,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
                 predictions[blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
             target = target['resp'].flatten(); # since it's [nTr, 1], just make it [nTr] (if respMeasure == 0)
             predictions = predictions.flatten(); # either [nTr, nComp] to [nComp*nTr] or [nTr,1] to [nTr]
-            if model.lossType == 3:
+            if model.lossType == 3: # DEPRECATED - SHOULD NEVER REACH HERE as of 22.12.26
               loss_curr = loss_sfNormMod(predictions, target, model.lossType, varGain=model.varGain)
             else:
               loss_curr = loss_sfNormMod(predictions, target, model.lossType)
@@ -1860,7 +1873,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         curr_resp[blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
         gt_resp[blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
 
-    if model.lossType == 3:
+    if model.lossType == 3: # DEPRECATED AS OF 22.12.26
       NLL = loss_sfNormMod(curr_resp.flatten(), gt_resp.flatten(), model.lossType, varGain=model.varGain).detach().numpy();
     else:
       NLL = loss_sfNormMod(curr_resp.flatten(), gt_resp.flatten(), model.lossType).detach().numpy();
@@ -1904,7 +1917,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           curr_resp[blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
           gt_resp[blanks] = 1e-6; # force F1 ~ 0 if con of that component is 0
 
-      if model.lossType == 3:
+      if model.lossType == 3: # DEPRECATED AS OF 22.12.26
         testNLL = loss_sfNormMod(curr_resp.flatten(), gt_resp.flatten(), model.lossType, varGain=model.varGain).detach().numpy();
       else:
         testNLL = loss_sfNormMod(curr_resp.flatten(), gt_resp.flatten(), model.lossType).detach().numpy();

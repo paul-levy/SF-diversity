@@ -586,6 +586,8 @@ def lgnType_suffix(lgnType, lgnConType=1, applyLGNtoNorm=1):
     lgnSuf = '_LGNb';
   elif lgnType == 3: # lgn filters shift with V1 filter, s.t. they are centered around V1 pref.
     lgnSuf = '_LGNyk'; # 'yk' for yoked
+  elif lgnType == 4: # lgn filters shift independently of V1 filter
+    lgnSuf = '_LGNsi'; # 'si' for shifted independently
   elif lgnType == 9:
     lgnSuf = '_jLGN';
 
