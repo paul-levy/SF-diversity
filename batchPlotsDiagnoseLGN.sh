@@ -59,6 +59,8 @@ do
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 25 11 11 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     # --- compare usual LGN [1] to LGN yoked to V1 prefSf [3]
     python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 11 13 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+    # --- compare usual LGN [1] to LGN which can pick a center NEQ to V1 prefSf [4]
+    python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 11 14 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
     #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 22 11 13 $VEC_F1 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
 
     # compare norm. types (w LGN as parvo-only)

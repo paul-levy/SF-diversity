@@ -1429,17 +1429,22 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
-      fL_name = 'fitList%s_pyt_nr221223%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_nr221231%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   k_fold = 1 if k_fold is None else k_fold; # i.e. default to one "fold"
   todoCV = 1 if whichTrials is not None or k_fold>1 else 0;
 
   fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm);
+  if todoCV and initFromCurr == 1: # i.e. we want to pre-initialize, but we're doing C-V...
+    fitListName_noCV = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=0, excType=excType, lgnForNorm=applyLGNtoNorm);
+  else:
+    fitListName_noCV = None;
+  print('applying LGN to norm? %d [fitList %s]' % (applyLGNtoNorm, fitListName))
   fitType_simpler, lgnFrontEnd_simpler = hf.get_simpler_mod(fitType, lgnFrontEnd)
   if fitType==fitType_simpler and lgnFrontEnd==lgnFrontEnd_simpler: # i.e. we were already at the simplest model
     if initFromCurr == -1: # then don't initialize bother initializing with simpler model (i.e. initFromCurr = -1)
       print('***Cancelling initFromCurr == -1***')
-      initFromCurr = 0; 
+      initFromCurr = 0;
   fitListName_simpler = hf.fitList_name(base=fL_name, fitType=fitType_simpler, lossType=lossType, lgnType=lgnFrontEnd_simpler, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm);
   # get the name for the stepList name, regardless of whether or not we keep this now
   stepListName = str(fitListName.replace('.npy', '_details.npy'));
@@ -1612,7 +1617,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       try:
         curr_fit = fitList[cellNum-1][respStr];
         if initFromCurr != -1: # then we want to get initial parameters; otherwise, we already set up initial parameters!
-          curr_params = curr_fit['params'];
+          if fitListName_noCV is None:
+            curr_params = curr_fit['params'];
+          else: # try to load those non-CV fits, get the params
+            fitList_nonCV = hf.np_smart_load(str(loc_data + fitListName_noCV));
+            nonCV_fit = fitList_nonCV[cellNum-1][respStr];
+            curr_params = nonCV_fit['params'];
+            print('initializing from non-CV parameters!')
           # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
           testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False)
           trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly) # warning: added respOverwrite here; also add whichTrials???
@@ -2163,7 +2174,7 @@ if __name__ == '__main__':
       nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221223%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr221231%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold);

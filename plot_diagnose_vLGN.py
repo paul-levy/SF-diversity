@@ -142,7 +142,8 @@ _sigmoidDord = 5;
 #fitBase = 'fitList%s_pyt_nr221106_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221109e_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221119d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-fitBase = 'fitList%s_pyt_nr221220_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr221231_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr221223_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr221116c_noRE%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
@@ -161,8 +162,8 @@ rvcBase = 'rvcFits%s_220928' % loc_str; # direc flag & '.npy' are added
 normA, normB = int(np.floor(normTypesIn/10)), np.mod(normTypesIn, 10)
 conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
 lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
-fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV)
-fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV)
+fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV, lgnForNorm=_applyLGNtoNorm)
+fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV, lgnForNorm=_applyLGNtoNorm)
 # what's the shorthand we use to refer to these models...
 # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
 aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn' if normA==5 else 'Yk');
@@ -182,7 +183,7 @@ else:
 if intpMod == 1:
   compDir = str(compDir + '/intp');
 subDir   = compDir.replace('fitList', 'fits').replace('.npy', '');
-save_loc = str(save_loc + subDir + '/');
+save_loc = str(save_loc + subDir + '%s/' % ('' if _applyLGNtoNorm else '_nn'));
 
 conDig = 3; # round contrast to the 3rd digit
 
@@ -885,7 +886,7 @@ for (pltNum, modPrm),modObj,lgnType,lgnConType,mWt in zip(enumerate(modFits), mo
     sfExcV1 = s;
     sfExcLGN = s; # will be used IF there isn't an LGN front-end...
   # BUT. if this is an LGN model, we'll apply the filtering, eval. at 100% contrast
-  if lgnType == 1 or lgnType == 2 or lgnType == 3:
+  if lgnType == 1 or lgnType == 2 or lgnType == 3 or lgnType == 4:
     params_m = modObj.rvc_m.detach().numpy(); # one tensor array, so just detach
     params_p = modObj.rvc_p.detach().numpy();
     DoGmodel = modObj.LGNmodel; # what DoG parameterization?
