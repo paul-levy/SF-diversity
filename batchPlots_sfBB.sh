@@ -50,7 +50,7 @@ do
   # ------------------------e-------l------dir--nrm---lgn-dif-kmul--onsr--sem-----
   # -----------------------------------------------con---inp----cor-rExp-------
   # modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
   #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
