@@ -1403,7 +1403,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 # learning_rate guide, as of 22.11.16:
 # --- 0.01 if all data (e.g. batch_size=3000)
 # --- 0.002 if batch_size = 256
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=1000, learning_rate=0.005, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, trackStepsReduced=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False, preLoadDataList=None, k_fold=None, k_fold_shuff=True, k_fold_state=None): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=2500, learning_rate=0.005, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, trackStepsReduced=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False, preLoadDataList=None, k_fold=None, k_fold_shuff=True, k_fold_state=None, testingNames=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1429,14 +1429,15 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
-      fL_name = 'fitList%s_pyt_nr221231%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_nr230102%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   k_fold = 1 if k_fold is None else k_fold; # i.e. default to one "fold"
   todoCV = 1 if whichTrials is not None or k_fold>1 else 0;
 
-  fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm);
+  testingInfo = [max_epochs,learning_rate,batch_size]; # wrapping for naming purposes...
+  fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm, testingNames=testingNames, testingInfo=testingInfo);
   if todoCV and initFromCurr == 1: # i.e. we want to pre-initialize, but we're doing C-V...
-    fitListName_nonCV = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=0, excType=excType, lgnForNorm=applyLGNtoNorm);
+    fitListName_nonCV = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=0, excType=excType, lgnForNorm=applyLGNtoNorm, testingNames=testingNames, testingInfo=testingInfo);
   else:
     fitListName_nonCV = None;
   print('applying LGN to norm? %d [fitList %s]' % (applyLGNtoNorm, fitListName))
@@ -1445,7 +1446,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if initFromCurr == -1: # then don't initialize bother initializing with simpler model (i.e. initFromCurr = -1)
       print('***Cancelling initFromCurr == -1***')
       initFromCurr = 0;
-  fitListName_simpler = hf.fitList_name(base=fL_name, fitType=fitType_simpler, lossType=lossType, lgnType=lgnFrontEnd_simpler, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm);
+  fitListName_simpler = hf.fitList_name(base=fL_name, fitType=fitType_simpler, lossType=lossType, lgnType=lgnFrontEnd_simpler, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm, testingNames=testingNames, testingInfo=testingInfo);
   # get the name for the stepList name, regardless of whether or not we keep this now
   stepListName = str(fitListName.replace('.npy', '_details.npy'));
 
@@ -2128,14 +2129,28 @@ if __name__ == '__main__':
       _LGNforNorm = int(sys.argv[15]);
     else:
       _LGNforNorm = 1; # default to applying the LGN filters to the front-end
-      
+
+    #######
+    # NOW: Note that the below values for optimization should be kept up-to-date with the defaults
+    # ------ furthermore, note that these values are only passed in for parallel call (i.e. cellNum<0)
+    #######
     if len(sys.argv) > 16:
-      toPar = int(sys.argv[16]); # 1 for True, 0 for False
-      # Then, create the pool paramemeter globally (i.e. how many CPUs?)
-      if toPar == 1:
-        nCpu = mp.cpu_count()
+      max_epochs = int(sys.argv[16]);
+      print('\tspecified epochs: %d' % max_epochs);
     else:
-      toPar = False;
+      max_epochs = 1000;
+
+    if len(sys.argv) > 17:
+      learning_rate = float(sys.argv[17]);
+      print('\tspecified learning rate: %.2e' % learning_rate);
+    else:
+      learning_rate = 0.005;
+
+    if len(sys.argv) > 18:
+      batch_size = int(sys.argv[18]);
+      print('\tspecified batch_size: %d' % batch_size);
+    else:
+      batch_size = 3000;
 
     start = time.process_time();
     dcOk = 0; f1Ok = 0 if (expDir == 'V1/' or expDir == 'V1_BB/') else 1; # i.e. we don't bother fitting F1 if fit is from V1_orig/ or altExp/
@@ -2168,28 +2183,33 @@ if __name__ == '__main__':
           pass;
         nTry -= 1;
 
-    elif cellNum == -1:
+    elif cellNum == -1 or cellNum == -2: # what is -2? Just for debugging purposes, restricts the celLNums to #nCpu (makes things faster)
+      nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
+
       loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory
       loc_data = loc_base + expDir + 'structures/';
       dataList = hf.np_smart_load(str(loc_data + dataListName));
       dataNames = dataList['unitName'];
-      cellNums = np.arange(1, 1+len(dataNames));
+      len_to_use = len(dataNames);
+      len_to_use = len_to_use if cellNum==-1 or len_to_use<nCpu else nCpu 
+      cellNums = np.arange(1, 1+len_to_use);
+      # also, if cellNum == -2, make sure we flag that the names are test names
+      testNames = True if cellNum == -2 else False;
 
       from functools import partial
       import multiprocessing as mp
-      nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr221231%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
+      fL_name = 'fitList%s_pyt_nr230102%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
 
       # do f1 here?
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold);
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size, testingNames=testNames);
       with mp.Pool(processes = nCpu) as pool:
         smFits_f1 = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
         pool.close();
 
       # First, DC? (should only do DC or F1?)
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold);
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size, testingNames=testNames);
       #sm_perCell(1); # use this to debug...
       with mp.Pool(processes = nCpu) as pool:
         smFits_dc = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
@@ -2197,7 +2217,8 @@ if __name__ == '__main__':
 
       ### do the saving HERE!
       todoCV = 0 if kfold is None else 1;
-      fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=_LGNforNorm)
+      testingInfo = [max_epochs,learning_rate,batch_size]; # wrapping for naming purposes...
+      fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=_LGNforNorm, testingNames=testNames, testingInfo=testingInfo)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
         fitListNPY = hf.np_smart_load(loc_data + fitListName);

@@ -625,9 +625,13 @@ def excType_suffix(excType):
    elif excType == 1: # derivative gaussian 
       return '_dG';
 
-def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrected=0, CV=0, fixRespExp=None, kMult=0.1, excType=None, lgnForNorm=1):
+def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrected=0, CV=0, fixRespExp=None, kMult=0.1, excType=None, lgnForNorm=1, testingNames=False, testingInfo=None):
   ''' use this to get the proper name for the full model fits
       - kMult used iff lossType == 4
+      23.01.02: testingNames is used for saving fitNames with a unique key based on:
+      ----------- testingInfo, organized as: [max_epochs, learning_rate, batch_size]
+      We'll pass each of those into a hash sequentially to get an output 8 character key
+      --- note that we'll call str(x) to make the hash, multiplying the learning rate by 1e5 first, then trunc. as int
   '''
   # first the fit type
   fitSuf = fitType_suffix(fitType);
@@ -644,6 +648,18 @@ def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrect
   kMult = chiSq_suffix(kMult) if lossType == 4 else ''; 
   excSuf = excType_suffix(excType);
 
+  if testingNames:
+    from hashlib import blake2s
+    to_hash = blake2s(digest_size=6); # digest size is in bytes...
+    for val in testingInfo:
+       if isinstance(val, float):
+          val = int(val*1e5);
+       as_bytestr = str(val).encode('utf-8');
+       to_hash.update(as_bytestr);
+    testSuf = to_hash.hexdigest()
+    # now, place it accordingly (just before .npy)
+    lossSuf = lossSuf.replace('.npy', '_%s.npy' % testSuf);
+  
   # order is as follows
   return str(base + kMult + vecSuf + CVsuf + reSuf + lgnSuf + excSuf + fitSuf + lossSuf);
 
