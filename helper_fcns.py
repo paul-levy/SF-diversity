@@ -656,7 +656,10 @@ def get_simpler_mod(normType, lgnType):
   '''
   if lgnType>0: # i.e. there is some lgnFrontEnd, so simplify that 
     if lgnType == 1: # i.e. we have just the simple LGN on
-      return 1, lgnType; # then return flat norm type (can be that normType is already 1...)
+      if normType==1: # if simplest LGN AND flat norm...
+        return 1, 0; # ...then just initialize from the flat, no LGN version
+      else: # otherwise, there's some weighting to the gain control --> just make that gain ctrl flat, keep the same LGN level
+        return 1, lgnType; # then return flat norm type (can be that normType is already 1...)
     else: # return a simpler LGN front end!
       return normType, 1; # whether yoked (3) or shift independent (4), return simplest lgn (1)
   else: # no LGN!

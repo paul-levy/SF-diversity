@@ -1436,9 +1436,9 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
   fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm);
   if todoCV and initFromCurr == 1: # i.e. we want to pre-initialize, but we're doing C-V...
-    fitListName_noCV = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=0, excType=excType, lgnForNorm=applyLGNtoNorm);
+    fitListName_nonCV = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=0, excType=excType, lgnForNorm=applyLGNtoNorm);
   else:
-    fitListName_noCV = None;
+    fitListName_nonCV = None;
   print('applying LGN to norm? %d [fitList %s]' % (applyLGNtoNorm, fitListName))
   fitType_simpler, lgnFrontEnd_simpler = hf.get_simpler_mod(fitType, lgnFrontEnd)
   if fitType==fitType_simpler and lgnFrontEnd==lgnFrontEnd_simpler: # i.e. we were already at the simplest model
@@ -1608,6 +1608,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           cp[-1] = curr_params[-1];
         # and copy it back
         curr_params = np.copy(cp);
+        print('\n------ successful initFromCurr -1!! ------');
       except:
         initFromCurr = 0; # then we will not initFromCurr...
         pass; # we'll just proceed below (and will skip any initFromCurr later on)
@@ -1616,14 +1617,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       fitList = hf.np_smart_load(str(loc_data + fitListName));
       try:
         curr_fit = fitList[cellNum-1][respStr];
-        if initFromCurr != -1: # then we want to get initial parameters; otherwise, we already set up initial parameters!
-          if fitListName_noCV is None:
-            curr_params = curr_fit['params'];
-          else: # try to load those non-CV fits, get the params
-            fitList_nonCV = hf.np_smart_load(str(loc_data + fitListName_noCV));
-            nonCV_fit = fitList_nonCV[cellNum-1][respStr];
-            curr_params = nonCV_fit['params'];
-            print('initializing from non-CV parameters!')
+        if initFromCurr != -1 and fitListName_nonCV is None: # then we want to get initial parameters; otherwise, we already set up initial parameters!
+          curr_params = curr_fit['params'];
           # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
           testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False)
           trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly) # warning: added respOverwrite here; also add whichTrials???
@@ -1635,11 +1630,21 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
             if np.isnan(loss_test.item()):
               initFromCurr = 0; # then we've saved bad parameters -- force new ones!
       except:
-        initFromCurr = 0; # force the old parameters
+        initFromCurr = 0; # force the standard initialization routine
     else:
-      initFromCurr = 0;
+      initFromCurr = 0 if (initFromCurr==1 and fitListName_nonCV is None) else initFromCurr; # if we were trying to initFromCurr (1) AND this isn't a CV fit, we failed; otherwise, still try initFromCurr?
       fitList = dict();
       curr_fit = dict();
+    # Not quite done with initialization...
+    # ...if this is a CV fit and initFromCurr==1, then we should try to load the non-CV parameters
+    if fitListName_nonCV is not None: # try to load those non-CV fits, get the params
+      try:
+        fitList_nonCV = hf.np_smart_load(str(loc_data + fitListName_nonCV));
+        nonCV_fit = fitList_nonCV[cellNum-1][respStr];
+        curr_params = nonCV_fit['params'];
+        print('initializing from non-CV parameters!')
+      except: # if this doesn't work, then we just give up on initializing from previous fit
+        initFromCurr = 0;
 
     ### set parameters
     # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
@@ -1733,9 +1738,10 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         # overwrite respScalar if initFromCurr!=0
         if initFromCurr!=0:
           respScalar = curr_params[4];
-        # increased starting value for width as of 22.10.25
-        normStd = np.random.uniform(1.25, 2.25) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
-    normGain = np.random.uniform(0.5, 1) if (initFromCurr == 0 or fitType!=5) else curr_params[10]; # will be a sigmoid-ed value...
+    if fitType>1: # i.e. not flat norm
+      # increased starting value for width as of 22.10.25
+      normStd = np.random.uniform(1.25, 2.25) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
+      normGain = np.random.uniform(0.5, 1) if (initFromCurr == 0 or fitType!=5) else curr_params[10]; # will be a sigmoid-ed value...
     # varGain is DEPRECATED AS OF 22.12.26
     #varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
     lgnCtrSf = pref_sf # initialize to the same value as preferred SF (i.e. LGN centered around V1 prefSF)
