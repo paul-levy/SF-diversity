@@ -38,7 +38,7 @@ END=$7
 VEC_F1=${8:-0}
 KFOLD=${9:-0}
 
-### for run in {1..N_CELLS}
+CORES=$(($(getconf _NPROCESSORS_ONLN)-4))
 
 for (( run=$START; run<=$END; run++ ))
 do
@@ -95,10 +95,17 @@ do
   # Check how many background jobs there are, and if it
   # is equal to the number of cores, wait for anyone to
   # finish before continuing.
-  background=( $(jobs -p) )
-  if (( ${#background[@]} == cores )); then
-      wait -n
-  fi
+  while :; do
+      background=( $(jobs -p))
+      if (( ${#background[@]} <= $CORES )); then
+	  echo 'not waiting'
+	  break
+      fi
+      echo 'waiting'
+      sleep 5
+  done
+
+
 
   # jointLGN plots
   #python3.6 plot_diagnose_vLGN.py $run 2 1 V1/ 99 1 1 0 0 0.05 -1 1 & # no diff, not interpolated

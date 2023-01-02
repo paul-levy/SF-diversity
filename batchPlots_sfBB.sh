@@ -38,11 +38,9 @@ else
   PYCALL="plot_sfBB_sep.py"
 fi
 
-# 1 means the original type of weighted gain control; 2 means the newer type
-# default is zero, i.e. not HPC fits...
+CORES=$(($(getconf _NPROCESSORS_ONLN)-4))
 
-# 20 cells if original datalist; 41 cells if dataList_210222
-for run in {1..24} # was ..58 before cutting dataList_210721
+for run in {1..47} # was ..58 before cutting dataList_210721
 do
   ######
   ## New version, model fits - the doubled (i.e. two-digit) inputs are, in order, normTypes, (lgn)conTypes, lgnFrontEnd
@@ -57,32 +55,31 @@ do
   #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
   #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
-  # modA: flat, no LGN; modB: wght, no LGN
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
-  # modA: flat, no LGN; modB: asym, no LGN
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 10 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
 
-done
-wait
-for run in {25..47} # was ..58 before cutting dataList_210721
-do
-  ######
-  ## New version, model fits - the doubled (i.e. two-digit) inputs are, in order, normTypes, (lgn)conTypes, lgnFrontEnd
-  ######
-  # ------------------------e-------l------dir--nrm---lgn-dif-kmul--onsr--sem-----
-  # -----------------------------------------------con---inp----cor-rExp-------
-  # modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
-  # modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
-  # modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
-  # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+
   # modA: flat, no LGN; modB: wght, no LGN
   python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
-  # modA: flat, no LGN; modB: asym, no LGN
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 10 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  # modA: flat, LGN; modB: wght, LGN
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  # modA: flat, LGN; modB: flat, LGN yk
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 13 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  # modA: flat, LGN; modB: flat, LGN si
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 14 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  # modA: wght, LGN; modB: wght, LGN si
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 11 14 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+
+  # Check how many background jobs there are, and if it
+  # is equal to the number of cores, wait for anyone to
+  # finish before continuing.
+  while :; do
+      background=( $(jobs -p))
+      if (( ${#background[@]} <= $CORES )); then
+	  echo 'not waiting'
+	  break
+      fi
+      echo 'waiting'
+      sleep 5
+  done
 
 done
 
