@@ -41,7 +41,8 @@ import warnings
 # lossType_suffix - get the string corresponding to a loss type
 # chiSq_suffix    - what suffix (e.g. 'a' or 'c') given the chiSq multiplier value
 # excType_suffix  - added Oct 2022 --> nothing to add if flex. gauss filter; _dG for deriv. gauss
-# fitList_name    - put together the name for the fitlist 
+# fitList_name    - put together the name for the fitlist
+# get_simpler_mod - given the fitType/LGN characteristics, get the model that's one 'feature' simpler
 # phase_fit_name  
 # is_mod_DoG      - returns True if the model is a simple DoG, otherise False
 # nParams_descrMod - how many parameters per descr. SF model?
@@ -645,6 +646,21 @@ def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrect
 
   # order is as follows
   return str(base + kMult + vecSuf + CVsuf + reSuf + lgnSuf + excSuf + fitSuf + lossSuf);
+
+def get_simpler_mod(normType, lgnType):
+  ''' Used to help us initialize with a slightly simple model; will return normType, lgnType (i.e. same order/fields as inputs)
+      Works under the following assumption in complexity:
+      -- normType > lgnType [ > lgnConType]
+      i.e. normType is a more 'changing' feature than lgnType, so we should change the lgnType before changing the normType
+      -- note: as of 22.12.30, we do not take into account lgnConType for this
+  '''
+  if lgnType>0: # i.e. there is some lgnFrontEnd, so simplify that 
+    if lgnType == 1: # i.e. we have just the simple LGN on
+      return 1, lgnType; # then return flat norm type (can be that normType is already 1...)
+    else: # return a simpler LGN front end!
+      return normType, 1; # whether yoked (3) or shift independent (4), return simplest lgn (1)
+  else: # no LGN!
+   return 1, lgnType; # lgnType should be 0; always return flat normalization
 
 def phase_fit_name(base, dir, byTrial=0):
   ''' Given the base name for a file, append the flag for the phase direction (dir)

@@ -1435,8 +1435,12 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
   todoCV = 1 if whichTrials is not None or k_fold>1 else 0;
 
   fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm);
-  if fitType != 1: # i.e. not flat, then let's make the flat name and see if we can load those parameters
-    fitListName_flat = hf.fitList_name(base=fL_name, fitType=1, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm);
+  fitType_simpler, lgnFrontEnd_simpler = hf.get_simpler_mod(fitType, lgnFrontEnd)
+  if fitType==fitType_simpler and lgnFrontEnd==lgnFrontEnd_simpler: # i.e. we were already at the simplest model
+    if initFromCurr == -1: # then don't initialize bother initializing with simpler model (i.e. initFromCurr = -1)
+      print('***Cancelling initFromCurr == -1***')
+      initFromCurr = 0; 
+  fitListName_simpler = hf.fitList_name(base=fL_name, fitType=fitType_simpler, lossType=lossType, lgnType=lgnFrontEnd_simpler, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm);
   # get the name for the stepList name, regardless of whether or not we keep this now
   stepListName = str(fitListName.replace('.npy', '_details.npy'));
 
@@ -1572,24 +1576,30 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
     respStr = hf_sfBB.get_resp_str(respMeasure);
 
-    if initFromCurr == -1: # try to load the flat parameters and go from there...
+    if initFromCurr == -1:
+      # Let's try to load the parameters from a simpler fit:
+      # - i.e., if no LGN and weighted, then flat model parameters
+      # ------- if LGN, then equivalent model without LGN
+      # ------- if LGN which can be shifted off of the standard, then the main LGN fit
       try:
-        fitList_fl = hf.np_smart_load(str(loc_data + fitListName_flat));
-        curr_fit_fl = fitList_fl[cellNum-1][respStr];
-        curr_params = curr_fit_fl['params'];
-        testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=1, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False)
-        # now, we should re-package the parameters into the shape they would be for the current fitType
-        # --- note: assumes fitType = 2 or 6
-        # --- furthermore, we start with high normStd [to mimic flat] and normMean near prefSf
-        init_gs_mean = _cast_as_tensor(torch.log(testModel.minPrefSf + testModel.maxPrefSf*torch.sigmoid(testModel.prefSf)));
-        init_gs_std = 3.5
+        fitList_simpler = hf.np_smart_load(str(loc_data + fitListName_simpler));
+        curr_fit_smpl = fitList_simpler[cellNum-1][respStr];
+        curr_params = curr_fit_smpl['params'];
+        testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType_simpler, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd_simpler, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False)
+        # NOW, we should re-package the parameters into the shape they would be for the current fitType
         # create interim initial param list
-        cp = np.zeros((hf.nParamsByType(fitType=2, excType=excType, lgnType=lgnFrontEnd), ));
-        # first 8 params will be in common
+        cp = np.zeros((hf.nParamsByType(fitType=fitType, excType=excType, lgnType=lgnFrontEnd), ));
+        # first 8 params will be in common -- always
         cp[0:8] = curr_params[0:8];
-        cp[8] = init_gs_mean; #
-        cp[9] = init_gs_std;
-        if lgnFrontEnd>0:
+        if fitType_simpler == 1: # i.e. the parameters we're initiazing from are flat (untuned) normalization
+          if fitType != 1: # then we're initializing a non-flat model fit from a flat model --> will need to guess that weighting parameters
+            # --- note: assumes fitType = 2 or 6
+            # --- furthermore, we start with high normStd [to mimic flat] and normMean near prefSf
+            init_gs_mean = _cast_as_tensor(torch.log(testModel.minPrefSf + testModel.maxPrefSf*torch.sigmoid(testModel.prefSf)));
+            init_gs_std = 4
+            cp[8] = init_gs_mean; #
+            cp[9] = init_gs_std;
+        if lgnFrontEnd_simpler>0: # the model we're initializing from has an LGN front end
           cp[-1] = curr_params[-1];
         # and copy it back
         curr_params = np.copy(cp);
