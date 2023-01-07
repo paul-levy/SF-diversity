@@ -525,5 +525,6 @@ def compute_f1f0(trial_inf, vecCorrectedF1=1):
   f0rate_posInd = np.where(np.logical_and(val_inds, f0all>0))[0];
   f0rate_pos = f0all[f0rate_posInd];
   f1rate_pos = f1all[f0rate_posInd];
-
-  return np.nanmean(np.divide(f1rate_pos, f0rate_pos)), f0all, f1all, f0_rates, f1_rates;
+  # NOTE: 23.01.06 --> CHANGED to mean(f1)/mean(f0) rather than mean(f1/f0)...
+  return np.nanmean(f1rate_pos)/np.nanmean(f0rate_pos), f0all, f1all, f0_rates, f1_rates;
+  #return np.nanmean(np.divide(f1rate_pos, f0rate_pos)), f0all, f1all, f0_rates, f1_rates;

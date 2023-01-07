@@ -123,6 +123,7 @@ import warnings
 ## V. jointList interlude
 #######
 
+# modelSpecs_to_key - given the model specifcations, return the tuple that we use as a key
 # jl_perCell - how to oranize everything, given a cell (called by jl_create, in a loop)
 # jl_create - create the jointList
 # jl_get_metric_byCon()
@@ -1176,8 +1177,8 @@ def adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3, 
         # finally, project the response as usual
         if np.any(np.isnan(phi_mean)): # hacky way of saying that there were no spikes! hence phi is undefined
           resp_proj = r_byTrial[val_trials, :]; # just set it equal to r value, which will be zero anyway
-          print('condition d/con/sf || %02d/%02d/%02d has (some?) nan phi; r values below' % (d,con,sf));
-          print(r_byTrial[val_trials, :]);
+          #print('condition d/con/sf || %02d/%02d/%02d has (some?) nan phi; r values below' % (d,con,sf));
+          #print(r_byTrial[val_trials, :]);
         else:
           resp_proj = np.multiply(r_byTrial[val_trials, :], np.cos(np.deg2rad(phi_mean) - np.deg2rad(phase_rel_stim)));
 
