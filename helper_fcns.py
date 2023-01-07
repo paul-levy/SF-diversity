@@ -1124,7 +1124,7 @@ def compute_f1_byTrial(cellStruct, expInd, whichSpikes=1, binWidth=1e-3):
 
   return resp_amp, resp_phase;
 
-def adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3, toSum=0):
+def adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3, toSum=0, verbose=False):
   ''' Correct the F1 ampltiudes for each trial (in order) by: [akin to hf_sfBB.adjust_f1_byTrial)
       - Projecting the full, i.e. (r, phi) FT vector onto the (vector) mean phase
         across all trials of a given condition
@@ -1138,7 +1138,8 @@ def adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3, 
   conDig = 3; # round contrast to the thousandth
 
   if expInd == 1:
-    warnings.warn('This function does not work with expInd=1, since that experiment does not have integer cycles for\
+    if verbose:
+      warnings.warn('This function does not work with expInd=1, since that experiment does not have integer cycles for\
                    each stimulus component; thus, we will not analyze the F1 responses, anyway');
     return None;
 

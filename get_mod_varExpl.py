@@ -206,15 +206,52 @@ def get_mod_varExpl(cellNum, expDir, normType, lgnFrontEnd, rvcAdj, whichKfold=N
   #print('%s%d: %.1f%% [%s]' % (expDir, cellNum, varExpl, respStr))
   return varExpl, respStr;
 
-if __name__ == '__main__':
-
-  expDir       = sys.argv[1];
-  kfold        = int(sys.argv[2]);
+def save_mod_varExpl(fitBase, expDir, fitType, lgnFrontOn, kfold=-1, excType=1, lossType=1, fixRespExp=2, _LGNforNorm=1, vecCorrected=0, nProc=20, lgnConType=1):
+  ''' Wrapper for get_mod_varExpl that calls it/saves for all cells in a given experiment X model fit combination
+  '''
   if kfold < 0:
     kfold = None;
     todoCV = False;
   else:
     todoCV = True
+  if expDir=='V1/' or expDir=='V1_BB/':
+    rvcAdj = 1
+  else:
+    rvcAdj = 0;
+
+  dataListName = hf.get_datalist(expDir, force_full=force_full, new_v1=True); # argv[2] is expDir
+  loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory
+  loc_data = loc_base + expDir + 'structures/';
+  dataList = hf.np_smart_load(str(loc_data + dataListName));
+  dataNames = dataList['unitName'];
+  len_to_use = len(dataNames);
+  cellNums = np.arange(1, 1+len_to_use);
+
+  perCell = partial(get_mod_varExpl, expDir=expDir, normType=fitType, lgnFrontEnd=lgnFrontOn, rvcAdj=rvcAdj, whichKfold=kfold, fixRespExp=fixRespExp, schedule=schedule, lgnConType=lgnConType, excType=excType, lossType=lossType);
+  perCell(4);
+  with mp.Pool(processes = nProc) as pool:
+    vExp_perCell = pool.map(perCell, cellNums); # use starmap if you to pass in multiple args
+    pool.close();
+
+  fitListName = hf.fitList_name(base=fitBase, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=_LGNforNorm)
+  fitListNPY = hf.np_smart_load(loc_data + fitListName);
+
+  for iii, (vExp, respStr) in enumerate(vExp_perCell):
+    if vExp != np.nan and respStr != []:
+      if todoCV:
+        if 'varExpl_func' not in fitListNPY[iii][respStr]: # then create the vector for varExpl...
+          nFold = len(fitListNPY[iii][respStr]['NLL_train']);
+          fitListNPY[iii][respStr]['varExpl_func'] = np.nan * np.zeros((nFold,));
+        fitListNPY[iii][respStr]['varExpl_func'][kfold] = vExp;
+      else:
+        fitListNPY[iii][respStr]['varExpl_func'] = vExp;
+  # --- finally, save
+  np.save(loc_data + fitListName, fitListNPY)
+
+if __name__ == '__main__':
+
+  expDir       = sys.argv[1];
+  kfold        = int(sys.argv[2]);
 
   ##########
   # EDIT HERE
@@ -224,51 +261,13 @@ if __name__ == '__main__':
   # --- unlikely to edit
   fixRespExp = 2;
   schedule = False
-  lossType = 1;
-  excType = 1;
-  _LGNforNorm = 1
-  lgnConType = 1
   hpcStr = 'HPC'; # are we doing HPC fits or no?
-  vecCorrected = 0;
-  if expDir=='V1/' or expDir=='V1_BB/':
-    rvcAdj = 1
-  else:
-    rvcAdj = 0;
   ##########
   ### END OF....EDIT HERE
   ##########
 
   fitBase = 'fitList%s_pyt_nr230104%s%s' % (hpcStr, '_noRE' if fixRespExp is not None else '', '_noSched' if schedule==False else '')
 
-  dataListName = hf.get_datalist(expDir, force_full=force_full, new_v1=True); # argv[2] is expDir
-  nCpu = 20; # mp.cpu_count()-1; # heuristics say you should reqeuest at least one fewer processes than their are CPU
-
-  loc_base = os.getcwd() + '/'; # ensure there is a "/" after the final directory
-  loc_data = loc_base + expDir + 'structures/';
-  dataList = hf.np_smart_load(str(loc_data + dataListName));
-  dataNames = dataList['unitName'];
-  len_to_use = len(dataNames);
-  cellNums = np.arange(1, 1+len_to_use);
-
   for fitType,lgnFrontOn in itertools.product(fitTypes, lgnTypes):
-    perCell = partial(get_mod_varExpl, expDir=expDir, normType=fitType, lgnFrontEnd=lgnFrontOn, rvcAdj=rvcAdj, whichKfold=kfold, fixRespExp=fixRespExp, schedule=schedule, lgnConType=lgnConType, excType=excType, lossType=lossType);
-    with mp.Pool(processes = nCpu) as pool:
-      vExp_perCell = pool.map(perCell, cellNums); # use starmap if you to pass in multiple args
-      pool.close();
-
-    fitListName = hf.fitList_name(base=fitBase, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=_LGNforNorm)
-    fitListNPY = hf.np_smart_load(loc_data + fitListName);
-
-    for iii, (vExp, respStr) in enumerate(vExp_perCell):
-      if vExp != np.nan and respStr != []:
-        if todoCV:
-          if 'varExpl_func' not in fitListNPY[iii][respStr]: # then create the vector for varExpl...
-            nFold = len(fitListNPY[iii][respStr]['NLL_train']);
-            fitListNPY[iii][respStr]['varExpl_func'] = np.nan * np.zeros((nFold,));
-          fitListNPY[iii][respStr]['varExpl_func'][kfold] = vExp;
-        else:
-          fitListNPY[iii][respStr]['varExpl_func'] = vExp;
-    # --- finally, save
-    np.save(loc_data + fitListName, fitListNPY)
-
+    save_mod_varExpl(fitBase, expDir, fitType, lgnFrontOn, kfold);
 
