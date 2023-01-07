@@ -9,7 +9,9 @@ import multiprocessing as mp
 
 import helper_fcns as hf
 import helper_fcns_sfBB as hf_sf
-import model_responses_pytorch as mrpt
+from model_responses_pytorch import process_data as mrpt_process_data
+from model_responses_pytorch import sfNormMod as mrpt_sfNormMod
+from model_responses_pytorch import dataWrapper as mrpt_dataWrapper
 
 import warnings
 warnings.filterwarnings('once');
@@ -25,7 +27,7 @@ f1_expCutoff = 2; # if 1, then all but V1_orig/ are allowed to have F1; if 2, th
 
 force_full = 1;
 
-def get_mod_varExpl(cellNum, expDir, normType, lgnFrontEnd, rvcAdj, whichKfold=None, lgnConType=1, excType=1, lossType=1, rvcMod=1, fixRespExp=2, hpcFit=1, schedule=False, rvcDir=1, vecF1=0, _applyLGNtoNorm=True, _newMethod=True, vecCorrected_bb=1):
+def get_mod_varExpl(cellNum, fitBase, expDir, normType, lgnFrontEnd, rvcAdj, whichKfold=None, lgnConType=1, excType=1, lossType=1, rvcMod=1, hpcFit=1, rvcDir=1, vecF1=0, _applyLGNtoNorm=True, _newMethod=True, vecCorrected_bb=1):
   ''' Compute the explained variance for the computational model of SF tuning (i.e. model_responses_pytorch)
       --- Computes varExpl on the basis of averaged responses per condition
   '''
@@ -37,7 +39,6 @@ def get_mod_varExpl(cellNum, expDir, normType, lgnFrontEnd, rvcAdj, whichKfold=N
   loc_str = 'HPC' if ('pl1465' in loc_base or hpcFit) else '';
 
   expName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
-  fitBase = 'fitList%s_pyt_nr230104%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if schedule==False else '')
 
   if rvcAdj == -1:
     vecCorrected = 1;
@@ -87,13 +88,16 @@ def get_mod_varExpl(cellNum, expDir, normType, lgnFrontEnd, rvcAdj, whichKfold=N
   else:
     respMeasure = 0; # default to DC (since this might be an expt where we can only analyze DC)
   respStr = hf_sf.get_resp_str(respMeasure);
-  modFit = fitList[cellNum-1][respStr]['params'];
+  try:
+    modFit = fitList[cellNum-1][respStr]['params'];
+  except:
+    return np.nan, [];
   if isCV:
     modFit = modFit[whichKfold]
 
   # ### Organize data & model responses --- differently handled for BB vs. other experiments
   if isBB:
-    trInf, resps = mrpt.process_data(expInfo, expInd=expInd, respMeasure=respMeasure);
+    trInf, resps = mrpt_process_data(expInfo, expInd=expInd, respMeasure=respMeasure);
     val_trials = trInf['num']; # these are the indices of valid, original trials
 
     #####
@@ -156,7 +160,7 @@ def get_mod_varExpl(cellNum, expDir, normType, lgnFrontEnd, rvcAdj, whichKfold=N
     respMean = respOrg;
 
   ### now, set-up the model
-  model = mrpt.sfNormMod(modFit, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=_newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
+  model = mrpt_sfNormMod(modFit, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=_newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
 
   if isBB:
     # getting both responses just to make the below easier...
@@ -176,7 +180,7 @@ def get_mod_varExpl(cellNum, expDir, normType, lgnFrontEnd, rvcAdj, whichKfold=N
     mod_resps = [respModel_onlyMask, respModel, respModel_maskTf];
     modAvgs = np.array(hf.flatten_list([hf.flatten_list(x[:,:,0]) if x is not None else [] for x in mod_resps]));
   else:
-    dw = mrpt.dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite);
+    dw = mrpt_dataWrapper(trialInf, respMeasure=respMeasure, expInd=expInd, respOverwrite=respOverwrite);
     modResps_temp = model.forward(dw.trInf, respMeasure=respMeasure, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm).detach().numpy();
     # package the responses into the right trials (the model skips simulating some [blank/orientation] trials)
     if respMeasure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
@@ -206,7 +210,7 @@ def get_mod_varExpl(cellNum, expDir, normType, lgnFrontEnd, rvcAdj, whichKfold=N
   #print('%s%d: %.1f%% [%s]' % (expDir, cellNum, varExpl, respStr))
   return varExpl, respStr;
 
-def save_mod_varExpl(fitBase, expDir, fitType, lgnFrontOn, kfold=-1, excType=1, lossType=1, fixRespExp=2, _LGNforNorm=1, vecCorrected=0, nProc=20, lgnConType=1):
+def save_mod_varExpl(fitBase, expDir, fitType, lgnFrontOn, kfold=-1, excType=1, lossType=1, _LGNforNorm=1, vecCorrected=0, nProc=20, lgnConType=1):
   ''' Wrapper for get_mod_varExpl that calls it/saves for all cells in a given experiment X model fit combination
   '''
   if kfold < 0:
@@ -227,8 +231,7 @@ def save_mod_varExpl(fitBase, expDir, fitType, lgnFrontOn, kfold=-1, excType=1, 
   len_to_use = len(dataNames);
   cellNums = np.arange(1, 1+len_to_use);
 
-  perCell = partial(get_mod_varExpl, expDir=expDir, normType=fitType, lgnFrontEnd=lgnFrontOn, rvcAdj=rvcAdj, whichKfold=kfold, fixRespExp=fixRespExp, schedule=schedule, lgnConType=lgnConType, excType=excType, lossType=lossType);
-  perCell(4);
+  perCell = partial(get_mod_varExpl, fitBase=fitBase, expDir=expDir, normType=fitType, lgnFrontEnd=lgnFrontOn, rvcAdj=rvcAdj, whichKfold=kfold, lgnConType=lgnConType, excType=excType, lossType=lossType);
   with mp.Pool(processes = nProc) as pool:
     vExp_perCell = pool.map(perCell, cellNums); # use starmap if you to pass in multiple args
     pool.close();
