@@ -2254,4 +2254,9 @@ if __name__ == '__main__':
       np.save(loc_data + fitDetailsName, fitDetailsNPY)
 
     enddd = time.process_time();
+    from get_mod_varExpl import save_mod_varExpl
+    if kfold is None:
+      save_mod_varExpl(fL_name, expDir, fitType, lgnFrontOn, kfold, excType=excType, lossType=lossType, lgnConType=lgnConType);
+    else:
+      [save_mod_varExpl(fL_name, expDir, fitType, lgnFrontOn, kfold_curr, excType=excType, lossType=lossType, lgnConType=lgnConType) for kfold_curr in range(kfold)];
     print('Took %d minutes -- dc %d || f1 %d' % ((enddd-start)/60, dcOk, f1Ok));
