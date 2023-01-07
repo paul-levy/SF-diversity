@@ -24,13 +24,12 @@
 
 source activate pytorch-lcv
 
-EXC_TYPE=$1
-LOSS=$2
-HPC=$3
-NORM_TYPE=$4
-WHICH_PLOT=$5
-VEC_F1=${6:-0}
-KFOLD=${7:--1}
+EXC_TYPE=${1:-1}
+WHICH_PLOT=${2:-1}
+KFOLD=${3:--1}
+LOSS=${4:-1}
+HPC=${5:-1}
+VEC_F1=${6:-1}
 
 if [[ $WHICH_PLOT -eq 1 ]]; then
   PYCALL="plot_sfBB.py"
@@ -61,12 +60,14 @@ do
   python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, LGN; modB: wght, LGN
   python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  # modA: flat, LGNsi; modB: wght, LGN si
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 44 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, LGN; modB: flat, LGN yk
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 13 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
-  # modA: flat, LGN; modB: flat, LGN si
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 14 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
-  # modA: wght, LGN; modB: wght, LGN si
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 11 14 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 13 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  # modA: flat, no LGN; modB: flat, LGN si
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 04 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  # modA: wght, no LGN; modB: wght, LGN si
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 11 04 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
 
   # Check how many background jobs there are, and if it
   # is equal to the number of cores, wait for anyone to

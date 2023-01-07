@@ -155,7 +155,8 @@ _sigmoidDord = 5;
 if excType==1 or excType == 2:
   #fitBase = 'fitList%s_pyt_nr221109e_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
   #fitBase = 'fitList%s_pyt_nr221109e_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-  fitBase = 'fitList%s_pyt_nr221119d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+  #fitBase = 'fitList%s_pyt_nr221119d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+  fitBase = 'fitList%s_pyt_nr230104_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 else:
   fitBase = None;
 

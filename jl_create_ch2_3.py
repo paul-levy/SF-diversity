@@ -137,7 +137,9 @@ if area == 'V1':
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
-  np.save(base_dir + 'jointList_wMods_freeRE_V1_%svE_vT%02d_dvT%02d_m%dj%d_mA%dmB%d' % (suffix, varExplThresh_str, dog_varExplThresh_str, dogMod, jointType, normA, normB), jointList)
+  np.save(base_dir + 'jointList_wMods_V1_%svE_vT%02d_dvT%02d_m%dj%d' % (suffix, varExplThresh_str, dog_varExplThresh_str, dogMod, jointType), jointList)
+  # -- old version of the naming scheme
+  #np.save(base_dir + 'jointList_wMods_freeRE_V1_%svE_vT%02d_dvT%02d_m%dj%d_mA%dmB%d' % (suffix, varExplThresh_str, dog_varExplThresh_str, dogMod, jointType, normA, normB), jointList)
 
 ########################
 #### END V1
