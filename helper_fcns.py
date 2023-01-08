@@ -3989,7 +3989,7 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
        respMeasure = 1; # we look at F1 for sach (LGN data)
      if isBB:
        f1f0_ratio = bb_compute_f1f0(expInfo)[0]; # yes, we're duplicating this (have already computed by this point)
-       respMeasure = f1f0_ratio > 1;
+       respMeasure = int(f1f0_ratio > 1);
    else:
      f1f0_ratio = compute_f1f0(tr, cell_ind+1, expInd, data_loc, dF_nm)[0]; # f1f0 ratio is 0th output
      respMeasure = 0; # assume it's DC by default
@@ -4403,9 +4403,9 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
         nllAll = [np.nanmean(modelDict[modKey]['fits'][cell_ind][respStr]['NLL']) if modelDict[modKey]['fits'] is not None else np.nan for modKey in modelDict.keys()];
         paramsAll = [modelDict[modKey]['fits'][cell_ind][respStr]['params'] if modelDict[modKey]['fits'] is not None else np.nan for modKey in modelDict.keys()];
         namesAll = [modelDict[modKey]['name'] if modelDict[modKey]['name'] is not None else '' for modKey in modelDict.keys()];
-        # TODO:FUTURE: Add varExpl?
+        varExplAll = [modelDict[modKey]['fits'][cell_ind][respStr]['varExpl_func'] if 'varExpl_func' in modelDict[modKey]['fits'][cell_ind][respStr] else np.nan for modKey in modelDict.keys()];
      except:
-        nllAll = None; paramsAll = None; namesAll = None;
+        nllAll = None; paramsAll = None; namesAll = None; varExplAll = None;
      # also try CV
      try:
         # C-V
@@ -4413,9 +4413,9 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
         nllAll_CV_te = [np.nanmean(modelDict[modKey]['cv']['fits'][cell_ind][respStr]['NLL_test']) if modelDict[modKey]['fits'] is not None else np.nan for modKey in modelDict.keys()];
         paramsAll_CV = [modelDict[modKey]['cv']['fits'][cell_ind][respStr]['params'] if modelDict[modKey]['cv']['fits'] is not None else np.nan for modKey in modelDict.keys()];
         namesAll_CV = [modelDict[modKey]['cv']['name'] if modelDict[modKey]['cv']['name'] is not None else '' for modKey in modelDict.keys()];
-        # TODO:FUTURE: Add varExpl?
+        varExplAll_CV = [np.nanmean(modelDict[modKey]['cv']['fits'][cell_ind][respStr]['varExpl_func']) if 'varExpl_func' in modelDict[modKey]['cv']['fits'][cell_ind][respStr] else np.nan for modKey in modelDict.keys()];
      except:
-        nllAll_CV_te = None; nllAll_CV_tr = None; paramsAll_CV = None; namesAll_CV = None;
+        nllAll_CV_te = None; nllAll_CV_tr = None; paramsAll_CV = None; namesAll_CV = None; varExplAll_CV = None;
      try: # unpack/save the input model specs
        # NOTE: The below assumes that there are no missing models (i.e. the set of norm x lgnType x .... is complete)
        inputModelDict = dict([('normType', modSpecs['normType']),
@@ -4431,10 +4431,12 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
      model = dict([('NLLs', nllAll),
                    ('params', paramsAll),
                    ('modNames', namesAll),
+                   ('varExplAll', varExplAll),
                    ('NLLs_CV_tr', nllAll_CV_tr),
                    ('NLLs_CV_te', nllAll_CV_te),
                    ('params_CV', paramsAll_CV),
                    ('modNames_CV', namesAll_CV),
+                   ('varExplAll_CV', varExplAll_CV),
                    ('inputKeys', list(modelDict.keys())),
                    ('inputsSpecified', inputModelDict)
                ]);
@@ -4634,7 +4636,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     if toPar:
       perCell_summary = partial(jl_perCell, dataList=dataList, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType, reducedSave=reducedSave, briefVersion=briefVersion, modSpecs=modSpecs, flexModels=flexModels, flBase_name=flBase_name)
 
-      #oh = perCell_summary(3);
+      #oh = perCell_summary(4);
       #if isBB:
       #  oh = perCell_summary(30);
       #  pdb.set_trace();

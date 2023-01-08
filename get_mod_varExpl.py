@@ -271,6 +271,11 @@ if __name__ == '__main__':
 
   fitBase = 'fitList%s_pyt_nr230104%s%s' % (hpcStr, '_noRE' if fixRespExp is not None else '', '_noSched' if schedule==False else '')
 
-  for fitType,lgnFrontOn in itertools.product(fitTypes, lgnTypes):
-    save_mod_varExpl(fitBase, expDir, fitType, lgnFrontOn, kfold);
+  if kfold>=5: # then we assume we are specifying how many k-folds we did, so just do all programatically...
+    for kfold_curr in range(kfold):
+      for fitType,lgnFrontOn in itertools.product(fitTypes, lgnTypes):
+        save_mod_varExpl(fitBase, expDir, fitType, lgnFrontOn, kfold_curr);
+  else:
+    for fitType,lgnFrontOn in itertools.product(fitTypes, lgnTypes):
+      save_mod_varExpl(fitBase, expDir, fitType, lgnFrontOn, kfold);
 
