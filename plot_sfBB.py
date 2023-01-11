@@ -170,7 +170,7 @@ _sigmoidDord = 5;
 #fitBase = 'fitList%s_pyt_nr221116wwww_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 #fitBase = 'fitList%s_pyt_nr221119d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 #fitBase = 'fitList%s_pyt_nr221231_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-fitBase = 'fitList%s_pyt_nr230104_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+fitBase = 'fitList%s_pyt_nr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 
 _CV=isCV
 
@@ -384,8 +384,8 @@ except:
 nrow, ncol = 5, 4;
 f, ax = plt.subplots(nrows=nrow, ncols=ncol, figsize=(ncol*15, nrow*15))
 
-maxResp = np.maximum(np.max(respMatrixDC), np.max(respMatrixF1));
-maxResp_onlyMask = np.maximum(np.max(respMatrixDC_onlyMask), np.max(respMatrixF1_onlyMask));
+maxResp = np.maximum(np.nanmax(respMatrixDC), np.nanmax(respMatrixF1));
+maxResp_onlyMask = np.maximum(np.nanmax(respMatrixDC_onlyMask), np.nanmax(respMatrixF1_onlyMask));
 maxResp_total = np.maximum(maxResp, maxResp_onlyMask);
 overall_ylim = [0, 1.2*maxResp_total];
 # also get the bounds for the AbLe plot - only DC
@@ -676,12 +676,12 @@ f.tight_layout(rect=[0, 0.03, 1, 0.95])
 if fitBase is not None: # then we can plot some model details
 
   fDetails = plt.figure();
-  fDetails.set_size_inches(w=60,h=25)
+  detailSize = (4, 6); # yes, normally (3,6), but making debug plots on 21.03.14 & want the extra row
+  fDetails.set_size_inches(w=50,h=25)
 
   # make overall title
   fDetails.suptitle('DC <---- |model details| ----> F1');
 
-  detailSize = (4, 6); # yes, normally (3,6), but making debug plots on 21.03.14 & want the extra row
 
   respTypes = [None, None]; # todo: [dcResps, f1Resps], figure out how to package, esp. with f1 having mask & base
   colToAdd = [0, 3]; # we add +X if doing f1 details
@@ -870,7 +870,7 @@ if fitBase is not None: # then we can plot some model details
     conVals = [maskCon[-5], maskCon[-3], maskCon[-1]]; # try to get the normResp at these contrast values
     modTrials = trInf['num']; # these are the trials eval. by the model
     # then, let's go through for the above contrasts and get the in-model response
-    for cI, conVal in enumerate(conVals):
+    for cI, conVal in enumerate(reversed(conVals)):
       closest_ind = np.argmin(np.abs(conVal - maskCon));
       close_enough = np.abs(maskCon[closest_ind] - conVal) < 0.03 # must be within 3% contrast
       if close_enough:
@@ -886,8 +886,10 @@ if fitBase is not None: # then we can plot some model details
             modB_resps = [np.mean(full_denoms[1][:, trs]) for trs in all_trials_modInd];
         else:
             modB_resps = [np.mean(full_denoms[1][trs]) for trs in all_trials_modInd];
+        if conVal==np.nanmax(conVals):
+            to_norm = [np.nanmax(denom) for denom in [modA_resps, modB_resps]];
         # -- take sqrt of con val so that it's not SO dim...
-        [plt.semilogx(maskSf, denom, alpha=np.sqrt(conVal), color=clr) for clr,denom in zip(modColors, [modA_resps, modB_resps])]
+        [plt.semilogx(maskSf, np.divide(denom, norm), alpha=np.sqrt(conVal), color=clr) for clr,denom,norm in zip(modColors, [modA_resps, modB_resps], to_norm)]
         plt.title('Normalization term by contrast, model');
     # plot just the constant term (i.e. if there is NO g.c. pooled response)
     sf_vals = maskSf;

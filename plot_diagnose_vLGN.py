@@ -27,10 +27,13 @@ _sigmoidRespExp = None; # 3 or None, as of 21.03.14
 _sigmoidSigma = 5; # put a value (5, as of 21.03.10) or None (see model_responses_pytorch.py for details)
 _sigmoidGainNorm = 5;
 _applyLGNtoNorm = 1;
+#_applyLGNtoNorm = 0;
 recenter_norm = 0;
 #recenter_norm = 3;
 #singleGratsOnly = True;
 singleGratsOnly = False;
+
+save_varExpl = False; # save varExpl to the model fit?
 
 f1_expCutoff = 2; # if 1, then all but V1_orig/ are allowed to have F1; if 2, then altExp/ is also excluded
 
@@ -139,11 +142,9 @@ expName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
 _sigmoidScale = 10
 _sigmoidDord = 5;
 
-#fitBase = 'fitList%s_pyt_nr221106_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr221109e_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr221119d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr221231_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-fitBase = 'fitList%s_pyt_nr230104_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_Nnr230107_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_Nnr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
 vecF1 = 0;
@@ -166,7 +167,7 @@ fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, f
 # what's the shorthand we use to refer to these models...
 # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
 aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn' if normA==5 else 'Yk');
-bWtStr = '%s%s' % ('wt' if normB>1 else 'asym', '' if normB<=2 else 'Gn' if normA==5 else 'Yk');
+bWtStr = '%s%s' % ('wt' if normB>1 else 'asym', '' if normB<=2 else 'Gn' if normB==5 else 'Yk');
 lgnStrA = hf.lgnType_suffix(lgnA, conA);
 lgnStrB = hf.lgnType_suffix(lgnB, conB);
 modA_str = '%s%s' % ('fl' if normA==1 else aWtStr, lgnStrA if lgnA>0 else 'V1');
@@ -360,10 +361,11 @@ if pytorch_mod == 1:
       varExplSF_B[dI, cI] = hf.var_explained(hf.nan_rm(expByCond[dI, :, cI]), hf.nan_rm(modByCondB[dI, :, cI]), None);
 
   # save the varExpl in the fitList
-  fitListA[cellNum-1][respStr]['varExpl_con'] = varExplCon_A
-  fitListB[cellNum-1][respStr]['varExpl_con'] = varExplCon_B
-  fitListA[cellNum-1][respStr]['varExpl_SF'] = varExplSF_A
-  fitListB[cellNum-1][respStr]['varExpl_SF'] = varExplSF_B
+  if save_varExpl:
+    fitListA[cellNum-1][respStr]['varExpl_con'] = varExplCon_A
+    fitListB[cellNum-1][respStr]['varExpl_con'] = varExplCon_B
+    fitListA[cellNum-1][respStr]['varExpl_SF'] = varExplSF_A
+    fitListB[cellNum-1][respStr]['varExpl_SF'] = varExplSF_B
 
   # and also get the blank resp
   modBlank_A = np.maximum(0, model_A.noiseLate.detach().numpy()/divFactor); # baseline 
@@ -790,7 +792,7 @@ f.legend(fontsize='large');
 varExpl_A = hf.var_explained(hf.nan_rm(respMean), hf.nan_rm(modAvgs[0]), None);
 varExpl_B = hf.var_explained(hf.nan_rm(respMean), hf.nan_rm(modAvgs[1]), None);
 ###
-if pytorch_mod == 1:
+if pytorch_mod == 1 and save_varExpl:
   fitListA[cellNum-1][respStr]['varExpl'] = varExpl_A;
   fitListB[cellNum-1][respStr]['varExpl'] = varExpl_B;
   # save the var explained!
@@ -914,6 +916,10 @@ for (pltNum, modPrm),modObj,lgnType,lgnConType,mWt in zip(enumerate(modFits), mo
       # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
       selCon_avg = mWt*selCon_m + (1-mWt)*selCon_p;
       lgnSel = mWt*selSf_m*selCon_avg[-1] + (1-mWt)*selSf_p*selCon_avg[-1];
+    elif lgnConType == 5: # TEMP
+      # -- then here's our final responses per component for the current stimulus
+      # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
+      lgnSel = mWt*selSf_m*selCon_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
     withLGN = s*lgnSel;
     sfExcLGN = withLGN/np.max(withLGN);
 
@@ -929,6 +935,8 @@ for (pltNum, modPrm),modObj,lgnType,lgnConType,mWt in zip(enumerate(modFits), mo
       jointAtLowCon = mWt*selSf_m*selCon_m[conValInd] + (1-mWt)*selSf_p*selCon_p[conValInd];
     elif lgnConType == 2 or lgnConType == 3 or lgnConType == 4:
       jointAtLowCon = mWt*selSf_m*selCon_avg[conValInd] + (1-mWt)*selSf_p*selCon_avg[conValInd];
+    elif lgnConType == 5:
+      jointAtLowCon = mWt*selSf_m*selCon_m[conValInd] + (1-mWt)*selSf_p*selCon_p[conValInd];
     plt.semilogx(omega, np.divide(jointAtLowCon, max_joint), label='joint - %d%% contrast' % (100*conMatch), color='k', alpha=0.3);
     plt.title('lgn %s' % modLabels[pltNum]);
     plt.legend();
@@ -1039,11 +1047,11 @@ full_denoms = [sigmaFilt+norm for sigmaFilt, norm in zip([modA_sigma, modB_sigma
 # --- use hf.get_valid_trials to get high/low con, single gratings
 disp = 0;
 v_cons = np.array(val_con_by_disp[disp]);
-conVals = [0.10, 0.33, 1]; # try to get the normResp at these contrast values
+conVals = [0.10, 0.33, 1]; # try to get the normResp at these contrast values; MUST BE ASCENDING
 modTrials = dw.trInf['num']; # these are the trials eval. by the model
 # then, let's go through for the above contrasts and get the in-model response
-#pdb.set_trace();
-for cI, conVal in enumerate(conVals):
+# as of 23.01.08, we normalize the normalization response to the high-contrast value
+for cI, conVal in enumerate(reversed(conVals)):
   closest_ind = np.argmin(np.abs(conVal - all_cons[v_cons]));
   close_enough = np.abs(all_cons[v_cons[closest_ind]] - conVal) < 0.03 # must be within 3% contrast
   if close_enough:
@@ -1059,12 +1067,15 @@ for cI, conVal in enumerate(conVals):
       modA_resps = [np.mean(full_denoms[0][trs]) for trs in all_trials_modInd];
       modB_resps = [np.mean(full_denoms[1][trs]) for trs in all_trials_modInd];
     sf_vals = all_sfs[valSfInds];
-    [plt.semilogx(sf_vals, denom, alpha=conVal, color=clr) for clr,denom in zip(modColors, [modA_resps, modB_resps])]
+    # as of 23.01.08, normalize the denominator!
+    if conVal==np.nanmax(conVals):
+      to_norm = [np.nanmax(denom) for denom in [modA_resps, modB_resps]];
+    [plt.semilogx(sf_vals, np.divide(denom, norm), alpha=conVal, color=clr) for clr,denom,norm in zip(modColors, [modA_resps, modB_resps], to_norm)]
     plt.title('Normalization term by contrast, model');
 # plot just the constant term (i.e. if there is NO g.c. pooled response)
 sf_vals = all_sfs[valSfInds];
 onlySigma = [sigmaFilt for sigmaFilt in [modA_sigma, modB_sigma]];
-[plt.plot(xCoord*sf_vals[0], sig, color=clr, marker='>') for xCoord,sig,clr in zip([0.95, 0.85], onlySigma, modColors)]
+[plt.plot(xCoord*sf_vals[0], sig/norm, color=clr, marker='>') for xCoord,sig,clr,norm in zip([0.95, 0.85], onlySigma, modColors, to_norm)]
 plt.xlim([omega[0], omega[-1]]);
 #plt.xlim([1e-1, 1e1]);
 
