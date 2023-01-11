@@ -1198,7 +1198,7 @@ def adjust_f1_byTrial(cellStruct, expInd, dir=-1, whichSpikes=1, binWidth=1e-3, 
 
   return adjusted_f1_rate;
 
-def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, descrFitName_f1=None):
+def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, descrFitName_f1=None, meanAfterRatio=False):
   ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio
       This will be used to determine simple versus complex
       Note that descrFitName_f1 is optional, i.e. we needn't pass this in
@@ -1280,7 +1280,9 @@ def compute_f1f0(trial_inf, cellNum, expInd, loc_data, descrFitName_f0=None, des
   f0rate_pos = f0rate[rate_posInd];
   f1rate_pos = f1rate[rate_posInd];
 
-  return np.nanmean(np.divide(f1rate_pos, f0rate_pos)), f0rate, f1rate, f0_counts, f1rates;
+  f1f0_ratio = np.nanmean(np.divide(f1rate_pos, f0rate_pos)) if meanAfterRatio else np.nanmean(f1rate_pos)/np.nanmean(f0rate_pos)
+
+  return f1f0_ratio, f0rate, f1rate, f0_counts, f1rates;
 
 ##################################################################
 ##################################################################
