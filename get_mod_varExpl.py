@@ -213,7 +213,9 @@ def get_mod_varExpl(cellNum, fitBase, expDir, normType, lgnFrontEnd, rvcAdj, whi
 def save_mod_varExpl(fitBase, expDir, fitType, lgnFrontOn, kfold=-1, excType=1, lossType=1, _LGNforNorm=1, vecCorrected=0, nProc=20, lgnConType=1):
   ''' Wrapper for get_mod_varExpl that calls it/saves for all cells in a given experiment X model fit combination
   '''
-  if kfold < 0:
+  if kfold is None:
+    todoCV = False; # and kfold = None already declared...
+  elif kfold < 0:
     kfold = None;
     todoCV = False;
   else:
