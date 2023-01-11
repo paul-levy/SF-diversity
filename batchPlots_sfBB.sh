@@ -55,19 +55,19 @@ do
   # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
   #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
 
-
   # modA: flat, no LGN; modB: wght, no LGN
   python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, LGN; modB: wght, LGN
   python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, LGNsi; modB: wght, LGN si
   python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 44 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  # modA: wght, no LGN; modB: flat, LGN si
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 21 11 04 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  # modA: flat, LGN; modB: flat, LGN si
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 14 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
+
   # modA: flat, LGN; modB: flat, LGN yk
   #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 13 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
-  # modA: flat, no LGN; modB: flat, LGN si
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 04 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
-  # modA: wght, no LGN; modB: wght, LGN si
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 11 04 0 0 0.05 $VEC_F1 0 -1 1 $HPC $KFOLD & # no diff, not interpolated
 
   # Check how many background jobs there are, and if it
   # is equal to the number of cores, wait for anyone to

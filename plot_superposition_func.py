@@ -73,11 +73,11 @@ def get_responses(expData, which_cell, expInd, expDir, dataPath, respMeasure, st
 
   #print('###\nGetting spikes (data): rates? %d\n###' % rates);
   _, _, _, respAll = hf.organize_resp(spikes, expData, expInd, respsAsRate=rates); # only using respAll to get variance measures
-  resps_data, _, _, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates, modsAsRate=rates, sum_power=sum_power);
+  resps_data, _, _, _, _ = hf.tabulate_responses(expData, expInd, overwriteSpikes=spikes, respsAsRates=rates, modsAsRate=rates, sum_power=sum_power, verbose=True);
 
   return resps_data, respAll, respsPhAdv_mean_ref, respsPhAdv_mean_pred, baseline, adjMeansByComp, val_tr_by_cond;
 
-def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, f1f0_rat, respMeasure, baseline, lossType=1, lgnFrontEnd=0, newMethod=1, lgnConType=1, _applyLGNtoNorm=0, _sigmoidSigma=5, recenter_norm=2, normToOne=1, debug=False, use_mod_resp=2):
+def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, f1f0_rat, respMeasure, baseline, lossType=1, lgnFrontEnd=0, newMethod=1, lgnConType=1, _applyLGNtoNorm=0, _sigmoidSigma=5, recenter_norm=0, normToOne=1, debug=False, use_mod_resp=2, sum_power=1):
   # This is ONLY for getting model responses
   if use_mod_resp == 1:
     curr_fit = fitList[which_cell-1]['params'];
@@ -85,7 +85,7 @@ def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, 
     if f1f0_rat < 1: # then subtract baseline..
       modResp = modResp - baseline*hf.get_exp_params(expInd).stimDur; 
     # now organize the responses
-    resps = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp, respsAsRates=False, modsAsRate=False)[0];
+    resps = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp, respsAsRates=False, modsAsRate=False, sum_power=sum_power)[0];
 
   elif use_mod_resp == 2: # then pytorch model!
     resp_str = hf_sf.get_resp_str(respMeasure)
@@ -129,7 +129,7 @@ def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, 
     modResp_full = np.divide(modResp_full, divFactor);
     # now organize the responses
     #resps = hf.organize_resp(modResp_full, expData, expInd);
-    resps = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp_full, respsAsRates=asRates, modsAsRate=asRates)[0];
+    resps = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp_full, respsAsRates=asRates, modsAsRate=asRates, verbose=True)[0];
 
   if debug:
     return model.respPerCell(dw.trInf, debug=True, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm);
@@ -317,7 +317,7 @@ def selected_supr_metrics(df):
 
   return None;
 
-def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excType=1, useHPCfit=1, lgnConType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=False, useTex=False, simple_plot=True, altHollow=True, ltThresh=0.5, ref_line_alpha=0.5, ref_all_sfs=False, plt_supr_ind=False, supr_ind_prince=False, sum_power=1, spec_disp = None, spec_con = None):
+def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excType=1, useHPCfit=1, lgnConType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=False, useTex=False, simple_plot=True, altHollow=True, ltThresh=0.5, ref_line_alpha=0.5, ref_all_sfs=False, plt_supr_ind=False, supr_ind_prince=False, sum_power=1, spec_disp = None, spec_con = None, fixRespExp=2, scheduler=False, singleGratsOnly=False, dataAsRef=False):
 
   # if ref_all_sfs, then colors for superposition plots are referenced across all SFS (not just those that appear for dispersion=1)
 
@@ -357,7 +357,8 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   elif use_mod_resp == 2:
     rvcName = None; # Use NONE if getting model responses, only
     #fitBase = 'fitList%s_pyt_nr221106_noRE_noSched' % loc_str
-    fitBase = 'fitList%s_pyt_nr221106d_noSched' % loc_str
+    #fitBase = 'fitList%s_pyt_nr221106d_noSched' % loc_str
+    fitBase='fitList%s_pyt_nr230107%s%s%s' % ('HPC', '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=-rvcAdj, excType=excType);
   # ^^^ EDIT rvc/descrFits/fitList names here;
 
@@ -541,7 +542,6 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   findNaN = np.isnan(respAll);
   nonNaN  = np.sum(findNaN == False, axis=-1);
   respSem = np.nanstd(respAll, -1) / np.sqrt(nonNaN);
-  #pdb.set_trace();
 
   ############
   ### zeroth...just organize into pandas for some potential/future processing
@@ -589,10 +589,16 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
       fitz, _ = opt.curve_fit(myFit, all_preds_data[non_neg_data], all_resps_data[non_neg_data], p0=[100, 2, 25], maxfev=5000)
       rel_c50 = np.divide(fitz[-1], np.max(all_preds[non_neg_data]));
     else:
-      fitz, rel_c50, nr_mod = fit_overall_suppression(all_resps, all_preds)
+      fitz, rel_c50, _ = fit_overall_suppression(all_resps, all_preds)
   except:
     fitz = None;
     rel_c50 = -99;
+  if dataAsRef: # i.e. if we want the data to set the N-R fit,
+    predResps_data = resps_data[2];
+    respMean_data = resps_data[0];
+    all_resps_data = respMean_data[1:, :, :].flatten() # all disp>0
+    all_preds_data = predResps_data[1:, :, :].flatten() # all disp>0
+    fitz, rel_c50, _ = fit_overall_suppression(all_resps_data, all_preds_data)
   curr_suppr['rel_c50'] = rel_c50;
 
   #### Now, recapitulate the key measures for the dataframe
@@ -952,7 +958,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
       except: # for the 1-2 V1 cells with oddities, the above won't work --> just skip it
         pass;
       # - and put that value on the plot
-      ax[4+row_ind_offset,1].text(0.1, -0.25, 'var=%.3f' % (ind_var_offset if supr_ind_prince else ind_var));
+      ax[4+row_ind_offset,1].text(0.1, -0.25, 'var=%.4f' % (ind_var_offset if supr_ind_prince else ind_var));
       # --- check if the pandas grouping gives the same results as what we have above?
       #mns, sems = to_use.groupby('sf')['supr_ind'].mean(), to_use.groupby('sf')['supr_ind'].std()/to_use.groupby('sf')['supr_ind'].count()
       #ax[4,1].errorbar(sfs, mns, yerr=sems, marker='*', linestyle='--');
@@ -1071,7 +1077,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   if fitList is None:
     save_name = 'cell_%03d%s%s.pdf' % (which_cell, disp_str, con_str);
   else:
-    save_name = 'cell_%03d_mod%s%s%s%s.pdf' % (which_cell, hf.fitType_suffix(fitType), hf.lgnType_suffix(lgnFrontEnd, lgnConType=1), disp_str, con_str)
+    save_name = 'cell_%03d_mod%s%s%s%s%s.pdf' % (which_cell, hf.fitType_suffix(fitType), hf.lgnType_suffix(lgnFrontEnd, lgnConType=1), disp_str, con_str, '_dtRef' if dataAsRef else '')
   pdfSv = pltSave.PdfPages(str(save_locSuper + save_name));
   pdfSv.savefig(fSuper)
   pdfSv.close();
@@ -1146,8 +1152,15 @@ if __name__ == '__main__':
       spec_con = int(sys.argv[9]);
     else:
       spec_con = None;
-
-    fitList='fitList%s_pyt_nr221021' % 'HPC'; # TEMPORARY
+      
+    dataAsRef = False;
+    excType = 1; # 1 [dG] or 2 [flex. gauss]?
+    #fixRespExp = None;
+    fixRespExp = 2;
+    scheduler=False;
+    singleGratsOnly = False
+    #fitList='fitList%s_pyt_nr221021' % 'HPC'; # TEMPORARY
+    fitList='fitList%s_pyt_nr230107%s%s%s' % ('HPC', '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
     if asMulti:
       from functools import partial
@@ -1156,7 +1169,7 @@ if __name__ == '__main__':
       print('***cpu count: %02d***' % nCpu);
 
       with mp.Pool(processes = nCpu) as pool:
-        sup_perCell = partial(plot_save_superposition, expDir=expDir, use_mod_resp=use_mod_resp, fitType=normType, useHPCfit=1, lgnConType=1, lgnFrontEnd=lgnOn, to_save=0, plt_supr_ind=plt_supr_ind, supr_ind_prince=supr_ind_prince, spec_disp=spec_disp, spec_con=spec_con);
+        sup_perCell = partial(plot_save_superposition, expDir=expDir, use_mod_resp=use_mod_resp, fitType=normType, useHPCfit=1, lgnConType=1, lgnFrontEnd=lgnOn, to_save=0, plt_supr_ind=plt_supr_ind, supr_ind_prince=supr_ind_prince, spec_disp=spec_disp, spec_con=spec_con, fixRespExp=fixRespExp, excType=excType, dataAsRef=dataAsRef);
         supFits = pool.map(sup_perCell, range(start_cell, end_cell+1));
         pool.close();
 
@@ -1178,5 +1191,5 @@ if __name__ == '__main__':
       np.save(dataPath + super_name, suppr_all);
 
     else: # i.e. not multi
-      plot_save_superposition(cell_num, expDir, to_save=1, plt_supr_ind=plt_supr_ind, use_mod_resp=use_mod_resp, supr_ind_prince=supr_ind_prince, lgnConType=1, lgnFrontEnd=lgnOn, fitType=normType, spec_disp=spec_disp, spec_con=spec_con);
+      plot_save_superposition(cell_num, expDir, to_save=1, plt_supr_ind=plt_supr_ind, use_mod_resp=use_mod_resp, supr_ind_prince=supr_ind_prince, lgnConType=1, lgnFrontEnd=lgnOn, fitType=normType, spec_disp=spec_disp, spec_con=spec_con, fixRespExp=fixRespExp, excType=excType, dataAsRef=dataAsRef);
 

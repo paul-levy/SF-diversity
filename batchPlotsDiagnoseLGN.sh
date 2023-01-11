@@ -44,14 +44,16 @@ do
 
   # no LGN
   python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  # wght, V1, flat LGNsi
+  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 21 15 04 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  # flat, V1, flat LGNsi
+  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 15 04 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   # w/LGN
-  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   # w/LGNsi
-  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 44 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 44 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   # flat, V1/LGNsi
-  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 11 04 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
-  # wght, V1/LGNsi
-  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 22 11 04 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 11 04 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
 
   # Check how many background jobs there are, and if it
   # is equal to the number of cores, wait for anyone to
