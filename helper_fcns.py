@@ -601,6 +601,8 @@ def lgnType_suffix(lgnType, lgnConType=1, applyLGNtoNorm=1):
     conSuf = 'y'; # "yoked"
   elif lgnConType == 4: # parvo-only front-end
     conSuf = 'p';
+  elif lgnConType == 5: # 
+    conSuf = 'eq';
   # prepend 'nn' for no norm when applyLGNtoNorm is not eq. 1
   return '%s%s%s' % ('' if applyLGNtoNorm==1 else 'nn', lgnSuf, conSuf if lgnType>0 else ''); # i.e. don't apply the lgnCon suffix if the lgn isn't on anyway!
 
@@ -1941,6 +1943,7 @@ def DoGsachVol(gain_c, r_c, gain_s, r_s, stim_sf, baseline=0):
  
 def var_explained(data_resps, modParams, sfVals, dog_model = 2, baseline=0, ref_params=None, ref_rc_val=None):
   ''' given a set of responses and model parameters, compute the variance explained by the model 
+      CARANDINI 1997 (eqs. in section DATA ANALYSIS)
       UPDATE: If sfVals is None, then modParams is actually modResps, so we can just skip to the end...
   '''
   np = numpy;
@@ -3710,7 +3713,7 @@ def modelSpecs_to_key(normType, lossType, lgnFrontEnd, lgnConType=1, excType=1, 
   return (normType, lossType, lgnFrontEnd, lgnConType, excType, fixRespExp, scheduler);
 
 #def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0, reducedSave=False, briefVersion=False, fitListWght=None, fitListFlat=None, cv_fitListWght=None, cv_fitListFlat=None):
-def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0, reducedSave=False, briefVersion=False, modSpecs=None, flexModels=True, flBase_name=None):
+def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0, reducedSave=False, briefVersion=False, modSpecs=None, flexModels=True, flBase_name=None, clip_modVarExpl=True):
 
    ''' - bootThresh (fraction of time for which a boot metric must be defined in order to be included in analysis)
        - flexModels (added 23.01.04): if True, then we make this dictionary not beholden to two models, only (flat/weighted)
@@ -4413,7 +4416,8 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
         nllAll_CV_te = [np.nanmean(modelDict[modKey]['cv']['fits'][cell_ind][respStr]['NLL_test']) if modelDict[modKey]['fits'] is not None else np.nan for modKey in modelDict.keys()];
         paramsAll_CV = [modelDict[modKey]['cv']['fits'][cell_ind][respStr]['params'] if modelDict[modKey]['cv']['fits'] is not None else np.nan for modKey in modelDict.keys()];
         namesAll_CV = [modelDict[modKey]['cv']['name'] if modelDict[modKey]['cv']['name'] is not None else '' for modKey in modelDict.keys()];
-        varExplAll_CV = [np.nanmean(modelDict[modKey]['cv']['fits'][cell_ind][respStr]['varExpl_func']) if 'varExpl_func' in modelDict[modKey]['cv']['fits'][cell_ind][respStr] else np.nan for modKey in modelDict.keys()];
+        lower_clip = -10 if clip_modVarExpl else None;
+        varExplAll_CV = [np.nanmean(np.clip(modelDict[modKey]['cv']['fits'][cell_ind][respStr]['varExpl_func'], lower_clip, None)) if 'varExpl_func' in modelDict[modKey]['cv']['fits'][cell_ind][respStr] else np.nan for modKey in modelDict.keys()];
      except:
         nllAll_CV_te = None; nllAll_CV_tr = None; paramsAll_CV = None; namesAll_CV = None; varExplAll_CV = None;
      try: # unpack/save the input model specs
@@ -4951,7 +4955,7 @@ def get_isolated_responseAdj(data, trials, adjByTrial):
 
 ##
 
-def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False, modsAsRate=False, resample=False, cellNum=-1, cross_val=None, sum_power=1):
+def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpikes=None, respsAsRates=False, modsAsRate=False, resample=False, cellNum=-1, cross_val=None, sum_power=1, verbose=False):
     ''' Given cell structure (and opt model responses), returns the following:
         (i) respMean, respStd, predMean, predStd, organized by condition; pred is linear prediction
         (ii) all_disps, all_cons, all_sfs - i.e. the stimulus conditions of the experiment
@@ -5087,6 +5091,9 @@ def tabulate_responses(cellStruct, expInd, modResp = [], mask=None, overwriteSpi
                     
                     curr_resps = resample_array(resample, respToUse[val_tr]); # will just be the array if resample==0
 
+                    # EDIT HERE IF DEBUGGING [VERBOSE]
+                    #if d==1 and sf==8 and con==8 and verbose:
+                    #   print('comp %d [%d/%.2f/%.2f] = %.2f [%.2f]' % (n_comp, 0,curr_con,curr_sf, np.mean(curr_resps), respMean[d,sf,con]))
                     curr_pred = curr_pred + np.power(np.mean(curr_resps/respDiv), sum_power);
                     curr_var = curr_var + np.var(curr_resps/respDiv);
                     

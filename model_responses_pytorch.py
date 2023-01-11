@@ -338,7 +338,9 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
       # single gratings AND 1.5<=sf<=4
       #valTrials = np.where(np.logical_and(np.logical_and(coreExp['sf'][0]>1.5, coreExp['sf'][0]<4), np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0)))[0]; # this will force singlegrats only!
       # DEFAULT: just single gratings
-      valTrials = np.where(np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0))[0]; # this will force singlegrats only!
+      #valTrials = np.where(np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]==0))[0]; # this will force singlegrats only!
+      # 23.01.07 try: only mixtures
+      valTrials = np.where(np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]>0))[0]; # this will force singlegrats only!
     else:
       valTrials = np.where(~np.isnan(np.sum(coreExp['ori'], 0)))[0];
     if whichTrials is None: # take all valid trials
@@ -433,8 +435,7 @@ class dataWrapper(torchdata.Dataset):
 ### The model
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module()
-
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=0, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=False, forceLateNoise=None, _lgnOctDiff=np.log2(9/3)):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=1, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=False, forceLateNoise=None, _lgnOctDiff=np.log2(9/3)):
 
     super().__init__();
 
@@ -473,8 +474,8 @@ class sfNormMod(torch.nn.Module):
       self.mWeight = _cast_as_param(modParams[-1]);
     elif (self.lgnFrontEnd == 3 or self.lgnFrontEnd == 4) and self.lgnConType == 1: # yoked LGN; mWeight is still treated the same way
       self.mWeight = _cast_as_param(modParams[-1]);
-    elif self.lgnConType == 2: # FORCE at 0.5
-       self.mWeight = _cast_as_tensor(0); # then it's NOT a parameter, and is fixed at 0, since as input to sigmoid, this gives 0.5
+    elif self.lgnConType == 2 or self.lgnConType == 5: # FORCE at 0.5
+      self.mWeight = _cast_as_tensor(0); # then it's NOT a parameter, and is fixed at 0, since as input to sigmoid, this gives 0.5
     elif self.lgnConType == 3: # still not a parameter, but use the value in modParams; this case shouldn't really come up...
       self.mWeight = _cast_as_tensor(modParams[-1]);
     elif self.lgnConType == 4: # FORCE at -1, i.e. all parvo
@@ -533,9 +534,9 @@ class sfNormMod(torch.nn.Module):
       self.stdLeft      = _cast_as_param(normParams[1]);  # std of the gaussian to the left of the peak
       self.stdRight     = _cast_as_param(normParams[2]); # '' to the right '' 
       self.sfPeak       = _cast_as_param(normParams[3]); # where is the gaussian peak?
-    elif self.normType == 4: # two-halved Gaussian...
-      self.gs_mean = _cast_as_param(normParams[0]);
-      self.gs_std = _cast_as_param(normParams[1]);
+    elif self.normType == 4: # DEPRECATED
+      self.gs_mean = _cast_as_param(normParams[0]); # mean
+      self.gs_std = _cast_as_param(normParams[1]); # really the deriv. order!
     else:
       self.inhAsym = _cast_as_param(normParams);
 
@@ -787,7 +788,7 @@ class sfNormMod(torch.nn.Module):
         self.lgnCalcDone = True; # save the LGN calc --> but fear not, we'll overwrite if not full dataset
         # NOTE: We will turn lgnCalcDone back to False when we update the m/p params (i.e. lgnFrontEnd==3 or 4)
 
-      if self.lgnConType == 1: # DEFAULT
+      if self.lgnConType == 1 or self.lgnConType == 5: # DEFAULT
         # -- then here's our final responses per component for the current stimulus
         # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
         lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
@@ -958,7 +959,7 @@ class sfNormMod(torch.nn.Module):
         selCon_m = get_rvc_model(self.rvc_m, cons);
         selCon_p = get_rvc_model(self.rvc_p, cons);
       # -- then here's our final responses per component for the current stimulus
-      if self.lgnConType == 1: # DEFAULT
+      if self.lgnConType == 1 or self.lgnConType == 5: # DEFAULT
         # -- then here's our final responses per component for the current stimulus
         # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
         lgnStage = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
@@ -1137,10 +1138,14 @@ class sfNormMod(torch.nn.Module):
       selSf_p = self.selSf_p;
       selSf_m = self.selSf_m;
 
-      if self.lgnConType == 1: # DEFAULT
+      if self.lgnConType == 1 or self.lgnConType == 5: # DEFAULT
         # -- then here's our final responses per component for the current stimulus
         # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
-        lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
+        if self.lgnConType==1:
+          lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), torch.mul(selSf_m, selCon_m)), torch.mul(1-torch.sigmoid(self.mWeight), torch.mul(selSf_p, selCon_p)));
+        elif self.lgnConType==5:
+          #### TEMP: Only apply RVC, not SF filtering from LGN
+          lgnSel = torch.add(torch.mul(torch.sigmoid(self.mWeight), selCon_m), torch.mul(1-torch.sigmoid(self.mWeight), selCon_p));
       elif self.lgnConType == 2 or self.lgnConType == 3 or self.lgnConType == 4:
         # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
         avgWt = torch.sigmoid(self.mWeight);
@@ -1221,7 +1226,7 @@ class sfNormMod(torch.nn.Module):
             # clamp the weights to avoid near-zero values
             new_weights = torch.clamp(torch.exp(weight_distr.log_prob(log_sfs)), min=minWeight);
             if self.normType == 5:
-              new_weights = torch.pow(new_weights, self.gs_gain); # temporary!!! (22.11.08 --> make the gs_gain act as a power on the weights?)
+              new_weights = torch.pow(new_weights, self.gs_gain); # temporary attempt as of 22.11.08 --> make the gs_gain act as a power on the weights?
             '''
             if torch.mean(new_weights).item() < 1e-2:
               print('bad weight! --> mn, std = %.2f, %.2f' % (self.gs_mean, self.gs_std));
@@ -1403,6 +1408,9 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 # learning_rate guide, as of 22.11.16:
 # --- 0.01 if all data (e.g. batch_size=3000)
 # --- 0.002 if batch_size = 256
+######
+## 23.01.04 and beyond: max_epochs should be 2500, learning_rate 0.0175, batch_size=3k
+######
 def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=2500, learning_rate=0.0175, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, trackStepsReduced=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False, preLoadDataList=None, k_fold=None, k_fold_shuff=True, k_fold_state=None, testingNames=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
@@ -1429,7 +1437,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
-      fL_name = 'fitList%s_pyt_nr230104%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_Nnr230107%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   k_fold = 1 if k_fold is None else k_fold; # i.e. default to one "fold"
   todoCV = 1 if whichTrials is not None or k_fold>1 else 0;
@@ -1563,9 +1571,27 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         _, _, expByCond, _ = hf.organize_resp(resps_full, expInfo, expInd);
       else:
         dcResp, f1Resp = hf_sfBB.get_mask_resp(expInfo, withBase=0, maskF1=1, vecCorrectedF1=vecCorrected);
-        expByCond = dcResp[:,:,0] if respMeasure==0 else f1Resp[:,:,0]; 
+        if respMeasure == 0:
+          expByCond = dcResp[:,:,0]
+        else:
+          expByCond = f1Resp[:,:,0,0] if vecCorrected else f1Resp[:,:,0]; 
       unique_sfs = np.unique(trInf['sf'][:,0])
-      pref_sf = unique_sfs[np.argmax(expByCond[0,:,-1])] if expInd != -1 else expInfo['baseSF'][0]; # we can just use baseSf
+      # NOTE: Before 23.01.08, this was initialization...incl. for 23.01.04 fits [v successful]
+      #pref_sf = unique_sfs[np.argmax(expByCond[0,:,-1])] if expInd != -1 else expInfo['baseSF'][0]; # we can just use baseSf
+      # the below is a new attempt...
+      if expInd == -1: # i.e. B+B --> don't just assume the baseSF is the preference, since sometimes we were off and other cells are pulled off the array, not tailored to...
+        # take C.O.M.??
+        mn_perSf = np.nanmean(expByCond,axis=0);
+        pref_sf = np.power(2, np.nansum(np.log2(unique_sfs)*mn_perSf)/np.nansum(mn_perSf))
+        #pref_sf = unique_sfs[np.argmax(mn_perSf)]; # add up all responses over contrast, which SF has highest...
+      else:
+        #pref_sf = unique_sfs[np.argmax(expByCond[0,:,-1])];
+        # take C.O.M.??
+        try:
+          mn_perSf = np.nanmean(expByCond[0], axis=1); # avgs. over SF (note opposite arrangement of sfBB/expInd=-1)
+          pref_sf = np.power(2, np.nansum(np.log2(unique_sfs)*mn_perSf)/np.nansum(mn_perSf))
+        except:
+          pref_sf = unique_sfs[np.argmax(expByCond[0,:,-1])];
       if verbose:
         print('prefSf: %.2f [will initialize at this + some jitter]' % pref_sf);
     except:
@@ -1649,12 +1675,16 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
     ### set parameters
     # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
-    #prefSfEst_goal = np.random.uniform(0.3, 2); # this is the value we want AFTER taking the sigmoid (and applying the upper bound)
-    prefSfEst_goal = np.random.uniform(0.75, 1.5) * pref_sf;
+    prefSfEst_goal = np.random.uniform(0.75, 1.5) * pref_sf; # validated as good; late 2022
     sig_inv_input = (pSfFloor+prefSfEst_goal)/pSfBound;
     prefSfEst = -np.log((1-sig_inv_input)/sig_inv_input)
     # 22.11.03 --> with not NormFiltersToOne, -1.5 works as a start except when lgnFrontEnd is on --> then make the normConst stronger to start
-    normConst = 0.5 if normToOne==1 and normFiltersToOne else -1.5 + 2*np.sign(lgnFrontEnd); # per Tony, just start with a low value (i.e. closer to linear)
+    if expInd == -1: # we want slightly stronger normalization for B+B to avoid ruining the base F1 response...
+      normConst = 0.5 if normToOne==1 and normFiltersToOne else -1.25 + 2*np.sign(lgnFrontEnd); # per Tony, just start with a low value (i.e. closer to linear)
+    else:
+      normConst = 0.5 if normToOne==1 and normFiltersToOne else -1.5 + 2*np.sign(lgnFrontEnd); # per Tony, just start with a low value (i.e. closer to linear)
+    # the below line was used for all fits in late 2022/early 2023 (incl. the good 23.01.04 fits)
+    #normConst = 0.5 if normToOne==1 and normFiltersToOne else -1.5 + 2*np.sign(lgnFrontEnd); # per Tony, just start with a low value (i.e. closer to linear)
     # the above is when we normalize the FFT first; the below is when we don't? as of 22.10.25
     #normConst = -0.25 + 0.75*lgnFrontEnd if normToOne==1 else -2; # per Tony, just start with a low value (i.e. closer to linear)
     if fitType <= 1:
@@ -1668,7 +1698,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     # --- then, set up each parameter
     pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
     if excType == 1:
-      dOrd_preSigmoid = np.random.uniform(1, 2.5)
+      #dOrd_preSigmoid = np.random.uniform(0.5, 1.15)
+      #dOrd_preSigmoid = np.random.uniform(1, 2.5) # validated as good; used as of late 2022 (incl. 23.01.04 fits)
+
+      # new attempt on 23.01.08
+      dOrd_preSigmoid = np.random.uniform(1, 2.5) if pref_sf>=2 else np.random.uniform(0.35, 0.75);
+      #print('aiming for dOrd: %.2f' % dOrd_preSigmoid);
+
       dOrdSp = -np.log((_sigmoidDord-dOrd_preSigmoid)/dOrd_preSigmoid) if initFromCurr==0 else curr_params[1];
     elif excType == 2:
       if _sigmoidSigma is None:
@@ -1715,7 +1751,11 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       # in these cases, overwrite noiseLate and respScalar, since both are now applied AFTER the FFT
       if normToOne == 1:
         if expInd != -1:
-          minResp, maxResp = np.nanmin(expByCond[0]), np.nanmax(expByCond[0]);
+          try:
+            minResp, maxResp = np.nanmin(expByCond[0]), np.nanmax(expByCond[0]);
+            assert(~np.isnan(minResp) & ~np.isnan(maxResp));
+          except: # if either is nan, try all data (used for temp. mixtures-only effort on 23.01.09)
+            minResp, maxResp = np.nanmin(expByCond), np.nanmax(expByCond);
         else:
           minResp, maxResp = np.nanmin(expByCond), np.nanmax(expByCond);
         if force_earlyNoise is None:
@@ -1727,7 +1767,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         # why div/40? Seems that high con, pref. SF only has FFT of ~40 spks/s
         # --- note: it WAS div/40 or div/20 when not full normResp --> not that it is, we use the below
         # -- if we don't do re-scaling below
-        respScalar = np.random.uniform(0.6,1.2) * (maxResp-noiseLate)/2; # all heuristics...
+        respScalar = np.random.uniform(0.6,1.2) * (maxResp-noiseLate)/2; # all heuristics...as of late 2022 (good)
         if normFiltersToOne and lgnFrontEnd>0:
           respScalar /= 500; # completely a heuristic!!!
         elif not normFiltersToOne and lgnFrontEnd>0:
@@ -2129,7 +2169,7 @@ if __name__ == '__main__':
       _LGNforNorm = int(sys.argv[15]);
     else:
       _LGNforNorm = 1; # default to applying the LGN filters to the front-end
-
+      
     #######
     # NOW: Note that the below values for optimization should be kept up-to-date with the defaults
     # ------ furthermore, note that these values are only passed in for parallel call (i.e. cellNum<0)
@@ -2138,15 +2178,15 @@ if __name__ == '__main__':
       max_epochs = int(sys.argv[16]);
       print('\tspecified epochs: %d' % max_epochs);
     else:
-      max_epochs = 2500 if kfold is None else 1250; # fewer epochs when cross-val...
-      #max_epochs = 1000;
+      max_epochs = 2500 if kfold is None else 1250; # fewer epochs when cross-val
+      #max_epochs = 250; # use for temp/quick/debugging fits
 
     if len(sys.argv) > 17:
       learning_rate = float(sys.argv[17]);
       print('\tspecified learning rate: %.2e' % learning_rate);
     else:
-      learning_rate = 0.0175;
-      #learning_rate = 0.005;
+      learning_rate = 0.0175; # the standard
+      #learning_rate = 0.0375; # use for temp/quick/debugging fits
 
     if len(sys.argv) > 18:
       batch_size = int(sys.argv[18]);
@@ -2160,7 +2200,7 @@ if __name__ == '__main__':
     if cellNum >= 0:
       while not dcOk and nTry>0:
         try:
-          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly, k_fold=kfold); # first do DC
+          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size); # first do DC
 
           #import cProfile
           #cProfile.runctx('setModel(cellNum, expDir, excType, lossType, fitType, 1, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel': setModel}, locals())
@@ -2177,7 +2217,7 @@ if __name__ == '__main__':
       nTry=1; #30; # reset nTry...
       while not f1Ok and nTry>0:
         try:
-          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly, k_fold=kfold); # then F1
+          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size); # then F1
           f1Ok = 1;
           print('passed with nTry = %d' % nTry);
         except Exception as e:
@@ -2202,8 +2242,8 @@ if __name__ == '__main__':
       import multiprocessing as mp
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr230104%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else ''); #
-
+      fL_name = 'fitList%s_pyt_Nnr230107%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else '');
+      
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size, testingNames=testNames);
       with mp.Pool(processes = nCpu) as pool:
@@ -2253,10 +2293,11 @@ if __name__ == '__main__':
       np.save(loc_data + fitListName, fitListNPY)
       np.save(loc_data + fitDetailsName, fitDetailsNPY)
 
+      from get_mod_varExpl import save_mod_varExpl
+      if kfold is None:
+        save_mod_varExpl(fL_name, expDir, fitType, lgnFrontOn, kfold, excType=excType, lossType=lossType, lgnConType=lgnConType);
+      else:
+        [save_mod_varExpl(fL_name, expDir, fitType, lgnFrontOn, kfold_curr, excType=excType, lossType=lossType, lgnConType=lgnConType) for kfold_curr in range(kfold)];
+
     enddd = time.process_time();
-    from get_mod_varExpl import save_mod_varExpl
-    if kfold is None:
-      save_mod_varExpl(fL_name, expDir, fitType, lgnFrontOn, kfold, excType=excType, lossType=lossType, lgnConType=lgnConType);
-    else:
-      [save_mod_varExpl(fL_name, expDir, fitType, lgnFrontOn, kfold_curr, excType=excType, lossType=lossType, lgnConType=lgnConType) for kfold_curr in range(kfold)];
     print('Took %d minutes -- dc %d || f1 %d' % ((enddd-start)/60, dcOk, f1Ok));
