@@ -223,7 +223,8 @@ if area == 'LGN':
 
   # NOTE: the real code for creating the jointList has been moved to helper_fcns!
   # WARNING: This takes ~10 minutes (as of 09.06.19)
-  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType, reducedSave=True, briefVersion=brief)
+
+  jointList = hf.jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, jointType=jointType, reducedSave=True, briefVersion=brief, flexModels=False)
 
   from datetime import datetime
   suffix = datetime.today().strftime('%y%m%d')

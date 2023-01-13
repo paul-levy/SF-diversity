@@ -94,22 +94,24 @@ if expDir == 'LGN/':
   descrBase = 'descrFits%s_221001vEs' % hpc_str;
   #descrBase = 'descrFits%s_220810vEs' % hpc_str;
 else:
-  descrBase = 'descrFits%s_221126vEs' % hpc_str;
+  descrBase = 'descrFits%s_230111vEs' % hpc_str;  # ONLY FOR V1/ (new)
+  #descrBase = 'descrFits%s_221126vEs' % hpc_str; # ONLY FOR V1/ (new)
   #descrBase = 'descrFits%s_221001vEs' % hpc_str;
-  #descrBase = 'descrFits%s_220811vEs' % hpc_str;
 if expDir == 'LGN/':
   rvcBase = 'rvcFits%s_220928' % hpc_str;
   #rvcBase = 'rvcFits%s_220531' % hpc_str;
 else:
-  rvcBase = 'rvcFits%s_221126' % hpc_str;
+  rvcBase = 'rvcFits%s_230111' % hpc_str; # ONLY FOR V1/ (new)
+  #rvcBase = 'rvcFits%s_221126' % hpc_str; # ONLY FOR V1/ (new)
   #rvcBase = 'rvcFits%s_220928' % hpc_str;
 # -- rvcAdj = -1 means, yes, load the rvcAdj fits, but with vecF1 correction rather than ph fit; so, we'll 
 rvcAdjSigned = rvcAdj;
 rvcAdj = np.abs(rvcAdj);
 
 if rvcAdjSigned==1 and phAmpByMean: # i.e. phAdv correction
+    phBase = 'phaseAdvanceFits%s_230111' % hpc_str # only for V1/ (new)
+    #phBase = 'phaseAdvanceFits%s_221126' % hpc_str # only for V1/ (new)
     #phBase = 'phaseAdvanceFits%s_220928' % hpc_str
-    phBase = 'phaseAdvanceFits%s_221126' % hpc_str
     #phBase = 'phaseAdvanceFits%s_220531' % (hpc_str) if expDir=='LGN/' else 'phaseAdvanceFits%s_220609' % (hpc_str)
     print(phBase);
     phAdvFits = hf.np_smart_load(data_loc + hf.phase_fit_name(phBase, dir=1));
