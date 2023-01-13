@@ -93,6 +93,18 @@ def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, 
       curr_fit = fitList[which_cell-1][resp_str]['params'];
     else:
       curr_fit = fitList; # we already passed in parameters
+    #######
+    '''
+    # TEMP: Changing parameters
+    prefSfEst_goal = 0.5;
+    pSfFloor = 0.1; pSfBound=14.9
+    sig_inv_input = (pSfFloor+prefSfEst_goal)/pSfBound;
+    curr_fit[0] = -np.log((1-sig_inv_input)/sig_inv_input)
+    # narrower [-2]; narrowest [-4?]; # No. 5 asym is [-1.5, 4] (or vice versa)
+    curr_fit[1]  = 4;
+    curr_fit[-1] = -2; 
+    '''
+    #######
     model = mrpt.sfNormMod(curr_fit, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnFrontEnd=lgnFrontEnd, newMethod=newMethod, lgnConType=lgnConType, applyLGNtoNorm=_applyLGNtoNorm, normToOne=normToOne, normFiltersToOne=False, toFit=False)
     ### get the vec-corrected responses, if applicable
     # NOTE: NEED TO FIX THIS, esp. for 
@@ -124,7 +136,7 @@ def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, 
 
     # TODO: This is a work around for which measures are in rates vs. counts (DC vs F1, model vs data...)
     stimDur = hf.get_exp_params(expInd).stimDur;
-    asRates = False;
+    asRates = False if respMeasure==0 else True; # NOT YET VERIFIED/VALIDATED
     divFactor = stimDur if asRates == 0 else 1;
     modResp_full = np.divide(modResp_full, divFactor);
     # now organize the responses
@@ -317,7 +329,7 @@ def selected_supr_metrics(df):
 
   return None;
 
-def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excType=1, useHPCfit=1, lgnConType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=False, useTex=False, simple_plot=True, altHollow=True, ltThresh=0.5, ref_line_alpha=0.5, ref_all_sfs=False, plt_supr_ind=False, supr_ind_prince=False, sum_power=1, spec_disp = None, spec_con = None, fixRespExp=2, scheduler=False, singleGratsOnly=False, dataAsRef=False):
+def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excType=1, useHPCfit=1, lgnConType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=False, useTex=False, simple_plot=True, altHollow=True, ltThresh=0.5, ref_line_alpha=0.5, ref_all_sfs=False, plt_supr_ind=False, supr_ind_prince=False, sum_power=1, spec_disp = None, spec_con = None, fixRespExp=2, scheduler=False, singleGratsOnly=False, dataAsRef=False, tuningOverlay=True):
 
   # if ref_all_sfs, then colors for superposition plots are referenced across all SFS (not just those that appear for dispersion=1)
 
@@ -337,14 +349,25 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   else:
     loc_str = '';
 
-  rvcName = 'rvcFits%s_220928' % ''# % loc_str
-  phAdvName = 'phaseAdvanceFits%s_220928' % ''# % loc_str
-  #rvcName = 'rvcFits_220926' if expDir=='LGN/' else 'rvcFits%s_220718' % loc_str
-  #phAdvName = 'phaseAdvanceFits%s_220531' % loc_str if expDir=='LGN/' else 'phaseAdvanceFits%s_220718' % loc_str;
+  if expDir == 'V1/':
+    dt_rvc = '230111';
+    dt_ph = dt_rvc;
+    dt_sf = '%svEs' % dt_rvc;
+  elif expDir == 'LGN/':
+    dt_rvc = '220928'
+    dt_ph = dt_rvc;
+    dt_sf = '220810vEs'
+  else: # altExp
+    dt_rvc = '221126'
+    dt_sf = '%svEs' % dt_rvc;
+    dt_ph = None;
+  rvcName = 'rvcFits%s_%s' % (loc_str, dt_rvc);
+  phAdvName = 'phaseAdvanceFits%s_%s' % (loc_str, dt_ph);
   rvcFits = None; # pre-define this as None; will be overwritten if available/needed
   if expDir == 'altExp/': # we don't adjust responses there...
     rvcName = '%s_f0' % rvcName;
-  dFits_base = 'descrFits%s_220609' % 'HPC' if expDir=='LGN/' else 'descrFits%s_220721' % 'HPC'
+  dFits_base = 'descrFits%s_%s' % (loc_str, dt_sf);
+  #dFits_base = 'descrFits%s_220609' % 'HPC' if expDir=='LGN/' else 'descrFits%s_220721' % 'HPC'
   #dFits_base = 'descrFits%s_220609' % loc_str if expDir=='LGN/' else 'descrFits%s_220721' % loc_str
   if use_mod_resp == 1:
     rvcName = None; # Use NONE if getting model responses, only
@@ -355,9 +378,6 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     lossType = 1; # sqrt
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
   elif use_mod_resp == 2:
-    rvcName = None; # Use NONE if getting model responses, only
-    #fitBase = 'fitList%s_pyt_nr221106_noRE_noSched' % loc_str
-    #fitBase = 'fitList%s_pyt_nr221106d_noSched' % loc_str
     fitBase='fitList%s_pyt_nr230107%s%s%s' % ('HPC', '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=-rvcAdj, excType=excType);
   # ^^^ EDIT rvc/descrFits/fitList names here;
@@ -413,12 +433,13 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     dMod_num = 1;
     rvcDir = 1;
     vecF1 = 0;
-  else:
+  else: 
     rvcMod = 1; # i.e. Naka-rushton (1)
     dMod_num = 3; # d-dog-s
     if expDir == 'altExp/':
       rvcDir = None;
-      vecF1 = 0 # was None?
+      #vecF1 = 0 # was None?
+      vecF1 = None # was None?
     else:
       rvcDir = 1;
       vecF1 = 0; # was previously 1, but now we do phAmp, not just vecF1
@@ -529,13 +550,18 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   resps_data, respAll, respsPhAdv_mean_ref, respsPhAdv_mean_preds, baseline, comp_resp_org, val_tr_org = get_responses(expData, which_cell, expInd, expDir, dataPath, respMeasure, stimVals, 
                                                                                                                        val_con_by_disp, rvcFits, phAdvName, vecF1, f1_expCutoff=f1_expCutoff, rvcDir=rvcDir, val_by_stim_val=val_by_stim_val, sum_power=sum_power);
 
+  #pdb.set_trace();
   if fitList is None:
     resps = resps_data; # otherwise, we'll still keep resps_data for reference
   elif fitList is not None: # OVERWRITE the data with the model spikes!
     resps = get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, f1f0_rat, respMeasure, baseline, lossType=lossType, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, _applyLGNtoNorm=_applyLGNtoNorm, recenter_norm=recenter_norm);
 
-  predResps = resps[2] if respsPhAdv_mean_preds is None else respsPhAdv_mean_preds;
-  respMean = resps[0] if respsPhAdv_mean_ref is None else respsPhAdv_mean_ref; # equivalent to resps[0];
+  if use_mod_resp == 2: # then get model resp
+    predResps = resps[2]
+    respMean = resps[0]
+  else:
+    predResps = resps[2] if respsPhAdv_mean_preds is None else respsPhAdv_mean_preds;
+    respMean = resps[0] if respsPhAdv_mean_ref is None else respsPhAdv_mean_ref; # equivalent to resps[0];
   respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
   predStd = resps[3]; # WARNING/todo: if fitList is not None, this might be a problem?
   # compute SEM, too
@@ -959,6 +985,11 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
         pass;
       # - and put that value on the plot
       ax[4+row_ind_offset,1].text(0.1, -0.25, 'var=%.4f' % (ind_var_offset if supr_ind_prince else ind_var));
+      if tuningOverlay: # overlay the SF tuning (scaled) on the sfVar plot
+        err_min, err_max = np.nanmin(norm_subset), np.nanmax(norm_subset);
+        mod_resp_recenter = (respMean[0, :, -1] - np.nanmin(respMean[0,:,-1]))/np.nanmax(respMean[0,:,-1])
+        sfRef_rescaled = err_min + (err_max-err_min)*mod_resp_recenter;
+        ax[4+row_ind_offset, 1].plot(all_sfs, sfRef_rescaled, 'r--', alpha=0.3);
       # --- check if the pandas grouping gives the same results as what we have above?
       #mns, sems = to_use.groupby('sf')['supr_ind'].mean(), to_use.groupby('sf')['supr_ind'].std()/to_use.groupby('sf')['supr_ind'].count()
       #ax[4,1].errorbar(sfs, mns, yerr=sems, marker='*', linestyle='--');
@@ -1153,13 +1184,13 @@ if __name__ == '__main__':
     else:
       spec_con = None;
       
-    dataAsRef = False;
+    #dataAsRef = False;
+    dataAsRef = True;
     excType = 1; # 1 [dG] or 2 [flex. gauss]?
     #fixRespExp = None;
     fixRespExp = 2;
     scheduler=False;
     singleGratsOnly = False
-    #fitList='fitList%s_pyt_nr221021' % 'HPC'; # TEMPORARY
     fitList='fitList%s_pyt_nr230107%s%s%s' % ('HPC', '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
     if asMulti:
@@ -1175,12 +1206,12 @@ if __name__ == '__main__':
 
       ### do the saving HERE!
       dataPath = os.getcwd() + '/' + expDir + 'structures/'
-      if fitList is None:
+      if fitList is None or use_mod_resp==0:
         from datetime import datetime
         suffix = datetime.today().strftime('%y%m%d')
         super_name = 'superposition_analysis_%s.npy' % suffix;
       else:
-        super_name = 'superposition_analysis_mod%s%s.npy' % (hf.fitType_suffix(normType), hf.lgnType_suffix(lgnOn, lgnConType=1));
+        super_name = 'superposition_analysis_%s_mod%s%s.npy' % (suffix, hf.fitType_suffix(normType), hf.lgnType_suffix(lgnOn, lgnConType=1));
 
       if os.path.exists(dataPath + super_name):
         suppr_all = hf.np_smart_load(dataPath + super_name);

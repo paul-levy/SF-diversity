@@ -142,9 +142,7 @@ expName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
 _sigmoidScale = 10
 _sigmoidDord = 5;
 
-#fitBase = 'fitList%s_pyt_nr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_Nnr230107_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-fitBase = 'fitList%s_pyt_Nnr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
 vecF1 = 0;
@@ -400,7 +398,7 @@ if normA > 1:
   #gs_std_A = modFit_A[9];
 else:
   gs_mean_A, gs_std_A = None, None
-if normB > 1:
+if normB > 1 and normB != 4:
   gs_mean_B = model_B.gs_mean.detach().numpy();
   gs_std_B = model_B.gs_std.detach().numpy();
   #gs_mean_B = modFit_B[8]; 
@@ -828,6 +826,7 @@ if ~np.any([i is None for i in conModResps]): # then we're using an experiment w
   [plt.plot(consUse, conResp, '%so' % c, clip_on=clip_on, label=s) for conResp, c, s in zip(conModResps, modColors, modLabels)]; # Model responses
   plt.xlabel('Con (%)', fontsize=20);
 
+''' DEPRECATING POISSON PLOT --> WILL NEED TO MOVE OTHERS, IF SO
 # poisson test - mean/var for each condition (i.e. sfXdispXcon)
 curr_ax = plt.subplot2grid(detailSize, (0, 0)); # set the current subplot location/size[default is 1x1]
 sns.despine(ax=curr_ax, offset=5, trim=False);
@@ -844,9 +843,10 @@ plt.xlabel('Mean (imp/s)');
 plt.ylabel('Variance (imp/s^2)');
 plt.title('Super-poisson?');
 plt.axis('equal');
+'''
 
 #  RVC - pick center SF
-curr_ax = plt.subplot2grid(detailSize, (0, 1)); # default size is 1x1
+curr_ax = plt.subplot2grid(detailSize, (0, 0)); # default size is 1x1
 sns.despine(ax=curr_ax, offset = 5);
 disp_rvc = 0;
 val_cons = np.array(val_con_by_disp[disp_rvc]);
@@ -1037,54 +1037,76 @@ plt.ylabel('Normalized response (a.u.)', fontsize=12);
 
 # Now, plot the full denominator (including the constant term) at a few contrasts
 # --- use the debug flag to get the tuned component of the gain control as computed in the full model
-curr_ax = plt.subplot2grid(detailSize, (1, 2));
-modRespsDebug = [mod.forward(dw.trInf, respMeasure=respMeasure, debug=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, normOverwrite=True) for mod in [model_A, model_B]];
-modA_norm, modA_sigma = [modRespsDebug[0][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
-modB_norm, modB_sigma = [modRespsDebug[1][x].detach().numpy() for x in [1,2]]; # returns are exc, inh, sigmaFilt (c50)
-# --- then, simply mirror the calculation as done in the full model
-full_denoms = [sigmaFilt+norm for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
-#full_denoms = [np.power(sigmaFilt + np.power(norm, 2), 0.5) for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
-# --- use hf.get_valid_trials to get high/low con, single gratings
-disp = 0;
-v_cons = np.array(val_con_by_disp[disp]);
-conVals = [0.10, 0.33, 1]; # try to get the normResp at these contrast values; MUST BE ASCENDING
-modTrials = dw.trInf['num']; # these are the trials eval. by the model
-# then, let's go through for the above contrasts and get the in-model response
-# as of 23.01.08, we normalize the normalization response to the high-contrast value
-for cI, conVal in enumerate(reversed(conVals)):
-  closest_ind = np.argmin(np.abs(conVal - all_cons[v_cons]));
-  close_enough = np.abs(all_cons[v_cons[closest_ind]] - conVal) < 0.03 # must be within 3% contrast
-  if close_enough:
-    valSfInds = hf.get_valid_sfs(None, disp, v_cons[closest_ind], expInd, stimVals, validByStimVal);
-    # highest contrast, first
-    all_trials = [hf.get_valid_trials(expData, disp, v_cons[closest_ind], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in valSfInds];
-    # then, find which corresponding index into model-eval-only trials this is
-    all_trials_modInd = [np.intersect1d(modTrials, trs, return_indices=True)[1] for trs in all_trials];
-    if model_A.useFullNormResp:
-      modA_resps = [np.mean(full_denoms[0][:, trs]) for trs in all_trials_modInd];
-      modB_resps = [np.mean(full_denoms[1][:, trs]) for trs in all_trials_modInd];
-    else:
-      modA_resps = [np.mean(full_denoms[0][trs]) for trs in all_trials_modInd];
-      modB_resps = [np.mean(full_denoms[1][trs]) for trs in all_trials_modInd];
-    sf_vals = all_sfs[valSfInds];
-    # as of 23.01.08, normalize the denominator!
-    if conVal==np.nanmax(conVals):
-      to_norm = [np.nanmax(denom) for denom in [modA_resps, modB_resps]];
-    [plt.semilogx(sf_vals, np.divide(denom, norm), alpha=conVal, color=clr) for clr,denom,norm in zip(modColors, [modA_resps, modB_resps], to_norm)]
-    plt.title('Normalization term by contrast, model');
-# plot just the constant term (i.e. if there is NO g.c. pooled response)
-sf_vals = all_sfs[valSfInds];
-onlySigma = [sigmaFilt for sigmaFilt in [modA_sigma, modB_sigma]];
-[plt.plot(xCoord*sf_vals[0], sig/norm, color=clr, marker='>') for xCoord,sig,clr,norm in zip([0.95, 0.85], onlySigma, modColors, to_norm)]
-plt.xlim([omega[0], omega[-1]]);
-#plt.xlim([1e-1, 1e1]);
+for disp_i in range(np.minimum(3, nDisps)):
+  exc_ax = plt.subplot2grid(detailSize, (0, 2+disp_i));
+  norm_ax = plt.subplot2grid(detailSize, (1, 2+disp_i));
+
+  modRespsDebug = [mod.forward(dw.trInf, respMeasure=respMeasure, debug=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, normOverwrite=True) for mod in [model_A, model_B]];
+  modA_exc, modA_norm, modA_sigma = [modRespsDebug[0][x].detach().numpy() for x in [0, 1,2]]; # returns are exc, inh, sigmaFilt (c50)
+  modB_exc, modB_norm, modB_sigma = [modRespsDebug[1][x].detach().numpy() for x in [0, 1,2]]; # returns are exc, inh, sigmaFilt (c50)
+  # --- then, simply mirror the calculation as done in the full model
+  full_denoms = [sigmaFilt+norm for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
+  #full_denoms = [np.power(sigmaFilt + np.power(norm, 2), 0.5) for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
+  # --- use hf.get_valid_trials to get high/low con, single gratings
+  v_cons = np.array(val_con_by_disp[disp_i]);
+  if disp_i == 0: # single gratings
+    conVals = [0.10, 0.33, 0.5, 1]; # try to get the normResp at these contrast values; MUST BE ASCENDING
+  elif disp_i == 1: # e.x. mixture
+    conVals = [0.33, 0.69, 1]; # try to get the normResp at these contrast values; MUST BE ASCENDING
+  elif disp_i == 2: # e.x. mixture
+    conVals = [0.47, 0.69, 1]; # try to get the normResp at these contrast values; MUST BE ASCENDING
+  modTrials = dw.trInf['num']; # these are the trials eval. by the model
+  # then, let's go through for the above contrasts and get the in-model response
+  # as of 23.01.08, we normalize the normalization response to the high-contrast value
+  line_styles = ['-', '--'] # solid for exc, dashed for norm.
+  for cI, conVal in enumerate(reversed(conVals)):
+    closest_ind = np.argmin(np.abs(conVal - all_cons[v_cons]));
+    close_enough = np.abs(all_cons[v_cons[closest_ind]] - conVal) < 0.03 # must be within 3% contrast
+    if close_enough:
+      valSfInds = hf.get_valid_sfs(None, disp_i, v_cons[closest_ind], expInd, stimVals, validByStimVal);
+      # highest contrast, first
+      all_trials = [hf.get_valid_trials(expData, disp_i, v_cons[closest_ind], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in valSfInds];
+      # then, find which corresponding index into model-eval-only trials this is
+      all_trials_modInd = [np.intersect1d(modTrials, trs, return_indices=True)[1] for trs in all_trials];
+      sf_vals = all_sfs[valSfInds];
+      for respInd, whichResp in enumerate([[modA_exc, modB_exc], full_denoms]):
+        whichAx = exc_ax if respInd==0 else norm_ax;
+        if model_A.useFullNormResp or respInd==0: # i.e. we only do this if norm. and fullNormResp
+          modA_resps = [np.mean(whichResp[0][:, trs]) for trs in all_trials_modInd];
+          modB_resps = [np.mean(whichResp[1][:, trs]) for trs in all_trials_modInd];
+          #print('respInd %d, con %.2f:\t' % (respInd, conVal))
+          #print(modA_resps);
+        else:
+          modA_resps = [np.mean(whichResp[0][trs]) for trs in all_trials_modInd];
+          modB_resps = [np.mean(whichResp[1][trs]) for trs in all_trials_modInd];
+        # as of 23.01.08, normalize the denominator!
+        if conVal==np.nanmax(conVals):
+          if respInd == 0:
+            to_norm_num  = [np.nanmax(denom) for denom in [modA_resps, modB_resps]];
+          elif respInd == 1:
+            to_norm_denom = [np.nanmax(denom) for denom in [modA_resps, modB_resps]];
+        to_norm = to_norm_num if respInd==0 else to_norm_denom;
+        [whichAx.semilogx(sf_vals, np.divide(denom, norm), alpha=conVal, color=clr, linestyle=line_styles[respInd]) for clr,denom,norm in zip(modColors, [modA_resps, modB_resps], to_norm)]
+        if respInd == 0: # exc
+          whichAx.set_title('Model exc. [d=%d]' % disp_i);
+          if conVal==np.nanmax(conVals):
+            # let's also replot the high contrast responses (faintly) on the norm. plot!
+            [norm_ax.semilogx(sf_vals, np.divide(denom, norm), alpha=0.3, linestyle=line_styles[respInd], color=clr) for clr,denom,norm in zip(modColors, [modA_resps, modB_resps], to_norm)]
+        elif respInd == 1: # inh
+          whichAx.set_title('Model norm. [d=%d]' % disp_i);
+          # also plot just the constant term (i.e. if there is NO g.c. pooled response)
+          sf_vals = all_sfs[valSfInds];
+          onlySigma = [sigmaFilt for sigmaFilt in [modA_sigma, modB_sigma]];
+          [whichAx.plot(xCoord*sf_vals[0], sig/norm, color=clr, marker='>') for xCoord,sig,clr,norm in zip([0.95, 0.85], onlySigma, modColors, to_norm)]
+        whichAx.set_xlim([omega[0], omega[-1]]);
+        #plt.xlim([1e-1, 1e1]);
 
 # last but not least...and not last... response nonlinearity
 if _sigmoidRespExp is None:
   modExps = [x[3] for x in modFits]; # respExp is in location [3]
 else:
   modExps = [1 + _sigmoidRespExp/(1+np.exp(-x[3])) for x in modFits]; # respExp is in location [3]
-curr_ax = plt.subplot2grid(detailSize, (0, 2));
+curr_ax = plt.subplot2grid(detailSize, (0, 1));
 # Remove top/right axis, put ticks only on bottom/left
 sns.despine(ax=curr_ax, offset=5);
 plt.plot([-1, 1], [0, 0], 'k--')
@@ -1109,7 +1131,7 @@ if loss_traj_A is not None or loss_traj_B is not None:
   sns.despine(ax=curr_ax, offset=10);
 
 # print, in text, model parameters:
-curr_ax = plt.subplot2grid(detailSize, (0, 4));
+curr_ax = plt.subplot2grid(detailSize, (2, 3)); # was (0, 4)
 plt.text(0.5, 0.5, 'prefSf: %.3f, %.3f' % (modFits[0][0], modFits[1][0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
 if excType == 1:
   plt.text(0.5, 0.4, 'derivative order: %.3f, %.3f' % (modFits[0][1], modFits[1][1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
