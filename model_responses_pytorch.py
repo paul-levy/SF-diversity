@@ -1221,7 +1221,9 @@ class sfNormMod(torch.nn.Module):
           # weights relative to mean of pool
           #curr_resp = (1 + torch.clamp(self.inhAsym,-0.3,0.3) * (torch.log(filt_sfs) - torch.mean(torch.log(self.normFull['prefSfs'][iB])))) * filts
           # weights relative to cell preference
-          all_weights = 1 + torch.clamp(self.inhAsym,-0.3,0.3) * (torch.log(filt_sfs) - torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)))
+          #all_weights = 1 + torch.clamp(self.inhAsym,-0.3,0.3) * (torch.log(filt_sfs) - torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)))
+          # --- but not clipped
+          all_weights = 1 + self.inhAsym * (torch.log(filt_sfs) - torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)))
 
         elif self.normType == 2 or self.normType == 5 or self.normType == 6 or self.normType == 4: # i.e. tuned weights
           all_weights = [];

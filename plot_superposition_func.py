@@ -378,7 +378,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     lossType = 1; # sqrt
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
   elif use_mod_resp == 2:
-    fitBase='fitList%s_pyt_nr230107%s%s%s' % ('HPC', '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+    fitBase='fitList%s_pyt_nr230113%s%s%s' % ('HPC', '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=-rvcAdj, excType=excType);
   # ^^^ EDIT rvc/descrFits/fitList names here;
 
@@ -1216,7 +1216,7 @@ if __name__ == '__main__':
     dataAsRef = True;
     scheduler=False;
     singleGratsOnly = False
-    fitList='fitList%s_pyt_nr230107%s%s%s' % ('HPC', '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+    fitList='fitList%s_pyt_nr230113%s%s%s' % ('HPC', '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
     if asMulti:
       from functools import partial
@@ -1231,9 +1231,9 @@ if __name__ == '__main__':
 
       ### do the saving HERE!
       dataPath = os.getcwd() + '/' + expDir + 'structures/'
+      from datetime import datetime
       suffix = datetime.today().strftime('%y%m%d')
       if fitList is None or use_mod_resp==0:
-        from datetime import datetime
         super_name = 'superposition_analysis_%s.npy' % suffix;
       else:
         super_name = 'superposition_analysis_%s_mod%s%s.npy' % (suffix, hf.fitType_suffix(normType), hf.lgnType_suffix(lgnOn, lgnConType=1));
