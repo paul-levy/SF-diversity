@@ -4547,7 +4547,16 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
   if flexModels: # i.e. arbitrary # of models
     mod_tpl = ([None] * len(expDirs));
   else: # just flat, weighted
-    mod_tpl = (fitNamesWght, fitNamesFlat, cv_fitNamesWght, cv_fitNamesFlat)
+    # make sure that none of the arguments are just None --> will need to be expanded if we want to zip across expDirs
+    if fitNamesWght is None:
+       fitNamesWght = [None] * len(expDirs);
+    if fitNamesFlat is None:
+       fitNamesFlat = [None] * len(expDirs);
+    if cv_fitNamesFlat is None:
+       cv_fitNamesFlat = [None] * len(expDirs);
+    if cv_fitNamesWght is None:
+       cv_fitNamesWght = [None] * len(expDirs);
+    mod_tpl = zip(fitNamesWght, fitNamesFlat, cv_fitNamesWght, cv_fitNamesFlat)
 
   for expDir, dL_nm, dF_nm, dog_nm, rv_nm, rvcMod, mod_tpl_out in zip(expDirs, expNames, descrNames, dogNames, rvcNames, rvcMods, mod_tpl):
 
@@ -4611,7 +4620,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
          #curr_key = (modSpecs['normType'][mod_i], modSpecs['lossType'][mod_i], modSpecs['lgnFrontEnd'][mod_i], modSpecs['lgnConType'][mod_i], modSpecs['excType'][mod_i], modSpecs['fixRespExp'][mod_i], modSpecs['scheduler'][mod_i]);
          modelDict[curr_key] = curr_mod_dict; # remember, modelDict is a global variable!
     else: # if it's the old way of specifying models (assumes flat, weighted only)
-      fLW_nm, fLF_nm, cv_fLW_nm, cv_fLF_nm = mod_tpl;
+      fLW_nm, fLF_nm, cv_fLW_nm, cv_fLF_nm = mod_tpl_out;
       fitListWght = np_smart_load(data_loc + fLW_nm);
       fitListFlat = np_smart_load(data_loc + fLF_nm);
       try:
@@ -4624,7 +4633,8 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     dogFits = np_smart_load(data_loc + dog_nm);
     rvcFits = np_smart_load(data_loc + rv_nm);
     try:
-      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_220930.npy');
+      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_230111.npy');
+      #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_220930.npy');
       #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_220926.npy');
       #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_210824.npy');
     except:

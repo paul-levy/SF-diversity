@@ -434,7 +434,7 @@ class dataWrapper(torchdata.Dataset):
 
 ### The model
 class sfNormMod(torch.nn.Module):
-  # inherit methods/fields from torch.nn.Module()
+  # inherit methods/fields from torch.nn.Module(); [12,15] and [0.75, 1.5] are defaults!
   def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=1, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=False, forceLateNoise=None, _lgnOctDiff=np.log2(9/3)):
 
     super().__init__();
@@ -534,9 +534,10 @@ class sfNormMod(torch.nn.Module):
       self.stdLeft      = _cast_as_param(normParams[1]);  # std of the gaussian to the left of the peak
       self.stdRight     = _cast_as_param(normParams[2]); # '' to the right '' 
       self.sfPeak       = _cast_as_param(normParams[3]); # where is the gaussian peak?
-    elif self.normType == 4: # DEPRECATED
+    elif self.normType == 4: # NOT DEPRECATED, but not really used...
       self.gs_mean = _cast_as_param(normParams[0]); # mean
-      self.gs_std = _cast_as_param(normParams[1]); # really the deriv. order!
+      self.gs_std_low = _cast_as_param(normParams[1][0]); # really the deriv. order!
+      self.gs_std_high = _cast_as_param(normParams[1][1]); # really the deriv. order!
     else:
       self.inhAsym = _cast_as_param(normParams);
 
@@ -710,6 +711,13 @@ class sfNormMod(torch.nn.Module):
           param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.gs_mean.item(), self.gs_std.item(), self.gs_gain.item(), self.mWeight.item()];
         elif self.excType == 2:
           param_list = [self.prefSf.item(), self.sigLow.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.gs_mean.item(), self.gs_std.item(), self.gs_gain.item(), self.sigHigh.item(), self.mWeight.item()];
+    # NOT really used, but keeping for posterity (in case we try to revive this flex. Gauss normalization weighting)
+    elif self.normType == 4:
+        if self.excType == 1:
+          param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.gs_mean.item(), self.gs_std_low.item(), self.gs_std_high.item(), self.mWeight.item()];
+        elif self.excType == 2:
+          param_list = [self.prefSf.item(), self.sigLow.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.gs_mean.item(), self.gs_std_low.item(), self.gs_std_high.item(), self.sigHigh.item(), self.mWeight.item()];
+    # after all possible model configs...
     if self.lgnFrontEnd == 0: # then we'll trim off the last constraint, which is mWeight bounds (and the last param, which is mWeight)
       param_list = param_list[0:-1];
 
@@ -1047,6 +1055,7 @@ class sfNormMod(torch.nn.Module):
     #respPerTr = torch.pow(resp.sum(1), 1./self.respExp); # i.e. sum over components, then sqrt
     return respPerTr; # will be [nTrials] -- later, will ensure right output size during operation    
 
+  # gs_std_min = 0.05 [default value]
   def FullNormResp(self, trialInf, trialArtificial=None, debugFilters=False, debugQuadrature=False, debugFilterTemporal=False, gs_std_min=_cast_as_tensor(0.05), forceExpAt2=False, normOverwrite=False, minWeight=_cast_as_tensor(0.005)):
     ''' Per discussions with Tony and Eero (Oct. 2022), need to re-incorporate a more realistic normalization signal
         --- 1. Including temporal dynamics
@@ -1214,23 +1223,24 @@ class sfNormMod(torch.nn.Module):
           # weights relative to cell preference
           all_weights = 1 + torch.clamp(self.inhAsym,-0.3,0.3) * (torch.log(filt_sfs) - torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)))
 
-        elif self.normType == 2 or self.normType == 5 or self.normType == 6: # i.e. tuned weights
+        elif self.normType == 2 or self.normType == 5 or self.normType == 6 or self.normType == 4: # i.e. tuned weights
           all_weights = [];
           for iB, filt_sfs in zip(range(len(self.normFull['nFilters'])), self.normFull['prefSfs']):
             log_sfs = torch.log(filt_sfs);
             # NOTE: 22.10.31 --> clamp the gs_mean at the 1st/last filters of the 1st bank of filters
-            if self.normType == 6:# here, norm yoked to filter --> compute prefSf, and take the log of it
+            if self.normType == 6: # here, norm yoked to filter --> compute prefSf, and take the log of it
               weight_distr = torch.distributions.normal.Normal(torch.clamp(torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)), min=torch.log(self.normFull['prefSfs'][0][0]), max=torch.log(self.normFull['prefSfs'][0][-1])), torch.clamp(self.gs_std, min=gs_std_min));
+            elif self.normType == 4: # two-half Gaussian?
+              weight_distr = flexible_Gauss([_cast_as_tensor(0), _cast_as_tensor(1), torch.clamp(torch.exp(self.gs_mean), min=self.normFull['prefSfs'][0][0], max=self.normFull['prefSfs'][0][-1]), self.gs_std_low, self.gs_std_high], torch.exp(log_sfs), minThresh=0);
             else:
               weight_distr = torch.distributions.normal.Normal(torch.clamp(self.gs_mean, min=torch.log(self.normFull['prefSfs'][0][0]), max=torch.log(self.normFull['prefSfs'][0][-1])), torch.clamp(self.gs_std, min=gs_std_min));
             # clamp the weights to avoid near-zero values
-            new_weights = torch.clamp(torch.exp(weight_distr.log_prob(log_sfs)), min=minWeight);
-            if self.normType == 5:
+            if self.normType == 4:
+              new_weights = torch.clamp(weight_distr, min=minWeight)
+            else:
+              new_weights = torch.clamp(torch.exp(weight_distr.log_prob(log_sfs)), min=minWeight);
+            if self.normType == 5: 
               new_weights = torch.pow(new_weights, self.gs_gain); # temporary attempt as of 22.11.08 --> make the gs_gain act as a power on the weights?
-            '''
-            if torch.mean(new_weights).item() < 1e-2:
-              print('bad weight! --> mn, std = %.2f, %.2f' % (self.gs_mean, self.gs_std));
-            '''
             avg_weights = new_weights/torch.mean(new_weights); # make avg. weight = 1
             if all_weights == []:
               all_weights = [avg_weights];
@@ -1689,7 +1699,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     #normConst = -0.25 + 0.75*lgnFrontEnd if normToOne==1 else -2; # per Tony, just start with a low value (i.e. closer to linear)
     if fitType <= 1:
       inhAsym = 0;
-    if fitType == 2 or fitType == 5 or fitType == 6:
+    if fitType == 2 or fitType == 5 or fitType == 6 or fitType == 4: # yes, we've put 4 last because it's rarely if ever used
       # see modCompare.ipynb, "Smarter initialization" for details
       normMean = np.random.uniform(0.75, 1.25) * np.log10(prefSfEst_goal) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
       normStd = np.random.uniform(0.3, 2) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
@@ -1783,6 +1793,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       # increased starting value for width as of 22.10.25
       normStd = np.random.uniform(1.25, 2.25) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
       normGain = np.random.uniform(0.5, 1) if (initFromCurr == 0 or fitType!=5) else curr_params[10]; # will be a sigmoid-ed value...
+      if fitType == 4:
+        normStd_low, normStd_high = -1.5,-2; # start with the high freq. side being slightly narrower than the low freq. side
     # varGain is DEPRECATED AS OF 22.12.26
     #varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
     lgnCtrSf = pref_sf # initialize to the same value as preferred SF (i.e. LGN centered around V1 prefSF)
@@ -1810,6 +1822,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, normMean, normStd, normGain, mWeight);
       elif excType == 2:
         param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, normMean, normStd, normGain, sigHigh, mWeight);
+    elif fitType == 4:
+      ### TODO: make this less redundant???
+      if excType == 1:
+        param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, normMean, normStd_low, normStd_high, mWeight);
+      elif excType == 2:
+        param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, normMean, normStd_low, normStd_high, sigHigh, mWeight);
+    # After all possible model configs...
     if lgnFrontEnd == 0: # then we'll trim off the last constraint, which is mWeight bounds (and the last param, which is mWeight)
       param_list = param_list[0:-1];   
 
