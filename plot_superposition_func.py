@@ -561,7 +561,8 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     respMean = resps[0]
   else:
     predResps = resps[2] if respsPhAdv_mean_preds is None else respsPhAdv_mean_preds;
-    respMean = resps[0] if respsPhAdv_mean_ref is None else respsPhAdv_mean_ref; # equivalent to resps[0];
+    respMean = resps[0] if respsPhAdv_mean_ref is None else respsPhAdv_mean_ref; # equivalent to resps[0;]
+  # note: respAll always refers to the data! (i.e. never the model)
   respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
   predStd = resps[3]; # WARNING/todo: if fitList is not None, this might be a problem?
   # compute SEM, too
@@ -697,10 +698,16 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
 
   ### plot reference tuning [row 1 (i.e. 2nd row)]
   ## on the right, SF tuning (high contrast)
-  sfRef = hf.nan_rm(respMean[0, :, -1]); # high contrast tuning
   sf_ref_row = 0 if simple_plot else 1 
   sf_ref_col = 0 if simple_plot else 1
-  ax[sf_ref_row, sf_ref_col].errorbar(all_sfs, sfRef, yerr=hf.nan_rm(respStd[0,:,-1]), color='k', marker='o', label='ref. tuning', clip_on=False, linestyle='None')
+
+  if use_mod_resp>0: # i.e. we are using model responses, then will need to get these values specifically
+    sfRef = hf.nan_rm(resps_data[0][0,:,-1])
+  else:
+    sfRef = hf.nan_rm(respMean[0, :, -1]); # high contrast tuning
+  ref_std = hf.nan_rm(respStd[0,:,-1]);
+  ax[sf_ref_row, sf_ref_col].errorbar(all_sfs, sfRef, yerr=ref_std, color='k', marker='o', label='ref. tuning', clip_on=False, linestyle='None')
+  #ax[sf_ref_row, sf_ref_col].errorbar(all_sfs, sfRef, yerr=hf.nan_rm(respStd[0,:,-1]), color='k', marker='o', label='ref. tuning', clip_on=False, linestyle='None')
   #ax[sf_ref_row, sf_ref_col].plot(all_sfs, sfRef, 'k-', marker='o', label='ref. tuning', clip_on=False)
   ax[sf_ref_row, sf_ref_col].set_xscale('log')
   ax[sf_ref_row, sf_ref_col].set_xlim((0.1, 10));
@@ -713,7 +720,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   #####
   sfPeak = np.argmax(sfRef); # stupid/simple, but just get the rvc for the max response
   v_cons_single = val_con_by_disp[0]
-  rvcRef = hf.nan_rm(respMean[0, sfPeak, v_cons_single]);
+  rvcRef = hf.nan_rm(respMean[0, sfPeak, v_cons_single]) if use_mod_resp==0 else hf.nan_rm(resps_data[0][0, sfPeak, v_cons_single]);
   # now, if possible, let's also plot the RVC fit
   if rvcFits is not None:
     rvcFits = hf.get_rvc_fits(dataPath, expInd, which_cell, rvcName=rvcName, rvcMod=rvcMod);
@@ -735,6 +742,14 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   if rel_rvc is not None:
     plt_cons = np.geomspace(all_cons[0], all_cons[-1], 50);
     c50_emp, c50_eval = hf.c50_empirical(rvcMod, rel_rvc); # determine c50 by optimization, numerical approx.
+    # and save it
+    curr_suppr['c50'] = c50; curr_suppr['conGain'] = pk;
+    curr_suppr['c50_emp'] = c50_emp; curr_suppr['c50_emp_eval'] = c50_eval
+  else:
+    curr_suppr['c50'] = np.nan; curr_suppr['conGain'] = np.nan;
+    curr_suppr['c50_emp'] = np.nan; curr_suppr['c50_emp_eval'] = np.nan;
+  # plot model or descr. fit
+  if use_mod_resp == 0 and rel_rvc is not None:
     if rvcMod == 0:
       rvc_mod = hf.get_rvc_model();
       rvcmodResp = rvc_mod(*rel_rvc, plt_cons);
@@ -743,12 +758,10 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     if baseline is not None:
       rvcmodResp = rvcmodResp - baseline; 
     ax[1, 0].plot(plt_cons, rvcmodResp, 'k--', label='rvc fit (c50=%.2f%s)' %(c50, 'gain=%0f' % pk if rvcMod==0 else ''))
-    # and save it
-    curr_suppr['c50'] = c50; curr_suppr['conGain'] = pk;
-    curr_suppr['c50_emp'] = c50_emp; curr_suppr['c50_emp_eval'] = c50_eval
-  else:
-    curr_suppr['c50'] = np.nan; curr_suppr['conGain'] = np.nan;
-    curr_suppr['c50_emp'] = np.nan; curr_suppr['c50_emp_eval'] = np.nan;
+  elif use_mod_resp>0: # then plot model response
+    okresps = ~np.isnan(respMean[0, sfPeak, v_cons_single]);
+    vcs = np.array(v_cons_single);
+    ax[1, 0].plot(all_cons[vcs[okresps]], respMean[0,sfPeak,vcs[okresps]], 'k--', label='model resp.')
 
   ax[1, 0].errorbar(all_cons[v_cons_single], rvcRef, yerr=hf.nan_rm(respStd[0,sfPeak,v_cons_single]), color='k', marker='o', label='ref. tuning (d0, peak SF)', linestyle='None')
   #ax[1, 0].plot(all_cons[v_cons_single], rvcRef, 'k-', marker='o', label='ref. tuning (d0, peak SF)')
@@ -1033,8 +1046,13 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   errSfs = all_sfs[val_sfs][sfInds];
   mod_inds = [np.argmin(np.square(mod_sfs-x)) for x in errSfs];
   deriv_norm_eval = deriv_norm[mod_inds];
-  # -- plot ref. tuning
-  ax[sf_ref_row, sf_ref_col].plot(mod_sfs, mod_resp, 'k--', label='fit (g)')
+  # -- plot ref. tuning - WILL BE DIFFERENT depending on data vs. comp. model responses!
+  if use_mod_resp>0: # then let's plot the model tuning here
+    ok_inds = ~np.isnan(respMean[0,:,-1])
+    sfs_to_plt, resps_to_plt = all_sfs[ok_inds], respMean[0,ok_inds,-1]; # high con, single grating resps
+  else:
+    sfs_to_plt, resps_to_plt = mod_sfs, mod_resp
+  ax[sf_ref_row, sf_ref_col].plot(sfs_to_plt, resps_to_plt, 'k--', label='fit (g)')
   ax[sf_ref_row, sf_ref_col].legend(fontsize='x-small');
   if not simple_plot: # DEPRECATE? NOT NEEDED WITHOUT DERIV.
     # Duplicate "twin" the axis to create a second y-axis
@@ -1176,19 +1194,26 @@ if __name__ == '__main__':
     else:
       lgnOn = 0; # default to no LGN
     if len(sys.argv)>8:
-      spec_disp = int(sys.argv[8]);
+      excType = int(sys.argv[8]);
+    else:
+      excType = 1; # default to dG (not flex. Gauss, which is 2)
+    if len(sys.argv)>9:
+      fixRespExp = int(sys.argv[9]);
+      if fixRespExp <= 0:
+        fixRespExp = None
+    else:
+      fixRespExp = 2; # default to fixing at 2
+    if len(sys.argv)>10:
+      spec_disp = int(sys.argv[10]);
     else:
       spec_disp = None;
-    if len(sys.argv)>9:
-      spec_con = int(sys.argv[9]);
+    if len(sys.argv)>11:
+      spec_con = int(sys.argv[11]);
     else:
       spec_con = None;
       
     #dataAsRef = False;
     dataAsRef = True;
-    excType = 1; # 1 [dG] or 2 [flex. gauss]?
-    #fixRespExp = None;
-    fixRespExp = 2;
     scheduler=False;
     singleGratsOnly = False
     fitList='fitList%s_pyt_nr230107%s%s%s' % ('HPC', '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
@@ -1206,9 +1231,9 @@ if __name__ == '__main__':
 
       ### do the saving HERE!
       dataPath = os.getcwd() + '/' + expDir + 'structures/'
+      suffix = datetime.today().strftime('%y%m%d')
       if fitList is None or use_mod_resp==0:
         from datetime import datetime
-        suffix = datetime.today().strftime('%y%m%d')
         super_name = 'superposition_analysis_%s.npy' % suffix;
       else:
         super_name = 'superposition_analysis_%s_mod%s%s.npy' % (suffix, hf.fitType_suffix(normType), hf.lgnType_suffix(lgnOn, lgnConType=1));
