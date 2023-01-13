@@ -26,14 +26,16 @@ else:
   hpcSuff = '';
 
 expName = hf.get_datalist(sys.argv[3], force_full=1, new_v1=True); # sys.argv[3] is experiment dir
-dogName = 'descrFits%s_221126vEs' % hpcSuff;
+dogName = 'descrFits%s_230111vEs' % hpcSuff;
+#dogName = 'descrFits%s_221126vEs' % hpcSuff;
 #dogName = 'descrFits%s_220926vEs' % hpcSuff;
 if sys.argv[3] == 'LGN/':
   phAdvName = 'phaseAdvanceFits%s_220928' % hpcSuff
   rvcName_f1 = 'rvcFits%s_220928' % hpcSuff;
   rvcName_f0 = 'rvcFits_220928_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 else:
-  dt_suff = '221126' # intended largely for V1, now that we've trimmed non-V1 cells
+  dt_suff = '230111' # intended largely for V1, now that we've trimmed non-V1 cells
+  #dt_suff = '221126' # intended largely for V1, now that we've trimmed non-V1 cells
   #dt_suff = '220928' # as used for ch. 1
   phAdvName = 'phaseAdvanceFits%s_%s' % (hpcSuff, dt_suff)
   rvcName_f1 = 'rvcFits%s_%s' % (hpcSuff, dt_suff)
@@ -1202,11 +1204,11 @@ if __name__ == '__main__':
       dir = 0;
     fracSig = 1;
     #fracSig = 0 if data_dir == 'LGN/' else 1; # we only enforce the "upper-half sigma as fraction of lower half" for V1 cells!
-    
+
     if asMulti:
       from functools import partial
       import multiprocessing as mp
-      nCpu = np.min(20, mp.cpu_count()-1); # heuristics say you should reqeuest at least one fewer processes than their are CPU; otherwise, we cap at 20 (per HPC)
+      nCpu = np.minimum(20, mp.cpu_count()-1); # heuristics say you should reqeuest at least one fewer processes than their are CPU; otherwise, we cap at 20 (per HPC)
       print('***cpu count: %02d***' % nCpu);
 
       ### Phase fits

@@ -4636,7 +4636,6 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       superAnalysis = np_smart_load(data_loc + 'superposition_analysis_230111.npy');
       #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_220930.npy');
       #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_220926.npy');
-      #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_210824.npy');
     except:
       superAnalysis = None;
 
