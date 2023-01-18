@@ -127,10 +127,11 @@ def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, 
     modResp_full = np.nan * np.zeros((nTrialsFull, ));
     modResp_full[dw.trInf['num']] = modResp;
 
+    model_baseline = model.noiseLate.detach().numpy()
     if respMeasure == 0: # if DC, then subtract baseline..., as determined from data (why not model? we aren't yet calc. response to no stim, though it can be done)
       stimDur = hf.get_exp_params(expInd).stimDur
       if normToOne==1 and newMethod==1: # then noiseLate is exactly the noiseLate
-        modResp_full -= model.noiseLate.detach().numpy() # Model is counts --> no need to factor in stimDur
+        modResp_full -= model_baseline;  # Model is counts --> no need to factor in stimDur
       else: # sub the data baseline, since our model should've found that anyway...
         modResp_full = modResp_full - baseline*stimDur;
 
@@ -141,12 +142,12 @@ def get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, 
     modResp_full = np.divide(modResp_full, divFactor);
     # now organize the responses
     #resps = hf.organize_resp(modResp_full, expData, expInd);
-    resps = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp_full, respsAsRates=asRates, modsAsRate=asRates, verbose=True)[0];
+    resps = hf.tabulate_responses(expData, expInd, overwriteSpikes=modResp_full, respsAsRates=True, modsAsRate=asRates, verbose=True, sum_power=sum_power)[0];
 
   if debug:
     return model.respPerCell(dw.trInf, debug=True, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm);
 
-  return resps;
+  return resps, model_baseline/divFactor;
 
 def fit_overall_suppression(all_resps, all_preds, expFixed=True):
   ''' Fit the overall suppression (i.e. superposition failures) with a Naka-Rushton fit
@@ -329,7 +330,7 @@ def selected_supr_metrics(df):
 
   return None;
 
-def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excType=1, useHPCfit=1, lgnConType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=False, useTex=False, simple_plot=True, altHollow=True, ltThresh=0.5, ref_line_alpha=0.5, ref_all_sfs=False, plt_supr_ind=False, supr_ind_prince=False, sum_power=1, spec_disp = None, spec_con = None, fixRespExp=2, scheduler=False, singleGratsOnly=False, dataAsRef=False, tuningOverlay=True):
+def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excType=1, useHPCfit=1, lgnConType=None, lgnFrontEnd=None, force_full=1, f1_expCutoff=2, to_save=1, plt_f1_plots=False, useTex=False, simple_plot=True, altHollow=True, ltThresh=0.5, ref_line_alpha=0.5, ref_all_sfs=False, plt_supr_ind=False, supr_ind_prince=False, sum_power=1, spec_disp = None, spec_con = None, fixRespExp=2, scheduler=False, singleGratsOnly=False, dataAsRef=False, tuningOverlay=True, incl_baseline=True, dgNormFunc=False):
 
   # if ref_all_sfs, then colors for superposition plots are referenced across all SFS (not just those that appear for dispersion=1)
 
@@ -378,8 +379,8 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     lossType = 1; # sqrt
     fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType);
   elif use_mod_resp == 2:
-    fitBase='fitList%s_pyt_nr230113%s%s%s' % ('HPC', '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
-    fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=-rvcAdj, excType=excType);
+    fitBase='fitList%s_pyt_nr230118%s%s%s' % ('HPC', '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+    fitList_nm = hf.fitList_name(fitBase, fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=-rvcAdj, excType=excType, dgNormFunc=dgNormFunc);
   # ^^^ EDIT rvc/descrFits/fitList names here;
 
   if use_mod_resp>0:
@@ -550,11 +551,10 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   resps_data, respAll, respsPhAdv_mean_ref, respsPhAdv_mean_preds, baseline, comp_resp_org, val_tr_org = get_responses(expData, which_cell, expInd, expDir, dataPath, respMeasure, stimVals, 
                                                                                                                        val_con_by_disp, rvcFits, phAdvName, vecF1, f1_expCutoff=f1_expCutoff, rvcDir=rvcDir, val_by_stim_val=val_by_stim_val, sum_power=sum_power);
 
-  #pdb.set_trace();
   if fitList is None:
     resps = resps_data; # otherwise, we'll still keep resps_data for reference
   elif fitList is not None: # OVERWRITE the data with the model spikes!
-    resps = get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, f1f0_rat, respMeasure, baseline, lossType=lossType, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, _applyLGNtoNorm=_applyLGNtoNorm, recenter_norm=recenter_norm);
+    resps, model_baseline = get_model_responses(expData, fitList, expInd, which_cell, excType, fitType, f1f0_rat, respMeasure, baseline, lossType=lossType, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, _applyLGNtoNorm=_applyLGNtoNorm, recenter_norm=recenter_norm, sum_power=sum_power);
 
   if use_mod_resp == 2: # then get model resp
     predResps = resps[2]
@@ -779,6 +779,17 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     
   dispRats = [];
   disps_plt = range(0,nDisps) if spec_disp is None else range(spec_disp,spec_disp+1);
+
+  if respMeasure == 0 and incl_baseline: # i.e. DC
+    #stimDur = hf.get_exp_params(expInd).stimDur;
+    if use_mod_resp>0:
+      baseline_add = model_baseline # 
+    else:
+      baseline_add = hf.blankResp(expData, expInd)[0] # rate
+
+  else:
+    baseline_add = 0;
+
   for d in disps_plt: #range(0,nDisps):#nDisps):
     if d == 0: # we don't care about single gratings!
       dispRats = [];
@@ -794,9 +805,9 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
       
       v_sfs = hf.get_valid_sfs(S, d, v_cons[c], expInd)
       for iii, s in enumerate(v_sfs):
-        mixResp = respMean[d, s, v_cons[c]];
+        mixResp = respMean[d, s, v_cons[c]] + baseline_add;
         allMix.append(mixResp);
-        sumResp = predResps[d, s, v_cons[c]];
+        sumResp = predResps[d, s, v_cons[c]] + baseline_add
         allSum.append(sumResp);
   #      print('condition: d(%d), c(%d), sf(%d):: pred(%.2f)|real(%.2f)' % (d, v_cons[c], s, sumResp, mixResp))
         # PLOT in by-disp panel
@@ -1214,9 +1225,6 @@ if __name__ == '__main__':
       
     #dataAsRef = False;
     dataAsRef = True;
-    scheduler=False;
-    singleGratsOnly = False
-    fitList='fitList%s_pyt_nr230113%s%s%s' % ('HPC', '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
     if asMulti:
       from functools import partial
@@ -1233,7 +1241,7 @@ if __name__ == '__main__':
       dataPath = os.getcwd() + '/' + expDir + 'structures/'
       from datetime import datetime
       suffix = datetime.today().strftime('%y%m%d')
-      if fitList is None or use_mod_resp==0:
+      if use_mod_resp==0:
         super_name = 'superposition_analysis_%s.npy' % suffix;
       else:
         super_name = 'superposition_analysis_%s_mod%s%s.npy' % (suffix, hf.fitType_suffix(normType), hf.lgnType_suffix(lgnOn, lgnConType=1));
