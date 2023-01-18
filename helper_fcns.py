@@ -545,23 +545,27 @@ def num_frames(expInd):
   nFrames    = dur*fps;
   return nFrames;
 
-def fitType_suffix(fitType):
+def fitType_suffix(fitType, dgNormFunc=False):
   ''' Use this to get the string referring to a given normalization type
   '''
+  dgStr = 'DG' if dgNormFunc else ''; # i.e. the default is blank; otherwise, we add DG to the end of the weighting
+  # note --> only applie sto wght, wghtGain, Yoke, Match
   if fitType == 1:
-    fitSuf = '_flat';
+    fitSuf = '_flat'
   elif fitType == 0:
-    fitSuf = '_asym';
+    fitSuf = '_asym'
   elif fitType == 2:
-    fitSuf = '_wght';
+    fitSuf = '_%swght' % dgStr
   elif fitType == 3:
-    fitSuf = '_c50';
+    fitSuf = '_c50'
   elif fitType == 4:
-    fitSuf = '_flex';
+    fitSuf = '_flex'
   elif fitType == 5:
-    fitSuf = '_wghtGain';
+    fitSuf = '_%swghtGain' % dgStr
   elif fitType == 6:
-    fitSuf = '_wghtYoke'; # center of weight yoked to the prefSf
+    fitSuf = '_%swghtYoke' % dgStr # center of weight yoked to the prefSf
+  elif fitType == 7:
+    fitSuf = '_%swghtMtch' % dgStr # norm weighting is exactly as in the exc. filter
   return fitSuf;
 
 def lossType_suffix(lossType):
@@ -628,7 +632,7 @@ def excType_suffix(excType):
    elif excType == 1: # derivative gaussian 
       return '_dG';
 
-def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrected=0, CV=0, fixRespExp=None, kMult=0.1, excType=None, lgnForNorm=1, testingNames=False, testingInfo=None):
+def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrected=0, CV=0, fixRespExp=None, kMult=0.1, excType=None, lgnForNorm=1, testingNames=False, testingInfo=None, dgNormFunc=False):
   ''' use this to get the proper name for the full model fits
       - kMult used iff lossType == 4
       23.01.02: testingNames is used for saving fitNames with a unique key based on:
@@ -637,7 +641,7 @@ def fitList_name(base, fitType, lossType, lgnType=None, lgnConType=1, vecCorrect
       --- note that we'll call str(x) to make the hash, multiplying the learning rate by 1e5 first, then trunc. as int
   '''
   # first the fit type
-  fitSuf = fitType_suffix(fitType);
+  fitSuf = fitType_suffix(fitType, dgNormFunc=dgNormFunc);
   # then the loss type
   lossSuf = lossType_suffix(lossType);
   # IF lgnType/lgnConType are given, then we can add that, too
@@ -5803,10 +5807,10 @@ def getNormParams(params, normType, forceAsymZero=True):
       inhAsym = 0;
 
     return inhAsym;
-  elif normType == 2 or normType == 5 or normType == 6:
+  elif normType == 2 or normType == 5 or normType == 6 or normType == 7:
     gs_mean = params[8];
     gs_std  = params[9];
-    if normType == 2 or normType == 6:
+    if normType == 2 or normType == 6 or normType == 7:
       return gs_mean, gs_std;
     elif normType == 5:
       gs_gain = params[10]; # just one parameter after gs_std
@@ -5826,7 +5830,7 @@ def getNormParams(params, normType, forceAsymZero=True):
     inhAsym = 0;
     return inhAsym;
 
-def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2, trialInf = None, lgnFrontParams = None):
+def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2, trialInf = None, lgnFrontParams = None, dgNormFunc=False):
   ''' simply evaluates the usual normalization weighting but at the frequencies of the stimuli directly
   i.e. in effect, we are eliminating the bank of filters in the norm. pool
   '''
@@ -5878,9 +5882,12 @@ def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2, tr
     inhAsym = 0;
     new_weights = 1 + inhAsym*(np.log(sfs) - np.nanmean(np.log(sfs)));
     new_weights = np.multiply(lgnStage, new_weights);
-  elif normType == 2 or normType == 6:
-    log_sfs = np.log(sfs);
-    new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
+  elif normType == 2 or normType == 6 or normType == 7:
+    if dgNormFunc: # i.e. deriv. Gaussian
+      new_weights = deriv_gauss([gs_mean, gs_std], stimSf = sfs);
+    else: # log Gaussian
+      log_sfs = np.log(sfs);
+      new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
     new_weights = np.multiply(lgnStage, new_weights);
   elif normType == 4:
     log_sfs = np.log(sfs);
@@ -6052,7 +6059,7 @@ def nParamsByType(fitType, excType, lgnType=0):
   try:
     if fitType == 1 or fitType == 0:
       nParams = 9; 
-    elif fitType == 2 or fitType == 4 or fitType == 6:
+    elif fitType == 2 or fitType == 4 or fitType == 6 or fitType == 7:
       nParams = 10;
     elif fitType == 3 or fitType == 5:
       nParams = 11;

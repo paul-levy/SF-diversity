@@ -33,8 +33,7 @@ torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
 force_earlyNoise = None; # if None, allow it as parameter; otherwise, force it to this value (e.g. 0)
 recenter_norm = 0;
 _schedule = False; # use scheduler or not??? True or False
-#_schedule = True; # use scheduler or not??? True or False
-singleGratsOnly = False; # True;
+singleGratsOnly = False; # True
 
 fall2020_adj = 1; # 210121, 210206, 210222, 210226, 210304, 210308/11/12/14, 210321
 spring2021_adj = 1; # further adjustment to make scale a sigmoid rather than abs; 2102622
@@ -435,7 +434,7 @@ class dataWrapper(torchdata.Dataset):
 ### The model
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module(); [12,15] and [0.75, 1.5] are defaults!
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=1, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=False, forceLateNoise=None, _lgnOctDiff=np.log2(9/3)):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=1, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=False, forceLateNoise=None, _lgnOctDiff=np.log2(9/3), dgNormFunc=False):
 
     super().__init__();
 
@@ -454,6 +453,7 @@ class sfNormMod(torch.nn.Module):
     self.normToOne = normToOne;
     self.normFiltersToOne = normFiltersToOne; # normalize the quadrature filters?
     self.fullDataset = fullDataset; # are we fitting the full dataset at once?
+    self.dgNormFunc = dgNormFunc
 
     ### all modparams
     self.modParams = modParams;
@@ -518,7 +518,7 @@ class sfNormMod(torch.nn.Module):
     if self.normType == 1 or self.normType == 0:
       self.inhAsym = _cast_as_tensor(normParams) if self.normType==1 else _cast_as_param(normParams); # then it's not really meant to be optimized, should be just zero
       self.gs_mean = None; self.gs_std = None; # replacing the "else" in commented out 'if normType == 2 or normType == 4' below
-    elif self.normType == 2 or self.normType == 5 or self.normType == 6:
+    elif self.normType == 2 or self.normType == 5 or self.normType == 6 or self.normType == 7:
       if self.normType == 6: # just cast as tensor, since we will NOT optimize for it [yoked to filter prefSf]
         self.gs_mean = _cast_as_tensor(torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)));
       else:
@@ -528,6 +528,10 @@ class sfNormMod(torch.nn.Module):
         self.gs_gain = _cast_as_param(normParams[2]);
       else:
         self.gs_gain = None;
+      # overwrite the above if:
+      if self.normType == 7 and self.excType == 1:
+        self.gs_mean = _cast_as_tensor(self.prefSf);
+        self.gs_std = _cast_as_tensor(self.dordSp);
     elif self.normType == 3:
       # sigma calculation
       self.offset_sigma = _cast_as_param(normParams[0]);  # c50 filter will range between [v_sigOffset, 1]
@@ -651,6 +655,10 @@ class sfNormMod(torch.nn.Module):
         print('M/P fc are %.2f/%.2f [done? %r]' % (self.M_fc, self.P_fc, self.lgnCalcDone))
     if self.normType == 6: # norm pool mn eq. to prefSf
       self.gs_mean = prefSf
+    if self.normType == 7 and self.excType == 1: # only works if norm weights are given as deriv. of Gaussian AND dG exc filter
+      # in this case, same filter shape!
+      self.gs_mean = self.prefSf;
+      self.gs_std = self.dordSp
 
   def clear_saved_calcs(self):
     # reset the images/pre-computed calculations in case the dataset has changed (i.e. cross-validation!)
@@ -690,6 +698,8 @@ class sfNormMod(torch.nn.Module):
         print('\tAnd the norm gain (transformed|untransformed) is: %.2f|%.2f' % (torch.mul(_cast_as_tensor(_sigmoidGainNorm), torch.sigmoid(self.gs_gain)).item(), self.gs_gain.item()));
     elif self.normType == 0:
       print('inhAsym: %.2f' % self.inhAsym.item());
+    elif self.normType == 7 and self.excType == 1:
+      print('norm. tuning matched to exc. filter!')
     print('********END OF MODEL PARAMETERS********\n');
 
     return None;
@@ -701,7 +711,7 @@ class sfNormMod(torch.nn.Module):
           param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.inhAsym.item(), self.mWeight.item()];
         elif self.excType == 2:
           param_list = [self.prefSf.item(), self.sigLow.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.inhAsym.item(), self.sigHigh.item(), self.mWeight.item()];
-    elif self.normType == 2 or self.normType == 6:
+    elif self.normType == 2 or self.normType == 6 or self.normType == 7:
         if self.excType == 1:
           param_list = [self.prefSf.item(), self.dordSp.item(), self.sigma.item(), self.respExp.item(), self.scale.item(), self.noiseEarly.item(), self.noiseLate.item(), self.lgnCtrSf.item(), self.gs_mean.item(), self.gs_std.item(), self.mWeight.item()];
         elif self.excType == 2:
@@ -869,7 +879,7 @@ class sfNormMod(torch.nn.Module):
     # NOTE: here, I use the term complex to denote that it is a complex number NOT
     # - that it reflects a complex cell (i.e. this is still a simple cell response)
     if self.lgnFrontEnd > 0: # contrast already included: TRY 22.10.12
-      # selSi is [nTr x nComp], realImag is [nTr x nComp x nComp x 2]
+      # selSi is [nTr x nComp], realImag is [nTr x nComp x nFrames x 2]
       rComplex = torch.einsum('ij,ikjz->ikz', selSi, realImag) # mult. to get [nTr x nFr x 2] response
     else: # need to include contrast here
       rComplex = torch.einsum('ij,ikjz->ikz', torch.mul(selSi,stimCo), realImag) # mult. to get [nTr x nFr x 2] response
@@ -1056,7 +1066,7 @@ class sfNormMod(torch.nn.Module):
     return respPerTr; # will be [nTrials] -- later, will ensure right output size during operation    
 
   # gs_std_min = 0.05 [default value]
-  def FullNormResp(self, trialInf, trialArtificial=None, debugFilters=False, debugQuadrature=False, debugFilterTemporal=False, gs_std_min=_cast_as_tensor(0.05), forceExpAt2=False, normOverwrite=False, minWeight=_cast_as_tensor(0.005)):
+  def FullNormResp(self, trialInf, trialArtificial=None, debugFilters=False, debugQuadrature=False, debugFilterTemporal=False, gs_std_min=_cast_as_tensor(0.05), forceExpAt2=False, normOverwrite=False, minWeight=_cast_as_tensor(5e-8)): # minWeight was 0.005
     ''' Per discussions with Tony and Eero (Oct. 2022), need to re-incorporate a more realistic normalization signal
         --- 1. Including temporal dynamics
         --- 2. Allow for interactions between stimulus components if they appear within the filter pass-band
@@ -1225,7 +1235,7 @@ class sfNormMod(torch.nn.Module):
           # --- but not clipped
           all_weights = 1 + self.inhAsym * (torch.log(filt_sfs) - torch.log(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)))
 
-        elif self.normType == 2 or self.normType == 5 or self.normType == 6 or self.normType == 4: # i.e. tuned weights
+        elif self.normType == 2 or self.normType == 5 or self.normType == 6 or self.normType == 4 or self.normType == 7: # i.e. tuned weights
           all_weights = [];
           for iB, filt_sfs in zip(range(len(self.normFull['nFilters'])), self.normFull['prefSfs']):
             log_sfs = torch.log(filt_sfs);
@@ -1235,14 +1245,25 @@ class sfNormMod(torch.nn.Module):
             elif self.normType == 4: # two-half Gaussian?
               weight_distr = flexible_Gauss([_cast_as_tensor(0), _cast_as_tensor(1), torch.clamp(torch.exp(self.gs_mean), min=self.normFull['prefSfs'][0][0], max=self.normFull['prefSfs'][0][-1]), self.gs_std_low, self.gs_std_high], torch.exp(log_sfs), minThresh=0);
             else:
-              weight_distr = torch.distributions.normal.Normal(torch.clamp(self.gs_mean, min=torch.log(self.normFull['prefSfs'][0][0]), max=torch.log(self.normFull['prefSfs'][0][-1])), torch.clamp(self.gs_std, min=gs_std_min));
+              if self.dgNormFunc:
+                sfRel = torch.div(filt_sfs, self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.gs_mean));
+                effDord = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.gs_std));
+                s     = torch.pow(filt_sfs, effDord) * torch.exp(-effDord/2 * torch.pow(sfRel, 2));
+                sMax  = torch.pow(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.gs_mean), effDord) * torch.exp(-effDord/2);
+                weight_distr   = torch.div(s, sMax);
+              else: # log-Gaussian
+                weight_distr = torch.distributions.normal.Normal(torch.clamp(self.gs_mean, min=torch.log(self.normFull['prefSfs'][0][0]), max=torch.log(self.normFull['prefSfs'][0][-1])), torch.clamp(self.gs_std, min=gs_std_min));
+
             # clamp the weights to avoid near-zero values
             if self.normType == 4:
               new_weights = torch.clamp(weight_distr, min=minWeight)
             else:
-              new_weights = torch.clamp(torch.exp(weight_distr.log_prob(log_sfs)), min=minWeight);
+              if self.dgNormFunc:
+                new_weights = torch.clamp(weight_distr, min=minWeight)
+              else:
+                new_weights = torch.clamp(torch.exp(weight_distr.log_prob(log_sfs)), min=minWeight);
             if self.normType == 5: 
-              new_weights = torch.pow(new_weights, self.gs_gain); # temporary attempt as of 22.11.08 --> make the gs_gain act as a power on the weights?
+              new_weights = torch.pow(new_weights, self.gs_gain); # make the gs_gain act as a power on the weights?
             avg_weights = new_weights/torch.mean(new_weights); # make avg. weight = 1
             if all_weights == []:
               all_weights = [avg_weights];
@@ -1423,7 +1444,7 @@ def loss_sfNormMod(respModel, respData, lossType=1, debug=0, nbinomCalc=2, varGa
 ######
 ## 23.01.04 and beyond: max_epochs should be 2500, learning_rate 0.0175, batch_size=3k
 ######
-def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=2500, learning_rate=0.0175, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, trackStepsReduced=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False, preLoadDataList=None, k_fold=None, k_fold_shuff=True, k_fold_state=None, testingNames=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
+def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0, lgnConType=1, applyLGNtoNorm=1, max_epochs=2500, learning_rate=0.0175, batch_size=3000, scheduler=True, initFromCurr=0, kMult=0.1, newMethod=0, fixRespExp=None, trackSteps=True, trackStepsReduced=True, fL_name=None, respMeasure=0, vecCorrected=0, whichTrials=None, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, to_save=True, pSfBound=14.9, pSfFloor=0.1, allCommonOri=True, rvcName = 'rvcFitsHPC_220928', rvcMod=1, rvcDir=1, returnOnlyInits=False, normToOne=True, verbose=True, singleGratsOnly=False, useFullNormResp=True, normFiltersToOne=False, preLoadDataList=None, k_fold=None, k_fold_shuff=True, k_fold_state=None, testingNames=False, dgNormFunc=False): # learning rate 0.04 on 22.10.01 (0.15 seems too high - 21.01.26); was 0.10 on 21.03.31;
   '''
   # --- max_epochs usually 7500; learning rate _usually_ 0.04-0.05
   # --- to_save should be set to False if calling setModel in parallel!
@@ -1449,15 +1470,15 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
-      fL_name = 'fitList%s_pyt_nr230107%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_nr230118%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   k_fold = 1 if k_fold is None else k_fold; # i.e. default to one "fold"
   todoCV = 1 if whichTrials is not None or k_fold>1 else 0;
 
   testingInfo = [max_epochs,learning_rate,batch_size]; # wrapping for naming purposes...
-  fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm, testingNames=testingNames, testingInfo=testingInfo);
+  fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm, testingNames=testingNames, testingInfo=testingInfo, dgNormFunc=dgNormFunc);
   if todoCV and initFromCurr == 1: # i.e. we want to pre-initialize, but we're doing C-V...
-    fitListName_nonCV = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=0, excType=excType, lgnForNorm=applyLGNtoNorm, testingNames=testingNames, testingInfo=testingInfo);
+    fitListName_nonCV = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontEnd, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=0, excType=excType, lgnForNorm=applyLGNtoNorm, testingNames=testingNames, testingInfo=testingInfo, dgNormFunc=dgNormFunc);
   else:
     fitListName_nonCV = None;
   print('applying LGN to norm? %d [fitList %s]' % (applyLGNtoNorm, fitListName))
@@ -1466,7 +1487,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if initFromCurr == -1: # then don't initialize bother initializing with simpler model (i.e. initFromCurr = -1)
       print('***Cancelling initFromCurr == -1***')
       initFromCurr = 0;
-  fitListName_simpler = hf.fitList_name(base=fL_name, fitType=fitType_simpler, lossType=lossType, lgnType=lgnFrontEnd_simpler, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm, testingNames=testingNames, testingInfo=testingInfo);
+  fitListName_simpler = hf.fitList_name(base=fL_name, fitType=fitType_simpler, lossType=lossType, lgnType=lgnFrontEnd_simpler, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=applyLGNtoNorm, testingNames=testingNames, testingInfo=testingInfo, dgNormFunc=dgNormFunc);
   # get the name for the stepList name, regardless of whether or not we keep this now
   stepListName = str(fitListName.replace('.npy', '_details.npy'));
 
@@ -1629,7 +1650,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         fitList_simpler = hf.np_smart_load(str(loc_data + fitListName_simpler));
         curr_fit_smpl = fitList_simpler[cellNum-1][respStr];
         curr_params = curr_fit_smpl['params'];
-        testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType_simpler, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd_simpler, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False)
+        testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType_simpler, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd_simpler, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False, dgNormFunc=dgNormFunc)
         # NOW, we should re-package the parameters into the shape they would be for the current fitType
         # create interim initial param list
         cp = np.zeros((hf.nParamsByType(fitType=fitType, excType=excType, lgnType=lgnFrontEnd), ));
@@ -1637,7 +1658,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         cp[0:8] = curr_params[0:8];
         if fitType_simpler == 1: # i.e. the parameters we're initiazing from are flat (untuned) normalization
           if fitType != 1: # then we're initializing a non-flat model fit from a flat model --> will need to guess that weighting parameters
-            # --- note: assumes fitType = 2 or 6
+            # --- note: assumes fitType = 2 or 6 
             # --- furthermore, we start with high normStd [to mimic flat] and normMean near prefSf
             init_gs_mean = _cast_as_tensor(torch.log(testModel.minPrefSf + testModel.maxPrefSf*torch.sigmoid(testModel.prefSf)));
             init_gs_std = 4
@@ -1659,7 +1680,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         if initFromCurr != -1 and fitListName_nonCV is None: # then we want to get initial parameters; otherwise, we already set up initial parameters!
           curr_params = curr_fit['params'];
           # Run the model, evaluate the loss to ensure we have a valid parameter set saved -- otherwise, we'll generate new parameters
-          testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False)
+          testModel = sfNormMod(curr_params, expInd=expInd, excType=excType, normType=fitType, lossType=lossType, lgnConType=lgnConType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, applyLGNtoNorm=applyLGNtoNorm, normToOne=normToOne, useFullNormResp=useFullNormResp, normFiltersToOne=normFiltersToOne, toFit=False, dgNormFunc=dgNormFunc)
           trInfTemp, respTemp = process_data(expInfo, expInd, respMeasure, respOverwrite=respOverwrite, singleGratsOnly=singleGratsOnly) # warning: added respOverwrite here; also add whichTrials???
           predictions = testModel.forward(trInfTemp, respMeasure=respMeasure);
           if testModel.lossType == 3: # DEPRECATED AS OF 22.12.16 - SHOULD NOT REACH HERE
@@ -1685,28 +1706,13 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       except: # if this doesn't work, then we just give up on initializing from previous fit
         initFromCurr = 0;
 
+    ########
     ### set parameters
-    # --- first, estimate prefSf, normConst if possible (TODO); inhAsym, normMean/Std
+    ########
+    # --- first, estimate prefSf, normConst if possible; inhAsym, normMean/Std
     prefSfEst_goal = np.random.uniform(0.75, 1.5) * pref_sf; # validated as good; late 2022
     sig_inv_input = (pSfFloor+prefSfEst_goal)/pSfBound;
     prefSfEst = -np.log((1-sig_inv_input)/sig_inv_input)
-    # 22.11.03 --> with not NormFiltersToOne, -1.5 works as a start except when lgnFrontEnd is on --> then make the normConst stronger to start
-    if expInd == -1: # we want slightly stronger normalization for B+B to avoid ruining the base F1 response...
-      normConst = 0.5 if normToOne==1 and normFiltersToOne else -1.25 + 2*np.sign(lgnFrontEnd); # per Tony, just start with a low value (i.e. closer to linear)
-    else:
-      normConst = 0.5 if normToOne==1 and normFiltersToOne else -1.5 + 2*np.sign(lgnFrontEnd); # per Tony, just start with a low value (i.e. closer to linear)
-    # the below line was used for all fits in late 2022/early 2023 (incl. the good 23.01.04 fits)
-    #normConst = 0.5 if normToOne==1 and normFiltersToOne else -1.5 + 2*np.sign(lgnFrontEnd); # per Tony, just start with a low value (i.e. closer to linear)
-    # the above is when we normalize the FFT first; the below is when we don't? as of 22.10.25
-    #normConst = -0.25 + 0.75*lgnFrontEnd if normToOne==1 else -2; # per Tony, just start with a low value (i.e. closer to linear)
-    if fitType <= 1:
-      inhAsym = 0;
-    if fitType == 2 or fitType == 5 or fitType == 6 or fitType == 4: # yes, we've put 4 last because it's rarely if ever used
-      # see modCompare.ipynb, "Smarter initialization" for details
-      normMean = np.random.uniform(0.75, 1.25) * np.log10(prefSfEst_goal) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
-      normStd = np.random.uniform(0.3, 2) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
-      if fitType == 5:
-        normGain = np.random.uniform(-3, -1) if initFromCurr == 0 else curr_params[10]; # will be a sigmoid-ed value...
     # --- then, set up each parameter
     pref_sf = float(prefSfEst) if initFromCurr==0 else curr_params[0];
     if excType == 1:
@@ -1715,8 +1721,6 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
 
       # new attempt on 23.01.08
       dOrd_preSigmoid = np.random.uniform(1, 2.5) if pref_sf>=2 else np.random.uniform(0.35, 0.75);
-      #print('aiming for dOrd: %.2f' % dOrd_preSigmoid);
-
       dOrdSp = -np.log((_sigmoidDord-dOrd_preSigmoid)/dOrd_preSigmoid) if initFromCurr==0 else curr_params[1];
     elif excType == 2:
       if _sigmoidSigma is None:
@@ -1726,7 +1730,28 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       else: # this is from modCompare::smarter initialization, assuming _sigmoidSigma = 5
         sigLow = np.random.uniform(-2, -0.5);
         sigHigh = np.random.uniform(-2, -0.5);
+    #####
+    # norm: first normConst, then normMean/Std if applicable
+    #####
+    # 22.11.03 --> with not NormFiltersToOne, -1.5 works as a start except when lgnFrontEnd is on --> then make the normConst stronger to start
+    if expInd == -1: # we want slightly stronger normalization for B+B to avoid ruining the base F1 response...
+      normConst = 0.5 if normToOne==1 and normFiltersToOne else -1.25 + 2*np.sign(lgnFrontEnd); # per Tony, just start with a low value (i.e. closer to linear)
+    else:
+      normConst = 0.5 if normToOne==1 and normFiltersToOne else -1.5 + 2*np.sign(lgnFrontEnd); # per Tony, just start with a low value (i.e. closer to linear)
+    if fitType <= 1:
+      inhAsym = 0;
+    if fitType == 2 or fitType == 5 or fitType == 6 or fitType == 4 or fitType == 7: # yes, we've put 4 last because it's rarely if ever used
+      # see modCompare.ipynb, "Smarter initialization" for details
+      if dgNormFunc:
+        normMean = np.random.uniform(0.5, 1.5) * prefSfEst if initFromCurr==0 else curr_params[8];
+        normStd = np.random.uniform(0.7,1.3) * dOrdSp if initFromCurr==0 else curr_params[9];
+      else:
+        normMean = np.random.uniform(0.75, 1.25) * np.log10(prefSfEst_goal) if initFromCurr==0 else curr_params[8]; # start as matched to excFilter
+        normStd = np.random.uniform(0.3, 2) if initFromCurr==0 else curr_params[9]; # start at high value (i.e. broad)
+      if fitType == 5:
+        normGain = np.random.uniform(-3, -1) if initFromCurr == 0 else curr_params[10]; # will be a sigmoid-ed value...
     normConst = normConst if initFromCurr==0 else curr_params[2];
+    # --- then respExp and other scalars/"noise" terms
     if fixRespExp is not None:
       respExp = fixRespExp; # then, we set it to this value and make it a tensor (rather than parameter)
     else:
@@ -1786,7 +1811,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
           respScalar /= 250; # completely heuristic :(
         elif not normFiltersToOne and lgnFrontEnd==0:
           respScalar /= 750; # completely heuristic :(
-        if (fitType==2 or fitType==6) and lgnFrontEnd==0: # i.e. tuned gain
+        if (fitType==2 or fitType==6 or fitType==7) and lgnFrontEnd==0: # i.e. tuned gain
           respScalar *= 1.5; # need slighly stronger respScalar in these cases?
         # overwrite respScalar if initFromCurr!=0
         if initFromCurr!=0:
@@ -1797,8 +1822,6 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       normGain = np.random.uniform(0.5, 1) if (initFromCurr == 0 or fitType!=5) else curr_params[10]; # will be a sigmoid-ed value...
       if fitType == 4:
         normStd_low, normStd_high = -1.5,-2; # start with the high freq. side being slightly narrower than the low freq. side
-    # varGain is DEPRECATED AS OF 22.12.26
-    #varGain = np.random.uniform(0.01, 1) if initFromCurr==0 else curr_params[7];
     lgnCtrSf = pref_sf # initialize to the same value as preferred SF (i.e. LGN centered around V1 prefSF)
     if lgnFrontEnd > 0:
       # Now, the LGN weighting 
@@ -1813,7 +1836,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
         param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, inhAsym, mWeight);
       elif excType == 2:
         param_list = (pref_sf, sigLow, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, inhAsym, sigHigh, mWeight);
-    elif fitType == 2 or fitType == 6:
+    elif fitType == 2 or fitType == 6 or fitType == 7:
       if excType == 1:
         param_list = (pref_sf, dOrdSp, normConst, respExp, respScalar, noiseEarly, noiseLate, lgnCtrSf, normMean, normStd, mWeight);
       elif excType == 2:
@@ -1835,7 +1858,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
       param_list = param_list[0:-1];   
 
     ### define model, grab training parameters
-    model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound, pSfBound_low=pSfFloor, normToOne=normToOne, useFullNormResp=useFullNormResp, fullDataset=batch_size>2000, normFiltersToOne=normFiltersToOne)
+    model = sfNormMod(param_list, expInd, excType=excType, normType=fitType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=applyLGNtoNorm, pSfBound=pSfBound, pSfBound_low=pSfFloor, normToOne=normToOne, useFullNormResp=useFullNormResp, fullDataset=batch_size>2000, normFiltersToOne=normFiltersToOne, dgNormFunc=dgNormFunc)
 
     training_parameters = [p for p in model.parameters() if p.requires_grad]
     if verbose:
@@ -1893,11 +1916,8 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
             if respMeasure == 1: # figure out which stimulus components were blank for the given trials
               if expInd == -1:
                 maskInd, baseInd = hf_sfBB.get_mask_base_inds();
-                # [commented out] TEMPORARY!!! make all mask same value (i.e. do not optimize for these values)
-                #target['resp'][:, maskInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
                 target['resp'][target['maskCon']==0, maskInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
                 target['resp'][target['baseCon']==0, baseInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
-                #predictions[:, maskInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
                 predictions[target['maskCon']==0, maskInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
                 predictions[target['baseCon']==0, baseInd] = 1e-6 # force F1 ~ 0 if con of that stim is 0
               else:
@@ -2187,7 +2207,12 @@ if __name__ == '__main__':
       kfold = None; # i.e. not doing cross-val
 
     if len(sys.argv) > 15:
-      _LGNforNorm = int(sys.argv[15]);
+      dgNormFunc = int(sys.argv[15]);
+    else:
+      dgNormFunc = 0; # we default to NOT using deriv. Gauss for gain control tuning
+      
+    if len(sys.argv) > 16:
+      _LGNforNorm = int(sys.argv[16]);
     else:
       _LGNforNorm = 1; # default to applying the LGN filters to the front-end
       
@@ -2199,15 +2224,17 @@ if __name__ == '__main__':
       max_epochs = int(sys.argv[16]);
       print('\tspecified epochs: %d' % max_epochs);
     else:
-      max_epochs = 2500 if kfold is None else 1250; # fewer epochs when cross-val
-      #max_epochs = 250; # use for temp/quick/debugging fits
-
+      #max_epochs = 2500 if kfold is None else 1250; # fewer epochs when cross-val
+      max_epochs = 250; # use for temp/quick/debugging fits
+      #max_epochs = 500; # use for temp/quick/debugging fits
+      
     if len(sys.argv) > 17:
       learning_rate = float(sys.argv[17]);
       print('\tspecified learning rate: %.2e' % learning_rate);
     else:
-      learning_rate = 0.0175; # the standard
+      #learning_rate = 0.0175; # the standard
       #learning_rate = 0.0375; # use for temp/quick/debugging fits
+      learning_rate = 0.0575; # use for temp/quick/debugging fits
 
     if len(sys.argv) > 18:
       batch_size = int(sys.argv[18]);
@@ -2221,7 +2248,7 @@ if __name__ == '__main__':
     if cellNum >= 0:
       while not dcOk and nTry>0:
         try:
-          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size); # first do DC
+          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size, dgNormFunc=dgNormFunc); # first do DC
 
           #import cProfile
           #cProfile.runctx('setModel(cellNum, expDir, excType, lossType, fitType, 1, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule)', {'setModel': setModel}, locals())
@@ -2238,7 +2265,7 @@ if __name__ == '__main__':
       nTry=1; #30; # reset nTry...
       while not f1Ok and nTry>0:
         try:
-          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size); # then F1
+          setModel(cellNum, expDir, excType, lossType, fitType, lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, singleGratsOnly=singleGratsOnly, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size, dgNormFunc=dgNormFunc); # then F1
           f1Ok = 1;
           print('passed with nTry = %d' % nTry);
         except Exception as e:
@@ -2263,16 +2290,16 @@ if __name__ == '__main__':
       import multiprocessing as mp
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr230107%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_nr230118%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else '');
       
       # do f1 here?
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size, testingNames=testNames);
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size, testingNames=testNames, dgNormFunc=dgNormFunc);
       with mp.Pool(processes = nCpu) as pool:
         smFits_f1 = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
         pool.close();
 
       # First, DC? (should only do DC or F1?)
-      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size, testingNames=testNames);
+      sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size, testingNames=testNames, dgNormFunc=dgNormFunc);
       #sm_perCell(1); # use this to debug...
       with mp.Pool(processes = nCpu) as pool:
         smFits_dc = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
@@ -2281,7 +2308,7 @@ if __name__ == '__main__':
       ### do the saving HERE!
       todoCV = 0 if kfold is None else 1;
       testingInfo = [max_epochs,learning_rate,batch_size]; # wrapping for naming purposes...
-      fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=_LGNforNorm, testingNames=testNames, testingInfo=testingInfo)
+      fitListName = hf.fitList_name(base=fL_name, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=_LGNforNorm, testingNames=testNames, testingInfo=testingInfo, dgNormFunc=dgNormFunc)
       if os.path.isfile(loc_data + fitListName):
         print('reloading fit list...');
         fitListNPY = hf.np_smart_load(loc_data + fitListName);
