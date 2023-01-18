@@ -111,6 +111,12 @@ if len(sys.argv) > 17:
     whichKfold = None
 else:
   whichKfold = None;
+
+if len(sys.argv) > 18: # norm weights determined with deriv. Gauss or log Gauss?
+  dgNormFuncIn=int(sys.argv[18]);
+else:
+  dgNormFuncIn=0
+
 isCV = False if whichKfold is None else True;
 
 ## used for interpolation plot
@@ -142,7 +148,8 @@ expName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
 _sigmoidScale = 10
 _sigmoidDord = 5;
 
-fitBase = 'fitList%s_pyt_nr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr230118_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr230118_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
 vecF1 = 0;
@@ -156,16 +163,19 @@ else:
 rvcBase = 'rvcFits%s_220928' % loc_str; # direc flag & '.npy' are added
 
 ### Model types
-# 0th: Unpack the norm types, con types, lgnTypes
+# 0th: Unpack the norm types, con types, lgnTypes, and (as of 23.01.18) whether we use deriv. Gauss norm weighting or log Gauss (default)
 normA, normB = int(np.floor(normTypesIn/10)), np.mod(normTypesIn, 10)
 conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
 lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
-fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV, lgnForNorm=_applyLGNtoNorm)
-fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV, lgnForNorm=_applyLGNtoNorm)
+dgnfA, dgnfB = int(np.floor(dgNormFuncIn/10)), np.mod(dgNormFuncIn, 10)
+fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV, lgnForNorm=_applyLGNtoNorm, dgNormFunc=dgnfA)
+fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV, lgnForNorm=_applyLGNtoNorm, dgNormFunc=dgnfB)
 # what's the shorthand we use to refer to these models...
 # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
-aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn' if normA==5 else 'Yk');
-bWtStr = '%s%s' % ('wt' if normB>1 else 'asym', '' if normB<=2 else 'Gn' if normB==5 else 'Yk');
+aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn' if normA==5 else 'Yk' if normA==6 else 'Mt');
+bWtStr = '%s%s' % ('wt' if normB>1 else 'asym', '' if normB<=2 else 'Gn' if normB==5 else 'Yk' if normB==6 else 'Mt');
+aWtStr = '%s%s' % ('DG' if dgnfA==1 else '', aWtStr);
+bWtStr = '%s%s' % ('DG' if dgnfB==1 else '', bWtStr);
 lgnStrA = hf.lgnType_suffix(lgnA, conA);
 lgnStrB = hf.lgnType_suffix(lgnB, conB);
 modA_str = '%s%s' % ('fl' if normA==1 else aWtStr, lgnStrA if lgnA>0 else 'V1');
@@ -256,6 +266,7 @@ modFits = [modFit_A, modFit_B];
 normTypes = [normA, normB]; # weighted, then flat (typically, but NOT always)
 lgnTypes = [lgnA, lgnB];
 conTypes = [conA, conB];
+dgnfTypes = [dgnfA, dgnfB];
 
 # ### Organize data & model responses
 # ---- first, if m
@@ -309,7 +320,7 @@ else:
 
 if pytorch_mod == 1:
   ### now, set-up the two models
-  model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False) for prms,normType,lgnType,lgnCon in zip(modFits, normTypes, lgnTypes, conTypes)]
+  model_A, model_B = [mrpt.sfNormMod(prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=newMethod, lgnFrontEnd=lgnType, lgnConType=lgnCon, applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False, dgNormFunc=dgnfType) for prms,normType,lgnType,lgnCon,dgnfType in zip(modFits, normTypes, lgnTypes, conTypes, dgnfTypes)]
   # these values will be the same for all models
   minPrefSf, maxPrefSf = model_A.minPrefSf.detach().numpy(), model_A.maxPrefSf.detach().numpy()
   # -- package the model objects directly
@@ -392,17 +403,17 @@ elif pytorch_mod == 0:
 
 # Now, continue with organizing things
 if normA > 1:
-  gs_mean_A = model_A.gs_mean.detach().numpy();
-  gs_std_A = model_A.gs_std.detach().numpy();
-  #gs_mean_A = modFit_A[8];
-  #gs_std_A = modFit_A[9];
+  gs_mean_A = model_A.transform_sigmoid_param('gs_mean')
+  gs_std_A = model_A.transform_sigmoid_param('gs_std')
+  #gs_mean_A = model_A.gs_mean.detach().numpy();
+  #gs_std_A = model_A.gs_std.detach().numpy();
 else:
   gs_mean_A, gs_std_A = None, None
 if normB > 1 and normB != 4:
-  gs_mean_B = model_B.gs_mean.detach().numpy();
-  gs_std_B = model_B.gs_std.detach().numpy();
-  #gs_mean_B = modFit_B[8]; 
-  #gs_std_B = modFit_B[9];
+  gs_mean_B = model_B.transform_sigmoid_param('gs_mean')
+  gs_std_B = model_B.transform_sigmoid_param('gs_std')
+  #gs_mean_B = model_B.gs_mean.detach().numpy();
+  #gs_std_B = model_B.gs_std.detach().numpy();
 else:
   gs_mean_B, gs_std_B = None, None
 
@@ -961,35 +972,17 @@ sfNorm_flat = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
 sfNorm_flat = sfNorm_flat/np.amax(np.abs(sfNorm_flat));
 
 ### Compute weights for suppressive signals
-# - first, the old way (including the subunits, which is now deprecated...)
-nTrials =  inhSfTuning.shape[0];
-if gs_mean_A is not None:
-  inhWeight_A = hf.genNormWeights(expData, None, gs_mean_A, gs_std_A, nTrials, expInd);
-  inhWeight_A = inhWeight_A[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
-  sfNormTune_A = np.sum(-.5*(inhWeight_A*np.square(inhSfTuning)), 1);
-  sfNorm_A = sfNormTune_A/np.amax(np.abs(sfNormTune_A));
-else:
-  sfNorm_A = sfNorm_flat
-if gs_mean_B is not None:
-  inhWeight_B = hf.genNormWeights(expData, None, gs_mean_B, gs_std_B, nTrials, expInd);
-  inhWeight_B = inhWeight_B[:, :, 0]; # genNormWeights gives us weights as nTr x nFilters x nFrames - we have only one "frame" here, and all are the same
-  sfNormTune_B = np.sum(-.5*(inhWeight_B*np.square(inhSfTuning)), 1);
-  sfNorm_B = sfNormTune_B/np.amax(np.abs(sfNormTune_B));
-else:
-  sfNorm_B = sfNorm_flat
-sfNorms = [sfNorm_A, sfNorm_B];
-# then, the actual way!
 unwt_weights = np.sqrt(hf.genNormWeightsSimple(omega, None, None));
 sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
 # - tuned
 if gs_mean_A is not None:
-  wt_weights_A = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean_A, gs_std_A));
+  wt_weights_A = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean_A, gs_std_A, normType=normA, dgNormFunc=dgnfA));
   sfNormTuneSim_A = wt_weights_A/np.amax(np.abs(wt_weights_A));
   sfNormSim_A = sfNormTuneSim_A;
 else:
   sfNormSim_A = sfNormSim;
 if gs_mean_B is not None:
-  wt_weights_B = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean_B, gs_std_B));
+  wt_weights_B = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean_B, gs_std_B, normType=normB, dgNormFunc=dgnfB));
   sfNormTuneSim_B = wt_weights_B/np.amax(np.abs(wt_weights_B));
   sfNormSim_B = sfNormTuneSim_B;
 else:

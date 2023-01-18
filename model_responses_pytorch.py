@@ -660,6 +660,22 @@ class sfNormMod(torch.nn.Module):
       self.gs_mean = self.prefSf;
       self.gs_std = self.dordSp
 
+  def transform_sigmoid_param(self, whichPrm, _sigmoidDord=_sigmoidDord, _sigmoidSigma=_sigmoidSigma, _sigmoidScale=_sigmoidScale):
+    # used for outputs (e.g. prints, plots) where we don't want the sigmoided value...
+    if whichPrm == 'prefSf':
+      curr_val = self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)
+    elif whichPrm == 'gs_mean':
+      if self.dgNormFunc:
+        curr_val = self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.gs_mean)
+      else:
+        curr_val = self.gs_mean
+    elif whichPrm == 'gs_std':
+      if self.dgNormFunc: 
+        curr_val = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.gs_std))
+      else:
+        curr_val = self.gs_std;
+    return curr_val.detach().numpy();
+
   def clear_saved_calcs(self):
     # reset the images/pre-computed calculations in case the dataset has changed (i.e. cross-validation!)
     self.stimRealImag = None; # defaults to None so that we know to compute it the first time around

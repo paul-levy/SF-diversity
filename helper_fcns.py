@@ -5884,7 +5884,12 @@ def genNormWeightsSimple(cellStruct, gs_mean=None, gs_std=None, normType = 2, tr
     new_weights = np.multiply(lgnStage, new_weights);
   elif normType == 2 or normType == 6 or normType == 7:
     if dgNormFunc: # i.e. deriv. Gaussian
-      new_weights = deriv_gauss([gs_mean, gs_std], stimSf = sfs);
+      new_weights = deriv_gauss([gs_mean, gs_std], stimSf = sfs)[0];
+      # 23.01.18 note: consider squaring the weights iff normType==7
+      # --- why? well, exc filter should match norm weights, and the model usually picks near (or is forced at) respExp=2
+      # --- if we did this properly, should probably adjust mrpt.FullNormResp to apply the respExp in weights when matched
+      #if normType == 7: # why? because the norm 
+      #   new_weights = np.square(new_weights);
     else: # log Gaussian
       log_sfs = np.log(sfs);
       new_weights = norm.pdf(log_sfs, gs_mean, gs_std);
