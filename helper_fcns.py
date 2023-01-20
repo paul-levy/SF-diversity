@@ -3845,16 +3845,22 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
                      ('bySf', super_curr['supr_sf']),
                      ('sfErrsInd_var', super_curr['sfErrsInd_VAR']),
                      ('sfErrsInd_var_prince', super_curr['sfErrsInd_VAR_prince']),
+                     ('sfErrsInd_wtdVar_prince', super_curr['sfErrsInd_wtdVar_prince']),
+                     ('sfErrsInd_wtdVar_prince_boot', super_curr['sfErrsInd_wtdVar_prince_boot']),
                      ('errsRat_var', super_curr['sfRat_VAR']),
                      ('corr_derivWithErr', super_curr['corr_derivWithErr']),
                      ('corr_derivWithErrsInd', super_curr['corr_derivWithErrsInd']),
-                     ('corr_derivWithErrsInd', super_curr['corr_derivWithErrsInd']),
                      ('rel_c50', super_curr['rel_c50']),
+                     ('rel_c50_emp', super_curr['rel_c50_emp']),
+                     ('rel_c50_boot', super_curr['rel_c50_boot']),
+                     ('rel_c50_emp_boot', super_curr['rel_c50_emp_boot']),
                      ('disp0_c50', super_curr['c50']),
                      ('disp0_c50_emp', super_curr['c50_emp']),
                      ('disp0_c50_emp_eval', super_curr['c50_emp_eval']),
                      ('var_expl', super_curr['var_expl']), # expl. var of the N-R fit
+                     ('var_expl_boot', super_curr['var_expl_boot']), # expl. var of the N-R fit
                      ('supr_area', super_curr['supr_area']),
+                     ('supr_area_boot', super_curr['supr_area_boot']),
                      ('supr_disp', super_curr['supr_disp']),
                      ('supr_index', super_curr['supr_index'])]); # supr_index is bad - should be deprecated?
      except:
@@ -3865,6 +3871,7 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
                      ('corr_derivWithErr', None),
                      ('corr_derivWithErrsInd', None),
                      ('rel_c50', None),
+                     ('rel_c50_emp', None),
                      ('disp0_c50', None),
                      ('var_expl', None),
                      ('supr_area', None),
@@ -4637,9 +4644,9 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     dogFits = np_smart_load(data_loc + dog_nm);
     rvcFits = np_smart_load(data_loc + rv_nm);
     try:
-      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_230111.npy');
+      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_230119.npy');
+      #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_230111.npy');
       #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_220930.npy');
-      #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_220926.npy');
     except:
       superAnalysis = None;
 
