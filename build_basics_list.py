@@ -61,7 +61,7 @@ def build_basic_lists(datalist_names, expExt, loc='./', subfolder='recordings/',
 
   expInd = -1; # used for counting which subfolder to access, if needed
   curr_exp_num = -1;
-  
+
   basics = [];
   for dn in datalist_names:
     # a quick processing, since on local machine, we have changed mN[r/l]%02d, but it's just *%d on this machine

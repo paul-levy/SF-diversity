@@ -505,7 +505,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   if not reducedSave and not resample:
     try:
       basic_names, basic_order = dataList['basicProgName'][which_cell-1], dataList['basicProgOrder']
-      basics = hf.get_basic_tunings(basic_names, basic_order);
+      basics = hf.get_basic_tunings(basic_names, basic_order, reducedSave=True);
     except:
       try:
         # we've already put the basics in the data structure... (i.e. post-sorting 2021 data)
@@ -1292,9 +1292,9 @@ if __name__ == '__main__':
       from datetime import datetime
       suffix = datetime.today().strftime('%y%m%d')
       if use_mod_resp==0:
-        super_name = 'zzsuperposition_analysis_%s.npy' % suffix;
+        super_name = 'superposition_analysis_%s.npy' % suffix;
       else:
-        super_name = 'zzsuperposition_analysis_%s_mod%s%s.npy' % (suffix, hf.fitType_suffix(normType, dgNormFunc=dgNormFunc), hf.lgnType_suffix(lgnOn, lgnConType=1));
+        super_name = 'superposition_analysis_%s_mod%s%s.npy' % (suffix, hf.fitType_suffix(normType, dgNormFunc=dgNormFunc), hf.lgnType_suffix(lgnOn, lgnConType=1));
 
       # pre-load all large files that we would otherwise load in each function call, declare them as globals so not copied each time
       global dataList, descrFits, fitList
@@ -1382,7 +1382,7 @@ if __name__ == '__main__':
       np.save(dataPath + super_name, suppr_all);
 
     else: # i.e. not multi
-      resample = True;
+      resample = False;
       make_plots = False if resample else True;
-      #plot_save_superposition(cell_num, expDir, to_save=1, plt_supr_ind=plt_supr_ind, use_mod_resp=use_mod_resp, supr_ind_prince=supr_ind_prince, lgnConType=1, lgnFrontEnd=lgnOn, fitType=normType, spec_disp=spec_disp, spec_con=spec_con, fixRespExp=fixRespExp, excType=excType, dataAsRef=dataAsRef, dgNormFunc=dgNormFunc, verbose=True, resample=resample, make_plots=make_plots, reducedSave=reducedSave);
+      plot_save_superposition(cell_num, expDir, to_save=1, plt_supr_ind=plt_supr_ind, use_mod_resp=use_mod_resp, supr_ind_prince=supr_ind_prince, lgnConType=1, lgnFrontEnd=lgnOn, fitType=normType, spec_disp=spec_disp, spec_con=spec_con, fixRespExp=fixRespExp, excType=excType, dataAsRef=dataAsRef, dgNormFunc=dgNormFunc, verbose=True, resample=resample, make_plots=make_plots, reducedSave=reducedSave);
 

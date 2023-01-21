@@ -351,7 +351,9 @@ def get_datalist(expDir, force_full=0, new_v1=False):
     return 'dataList_200507.npy' if force_full==0 else 'dataList.npy'; # limited set of data
     #return 'dataList.npy';
   elif expDir == 'altExp/':
-    return 'dataList_200507.npy' if force_full==0 else 'dataList.npy'; # limited set of data
+    # replaced dataList with *_230120, which has basics!
+    return 'dataList_200507.npy' if force_full==0 else 'dataList_230120.npy'; # limited set of data
+    #return 'dataList_200507.npy' if force_full==0 else 'dataList.npy'; # limited set of data
     #return 'dataList.npy';
   elif expDir == 'LGN/':
     #return 'dataList_210524.npy'
@@ -3839,17 +3841,18 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
    ###########
    suppr = None;
    if superAnalysis is not None:
+     #pdb.set_trace();
      try:
        super_curr = superAnalysis[cell_ind];
-       suppr = dict([('byDisp', super_curr['supr_disp']),
-                     ('bySf', super_curr['supr_sf']),
-                     ('sfErrsInd_var', super_curr['sfErrsInd_VAR']),
+       suppr = dict([('sfErrsInd_var', super_curr['sfErrsInd_VAR']),
                      ('sfErrsInd_var_prince', super_curr['sfErrsInd_VAR_prince']),
                      ('sfErrsInd_wtdVar_prince', super_curr['sfErrsInd_wtdVar_prince']),
                      ('sfErrsInd_wtdVar_prince_boot', super_curr['sfErrsInd_wtdVar_prince_boot']),
                      ('errsRat_var', super_curr['sfRat_VAR']),
-                     ('corr_derivWithErr', super_curr['corr_derivWithErr']),
-                     ('corr_derivWithErrsInd', super_curr['corr_derivWithErrsInd']),
+                     #('byDisp', super_curr['supr_disp']),
+                     #('bySf', super_curr['supr_sf']),
+                     #('corr_derivWithErr', super_curr['corr_derivWithErr']),
+                     #('corr_derivWithErrsInd', super_curr['corr_derivWithErrsInd']),
                      ('rel_c50', super_curr['rel_c50']),
                      ('rel_c50_emp', super_curr['rel_c50_emp']),
                      ('rel_c50_boot', super_curr['rel_c50_boot']),
@@ -3860,9 +3863,9 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
                      ('var_expl', super_curr['var_expl']), # expl. var of the N-R fit
                      ('var_expl_boot', super_curr['var_expl_boot']), # expl. var of the N-R fit
                      ('supr_area', super_curr['supr_area']),
-                     ('supr_area_boot', super_curr['supr_area_boot']),
-                     ('supr_disp', super_curr['supr_disp']),
-                     ('supr_index', super_curr['supr_index'])]); # supr_index is bad - should be deprecated?
+                     ('supr_area_boot', super_curr['supr_area_boot'])]);
+                     #('supr_disp', super_curr['supr_disp']),
+                     #('supr_index', super_curr['supr_index'])]); # supr_index is bad - should be deprecated?
      except:
        suppr = dict([('byDisp', None),
                      ('bySf', None),
@@ -4571,7 +4574,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
 
   for expDir, dL_nm, dF_nm, dog_nm, rv_nm, rvcMod, mod_tpl_out in zip(expDirs, expNames, descrNames, dogNames, rvcNames, rvcMods, mod_tpl):
 
-    #if expDir != 'V1_BB/':
+    #if expDir != 'V1/':
     #   continue;
 
     # get the current directory, load data list
@@ -4644,7 +4647,8 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     dogFits = np_smart_load(data_loc + dog_nm);
     rvcFits = np_smart_load(data_loc + rv_nm);
     try:
-      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_230119.npy');
+      superAnalysis = np_smart_load(data_loc + 'superposition_analysis_230120.npy');
+      #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_230119.npy');
       #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_230111.npy');
       #superAnalysis = np_smart_load(data_loc + 'superposition_analysis_220930.npy');
     except:
@@ -4663,6 +4667,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
       perCell_summary = partial(jl_perCell, dataList=dataList, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType, reducedSave=reducedSave, briefVersion=briefVersion, modSpecs=modSpecs, flexModels=flexModels, flBase_name=flBase_name)
 
       #oh = perCell_summary(4);
+      #pdb.set_trace();
       #if isBB:
       #  oh = perCell_summary(30);
       #  pdb.set_trace();

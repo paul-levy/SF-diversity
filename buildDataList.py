@@ -41,13 +41,18 @@ def update_data_list(loc_data, dl_name, recArea):
   ###### IF MANUAL EDIT OF DATALIST (just to add basic list) RUN THIS NEXT LINE
   ###### -- and then simply patch the basic_list, basic_order to the loaded datalist, and save (np.save(path, dataList))
   #########
-  basic_list, _, _, basic_order = bl.build_basic_lists(unitName, '', loc='V1_orig/', subfolder='recordings/', folderByExpt=False, reduceNums=True);
+  #basic_list, _, _, basic_order = bl.build_basic_lists(unitName, '', loc='V1_orig/', subfolder='recordings/', folderByExpt=False, reduceNums=True);
+  loc_data = loc_data.replace('structures/', '');
+  basic_list, _, _, basic_order = bl.build_basic_lists(unitName, '', loc=loc_data, subfolder='recordings/', folderByExpt=False, reduceNums=True);
 
   #########
   ### finally, let's save it all
   #########
   if os.path.exists(dl_save):
-      dataList = np.load(dl_save).item();
+      try: # backwards compatability
+        dataList = np.load(dl_save).item();
+      except:
+        dataList = hf.np_smart_load(dl_save);
       dataList['unitName'] = unitName;
       dataList['unitArea'] = unitArea;
       dataList['expType'] = expType;
