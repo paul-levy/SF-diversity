@@ -7,6 +7,7 @@ from scipy.stats import ks_2samp, kstest, linregress
 import itertools, pdb
 
 area = sys.argv[1];
+area = area.replace('/', ''); # remove the / if put by accident...
 if len(sys.argv)>2:
   jointType = int(sys.argv[2]);
 else:

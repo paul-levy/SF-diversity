@@ -29,8 +29,8 @@ os.environ['OMP_NUM_THREADS'] = '1'
 ### Some global things...
 #########
 torch.set_num_threads(1) # to reduce CPU usage - 20.01.26
-#force_earlyNoise = 0; # if None, allow it as parameter; otherwise, force it to this value (e.g. 0)
-force_earlyNoise = None; # if None, allow it as parameter; otherwise, force it to this value (e.g. 0)
+force_earlyNoise = 0; # if None, allow it as parameter; otherwise, force it to this value (e.g. 0)
+#force_earlyNoise = None; # if None, allow it as parameter; otherwise, force it to this value (e.g. 0)
 recenter_norm = 0;
 _schedule = False; # use scheduler or not??? True or False
 singleGratsOnly = False; # True
@@ -2236,24 +2236,24 @@ if __name__ == '__main__':
     # NOW: Note that the below values for optimization should be kept up-to-date with the defaults
     # ------ furthermore, note that these values are only passed in for parallel call (i.e. cellNum<0)
     #######
-    if len(sys.argv) > 16:
-      max_epochs = int(sys.argv[16]);
+    if len(sys.argv) > 17:
+      max_epochs = int(sys.argv[17]);
       print('\tspecified epochs: %d' % max_epochs);
     else:
       #max_epochs = 2500 if kfold is None else 1250; # fewer epochs when cross-val
       max_epochs = 250; # use for temp/quick/debugging fits
       #max_epochs = 500; # use for temp/quick/debugging fits
       
-    if len(sys.argv) > 17:
-      learning_rate = float(sys.argv[17]);
+    if len(sys.argv) > 18:
+      learning_rate = float(sys.argv[18]);
       print('\tspecified learning rate: %.2e' % learning_rate);
     else:
       #learning_rate = 0.0175; # the standard
       #learning_rate = 0.0375; # use for temp/quick/debugging fits
       learning_rate = 0.0575; # use for temp/quick/debugging fits
 
-    if len(sys.argv) > 18:
-      batch_size = int(sys.argv[18]);
+    if len(sys.argv) > 19:
+      batch_size = int(sys.argv[19]);
       print('\tspecified batch_size: %d' % batch_size);
     else:
       batch_size = 3000;
@@ -2316,7 +2316,6 @@ if __name__ == '__main__':
 
       # First, DC? (should only do DC or F1?)
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=0, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size, testingNames=testNames, dgNormFunc=dgNormFunc);
-      #sm_perCell(1); # use this to debug...
       with mp.Pool(processes = nCpu) as pool:
         smFits_dc = pool.map(sm_perCell, cellNums); # use starmap if you to pass in multiple args
         pool.close();
@@ -2332,9 +2331,9 @@ if __name__ == '__main__':
         fitListNPY = dict();
       # and load fit details
       fitDetailsName = fitListName.replace('.npy', '_details.npy');
-      if os.path.isfile(loc_data + fitListName):
+      if os.path.isfile(loc_data + fitDetailsName):
         print('reloading fit list...');
-        fitDetailsNPY = hf.np_smart_load(loc_data + fitListName);
+        fitDetailsNPY = hf.np_smart_load(loc_data + fitDetailsName);
       else:
         fitDetailsNPY = dict();
 
@@ -2359,9 +2358,9 @@ if __name__ == '__main__':
 
       from get_mod_varExpl import save_mod_varExpl
       if kfold is None:
-        save_mod_varExpl(fL_name, expDir, fitType, lgnFrontOn, kfold, excType=excType, lossType=lossType, lgnConType=lgnConType);
+        save_mod_varExpl(fL_name, expDir, fitType, lgnFrontOn, kfold, excType=excType, lossType=lossType, lgnConType=lgnConType, dgNormFunc=dgNormFunc);
       else:
-        [save_mod_varExpl(fL_name, expDir, fitType, lgnFrontOn, kfold_curr, excType=excType, lossType=lossType, lgnConType=lgnConType) for kfold_curr in range(kfold)];
+        [save_mod_varExpl(fL_name, expDir, fitType, lgnFrontOn, kfold_curr, excType=excType, lossType=lossType, lgnConType=lgnConType, dgNormFunc=dgNormFunc) for kfold_curr in range(kfold)];
 
     enddd = time.process_time();
     print('Took %d minutes -- dc %d || f1 %d' % ((enddd-start)/60, dcOk, f1Ok));

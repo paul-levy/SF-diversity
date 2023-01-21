@@ -27,7 +27,7 @@ f1_expCutoff = 2; # if 1, then all but V1_orig/ are allowed to have F1; if 2, th
 
 force_full = 1;
 
-def get_mod_varExpl(cellNum, fitBase, expDir, normType, lgnFrontEnd, rvcAdj, whichKfold=None, lgnConType=1, excType=1, lossType=1, rvcMod=1, hpcFit=1, rvcDir=1, vecF1=0, _applyLGNtoNorm=True, _newMethod=True, vecCorrected_bb=1):
+def get_mod_varExpl(cellNum, fitBase, expDir, normType, lgnFrontEnd, rvcAdj, whichKfold=None, lgnConType=1, excType=1, lossType=1, rvcMod=1, hpcFit=1, rvcDir=1, vecF1=0, _applyLGNtoNorm=True, _newMethod=True, vecCorrected_bb=1, dgNormFunc=0):
   ''' Compute the explained variance for the computational model of SF tuning (i.e. model_responses_pytorch)
       --- Computes varExpl on the basis of averaged responses per condition
   '''
@@ -53,7 +53,7 @@ def get_mod_varExpl(cellNum, fitBase, expDir, normType, lgnFrontEnd, rvcAdj, whi
   else:
     rvcBase = 'rvcFits%s_220928' % loc_str; # direc flag & '.npy' are added
 
-  fitName = hf.fitList_name(fitBase, normType, lossType, lgnFrontEnd, lgnConType, vecCorrected, excType=excType, CV=isCV, lgnForNorm=_applyLGNtoNorm)
+  fitName = hf.fitList_name(fitBase, normType, lossType, lgnFrontEnd, lgnConType, vecCorrected, excType=excType, CV=isCV, lgnForNorm=_applyLGNtoNorm, dgNormFunc=dgNormFunc)
 
   try: # keeping for backwards compatability
     dataList = np.load(str(data_loc + expName), encoding='latin1').item();
@@ -160,7 +160,7 @@ def get_mod_varExpl(cellNum, fitBase, expDir, normType, lgnFrontEnd, rvcAdj, whi
     respMean = respOrg;
 
   ### now, set-up the model
-  model = mrpt_sfNormMod(modFit, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=_newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
+  model = mrpt_sfNormMod(modFit, expInd=expInd, excType=excType, normType=normType, lossType=lossType, newMethod=_newMethod, lgnFrontEnd=lgnFrontEnd, lgnConType=lgnConType, applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False, dgNormFunc=dgNormFunc)
 
   if isBB:
     # getting both responses just to make the below easier...
@@ -210,7 +210,7 @@ def get_mod_varExpl(cellNum, fitBase, expDir, normType, lgnFrontEnd, rvcAdj, whi
   #print('%s%d: %.1f%% [%s]' % (expDir, cellNum, varExpl, respStr))
   return varExpl, respStr;
 
-def save_mod_varExpl(fitBase, expDir, fitType, lgnFrontOn, kfold=-1, excType=1, lossType=1, _LGNforNorm=1, vecCorrected=0, nProc=20, lgnConType=1):
+def save_mod_varExpl(fitBase, expDir, fitType, lgnFrontOn, kfold=-1, excType=1, lossType=1, _LGNforNorm=1, vecCorrected=0, nProc=20, lgnConType=1, dgNormFunc=0):
   ''' Wrapper for get_mod_varExpl that calls it/saves for all cells in a given experiment X model fit combination
   '''
   if kfold is None:
@@ -233,12 +233,12 @@ def save_mod_varExpl(fitBase, expDir, fitType, lgnFrontOn, kfold=-1, excType=1, 
   len_to_use = len(dataNames);
   cellNums = np.arange(1, 1+len_to_use);
 
-  perCell = partial(get_mod_varExpl, fitBase=fitBase, expDir=expDir, normType=fitType, lgnFrontEnd=lgnFrontOn, rvcAdj=rvcAdj, whichKfold=kfold, lgnConType=lgnConType, excType=excType, lossType=lossType);
+  perCell = partial(get_mod_varExpl, fitBase=fitBase, expDir=expDir, normType=fitType, lgnFrontEnd=lgnFrontOn, rvcAdj=rvcAdj, whichKfold=kfold, lgnConType=lgnConType, excType=excType, lossType=lossType, dgNormFunc=dgNormFunc);
   with mp.Pool(processes = nProc) as pool:
     vExp_perCell = pool.map(perCell, cellNums); # use starmap if you to pass in multiple args
     pool.close();
 
-  fitListName = hf.fitList_name(base=fitBase, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=_LGNforNorm)
+  fitListName = hf.fitList_name(base=fitBase, fitType=fitType, lossType=lossType, lgnType=lgnFrontOn, lgnConType=lgnConType, vecCorrected=vecCorrected, CV=todoCV, excType=excType, lgnForNorm=_LGNforNorm, dgNormFunc=dgNormFunc)
   fitListNPY = hf.np_smart_load(loc_data + fitListName);
 
   for iii, (vExp, respStr) in enumerate(vExp_perCell):

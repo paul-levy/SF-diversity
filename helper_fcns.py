@@ -548,8 +548,8 @@ def num_frames(expInd):
 def fitType_suffix(fitType, dgNormFunc=False):
   ''' Use this to get the string referring to a given normalization type
   '''
-  dgStr = 'DG' if dgNormFunc else ''; # i.e. the default is blank; otherwise, we add DG to the end of the weighting
-  # note --> only applie sto wght, wghtGain, Yoke, Match
+  dgStr = 'DG' if dgNormFunc==1 else ''; # i.e. the default is blank; otherwise, we add DG to the end of the weighting
+  # note --> only applie to wght, wghtGain, Yoke, Match
   if fitType == 1:
     fitSuf = '_flat'
   elif fitType == 0:
