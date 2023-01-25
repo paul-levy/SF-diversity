@@ -250,6 +250,7 @@ if fitBase is not None:
 else: # we will just plot the data
   fitList_fl = None;
   fitList_wg = None;
+  kstr = '';
 
 # set the save directory to save_loc, then create the save directory if needed
 if onsetCurr is None:
@@ -336,7 +337,7 @@ baseDistrs, baseSummary, baseConds = hf_sf.get_baseOnly_resp(expInfo);
 baseDC, baseF1 = baseDistrs;
 baseDC_mn, baseF1_mn = np.mean(baseDC), np.mean(baseF1);
 if vecCorrected:
-    baseDistrs, baseSummary, _ = hf_sf.get_baseOnly_resp(expInfo, vecCorrectedF1=1, onsetTransient=onsetCurr);
+    baseDistrs, baseSummary, _ = hf_sf.get_baseOnly_resp(expInfo, vecCorrectedF1=1, onsetTransient=onsetCurr, F1useSem=False);
     baseF1_mn = baseSummary[1][0][0,:]; # [1][0][0,:] is r,phi mean
     baseF1_var = baseSummary[1][0][1,:]; # [1][0][0,:] is r,phi std/(circ.) var
     baseF1_r, baseF1_phi = baseDistrs[1][0][0], baseDistrs[1][0][1];
@@ -413,8 +414,8 @@ for measure in [0,1]:
         xlim_base = overall_ylim;
         ylim_diffsAbLe = AbLe_bounds;
         lbl = 'DC' 
-        modelsAsObj = [mod_A_dc, mod_B_dc]
         if fitBase is not None:
+          modelsAsObj = [mod_A_dc, mod_B_dc]
           data_A = respMatrix_A_dc;
           data_B = respMatrix_B_dc;
           data_A_onlyMask = respMatrix_A_dc_onlyMask;
@@ -437,8 +438,8 @@ for measure in [0,1]:
         refSf_pref = prefSf_F1;
         xlim_base = overall_ylim
         lbl = 'F1'
-        modelsAsObj = [mod_A_f1, mod_B_f1]
         if fitBase is not None:
+          modelsAsObj = [mod_A_f1, mod_B_f1]
           data_A = respMatrix_A_f1_maskTf;
           data_B = respMatrix_B_f1_maskTf;
           data_A_onlyMask = respMatrix_A_f1_onlyMask;
@@ -450,7 +451,7 @@ for measure in [0,1]:
 
     # Now, subtract the baseOnly response from the base+mask response (only used if measure=0, i.e. DC)
     # -- but store it separately 
-    if measure == 0:
+    if measure == 0: # should ALSO SPECIFY baselineSub==0, since otherwise we are double subtracting...
         data_sub = np.copy(data);
         data_sub[:,:,0] = data[:,:,0]-np.mean(baseOnly);
         if fitBase is not None:
@@ -1029,8 +1030,9 @@ pdfSv.close()
 #######################
 # Do this only if we are't plotting model fits
 ### --- TODO: Must make fits to sfBB_var* expts...
-#'''
-if fitBase is not None and useCoreFit:
+'''
+#if fitBase is not None and useCoreFit:
+if fitBase is None:
 
   # first, load the sfBB_core experiment to get reference tuning
   expInfo_base = cell['sfBB_core']
@@ -1038,6 +1040,8 @@ if fitBase is not None and useCoreFit:
 
   maskSf_ref, maskCon_ref = expInfo_base['maskSF'], expInfo_base['maskCon'];
   refDC, refF1 = hf_sf.get_mask_resp(expInfo_base, withBase=0);
+  if vecCorrected: # get only r, not phi
+    refF1 = refF1[:,:,0,:];
   # - get DC tuning curves
   refDC_sf = refDC[-1, :, :];
   prefSf_ind = np.argmax(refDC_sf[:, 0]);
@@ -1052,7 +1056,6 @@ if fitBase is not None and useCoreFit:
   # now, find out which - if any - varExpts exist
   allKeys = list(cell.keys())
   whichVar = np.where(['var' in x for x in allKeys])[0];
-
   for wV in whichVar: # if len(whichVar) == 0, nothing will happen
       expName = allKeys[wV];
 
@@ -1076,7 +1079,7 @@ if fitBase is not None and useCoreFit:
       #   base contrasts can leave slight differences -- all much less than the conDig we round to.
       maskCon, maskSf = np.unique(np.round(expInfo['maskCon'], conDig)), expInfo['maskSF'];
 
-      if useCoreFit:
+      if useCoreFit and fitList is not None:
         ### Get model responses!
         trInf_dc, resps_dc = mrpt.process_data(expInfo, expInd=expInd, respMeasure=0);
         trInf_f1, resps_f1 = mrpt.process_data(expInfo, expInd=expInd, respMeasure=1);
@@ -1149,6 +1152,7 @@ if fitBase is not None and useCoreFit:
         f, ax = plt.subplots(nrows=nrow, ncols=ncol, figsize=(ncol*12, nrow*12))
 
         f.suptitle('V1 #%d [%s, %.2f] base: %.2f cpd, %.2f%%' % (cellNum, unitNm, f1f0_rat, baseSf_curr, baseCon_curr));            
+        print('herehere?');
         for measure in [0,1]:
           if measure == 0:
             baseline = expInfo['blank']['mean'];
@@ -1403,7 +1407,7 @@ if fitBase is not None and useCoreFit:
 
         #sns.despine(offset=10)
         f.tight_layout(rect=[0, 0.03, 1, 0.95])
-
+        print('made it?');
         saveName = "/cell_%03d_both_sf%03d_con%03d%s.pdf" % (cellNum, np.int(100*baseSf_curr), np.int(100*baseCon_curr), kstr)
         full_save = os.path.dirname(str(save_loc + '%s/cell_%03d/' % (expName, cellNum)));
         if not os.path.exists(full_save):
@@ -1412,4 +1416,4 @@ if fitBase is not None and useCoreFit:
         pdfSv.savefig(f)
         plt.close(f)
         pdfSv.close()
-#'''
+'''

@@ -2,7 +2,7 @@ import math, numpy, random
 from scipy.stats import norm, mode, poisson, nbinom, sem
 from scipy.stats.mstats import gmean as geomean
 from numpy.matlib import repmat
-from helper_fcns_sfBB import get_resp_str
+#from helper_fcns_sfBB import get_resp_str
 from re import findall as re_findall
 import scipy.optimize as opt
 import os, sys
@@ -3741,6 +3741,7 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
    '''
 
    np = numpy;
+   from helper_fcns_sfBB import get_resp_str
    print('%s/%d' % (expDir, 1+cell_ind));
 
    arrtype = np.float32; # float32, rather than float64
@@ -4691,7 +4692,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
   else:
     return jointList;
 
-def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02, valIsFrac=False):
+def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02, valIsFrac=False, fieldOverwrite=None):
   ''' given a "jointList" structure, get the specified metric (as string) for a given conVal & dispersion
       returns: array of metric value for a given con X disp
       inputs:
@@ -4701,6 +4702,8 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02, valIsFrac=
         disp      - which dispersion (0, 1, ...)
         [conTol]  - we consider the contrast to match conVal if within +/- 2% (given experiment, this is satisfactory to match con level across dispersions, versions)
         valIsFrac - If true, then the conVal is fraction of the maximum contrast value
+  
+        if conVal=None, then we're looking at just one value --> used in tandem with fieldOverwrite
   '''
   np = numpy;
   nCells = len(jointList);
@@ -4709,17 +4712,46 @@ def jl_get_metric_byCon(jointList, metric, conVal, disp, conTol=0.02, valIsFrac=
   # how to handle contrast? for each cell, find the contrast that is valid for that dispersion and matches the con_lvl
   # to within some tolerance (e.g. +/- 0.01, i.e. 1% contrast)
 
+  def handle_nested_keys(jl, keys):
+     if len(keys)==1:
+        return jl[keys[0]]
+     else:
+        return handle_nested_keys(jl[keys[0]], keys[1:]);
+
   for ind, i in enumerate(jointList.keys()): #range(nCells): # holdover from when jointList was list rather than dict
       #######
       # get structure, metadata, etc
       #######
       curr_cell = jointList[i]
-      curr_metr = curr_cell['metrics']['%s' % metric];
+      if fieldOverwrite is None: # most common use case
+         curr_metr = curr_cell['metrics']['%s' % metric];
+      else:
+         try:
+           curr_metr = handle_nested_keys(curr_cell[fieldOverwrite], metric);
+         except:
+           curr_metr = np.nan
       if i == 0: # set up the output metric
-         if len(curr_metr.shape)>2: # i.e. it's not just con/disp
+         if isinstance(curr_metr, int) or isinstance(curr_metr, float) or isinstance(curr_metr, str) or curr_metr is None: # why? ints don't have .size field, so we should avoid that check as our first step
+            # default to this creation, but if in the future, the size is larger, we'll just remake the size...
+            output = np.nan * np.zeros((nCells, ));           
+         elif len(curr_metr.shape)>2: # i.e. it's not just con/disp
             output = np.nan * np.zeros((nCells, curr_metr.shape[-1]));
          else:
             output = np.nan * np.zeros((nCells, ));
+            if conVal is None and curr_metr.size>1: # then maybe it's a weird metric (e.g. [mn_med_max])
+               output = np.nan * np.zeros((nCells, len(curr_metr)));
+      if conVal is None:
+        try:
+          output[ind] = curr_metr;
+        except:
+          # should only reach here if we tried creating an array that's the wrong size
+          # --- which in turn will only happen if the first entries where None/nan, rather than the true size
+          # --- so we update here and disregard all previous info (which would've been None/nan anyway)
+          output = np.nan * np.zeros((nCells, curr_metr.shape[-1]));
+          output[ind] = curr_metr;
+        continue; # done!
+
+      # only reach here if conVal is not None
       curr_meta = curr_cell['metadata'];
       curr_cons = curr_meta['stimVals'][1]; # stimVals[1] is list of contrasts
       curr_byDisp = curr_meta['val_con_by_disp'];

@@ -19,11 +19,11 @@ import pdb
 # adjust_f1_byTrial - to the vector math adjustment on each trial
 # phase_advance_core
 
-### Anaylsis ###
+### Analysis ###
 # --- Computing F1 response (including phase), computing F1::F0 ratio, etc
 # get_vec_avg_response
 # compute_f1f0
-# -- descriptive tuning fits
+# get_all_responses - organize all responses in a dictionary!
 
 ### HELPER/BASIC ###
 
@@ -116,7 +116,7 @@ def resample_all_cond(resample, array, axis=-1):
 
 ### ORGANIZING RESPONSES ###
 
-def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecCorrectedF1=1, onsetTransient=None):
+def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecCorrectedF1=1, onsetTransient=None, F1useSem=True):
   ''' returns the distribution of responses, mean/s.e.m. and unique sfXcon for each base stimulus in the sfBB_* series
       -- dc_resp; f1_base --> use to overwrite the spikes in expInfo (e.g. model responses)
       ---- if passing in the above, should also include val_trials (list of valid trial indices), since
@@ -177,7 +177,7 @@ def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecC
       baseDC, baseF1 = dc_resp[dc_indexing], f1_base[f1_indexing];
 
       if vecCorrectedF1: # overwrite baseF1 from above...
-        vec_means, vec_byTrial, _, _, _, _ = get_vec_avg_response(expInfo, baseOnly_curr, onsetTransient=onsetTransient);
+        vec_means, vec_byTrial, _, _, _, _ = get_vec_avg_response(expInfo, baseOnly_curr, onsetTransient=onsetTransient, useSem=F1useSem);
         _, baseInd = get_mask_base_inds(); # we know we're getting base response...
         try:
           # NOTE: If vecCorrectedF1, we return baseResp_f1 --> length 2, [0] is R, [1] is phi in polar coordinates
@@ -199,7 +199,7 @@ def get_baseOnly_resp(expInfo, dc_resp=None, f1_base=None, val_trials=None, vecC
 
   return [baseResp_dc, baseResp_f1], [baseSummary_dc, baseSummary_f1], unique_pairs;
 
-def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=1, onsetTransient=None, resample=False, phAdvCorr=True, opt_params=None, debugPhAdv=False):
+def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f1_base=None, f1_mask=None, val_trials=None, vecCorrectedF1=1, onsetTransient=None, resample=False, phAdvCorr=True, opt_params=None, debugPhAdv=False, F1useSem=True):
   ''' return the DC, F1 matrices [mean, s.e.m.] for responses to the mask only in the sfBB_* series 
       For programs (e.g. sfBB_varSF) with multiple base conditions, the order returned here is guaranteed
       to be the same as the unique base conditions given in get_baseOnly_resp
@@ -302,7 +302,7 @@ def get_mask_resp(expInfo, withBase=0, maskF1 = 1, returnByTr=0, dc_resp=None, f
               else:
                 whichInd = baseInd;
                 whichTrials = f1Base_indexing;
-              vec_means, vec_byTrial, _, _, _, _ = get_vec_avg_response(expInfo, whichTrials, onsetTransient=onsetTransient);
+              vec_means, vec_byTrial, _, _, _, _ = get_vec_avg_response(expInfo, whichTrials, onsetTransient=onsetTransient, useSem=F1useSem);
               try:
                 # NOTE: vec_byTrial is list: R [0] and phi [1] (relative to stim onset)
                 respMatrixF1all[mcI, msI, 0:nTr, 0] = vec_byTrial[0][:, whichInd];
@@ -427,9 +427,10 @@ def phase_advance_fit_core(allAmps, allPhis, maskCons, maskSfs):
 
 ### ANALYSIS ###
 
-def get_vec_avg_response(expInfo, val_trials, dir=1, psth_binWidth=1e-3, stimDur=1, onsetTransient=None, refPhi=None):
-  ''' Return [r_mean, phi_mean, r_std, phi_var], [resp_amp, phase_rel_stim], rel_amps, phase_rel_stim, stimPhs, resp_phase
+def get_vec_avg_response(expInfo, val_trials, dir=1, psth_binWidth=1e-3, stimDur=1, onsetTransient=None, refPhi=None, useSem=True):
+  ''' Return [r_mean, phi_mean, r_var, phi_var], [resp_amp, phase_rel_stim], rel_amps, phase_rel_stim, stimPhs, resp_phase
       -- Note that the above values are at mask/base TF, respectively (i.e. not DC)
+      ---- r_var is s.e.m. if useSem, otherwise std
 
       If onsetTransient is not None, we'll do the manual FFT
 
@@ -474,12 +475,12 @@ def get_vec_avg_response(expInfo, val_trials, dir=1, psth_binWidth=1e-3, stimDur
     pass;
 
   phase_rel_stim = np.mod(np.multiply(dir, np.add(resp_phase, stimPhs)), 360);
-  r_mean, phi_mean, r_sem, phi_var = hf.polar_vec_mean(np.transpose(resp_amp), np.transpose(phase_rel_stim), sem=1) # return s.e.m. rather than std (default)
+  r_mean, phi_mean, r_var, phi_var = hf.polar_vec_mean(np.transpose(resp_amp), np.transpose(phase_rel_stim), sem=useSem) # return s.e.m. rather than std (default)
   if refPhi is not None:
     # then do the phase projection here! TODO: CHECK IF PHI_MEAN/refPhi in deg or rad
     r_mean = np.multiply(r_mean, np.cos(np.deg2rad(refPhi)-np.deg2rad(phi_mean)));
 
-  return [r_mean, phi_mean, r_sem, phi_var], [resp_amp, phase_rel_stim], rel_amps, phase_rel_stim, stimPhs, resp_phase;
+  return [r_mean, phi_mean, r_var, phi_var], [resp_amp, phase_rel_stim], rel_amps, phase_rel_stim, stimPhs, resp_phase;
 
 def compute_f1f0(trial_inf, vecCorrectedF1=1):
   ''' Using the stimulus closest to optimal in terms of SF (at high contrast), get the F1/F0 ratio
@@ -514,9 +515,13 @@ def compute_f1f0(trial_inf, vecCorrectedF1=1):
   f0f1_highConAll = [f0_rates_all[-1,:,:], f1_rates_all[-1,:,:]];
   # determine which of the peakInd X F0/F1 combinations has the highest overall response
   peakRespInd = np.argmax([np.nanmean(x[y]) for x,y in zip(f0f1_highCon, prefSfEst_ind)]);
+
+  # added/changed 23.01.23 --> compare apples to apples (best dcSF, best f1SF)
+  #f0rate, f1rate = [x[ind] for x,ind in zip(f0f1_highCon, prefSfEst_ind)];
+  #f0all, f1all = [x[ind, :] for x,ind in zip(f0f1_highConAll, prefSfEst_ind)];
+  # --- previous method: compare at max response SF (i.e. dcMax or f1Max, depending)
   # then get the true peak ind
   indToAnalyze = prefSfEst_ind[peakRespInd];
- 
   f0rate, f1rate = [x[indToAnalyze] for x in f0f1_highCon];
   f0all, f1all = [x[indToAnalyze, :] for x in f0f1_highConAll];
   # note: the below lines will help us avoid including trials for which the f0 is negative (after baseline subtraction!)
@@ -528,3 +533,168 @@ def compute_f1f0(trial_inf, vecCorrectedF1=1):
   # NOTE: 23.01.06 --> CHANGED to mean(f1)/mean(f0) rather than mean(f1/f0)...
   return np.nanmean(f1rate_pos)/np.nanmean(f0rate_pos), f0all, f1all, f0_rates, f1_rates;
   #return np.nanmean(np.divide(f1rate_pos, f0rate_pos)), f0all, f1all, f0_rates, f1_rates;
+
+#######################
+#### More analysis
+#######################
+def get_all_responses(cellNum, data_loc, dataList, descrFits=None, fitBase=None, vecCorrected=1, expName='sfBB_core'):
+  ''' Major helper function which will enable many analyses!
+      Creates dictionary which we return!
+      - if descrFits is not None, then we include information based on the descr. (not full comp. model) fit!
+      ---- as of 23.01.22, descrFits is 'descrFitsHPC_221126vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy'
+      ---- BUT, we should pass it in preemptively rather than loading it here (will be used with mp.pool)
+
+      NOTES:
+      --- resps organized as [CON x SF x [mn x sem]]
+  '''
+
+  expSummary = dict(); # split by DC, F1 for resp. measures
+
+  unitNm = dataList['unitName'][cellNum-1];
+  try:
+    curr_descrFits = descrFits[cellNum-1];
+  except:
+    curr_descrFits = None
+  cell = hf.np_smart_load('%s%s_sfBB.npy' % (data_loc, unitNm));
+  expInfo = cell[expName]
+  byTrial = expInfo['trial'];
+  f1f0_rat = compute_f1f0(expInfo)[0];
+
+  expSummary['f1f0_ratio'] = f1f0_rat;
+
+  ### Get the responses - base only, mask+base [base F1], mask only (mask F1)
+  baseDistrs, baseSummary, baseConds = get_baseOnly_resp(expInfo);
+  # - unpack DC, F1 distribution of responses per trial
+  baseDC, baseF1 = baseDistrs;
+  baseDC_mn, baseF1_mn = np.mean(baseDC), np.mean(baseF1);
+  if vecCorrected:
+      baseDistrs, baseSummary, _ = get_baseOnly_resp(expInfo, vecCorrectedF1=1, F1useSem=False);
+      baseF1_mn = baseSummary[1][0][0,:]; # [1][0][0,:] is r,phi mean
+      baseF1_var = baseSummary[1][0][1,:]; # [1][0][0,:] is r,phi std/(circ.) var
+      baseF1_r, baseF1_phi = baseDistrs[1][0][0], baseDistrs[1][0][1];
+  # - unpack the SF x CON of the base (guaranteed to have only one set for sfBB_core)
+  baseSf_curr, baseCon_curr = baseConds[0];
+  expSummary['baseSf'] = baseSf_curr;
+  expSummary['baseCon'] = baseCon_curr;
+
+  # now get the mask+base response (f1 at base TF)
+  respMatrixDC, respMatrixF1 = get_mask_resp(expInfo, withBase=1, maskF1=0, vecCorrectedF1=vecCorrected); # i.e. get the base response for F1
+  # and get the mask only response (f1 at mask TF)
+  respMatrixDC_onlyMask, respMatrixF1_onlyMask = get_mask_resp(expInfo, withBase=0, maskF1=1, vecCorrectedF1=vecCorrected); # i.e. get the maskONLY response
+  # and get the mask+base response (but f1 at mask TF)
+  _, respMatrixF1_maskTf = get_mask_resp(expInfo, withBase=1, maskF1=1, vecCorrectedF1=vecCorrected); # i.e. get the maskONLY response
+
+  # -- if vecCorrected, let's just take the "r" elements, not the phi information
+  if vecCorrected:
+      respMatrixF1 = respMatrixF1[:,:,0,:]; # just take the "r" information (throw away the phi)
+      respMatrixF1_onlyMask = respMatrixF1_onlyMask[:,:,0,:]; # just take the "r" information (throw away the phi)
+      respMatrixF1_maskTf = respMatrixF1_maskTf[:,:,0,:]; # just take the "r" information (throw away the phi)
+
+  ## Reference tuning...
+  refDC, refF1 = get_mask_resp(expInfo, withBase=0, vecCorrectedF1=vecCorrected); # i.e. mask only, at mask TF
+  maskSf, maskCon = expInfo['maskSF'], expInfo['maskCon'];
+  expSummary['maskSf'] = maskSf;
+  expSummary['maskCon'] = maskCon;
+  # - get DC tuning curves
+  refDC_sf = refDC[-1, :, :]; # highest contrast
+  prefSf_ind = np.argmax(refDC_sf[:, 0]);
+  prefSf_DC = maskSf[prefSf_ind];
+  refDC_rvc = refDC[:, prefSf_ind, :];
+  # - get F1 tuning curves (adjust for vecCorrected?)
+  if vecCorrected: # get only r, not phi
+      refF1 = refF1[:,:,0,:];
+  refF1_sf = refF1[-1, :, :];
+  prefSf_ind = np.argmax(refF1_sf[:, 0]);
+  prefSf_F1 = maskSf[prefSf_ind];
+  refF1_rvc = refF1[:, prefSf_ind, :];
+
+  ######
+  for measure in [0,1]:
+      if measure == 0:
+          dc_dict = dict();
+          dc_dict['blank_mean'] = expInfo['blank']['mean'];
+          dc_dict['blank_std'] = expInfo['blank']['std'];
+          dc_dict['blank_stderr'] = expInfo['blank']['stderr'];
+          dc_dict['bothResp'] = respMatrixDC;
+          dc_dict['maskResp'] = respMatrixDC_onlyMask;
+          if len(baseDC)==1: # i.e. just one base (not var* experiment)
+            baseDC = baseDC[0];
+          dc_dict['baseResp_all'] = baseDC
+          dc_dict['baseResp_mean'] = np.nanmean(baseDC)
+          dc_dict['baseResp_std'] = np.nanstd(baseDC)
+          # fano: var/mean (and var=square(std))
+          dc_dict['baseResp_fano'] = np.square(dc_dict['baseResp_std'])/dc_dict['baseResp_mean']
+          dc_dict['baseResp_stderr'] = sem(hf.nan_rm(baseDC))
+          # --- also compute the difference from expected response
+          # ----- i.e. R(m+b) - R(m) - R(b)
+          dc_dict['diffFromSumResp'] = respMatrixDC[:,:,0] - respMatrixDC_onlyMask[:,:,0] - dc_dict['baseResp_mean']
+          # --- and, more importantly --> deviations from base response when mask+base are present
+          baseDiffs = dc_dict['bothResp'][:,:,0] - dc_dict['baseResp_mean']
+          baseDiffs_zscr = baseDiffs/dc_dict['baseResp_std']; # in z-scored units
+          dc_dict['baseDiffs'] = np.stack((baseDiffs, baseDiffs_zscr), axis=-1); # [con X sf x [raw, zscr]]
+          #refAll = refDC[:,:,0];
+          #refSf = refDC_sf;
+          #refRVC = refDC_rvc;
+          #refSf_pref = prefSf_DC;
+          dc_dict['sfPref_est'] = prefSf_DC;
+          # NOTE: the descrFits info is duplicated in jointList --> perhaps deprecate here?
+          if 'dc' in curr_descrFits:
+            dc_dict['sfPref'] = curr_descrFits['dc']['mask']['prefSf'][-1]; # high con.
+            dc_dict['charFreq'] = curr_descrFits['dc']['mask']['charFreq'][-1]; # high con.
+            dc_dict['sfVarExpl'] = curr_descrFits['dc']['mask']['varExpl'][-1]; # high con.
+          ### ignored for now...
+          if fitBase is not None:
+            modelsAsObj = [mod_A_dc, mod_B_dc]
+            data_A = respMatrix_A_dc;
+            data_B = respMatrix_B_dc;
+            data_A_onlyMask = respMatrix_A_dc_onlyMask;
+            data_B_onlyMask = respMatrix_B_dc_onlyMask;
+            data_A_baseTf = None;
+            data_B_baseTf = None;
+            mod_mean_A = baseMean_mod_dc[0];
+            mod_mean_B = baseMean_mod_dc[1];
+      elif measure == 1:
+          f1_dict = dict();
+          f1_dict['bothResp_maskTf'] = respMatrixF1_maskTf;
+          f1_dict['bothResp_baseTf'] = respMatrixF1;
+          f1_dict['maskResp'] = respMatrixF1_onlyMask;
+          if vecCorrected:
+              mean_r, mean_phi = baseF1_mn;
+              std_r, var_phi = baseF1_var;
+              vec_r, vec_phi = baseF1_r, baseF1_phi;
+              f1_dict['baseResp_mean'] = mean_r
+              f1_dict['baseResp_std'] = std_r
+              f1_dict['baseResp_circVar'] = var_phi
+              # fano: var/mean (and var=square(std))
+              f1_dict['baseResp_fano'] = np.square(std_r)/mean_r;
+          else: # should be unused...
+              f1_dict['baseResp_mean'] = baseF1_mn
+              f1_dict['baseResp_var'] = baseF1_var
+          #refAll = refF1[:,:,0];
+          #refSf = refF1_sf;
+          #refRVC = refF1_rvc;
+          f1_dict['sfPref_est'] = prefSf_F1
+          # NOTE: the descrFits info is duplicated in jointList --> perhaps deprecate here?
+          if 'f1' in curr_descrFits:
+            f1_dict['sfPref'] = curr_descrFits['f1']['mask']['prefSf'][-1]; # high con.
+            f1_dict['charFreq'] = curr_descrFits['f1']['mask']['charFreq'][-1]; # high con.
+            f1_dict['sfVarExpl'] = curr_descrFits['f1']['mask']['varExpl'][-1]; # high con.
+          # change in mean base response - raw and norm. by baseResp std
+          baseDiffs = f1_dict['bothResp_baseTf'][:,:,0] - f1_dict['baseResp_mean']
+          baseDiffs_zscr = baseDiffs/f1_dict['baseResp_std']; # in z-scored units
+          f1_dict['baseDiffs'] = np.stack((baseDiffs, baseDiffs_zscr), axis=-1); # [con X sf x [raw, zscr]]
+          if fitBase is not None:
+            modelsAsObj = [mod_A_f1, mod_B_f1]
+            data_A = respMatrix_A_f1_maskTf;
+            data_B = respMatrix_B_f1_maskTf;
+            data_A_onlyMask = respMatrix_A_f1_onlyMask;
+            data_B_onlyMask = respMatrix_B_f1_onlyMask;
+            data_A_baseTf = respMatrix_A_f1;
+            data_B_baseTf = respMatrix_B_f1;
+            mod_mean_A = baseMean_mod_f1[0][0];
+            mod_mean_B = baseMean_mod_f1[1][0];
+
+  expSummary['dc'] = dc_dict;
+  expSummary['f1'] = f1_dict;
+
+  return expSummary;
