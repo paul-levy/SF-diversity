@@ -537,7 +537,7 @@ def compute_f1f0(trial_inf, vecCorrectedF1=1):
 #######################
 #### More analysis
 #######################
-def get_all_responses(cellNum, data_loc, dataList, descrFits=None, fitBase=None, vecCorrected=1, expName='sfBB_core'):
+def get_all_responses(cellNum, data_loc, dataList, descrFits=None, fitBase=None, vecCorrected=1, expName='sfBB_core', f1_r_std_on_r=True):
   ''' Major helper function which will enable many analyses!
       Creates dictionary which we return!
       - if descrFits is not None, then we include information based on the descr. (not full comp. model) fit!
@@ -546,6 +546,7 @@ def get_all_responses(cellNum, data_loc, dataList, descrFits=None, fitBase=None,
 
       NOTES:
       --- resps organized as [CON x SF x [mn x sem]]
+      --- if f1_r_std_on_r, then rather than computing the vector variance, compute only the var/std on the resp magnitudes
   '''
 
   expSummary = dict(); # split by DC, F1 for resp. measures
@@ -631,7 +632,8 @@ def get_all_responses(cellNum, data_loc, dataList, descrFits=None, fitBase=None,
           # --- and, more importantly --> deviations from base response when mask+base are present
           baseDiffs = dc_dict['bothResp'][:,:,0] - dc_dict['baseResp_mean']
           baseDiffs_zscr = baseDiffs/dc_dict['baseResp_std']; # in z-scored units
-          dc_dict['baseDiffs'] = np.stack((baseDiffs, baseDiffs_zscr), axis=-1); # [con X sf x [raw, zscr]]
+          baseDiffs_norm = baseDiffs/dc_dict['baseResp_mean']; # difference divided by response measure
+          dc_dict['baseDiffs'] = np.stack((baseDiffs, baseDiffs_zscr, baseDiffs_norm), axis=-1); # [con X sf x [raw, zscr]]
           #refAll = refDC[:,:,0];
           #refSf = refDC_sf;
           #refRVC = refDC_rvc;
@@ -663,7 +665,7 @@ def get_all_responses(cellNum, data_loc, dataList, descrFits=None, fitBase=None,
               std_r, var_phi = baseF1_var;
               vec_r, vec_phi = baseF1_r, baseF1_phi;
               f1_dict['baseResp_mean'] = mean_r
-              f1_dict['baseResp_std'] = std_r
+              f1_dict['baseResp_std'] = std_r if not f1_r_std_on_r else np.nanstd(baseDistrs[1][0][0]); # just the r values
               f1_dict['baseResp_circVar'] = var_phi
               # fano: var/mean (and var=square(std))
               f1_dict['baseResp_fano'] = np.square(std_r)/mean_r;
@@ -682,7 +684,8 @@ def get_all_responses(cellNum, data_loc, dataList, descrFits=None, fitBase=None,
           # change in mean base response - raw and norm. by baseResp std
           baseDiffs = f1_dict['bothResp_baseTf'][:,:,0] - f1_dict['baseResp_mean']
           baseDiffs_zscr = baseDiffs/f1_dict['baseResp_std']; # in z-scored units
-          f1_dict['baseDiffs'] = np.stack((baseDiffs, baseDiffs_zscr), axis=-1); # [con X sf x [raw, zscr]]
+          baseDiffs_norm = baseDiffs/f1_dict['baseResp_mean']; # difference divided by response measure
+          f1_dict['baseDiffs'] = np.stack((baseDiffs, baseDiffs_zscr, baseDiffs_norm), axis=-1); # [con X sf x [raw, zscr]]
           if fitBase is not None:
             modelsAsObj = [mod_A_f1, mod_B_f1]
             data_A = respMatrix_A_f1_maskTf;

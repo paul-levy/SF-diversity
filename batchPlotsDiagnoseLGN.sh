@@ -33,9 +33,10 @@ END=$2
 RVC_ADJ=${3:-0} # RVC ADJ should be 0 for altExp/V1_orig, 1 for V1/
 KFOLD=${4:--1}
 EXC_TYPE=${5:-1}
-LOSS=${6:-1}
-HPC=${7:-1}
-START=${8:-1}
+DG_NORM_FUNC=${6:-0} # should be double-digit number from {00 [default], 10, 11, 01}
+LOSS=${7:-1}
+HPC=${8:-1}
+START=${9:-1}
 
 CORES=$(($(getconf _NPROCESSORS_ONLN)-4))
 
@@ -44,10 +45,16 @@ do
 
   # no LGN
   python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 02 11 00 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 22 11 00 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 27 11 00 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD 11 & # no diff, not interpolated
   # wght, V1, flat LGNsi
-  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 21 15 04 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 21 11 04 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  # asym, LGNsi, wght LGNsi
+  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 02 11 44 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  
   # flat, V1, flat LGNsi
-  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 15 04 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 11 04 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   # w/LGN
   #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   # w/LGNsi
