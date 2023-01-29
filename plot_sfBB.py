@@ -41,6 +41,7 @@ _globalMin = 1e-10;
 # if None, then we keep the plots as is; if a number, then we create a gray shaded box encompassing that much STD of the base response
 # -- by plotting a range of base responses rather than just the mean, we can see how strong the variations in base or base+mask responses are
 plt_base_band = 1; # e.g. if 1, then we plot +/- 0.5 std; if 2, then we plot +/- 1 std; and so on
+f1_r_std_on_r = True; # do we compute the std for respAmpl (F1) based on vector (i.e. incl. var in phi) or ONLY on corrected F1 resps
 
 plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
 from matplotlib import rcParams
@@ -82,8 +83,13 @@ diffPlot = int(sys.argv[8]);
 intpMod  = int(sys.argv[9]);
 kMult  = float(sys.argv[10]);
 vecCorrected = int(sys.argv[11]);
-onsetTransient = int(sys.argv[12]);
-onsetMod = 1;
+if len(sys.argv) > 13:
+  onsetTransient = int(sys.argv[12]);
+  if onsetTransient<0 or onsetTransient>1:
+    onsetTransient=-1;
+  onsetMod = 1;
+else:
+  onsetTransient=-1;
 
 if len(sys.argv) > 13:
   fixRespExp = float(sys.argv[13]);
@@ -431,6 +437,8 @@ for measure in [0,1]:
         if vecCorrected:
             mean_r, mean_phi = baseF1_mn;
             std_r, var_phi = baseF1_var;
+            if f1_r_std_on_r: # i.e. rather than computing the vector variance, compute only the var/std on the resp magnitudes
+              std_r = np.nanstd(baseDistrs[1][0][0]); # just the r values
             vec_r, vec_phi = baseF1_r, baseF1_phi;
         refAll = refF1[:,:,0];
         refSf = refF1_sf;
@@ -538,7 +546,7 @@ for measure in [0,1]:
         if plt_base_band is not None:
           # -- and as +/- X std?
           stdTot = plt_base_band; # this will also serve as the total STD range to encompass
-          one_std = np.std(baseOnly);
+          one_std = np.std(baseOnly) if measure==0 else std_r;
           sfMin, sfMax = np.nanmin(maskSf), np.nanmax(maskSf);
           ax[1+ii, 2*measure].add_patch(matplotlib.patches.Rectangle([sfMin, floors[1]-0.5*stdTot*one_std], sfMax-sfMin, stdTot*one_std, alpha=0.1, color='k'))
 
@@ -1327,7 +1335,6 @@ if fitBase is None:
           if useCoreFit:
             ### What's the loss evaluated on these data?
             ax[4, 2*measure].text(0.5, 0.5, 'loss A|B = %.2f|%.2f' % (loss_A[measure], loss_B[measure]));
-          '''
           ### Loss trajectory
           # temp try...plot contour and trajectory of best fit...
           #ax[4, 2*measure].contourf(maskSf, maskCon, refAll)
@@ -1347,7 +1354,6 @@ if fitBase is None:
             ax[4, 1+2*measure].set_title('Optimization (%s): %.2f|%.2f' % (lbl, *lossVals[measure]), fontsize='x-large')
           except:
             ax[4, 1+2*measure].axis('off');
-          '''
           ### SF tuning with R(m+b) - R(m) - R(b) // for DC only
           nCons = len(maskCon);
           for mcI, mC in enumerate(maskCon):

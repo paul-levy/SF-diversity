@@ -745,7 +745,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
   #ax[nRows-2].set_xlim((0.1, 10));
   #ax[nRows-2].set_xlim((np.min(all_sfs), np.max(all_sfs)));
   ax[nRows-2].set_ylim((-0.5, 0.5));
-  ax[nRows-2].set_ylabel('Saturation index');
+  ax[nRows-2].set_ylabel(r'Suppression index, $\delta$');
   #ax[nRows-2].xaxis.label.set_visible(False)
   ax[nRows-2].tick_params('x', labelbottom=False)
   #ax[nRows-2].errorbar(all_sfs[val_sfs][sfInds][val_errs], norm_subset, normStd_subset, color='k', marker='o', linestyle='-', alpha=0.2)
@@ -829,7 +829,7 @@ def plot_save_superposition(which_cell, expDir, use_mod_resp=0, fitType=1, excTy
     if fitz is not None:
       ax[0].plot(pred_plt, myFit(pred_plt, *fitz), 'r--', label='fit')
     ax[0].axis('scaled') # scaled?
-    ax[0].set_xlabel('sum(components) (spikes/s)');
+    ax[0].set_xlabel('Grating prediction (spikes/s)');
     ax[0].set_ylabel('Mixture response (spikes/s)');
     ax[0].plot([0, 1*maxResp_y], [0, 1*maxResp_y], 'k--', alpha=ref_line_alpha)
     ax[0].set_xlim((-5, maxResp_x));
