@@ -148,8 +148,8 @@ expName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
 _sigmoidScale = 10
 _sigmoidDord = 5;
 
-fitBase = 'fitList%s_pyt_nr230118_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr230118_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr230118a_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
 vecF1 = 0;
@@ -171,7 +171,6 @@ dgnfA, dgnfB = int(np.floor(dgNormFuncIn/10)), np.mod(dgNormFuncIn, 10)
 fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV, lgnForNorm=_applyLGNtoNorm, dgNormFunc=dgnfA)
 fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=isCV, lgnForNorm=_applyLGNtoNorm, dgNormFunc=dgnfB)
 # what's the shorthand we use to refer to these models...
-# -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
 aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn' if normA==5 else 'Yk' if normA==6 else 'Mt');
 bWtStr = '%s%s' % ('wt' if normB>1 else 'asym', '' if normB<=2 else 'Gn' if normB==5 else 'Yk' if normB==6 else 'Mt');
 aWtStr = '%s%s' % ('DG' if dgnfA==1 else '', aWtStr);
@@ -360,7 +359,6 @@ if pytorch_mod == 1:
   varExplSF_B = np.nan * np.zeros((nDisp, nCon));
   varExplCon_A = np.nan * np.zeros((nDisp, nSf));
   varExplCon_B = np.nan * np.zeros((nDisp, nSf));
-
   for dI in np.arange(nDisp):
     for sI in np.arange(nSf):
       varExplCon_A[dI, sI] = hf.var_explained(hf.nan_rm(expByCond[dI, sI, :]), hf.nan_rm(modByCondA[dI, sI, :]), None);
@@ -905,12 +903,13 @@ for (pltNum, modPrm),modObj,lgnType,lgnConType,mWt in zip(enumerate(modFits), mo
     dog_m = np.array([x.item() for x in modObj.dog_m]) # a list of tensors, so do list comp. to undo into a normal/numpy array
     dog_p = np.array([x.item() for x in modObj.dog_p])
     # now compute with these parameters
-    resps_m = hf.get_descrResp(dog_m, omega, DoGmodel, minThresh=0.1)
-    resps_p = hf.get_descrResp(dog_p, omega, DoGmodel, minThresh=0.1)
+    glbl_min = 1e-6; # as in mrpt as of late 2022 and beyond --> doesn't matter for dogSach/DiffOfGauss, anyway, though...
+    resps_m = hf.get_descrResp(dog_m, omega, DoGmodel, minThresh=glbl_min)
+    resps_p = hf.get_descrResp(dog_p, omega, DoGmodel, minThresh=glbl_min)
     # -- make sure we normalize by the true max response:
     sfTest = np.geomspace(0.1, 10, 1000);
-    max_m = np.max(hf.get_descrResp(dog_m, sfTest, DoGmodel, minThresh=0.1));
-    max_p = np.max(hf.get_descrResp(dog_p, sfTest, DoGmodel, minThresh=0.1));
+    max_m = np.max(hf.get_descrResp(dog_m, sfTest, DoGmodel, minThresh=glbl_min));
+    max_p = np.max(hf.get_descrResp(dog_p, sfTest, DoGmodel, minThresh=glbl_min));
     # -- then here's our selectivity per component for the current stimulus
     selSf_m = np.divide(resps_m, max_m);
     selSf_p = np.divide(resps_p, max_p);

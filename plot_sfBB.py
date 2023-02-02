@@ -83,7 +83,8 @@ diffPlot = int(sys.argv[8]);
 intpMod  = int(sys.argv[9]);
 kMult  = float(sys.argv[10]);
 vecCorrected = int(sys.argv[11]);
-if len(sys.argv) > 13:
+
+if len(sys.argv) > 12:
   onsetTransient = int(sys.argv[12]);
   if onsetTransient<0 or onsetTransient>1:
     onsetTransient=-1;
@@ -115,6 +116,11 @@ if len(sys.argv) > 16:
 else:
   whichKfold = None;
 isCV = False if whichKfold is None else True;
+
+if len(sys.argv) > 17: # norm weights determined with deriv. Gauss or log Gauss?
+  dgNormFuncIn=int(sys.argv[17]);
+else:
+  dgNormFuncIn=11
 
 ## Unlikely to be changed, but keep flexibility
 baselineSub = 0;
@@ -176,7 +182,8 @@ _sigmoidDord = 5;
 #fitBase = 'fitList%s_pyt_nr221116wwww_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 #fitBase = 'fitList%s_pyt_nr221119d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 #fitBase = 'fitList%s_pyt_nr221231_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-fitBase = 'fitList%s_pyt_nr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+#fitBase = 'fitList%s_pyt_nr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 
 _CV=isCV
 
@@ -194,16 +201,21 @@ if fitBase is not None:
   normA, normB = int(np.floor(normTypesIn/10)), np.mod(normTypesIn, 10)
   conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
   lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
+  dgnfA, dgnfB = int(np.floor(dgNormFuncIn/10)), np.mod(dgNormFuncIn, 10)
 
-  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=_CV, lgnForNorm=_applyLGNtoNorm)
-  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=_CV, lgnForNorm=_applyLGNtoNorm)
+  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=_CV, lgnForNorm=_applyLGNtoNorm, dgNormFunc=dgnfA)
+  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=_CV, lgnForNorm=_applyLGNtoNorm, dgNormFunc=dgnfB)
   #fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
   #fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
   # what's the shorthand we use to refer to these models...
   wtStr = 'wt';
   # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
-  aWtStr = 'wt%s' % ('' if normA==2 else 'Gn');
-  bWtStr = 'wt%s' % ('' if normB==2 else 'Gn');
+  aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn' if normA==5 else 'Yk' if normA==6 else 'Mt');
+  bWtStr = '%s%s' % ('wt' if normB>1 else 'asym', '' if normB<=2 else 'Gn' if normB==5 else 'Yk' if normB==6 else 'Mt');
+  #aWtStr = 'wt%s' % ('' if normA==2 else 'Gn');
+  #bWtStr = 'wt%s' % ('' if normB==2 else 'Gn');
+  aWtStr = '%s%s' % ('DG' if dgnfA==1 else '', aWtStr);
+  bWtStr = '%s%s' % ('DG' if dgnfB==1 else '', bWtStr);
   lgnStrA = hf.lgnType_suffix(lgnA, conA);
   lgnStrB = hf.lgnType_suffix(lgnB, conB);
   modA_str = '%s%s' % ('fl' if normA==1 else aWtStr, lgnStrA if lgnA>0 else 'V1');
@@ -236,12 +248,13 @@ if fitBase is not None:
   normTypes = [normA, normB];
   lgnTypes = [lgnA, lgnB];
   conTypes = [conA, conB];
+  dgnfTypes = [dgnfA, dgnfB];
 
   newMethod = 1;
-  mod_A_dc  = mrpt.sfNormMod(modFit_A_dc, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
-  mod_B_dc = mrpt.sfNormMod(modFit_B_dc, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
-  mod_A_f1  = mrpt.sfNormMod(modFit_A_f1, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
-  mod_B_f1 = mrpt.sfNormMod(modFit_B_f1, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
+  mod_A_dc  = mrpt.sfNormMod(modFit_A_dc, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False, dgNormFunc=dgnfA)
+  mod_B_dc = mrpt.sfNormMod(modFit_B_dc, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False, dgNormFunc=dgnfB)
+  mod_A_f1  = mrpt.sfNormMod(modFit_A_f1, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False, dgNormFunc=dgnfA)
+  mod_B_f1 = mrpt.sfNormMod(modFit_B_f1, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False, dgNormFunc=dgnfB)
 
   # get varGain values...
   if lossType == 3: # i.e. modPoiss
@@ -742,7 +755,7 @@ if fitBase is not None: # then we can plot some model details
     sfExcRaw = [];
     sfNorms = [];
 
-    for (pltNum, modPrm),modObj,lgnType,lgnConType,normType in zip(enumerate(currPrms), modelsAsObj, lgnTypes, conTypes, normTypes):
+    for (pltNum, modPrm),modObj,lgnType,lgnConType,normType,dgnf_curr in zip(enumerate(currPrms), modelsAsObj, lgnTypes, conTypes, normTypes, dgnfTypes):
       # First, excitatory stuff
       prefSf = modPrm[0];
       mWt = 1/(1+np.exp(-modPrm[-1])); # either this is mWeight parameter, or we're not fitting an LGN model anyway (ignored)
@@ -826,7 +839,7 @@ if fitBase is not None: # then we can plot some model details
       gs_mean = modPrm[8] if normType == 2 or normType == 5 else None;
       gs_std = modPrm[9] if normType == 2 or normType == 5 else None;
       #gs_gain = 
-      norm_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std));
+      norm_weights = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean, gs_std, normType=normType, dgNormFunc=dgnf_curr));
       sfNormSimple = norm_weights/np.amax(np.abs(norm_weights));
       sfNorms.append(sfNormSimple);
 
