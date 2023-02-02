@@ -23,8 +23,6 @@ import sys # so that we can import model_responses (in different folder)
 
 ####### TO USE ########
 ### akin to other parallelized functions, call 'python3.6 plot_superposition_func.py -181 LGN/' for example
-### 'python3.6 plot_superposition_func.py 4 altExp/ 1 1 2 1 0'
-### - cellNum, expDir, plot suppression index, prince corr. to suprInd, modResp (2 for pyt; 0 for data rather than model); normType (1/2 - flat/gain), lgnOn (0/1)
 
 import warnings
 #warnings.filterwarnings('once');

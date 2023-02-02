@@ -14,7 +14,8 @@ from scipy.stats.mstats import gmean
 import time
 
 import helper_fcns as hf
-import model_responses as mod_resp
+from helper_fcns_sfBB import get_resp_str
+import model_responses_pytorch as mrpt
 sys.path.insert(0, 'LGN/sach/');
 import helper_fcns_sach as hfs
 
@@ -22,6 +23,8 @@ import warnings
 warnings.filterwarnings('once');
 
 import pdb
+
+f1_expCutoff = 2; # if 1, then all but V1_orig/ are allowed to have F1; if 2, then altExp/ is also excluded
 
 # See plot_sf_figs_breakAxisAttempt.py to continue attempt at making a proper break in the x-axis for zero frequency, rather than just pretending it's a slightly lower freq.
 
@@ -66,10 +69,11 @@ def prepare_sfs_plot_sach(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMo
 
   return respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val;
 
-def prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, disp, old_refprm):
+def prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, disp, old_refprm, mod_fits=None, isBB=False, normType=1, lgnFrontEnd=0, excType=1, lossType=1, dgNormFunc=True, f1_expCutoff=f1_expCutoff):
   # helper function called in plot_sfs
+  # --- if mod_resps/mod_dw are not None, then we also organize/return the model responses
 
-  expName = hf.get_datalist(expDir, force_full=1);
+  expName = hf.get_datalist(expDir, force_full=1, new_v1=True);
   dataList = hf.np_smart_load(data_loc + expName);
 
   cellName = dataList['unitName'][cellNum-1];
@@ -78,8 +82,9 @@ def prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fL
   except:
     overwriteExpName = None;
   expInd   = hf.get_exp_ind(data_loc, cellName, overwriteExpName)[0];
-  if expInd <= 2: # if expInd <= 2, then there cannot be rvcAdj, anyway!
+  if expInd <= f1_expCutoff: # if expInd <= 2, then there cannot be rvcAdj, anyway!
     rvcAdj = 0; # then we'll load just below!
+  stimDur = hf.get_exp_params(expInd).stimDur;
 
   descrFits = hf.np_smart_load(data_loc + fLname);
 
@@ -130,10 +135,14 @@ def prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fL
     baseline_resp = int(0);
 
   # now get the measured responses
+  divFactor = 1;
+  #_, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd);
   _, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
   if rvcAdjSigned==1 and phAmpByMean and (force_f1 or f1f0rat>1):
     try:
       respMean = hf.organize_phAdj_byMean(trialInf, expInd, all_opts, stimVals, val_con_by_disp);
+      # TEMP/TODO/HORRIBLE 
+      divFactor = 1/stimDur;
     except: # why would it fail? Only when there isn't a trial for each condition - in which case, these are disregarded cells...
       respMean = respOrg;
   else:
@@ -171,9 +180,46 @@ def prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fL
 
     ref_rc_val = None;
 
-  return respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val;
+  # IF applicable, organize model responses
+  # -- default to modByCond = None
+  modByCond = None; mod_to_sub = None;
+  if mod_fits is not None:
+    # define the responses to organize the datawrapper with
+    # get the correct, adjusted F1 response
+    if expInd > f1_expCutoff and which_measure == 1:
+      respOverwrite = hf.adjust_f1_byTrial(trialInf, expInd);
+    else:
+      respOverwrite = None;
+    
+    #divFactor = stimDur if which_measure == 0 else 1;
+    #divFactor = 1/divFactor
+    #divFactor = 1;
+    mod_prms = mod_fits[cellNum-1][get_resp_str(which_measure)]['params']
+    use_mod = mrpt.sfNormMod(mod_prms, expInd=expInd, excType=excType, normType=normType, lossType=lossType, lgnFrontEnd=lgnFrontEnd, toFit=False, dgNormFunc=dgNormFunc);
+    mod_to_sub = np.maximum(0, use_mod.noiseLate.detach().numpy()/divFactor); # baseline 
+    mod_dw = mrpt.dataWrapper(trialInf, respMeasure=which_measure, expInd=expInd, respOverwrite=respOverwrite);
+    mod_resps = use_mod.forward(mod_dw.trInf, respMeasure=which_measure).detach().numpy();
+    if not isBB:
+      if which_measure == 1: # make sure the blank components have a zero response (we'll do the same with the measured responses)
+        blanks = np.where(mod_dw.trInf['con']==0);
+        mod_resps[blanks] = 0;
+        # next, sum up across components
+        mod_resps = np.sum(mod_resps, axis=1);
+      # finally, make sure this fills out a vector of all responses (just have nan for non-modelled trials)
+      nTrialsFull = len(trialInf['num']);
+      modResps_full = np.nan * np.zeros((nTrialsFull, ));
+      modResps_full[mod_dw.trInf['num']] = mod_resps;
+      # organize responses so that we can package them for evaluating varExpl...
+      # modByCond is [nDisp, nSf, nCon]
+      _, _, modByCond, _ = hf.organize_resp(np.divide(modResps_full, divFactor), trialInf, expInd); 
+    else: # isBB
+      print('FIX THIS --> or just use the other one and only do this for the other ones (i.e. altExp & V1 only')
 
-def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvcAdj, phBase=None, descrLoss=2, rvcMod=1, phAmpByMean=1, respVar=1, plot_sem_on_log=1, disp=0, forceLog=1, subplot_title=False, specify_ticks=True, old_refprm=False, fracSig=1, incl_legend=False, nrow=2, subset_cons=None, minToPlot = 1, despine_offset=2, incl_zfreq=True):
+
+  return respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val, (modByCond, mod_to_sub);
+
+def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvcAdj, phBase=None, descrLoss=2, rvcMod=1, phAmpByMean=1, respVar=1, plot_sem_on_log=1, disp=0, forceLog=1, subplot_title=False, specify_ticks=True, old_refprm=False, fracSig=1, incl_legend=False, nrow=2, subset_cons=None, minToPlot = 1, despine_offset=2, incl_zfreq=True, use_tex=True, mod_fits=None, normType=1, lgnFrontEnd=0, excType=1, lossType=1, dgNormFunc=True, incl_data=True):
+  # --- IF mod_fits is not None, then we've passed in the model responses (as generated from mrpt.sfNormMod.forward()
 
   # Set up, load some files
   x_lblpad=6; y_lblpad=8;
@@ -189,6 +235,9 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
   rvcAdjSigned = rvcAdj;
   rvcAdj = np.abs(rvcAdj);
 
+  if not forceLog:
+    minToPlot = -2.5; # it's ok to have negative..
+
   modStr  = hf.descrMod_name(descrMod)
   fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint, phAdj=1 if rvcAdjSigned==1 else None);
   # set the save directory to save_loc, then create the save directory if needed
@@ -200,10 +249,10 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
 
   # call the necessary function
   if not isSach and not isBB: # this works for altExp, V1, V1_orig, LGN
-    respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val = prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, disp, old_refprm);
+    respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val, mod_resps = prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, disp, old_refprm, mod_fits=mod_fits, normType=normType, lgnFrontEnd=lgnFrontEnd, excType=excType, lossType=lossType, dgNormFunc=dgNormFunc);
   else:
     if isSach:
-      respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val = prepare_sfs_plot_sach(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, old_refprm);
+      respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val, mod_resps = prepare_sfs_plot_sach(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, old_refprm, mod_fits=mod_fits, normType=normType, lgnFrontEnd=lgnFrontEnd, excType=excType, lossType=lossType, dgNormFunc=dgNormFunc);
     else: # only here if isBB
       # TODO: not written as of 22.08.08
       pass;
@@ -216,7 +265,12 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
   else:
     hasZfreq = False;
     sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
-  maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)]))); 
+  # this was maxResp across all conditions --> but this is only single grats
+  #maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
+  #minResp = np.min(np.min(np.min(respMean[~np.isnan(respMean)]))); 
+  # --- disp=0
+  maxResp = np.nanmax(respMean[0])
+  minResp = np.nanmin(respMean[0])
   # -- decide which contrasts we'll plot...
   if subset_cons is not None:
     if len(subset_cons)==2: # then it's start index, how many to skip
@@ -268,7 +322,8 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
         errs = np.vstack((low_err, high_err));
         curr_plot_sfs = all_sfs[v_sfs] if isSach else all_sfs[v_sfs];
         #curr_plot_sfs = all_sfs if isSach else all_sfs[v_sfs];
-        ax[i,j].errorbar(curr_plot_sfs[plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', clip_on=True, color=col);
+        if mod_fits is None or incl_data: # let's optionally exclude the data
+          ax[i,j].errorbar(curr_plot_sfs[plot_resp>minToPlot], plot_resp[plot_resp>minToPlot], errs[:, plot_resp>minToPlot], fmt='o', clip_on=True, color=col);
 
         if hasZfreq and isSach and incl_zfreq: # then also plot the zero frequency data/model, but isolated...
           fake_sf = all_sfs[1]/10; # .../2, or something to make it even smaller
@@ -278,9 +333,19 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
           plt_resp = descrResp-to_sub;
           ax[i,j].plot(fake_sfs[plt_resp>minToPlot], plt_resp[plt_resp>minToPlot], color=col, clip_on=True);
 
-      descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
-      plt_resp = descrResp-to_sub;
-      ax[i,j].plot(sfs_plot[plt_resp>minToPlot], plt_resp[plt_resp>minToPlot], color=col, clip_on=True, label='%s\%%' % (str(int(100*np.round(curr_con, 2)))));
+      if mod_fits is None:
+        descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
+        plt_resp = descrResp-to_sub;
+        sfs_plot_curr = sfs_plot
+      else:
+        modResp = mod_resps[0][disp, v_sfs, v_cons[c]];
+        mod_to_sub = mod_resps[1] if to_sub!=0 else 0;
+        plt_resp = modResp-mod_to_sub;
+        sfs_plot_curr = all_sfs[v_sfs] # only evaluating at tested locs for now...
+      if use_tex: # need to use \ for escape
+        ax[i,j].plot(sfs_plot_curr[plt_resp>minToPlot], plt_resp[plt_resp>minToPlot], color=col, clip_on=True, label='%s\%%' % (str(int(100*np.round(curr_con, 2)))));
+      else:
+        ax[i,j].plot(sfs_plot_curr[plt_resp>minToPlot], plt_resp[plt_resp>minToPlot], color=col, clip_on=True, label='%s%%' % (str(int(100*np.round(curr_con, 2)))));
 
   ax[i,j].set_xlim((0.5*min(all_sfs), 1.2*max(all_sfs)));
 
@@ -296,15 +361,18 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
     #ax[i,j].set_aspect('equal'); # if both axes are log, must make equal scales!
     ax[i,j].axis('scaled'); # this works better for minimizing white space (as compared to set_aspect('equal'))
   else:
-    ax[i,j].set_ylim((np.minimum(-5, minResp-5), 1.5*maxResp));
+    ax[i,j].set_ylim((np.minimum(-5, minResp-5), 1.25*maxResp));
     logSuffix = '';
 
   pltd_sfs = all_sfs if isSach else all_sfs[v_sfs];
   for jj, axis in enumerate([ax[i,j].xaxis, ax[i,j].yaxis]):
-      axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+      if forceLog:
+        axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+      else:
+        axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x)) # this will make everything in non-scientific notation!
       if jj == 0 and specify_ticks: # i.e. x-axis
         core_ticks = np.array([1]);
-        if np.min(pltd_sfs)<=0.3:
+        if np.min(pltd_sfs)<=0.2: # was 0.3
             core_ticks = np.hstack((0.1, core_ticks));
         if np.max(pltd_sfs)>=7:
             core_ticks = np.hstack((core_ticks, 10));
@@ -315,14 +383,14 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
         axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
       else:
         #axis.set_tick_params(labelleft=True); 
-        if jj == 1 and specify_ticks: # y axis
+        if jj == 1 and specify_ticks and (forceLog or expDir=='LGN/'): # y axis
           core_ticks = np.array([1, 10, ]);
           if maxResp>=90:
               core_ticks = np.hstack((core_ticks, 100));
           axis.set_ticks(core_ticks)
-        inter_val = 3; # put labels (minor) at 3/30 spks/s
-        axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val*10)<1e-5 else '%d' % x if np.square(x-inter_val)<1e-5 else '')) # this will make everything in non-scientific notation!
-        axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
+          inter_val = 3; # put labels (minor) at 3/30 spks/s
+          axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val*10)<1e-5 else '%d' % x if np.square(x-inter_val)<1e-5 else '')) # this will make everything in non-scientific notation!
+          axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
  
   lbl_str = '';
   if j==0:
@@ -331,7 +399,10 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
     ax[i,j].set_xlabel('Spatial frequency (c/deg)', labelpad=x_lblpad); 
 
   if subplot_title:
+    if mod_fits is None:
       ax[i,j].set_title('%s%02d j%d' % (expDir, cellNum, joint));
+    else:
+      ax[i,j].set_title('%s' % hf.fitList_name('', fitType=normType, excType=excType, lossType=lossType, lgnType=lgnFrontEnd, dgNormFunc=dgNormFunc).replace('.npy', '').replace('_d', 'd'));
   if incl_legend:
     ax[i,j].legend(fontsize='x-small'); 
   

@@ -127,8 +127,17 @@ else:
   whichKfold = None;
 isCV = False if whichKfold is None else True;
 
+forceLog = True # log Y?
+
+if len(sys.argv) > 17: # norm weights determined with deriv. Gauss or log Gauss?
+  dgNormFuncIn=int(sys.argv[17]);
+else:
+  dgNormFuncIn=11
+
+
 ## Unlikely to be changed, but keep flexibility
-baselineSub = 0;
+baselineSub = 1 if forceLog else 0;
+plt_ylim = 1 if forceLog else None
 fix_ylim = 0;
 
 ## used for interpolation plot
@@ -159,9 +168,9 @@ expName = hf.get_datalist(expDir);
 
 # EXPIND ::: TODO: Make this smarter?
 expInd = -1;
-
 ### FITLIST
 _applyLGNtoNorm = 1;
+
 # -- some params are sigmoid, we'll use this to unpack the true parameter
 _sigmoidScale = 10
 _sigmoidDord = 5;
@@ -171,15 +180,20 @@ _sigmoidDord = 5;
 #fitBase = 'fitList%s_pyt_nr221116wwww_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 #fitBase = 'fitList%s_pyt_nr221119d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 #fitBase = 'fitList%s_pyt_nr221231_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-fitBase = 'fitList%s_pyt_nr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+#fitBase = 'fitList%s_pyt_nr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+fitBase = 'fitList%s_pyt_nr230118_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+#fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 
 # NOT model for now (23.01.25)
-fitBase = None;
+#fitBase = None;
 
 _CV=isCV
 
 if excType <= 0:
   fitBase = None;
+
+#incl_legend = True if fitBase is None else False; # incl. legend only if fitBase is None
+incl_legend = False
 
 if fitBase is not None:
   if vecCorrected:
@@ -192,16 +206,21 @@ if fitBase is not None:
   normA, normB = int(np.floor(normTypesIn/10)), np.mod(normTypesIn, 10)
   conA, conB = int(np.floor(conTypesIn/10)), np.mod(conTypesIn, 10)
   lgnA, lgnB = int(np.floor(lgnFrontEnd/10)), np.mod(lgnFrontEnd, 10)
-
-  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=_CV, lgnForNorm=_applyLGNtoNorm)
-  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=_CV, lgnForNorm=_applyLGNtoNorm)
+  dgnfA, dgnfB = int(np.floor(dgNormFuncIn/10)), np.mod(dgNormFuncIn, 10)
+  # --- NOTE: DEFAULT TO USING dgNormFunc
+  fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=_CV, lgnForNorm=_applyLGNtoNorm, dgNormFunc=dgnfA)
+  fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, 0, fixRespExp=fixRespExp, kMult=kMult, excType=excType, CV=_CV, lgnForNorm=_applyLGNtoNorm, dgNormFunc=dgnfB)
   #fitNameA = hf.fitList_name(fitBase, normA, lossType, lgnA, conA, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
   #fitNameB = hf.fitList_name(fitBase, normB, lossType, lgnB, conB, vecCorrected, fixRespExp=fixRespExp, kMult=kMult, excType=excType)
   # what's the shorthand we use to refer to these models...
   wtStr = 'wt';
+  aWtStr = '%s%s' % ('wt' if normA>1 else 'asym', '' if normA<=2 else 'Gn' if normA==5 else 'Yk' if normA==6 else 'Mt');
+  bWtStr = '%s%s' % ('wt' if normB>1 else 'asym', '' if normB<=2 else 'Gn' if normB==5 else 'Yk' if normB==6 else 'Mt');
   # -- the following two lines assume that we only use wt (norm=2) or wtGain (norm=5)
-  aWtStr = 'wt%s' % ('' if normA==2 else 'Gn');
-  bWtStr = 'wt%s' % ('' if normB==2 else 'Gn');
+  #aWtStr = 'wt%s' % ('' if normA==2 else 'Gn');
+  #bWtStr = 'wt%s' % ('' if normB==2 else 'Gn');
+  aWtStr = '%s%s' % ('DG' if dgnfA==1 else '', aWtStr);
+  bWtStr = '%s%s' % ('DG' if dgnfB==1 else '', bWtStr);
   lgnStrA = hf.lgnType_suffix(lgnA, conA);
   lgnStrB = hf.lgnType_suffix(lgnB, conB);
   modA_str = '%s%s' % ('fl' if normA==1 else aWtStr, lgnStrA if lgnA>0 else 'V1');
@@ -236,10 +255,10 @@ if fitBase is not None:
   conTypes = [conA, conB];
 
   newMethod = 1;
-  mod_A_dc  = mrpt.sfNormMod(modFit_A_dc, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
-  mod_B_dc = mrpt.sfNormMod(modFit_B_dc, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
-  mod_A_f1  = mrpt.sfNormMod(modFit_A_f1, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
-  mod_B_f1 = mrpt.sfNormMod(modFit_B_f1, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False)
+  mod_A_dc  = mrpt.sfNormMod(modFit_A_dc, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False, dgNormFunc=dgnfA)
+  mod_B_dc = mrpt.sfNormMod(modFit_B_dc, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False, dgNormFunc=dgnfB)
+  mod_A_f1  = mrpt.sfNormMod(modFit_A_f1, expInd=expInd, excType=excType, normType=normTypes[0], lossType=lossType, lgnFrontEnd=lgnTypes[0], newMethod=newMethod, lgnConType=conTypes[0], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False, dgNormFunc=dgnfA)
+  mod_B_f1 = mrpt.sfNormMod(modFit_B_f1, expInd=expInd, excType=excType, normType=normTypes[1], lossType=lossType, lgnFrontEnd=lgnTypes[1], newMethod=newMethod, lgnConType=conTypes[1], applyLGNtoNorm=_applyLGNtoNorm, toFit=False, normFiltersToOne=False, dgNormFunc=dgnfB)
 
   # get varGain values...
   if lossType == 3: # i.e. modPoiss
@@ -316,6 +335,17 @@ if fitBase is not None:
   # note the indexing: [1][x][0][0] for [summary], [dc||f1], [unpack], [mean], respectively
   baseMean_mod_dc = [hf_sf.get_baseOnly_resp(expInfo, dc_resp=x, val_trials=val_trials)[1][0][0][0] for x in [resp_A_dc, resp_B_dc]];
   baseMean_mod_f1 = [hf_sf.get_baseOnly_resp(expInfo, f1_base=x[:,baseInd], val_trials=val_trials)[1][1][0][0] for x in [resp_A_f1, resp_B_f1]];
+  # NOTE/TODO: Not handling any divFactor (rel. to stimDur)
+  modBlank_A_dc = np.maximum(0, mod_A_dc.noiseLate.detach().numpy()); # baseline 
+  modBlank_A_f1 = np.maximum(0, mod_A_f1.noiseLate.detach().numpy()); # baseline 
+  modBlank_B_dc = np.maximum(0, mod_B_dc.noiseLate.detach().numpy()); # baseline
+  modBlank_B_f1 = np.maximum(0, mod_B_f1.noiseLate.detach().numpy()); # baseline
+
+  if forceLog:
+    resp_A_dc -= modBlank_A_dc;
+    resp_A_f1 -= modBlank_A_f1;
+    resp_B_dc -= modBlank_B_dc;
+    resp_B_f1 -= modBlank_B_f1;
 
   # ------ note: for all model responses, flag vecCorrectedF1 != 1 so that we make sure to use the passed-in model responses
   # ---- model A responses
@@ -416,6 +446,7 @@ for measure in [0,1]:
         if baselineSub:
             data -= baseline
             baseOnly -= baseline;
+            maskOnly -= baseline;
 
         maxResp = np.maximum(np.nanmax(data), np.nanmax(maskOnly))
         minResp = np.minimum(np.nanmin(data), np.nanmin(maskOnly))
@@ -522,16 +553,27 @@ for measure in [0,1]:
         for mcI, mC in enumerate(maskCon):
 
             col = [(nCons-mcI-1)/float(nCons), (nCons-mcI-1)/float(nCons), (nCons-mcI-1)/float(nCons)];
+            data_ok = np.arange(len(maskSf)) if plt_ylim is None else rsps[mcI,:,0]>plt_ylim;
             # PLOT THE DATA
-            ax[plt_incl_i].errorbar(maskSf, rsps[mcI,:,0], rsps[mcI,:,1], fmt='o', clip_on=False,
+            # errbars should be (2,n_sfs)
+            if plt_ylim is not None:
+              high_err = rsps[mcI,:,1][data_ok]; # no problem with going to higher values
+              low_err = np.minimum(high_err, rsps[mcI,:,0][data_ok]-plt_ylim-1e-2); # i.e. don't allow us to make the err any lower than where the plot will cut-off (incl. negatives)
+              errs = np.vstack((low_err, high_err));
+            else:
+              errs = rsps[mcI,:,1][data_ok];
+
+            ax[plt_incl_i].errorbar(maskSf[data_ok], rsps[mcI,:,0][data_ok], errs, fmt='o', clip_on=False,
                                                 color=col, label=str(np.round(mC, 2)))
             if fitBase is None: # then just plot a line for the data
-              ax[plt_incl_i].plot(maskSf, rsps[mcI,:,0], clip_on=False, color=col)
+              ax[plt_incl_i].plot(maskSf[data_ok], rsps[mcI,:,0][data_ok], clip_on=False, color=col)
             else:
               # PLOT model A (if present)
-              ax[plt_incl_i].plot(maskSf, modA_resps[ii][mcI,:,0], color=modColors[0], alpha=1-col[0])
+              modA_ok = np.arange(len(maskSf)) if plt_ylim is None else modA_resps[ii][mcI,:,0]>plt_ylim;
+              ax[plt_incl_i].plot(maskSf[modA_ok], modA_resps[ii][mcI,:,0][modA_ok], color=modColors[0], alpha=1-col[0])
               # PLOT model B (if present)
-              ax[plt_incl_i].plot(maskSf, modB_resps[ii][mcI,:,0], color=modColors[1], alpha=1-col[0])
+              modB_ok = np.arange(len(maskSf)) if plt_ylim is None else modB_resps[ii][mcI,:,0]>plt_ylim;
+              ax[plt_incl_i].plot(maskSf[modB_ok], modB_resps[ii][mcI,:,0][modB_ok], color=modColors[1], alpha=1-col[0])
 
         ax[plt_incl_i].set_xscale('log');
         if plt_incl_i==(nrow-1):
@@ -553,7 +595,7 @@ for measure in [0,1]:
         ax[plt_incl_i].set_ylabel('Response (spikes/s)')
         #ax[plt_incl_i].set_title(labels[ii] + measure_lbl[measure, ii], fontsize='small');
         ax[plt_incl_i].set_ylim(overall_ylim);
-        if measure == 0: # only do the blank response reference for DC
+        if measure == 0 and not forceLog: # only do the blank response reference for DC
             ax[plt_incl_i].axhline(floors[0], linestyle='--', color='b', label=labels_ref[0])
         # i.e. always put the baseOnly reference line...
         ax[plt_incl_i].axhline(floors[1], linestyle='--', color='k', label=labels_ref[1])
@@ -563,8 +605,12 @@ for measure in [0,1]:
           sfMin, sfMax = np.nanmin(maskSf), np.nanmax(maskSf);
           ax[plt_incl_i].add_patch(mpl.patches.Rectangle([sfMin, floors[1]-0.5*stdTot*base_one_std], sfMax-sfMin, stdTot*base_one_std, alpha=0.1, color='k'))
           
-        if plt_incl_i==0: # only need the legend once...
+        if plt_incl_i==0 and incl_legend: # only need the legend once...
             ax[plt_incl_i].legend(fontsize='small');
+
+        if forceLog:
+          ax[plt_incl_i].set_yscale('log');
+          ax[plt_incl_i].axis('scaled');
 
         # and after we are done, increment the plot counter
         plt_incl_i += 1;
@@ -585,7 +631,7 @@ f.subplots_adjust(hspace=0.15);
 f.tight_layout(rect=[0, 0.03, 1, 0.98])
 
 ### now save all figures (incl model details, if specified)
-saveName = "/cell_%03d_%s%s.pdf" % (cellNum, hf_sf.get_resp_str(respMeasure=use_resp_measure), kstr)
+saveName = "/cell_%03d_%s%s%s.pdf" % (cellNum, hf_sf.get_resp_str(respMeasure=use_resp_measure), kstr, '_log' if forceLog else '')
 full_save = os.path.dirname(str(save_loc + 'core/'));
 if not os.path.exists(full_save):
     os.makedirs(full_save);
