@@ -354,6 +354,7 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
         resp = coreExp['spikeCount'].astype(int); # cast as int, since some are as uint
       elif respMeasure == 1:
         resp = coreExp['f1'];
+      # 23.02.01 TODO/SUSPICION --> I *think* this line should only apply for DC (i.e. respMeasure==0)
       resp = np.expand_dims(resp, axis=1);
     resp = resp[whichTrials];
 
@@ -564,6 +565,7 @@ class sfNormMod(torch.nn.Module):
     ### LGN front parameters
     self.LGNmodel = 2; # parameterized as DiffOfGauss (not DoGsach)
     # prepopulate DoG parameters -- will overwrite, if needed
+    # STANDARDS, CURRENT AS OF 23.01.29 --> [1,3,0.3,0.4] for M /// [1,9,0.5,0.4] for P
     self.M_k = _cast_as_tensor(1); # gain of 1
     self.M_fc = _cast_as_tensor(3); # char. freq of 3
     self.M_ks = _cast_as_tensor(0.3); # surround gain rel. to center
@@ -572,6 +574,13 @@ class sfNormMod(torch.nn.Module):
     self.P_fc = _cast_as_tensor(9); # char. freq of 9 [3x is a big discrepancy]
     self.P_ks = _cast_as_tensor(0.5); # surround gain rel. to center
     self.P_js = _cast_as_tensor(0.4); # relative char. freq of surround
+    # --- below are more exaggerated M&P parameters --> namely much stronger surround
+    # - attempts on 23.01.30, however, suggest that this just allows the model to use LGN as a tuned gain control (more bandpass than the above)
+    #self.M_ks = _cast_as_tensor(0.7); # surround gain rel. to center
+    #self.M_js = _cast_as_tensor(0.3); # relative char. frequency of surround
+    #self.P_ks = _cast_as_tensor(0.55); # surround gain rel. to center
+    #self.P_js = _cast_as_tensor(0.3); # relative char. freq of surround
+
     if self.lgnFrontEnd == 2:
       self.M_fc = _cast_as_tensor(6); # different variant (make magno f_c=6, not 3)
     elif self.lgnFrontEnd == 3 or self.lgnFrontEnd == 4:
@@ -670,12 +679,12 @@ class sfNormMod(torch.nn.Module):
       else:
         curr_val = self.gs_mean
     elif whichPrm == 'gs_std':
-      if self.dgNormFunc: 
+      if self.dgNormFunc:
         curr_val = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.gs_std))
       else:
         curr_val = self.gs_std;
     return curr_val.detach().numpy();
-
+      
   def clear_saved_calcs(self):
     # reset the images/pre-computed calculations in case the dataset has changed (i.e. cross-validation!)
     self.stimRealImag = None; # defaults to None so that we know to compute it the first time around
@@ -1486,7 +1495,7 @@ def setModel(cellNum, expDir=-1, excType=1, lossType=1, fitType=1, lgnFrontEnd=0
     if modRecov == 1:
       fL_name = 'mr_fitList%s_190516cA' % loc_str
     else:
-      fL_name = 'fitList%s_pyt_nr230118%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_nr230118a%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if scheduler==False else '', '_sg' if singleGratsOnly else '');
 
   k_fold = 1 if k_fold is None else k_fold; # i.e. default to one "fold"
   todoCV = 1 if whichTrials is not None or k_fold>1 else 0;
@@ -2226,7 +2235,7 @@ if __name__ == '__main__':
       dgNormFunc = int(sys.argv[15]);
     else:
       dgNormFunc = 0; # we default to NOT using deriv. Gauss for gain control tuning
-      
+
     if len(sys.argv) > 16:
       _LGNforNorm = int(sys.argv[16]);
     else:
@@ -2241,8 +2250,8 @@ if __name__ == '__main__':
       print('\tspecified epochs: %d' % max_epochs);
     else:
       #max_epochs = 2500 if kfold is None else 1250; # fewer epochs when cross-val
-      max_epochs = 250; # use for temp/quick/debugging fits
       #max_epochs = 500; # use for temp/quick/debugging fits
+      max_epochs = 250; # use for temp/quick/debugging fits
       
     if len(sys.argv) > 18:
       learning_rate = float(sys.argv[18]);
@@ -2306,7 +2315,7 @@ if __name__ == '__main__':
       import multiprocessing as mp
       print('***cpu count: %02d***' % nCpu);
       loc_str = 'HPC' if 'pl1465' in loc_data else '';
-      fL_name = 'fitList%s_pyt_nr230118%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else '');
+      fL_name = 'fitList%s_pyt_nr230118a%s%s%s' % (loc_str, '_noRE' if fixRespExp is not None else '', '_noSched' if _schedule==False else '', '_sg' if singleGratsOnly else '');
       
       # do f1 here?
       sm_perCell = partial(setModel, expDir=expDir, excType=excType, lossType=lossType, fitType=fitType, lgnFrontEnd=lgnFrontOn, lgnConType=lgnConType, applyLGNtoNorm=_LGNforNorm, initFromCurr=initFromCurr, kMult=kMult, fixRespExp=fixRespExp, trackSteps=trackSteps, respMeasure=1, newMethod=newMethod, vecCorrected=vecCorrected, scheduler=_schedule, to_save=False, singleGratsOnly=singleGratsOnly, fL_name=fL_name, preLoadDataList=dataList, k_fold=kfold, max_epochs=max_epochs, learning_rate=learning_rate, batch_size=batch_size, testingNames=testNames, dgNormFunc=dgNormFunc);

@@ -3803,7 +3803,7 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
      resps, stimVals, val_con_by_disp, validByStimVal, _ = tabulate_responses(cell, expInd);
      # get SF responses (for model-free metrics)
      tr = cell['sfm']['exp']['trial']
-     spks = get_spikes(tr, get_f0=1, expInd=expInd, rvcFits=None); # just to be explicit - no RVC fits right now
+     spks = get_spikes(tr, get_f0=1, expInd=expInd, rvcFits=None); # just to be explciit - no RVC fits right now
      sfTuning = organize_resp(spks, tr, expInd=expInd)[2]; # responses: nDisp x nSf x nCon
      try:
         cellType = dataList['unitType'][cell_ind];
@@ -3842,7 +3842,6 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
    ###########
    suppr = None;
    if superAnalysis is not None:
-     #pdb.set_trace();
      try:
        super_curr = superAnalysis[cell_ind];
        suppr = dict([('sfErrsInd_var', super_curr['sfErrsInd_VAR']),
@@ -3921,7 +3920,7 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
    metrs = ['sfVar', 'sfCom', 'sfComCut', # model-free metrics
             'bw_sigma', 'lsfv', 'bwHalf', 'bw34', # bandwidth
             'pSf', 'sf70', 'dog_charFreq', 'sfE', # sf
-            'arExpl', # variance explained (see below)
+            'arExpl', # variance explained (see below; yes, we add the 'v' later on)
             'conGain', 'c50', 'c50_emp', 'c50_eval', 'c50_varExpl', # RVC-based
             'dog_mech',
             'bwHalf_split', 'bw34_split',
@@ -4420,23 +4419,24 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
    if flexModels: # what to do here?
      try:
         # note that we take nanmean of NLL for compatability with batchSizes l.t. # of trials (unused as of 23.01.04)
-        nllAll = [np.nanmean(modelDict[modKey]['fits'][cell_ind][respStr]['NLL']) if modelDict[modKey]['fits'] is not None else np.nan for modKey in modelDict.keys()];
+        nllAll = np.array([np.nanmean(modelDict[modKey]['fits'][cell_ind][respStr]['NLL']) if modelDict[modKey]['fits'] is not None else np.nan for modKey in modelDict.keys()]);
         paramsAll = [modelDict[modKey]['fits'][cell_ind][respStr]['params'] if modelDict[modKey]['fits'] is not None else np.nan for modKey in modelDict.keys()];
         namesAll = [modelDict[modKey]['name'] if modelDict[modKey]['name'] is not None else '' for modKey in modelDict.keys()];
-        varExplAll = [modelDict[modKey]['fits'][cell_ind][respStr]['varExpl_func'] if 'varExpl_func' in modelDict[modKey]['fits'][cell_ind][respStr] else np.nan for modKey in modelDict.keys()];
+        varExplAll = [modelDict[modKey]['fits'][cell_ind][respStr]['varExpl_func'] if ~np.isnan(nll_crr) else np.nan for modKey,nll_crr in zip(modelDict.keys(), nllAll)];
      except:
-        nllAll = None; paramsAll = None; namesAll = None; varExplAll = None;
+        nllAll = np.nan * np.zeros((len(modelDict.keys()), )); paramsAll = None; namesAll = None; varExplAll = None;
      # also try CV
      try:
         # C-V
-        nllAll_CV_tr = [np.nanmean(modelDict[modKey]['cv']['fits'][cell_ind][respStr]['NLL_train']) if modelDict[modKey]['fits'] is not None else np.nan for modKey in modelDict.keys()];
-        nllAll_CV_te = [np.nanmean(modelDict[modKey]['cv']['fits'][cell_ind][respStr]['NLL_test']) if modelDict[modKey]['fits'] is not None else np.nan for modKey in modelDict.keys()];
+        nllAll_CV_tr = np.array([np.nanmean(modelDict[modKey]['cv']['fits'][cell_ind][respStr]['NLL_train']) if modelDict[modKey]['cv']['fits'] is not None else np.nan for modKey in modelDict.keys()]);
+        nllAll_CV_te = np.array([np.nanmean(modelDict[modKey]['cv']['fits'][cell_ind][respStr]['NLL_test']) if modelDict[modKey]['cv']['fits'] is not None else np.nan for modKey in modelDict.keys()]);
         paramsAll_CV = [modelDict[modKey]['cv']['fits'][cell_ind][respStr]['params'] if modelDict[modKey]['cv']['fits'] is not None else np.nan for modKey in modelDict.keys()];
         namesAll_CV = [modelDict[modKey]['cv']['name'] if modelDict[modKey]['cv']['name'] is not None else '' for modKey in modelDict.keys()];
         lower_clip = -10 if clip_modVarExpl else None;
-        varExplAll_CV = [np.nanmean(np.clip(modelDict[modKey]['cv']['fits'][cell_ind][respStr]['varExpl_func'], lower_clip, None)) if 'varExpl_func' in modelDict[modKey]['cv']['fits'][cell_ind][respStr] else np.nan for modKey in modelDict.keys()];
+        varExplAll_CV = [np.nanmean(np.clip(modelDict[modKey]['cv']['fits'][cell_ind][respStr]['varExpl_func'], lower_clip, None)) if ~np.isnan(nll_crr) else np.nan for modKey,nll_crr in zip(modelDict.keys(), nllAll_CV_tr)];
      except:
-        nllAll_CV_te = None; nllAll_CV_tr = None; paramsAll_CV = None; namesAll_CV = None; varExplAll_CV = None;
+        nllAll_CV_te = np.nan * np.zeros((len(modelDict.keys()), )); nllAll_CV_tr = np.nan * np.zeros((len(modelDict.keys()), ));
+        paramsAll_CV = None; namesAll_CV = None; varExplAll_CV = None;
      try: # unpack/save the input model specs
        # NOTE: The below assumes that there are no missing models (i.e. the set of norm x lgnType x .... is complete)
        inputModelDict = dict([('normType', modSpecs['normType']),
@@ -4532,7 +4532,7 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
    return cellSummary;
 
 def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrNames, dogNames, rvcNames, rvcMods,
-              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, jointType=0, reducedSave=False, briefVersion=False, cv_fitNamesWght=None, cv_fitNamesFlat=None, modSpecs=None, flexModels=True, flBase_name=None):
+              conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, toPar=1, jointType=0, reducedSave=False, briefVersion=False, cv_fitNamesWght=None, cv_fitNamesFlat=None, modSpecs=None, flexModels=True, flBase_name=None, dgNormFunc=True):
   ''' create the "super structure" that we use to analyze data across multiple versions of the experiment
       TODO: update this to get proper spikes/tuning measures based on f1/f0 ratio (REQUIRES descrFits to be like rvcFits, i.e. fit F1 or F0 responses, accordingly)
       inputs:
@@ -4604,14 +4604,17 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
          flBase_curr = '%s%s%s' % (flBase_name, '_noRE' if modSpecs['fixRespExp'][mod_i] is not None else '', '_noSched' if modSpecs['scheduler'][mod_i]==0 else '');
          curr_fit_name = fitList_name(flBase_curr, fitType=modSpecs['normType'][mod_i], 
                          lossType=modSpecs['lossType'][mod_i], lgnType=modSpecs['lgnFrontEnd'][mod_i], 
-                         lgnConType=modSpecs['lgnConType'][mod_i],
+                         lgnConType=modSpecs['lgnConType'][mod_i], dgNormFunc=dgNormFunc,
                          vecCorrected=0, CV=0, excType=modSpecs['excType'][mod_i], lgnForNorm=1)
          #print(curr_fit_name);
          curr_mod_dict['name'] = curr_fit_name;
          # Now, try to load it:
          try:
             curr_mod = np_smart_load('%s%s' % (data_loc, curr_fit_name));
-            curr_mod_dict['fits'] = curr_mod;
+            if not curr_mod: # i.e. it was empty
+               curr_mod_dict['fits'] = None;
+            else:
+               curr_mod_dict['fits'] = curr_mod;
          except:
             curr_mod_dict['fits'] = None;
             pass;
@@ -4619,14 +4622,17 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
          if modSpecs['hasCV']:
            curr_fit_name_cv = fitList_name(flBase_curr, fitType=modSpecs['normType'][mod_i], 
                          lossType=modSpecs['lossType'][mod_i], lgnType=modSpecs['lgnFrontEnd'][mod_i], 
-                         lgnConType=modSpecs['lgnConType'][mod_i],
+                         lgnConType=modSpecs['lgnConType'][mod_i], dgNormFunc=dgNormFunc,
                          vecCorrected=0, CV=1, excType=modSpecs['excType'][mod_i], lgnForNorm=1)
            curr_mod_dict['cv'] = dict();
            curr_mod_dict['cv']['name'] = curr_fit_name_cv;
            # Now, try to load it:
            try:
               curr_mod_cv = np_smart_load('%s%s' % (data_loc, curr_fit_name_cv));
-              curr_mod_dict['cv']['fits'] = curr_mod_cv;
+              if not curr_mod_cv: # i.e. it was empty
+                 curr_mod_dict['cv']['fits'] = None;
+              else:
+                 curr_mod_dict['cv']['fits'] = curr_mod_cv;
            except:
               curr_mod_dict['cv']['fits'] = None;
               pass;
@@ -4667,7 +4673,7 @@ def jl_create(base_dir, expDirs, expNames, fitNamesWght, fitNamesFlat, descrName
     if toPar:
       perCell_summary = partial(jl_perCell, dataList=dataList, expDir=expDir, data_loc=data_loc, dL_nm=dL_nm, fLW_nm=fLW_nm, fLF_nm=fLF_nm, dF_nm=dF_nm, dog_nm=dog_nm, rv_nm=rv_nm, superAnalysis=superAnalysis, conDig=conDig, sf_range=sf_range, rawInd=rawInd, muLoc=muLoc, varExplThresh=varExplThresh, dog_varExplThresh=dog_varExplThresh, descrMod=descrMod, dogMod=dogMod, isSach=isSach, rvcMod=rvcMod, isBB=isBB, jointType=jointType, reducedSave=reducedSave, briefVersion=briefVersion, modSpecs=modSpecs, flexModels=flexModels, flBase_name=flBase_name)
 
-      #oh = perCell_summary(4);
+      #oh = perCell_summary(27);
       #pdb.set_trace();
       #if isBB:
       #  oh = perCell_summary(30);
