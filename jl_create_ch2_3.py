@@ -27,7 +27,7 @@ if area == 'V1':
   ########################
 
   expDirs = ['V1_orig/', 'altExp/', 'V1/', 'V1_BB/']
-  expNames = ['dataList.npy', 'dataList.npy', 'dataList_221011.npy', 'dataList_210721.npy']
+  expNames = ['dataList.npy', 'dataList_230120.npy', 'dataList_221011.npy', 'dataList_210721.npy']
 
   nExpts = len(expDirs);
 
@@ -43,7 +43,7 @@ if area == 'V1':
   hasCV = [1];
   scheduler = [0];
   # these values - specifying the model - will be used with itertools to get all model combinations
-  norms = [1, 2]; # flat, weighted
+  norms = [1, 2, 7]; # flat, weighted, 
   lgnFrontEnds= [0,1,4]; # off, normal, shift independent
   lgnCons = [1];
   # --- now, generate all combinations!
@@ -51,7 +51,8 @@ if area == 'V1':
 
   ##### get the name --- and tile any value which appears only once (should be N model times)
   # name
-  fL_name = 'fitList%s_pyt_nr230107' % (loc_str); # we'll add noRE, noSched after
+  fL_name = 'fitList%s_pyt_nr230118a' % (loc_str); # we'll add noRE, noSched after
+  #fL_name = 'fitList%s_pyt_nr230107' % (loc_str); # we'll add noRE, noSched after
   # expand the model subtypes into the full list of model fits
   expCodes = np.vstack(list(itertools.product(*(norms, lgnFrontEnds, lgnCons)))); # will be [nMod x nFeatures]
   normTypes = expCodes[:,0];
