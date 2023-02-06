@@ -80,7 +80,6 @@ tick_adj = ['xtick.major.size', 'xtick.minor.size', 'ytick.major.size', 'ytick.m
 for adj in tick_adj:
     rcParams[adj] = rcParams[adj] * tick_scalar;
 
-
 ### input arguments
 cellNum  = int(sys.argv[1]);
 excType  = int(sys.argv[2]);
@@ -125,9 +124,16 @@ if len(sys.argv) > 16:
     whichKfold = None
 else:
   whichKfold = None;
+
+if whichKfold==2048: # using this input to specify diffs plot or not...
+  asFlatDiffs = True;
+  whichKfold = None; # and reset back to None, since we aren't actually doing CV fit plotting
+else:
+  asFlatDiffs = False;
+
 isCV = False if whichKfold is None else True;
 
-forceLog = True # log Y?
+forceLog = False # log Y?
 
 if len(sys.argv) > 17: # norm weights determined with deriv. Gauss or log Gauss?
   dgNormFuncIn=int(sys.argv[17]);
@@ -181,8 +187,8 @@ _sigmoidDord = 5;
 #fitBase = 'fitList%s_pyt_nr221119d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 #fitBase = 'fitList%s_pyt_nr221231_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 #fitBase = 'fitList%s_pyt_nr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-fitBase = 'fitList%s_pyt_nr230118_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-#fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+#fitBase = 'fitList%s_pyt_nr230118_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 
 # NOT model for now (23.01.25)
 #fitBase = None;
@@ -194,6 +200,8 @@ if excType <= 0:
 
 #incl_legend = True if fitBase is None else False; # incl. legend only if fitBase is None
 incl_legend = False
+asFlatDiffs = asFlatDiffs and (fitBase is not None); 
+# i.e. we only make difference plots IFF we specify and we have model fits
 
 if fitBase is not None:
   if vecCorrected:
@@ -407,10 +415,18 @@ refF1_rvc = refF1[:, prefSf_ind, :];
 # set up model plot info
 # i.e. flat model is red, weighted model is green
 modColors = ['g', 'r']
+modLines = ['--', '-']
 try:
   modLabels = ['A: %s' % modA_str, 'B: %s' % modB_str]
 except:
   modLabels = None
+
+useLinestyle = True if asFlatDiffs else False;
+
+if useLinestyle: # then undo modColors
+  modColors = ['k', 'k'];
+else: # then undo linestyle
+  modLines = ['-', '-']
 
 ##########################
 ### set up the figure
@@ -521,6 +537,23 @@ for measure in [0,1]:
 
     # SF tuning with contrast (MASK)
     # --- FOR NOW, keep resps as it is, but skip ii==1 (i.e. mask+base together [@maskTF if F1])
+    if asFlatDiffs: # NOTE: Assumes that flat is model A
+      maskOnly -= data_A_onlyMask
+      data -= data_A
+      # we're only here if we have models!
+      data_B_onlyMask -= data_A_onlyMask
+      data_B -= data_A
+      # these only apply if F1
+      if measure == 1:
+        data_baseTf -= data_A_baseTf
+        data_B_baseTf -= data_A_baseTf
+        # only subtract from model A at the end!
+        data_A_baseTf -= data_A_baseTf
+      # only subtract from model A at the end!
+      data_A_onlyMask -= data_A_onlyMask
+      data_A -= data_A
+
+
     resps = [maskOnly, data, data_baseTf];
     if fitBase is not None:
       modA_resps = [data_A_onlyMask, data_A, data_A_baseTf];
@@ -570,14 +603,17 @@ for measure in [0,1]:
             else:
               # PLOT model A (if present)
               modA_ok = np.arange(len(maskSf)) if plt_ylim is None else modA_resps[ii][mcI,:,0]>plt_ylim;
-              ax[plt_incl_i].plot(maskSf[modA_ok], modA_resps[ii][mcI,:,0][modA_ok], color=modColors[0], alpha=1-col[0])
+              ax[plt_incl_i].plot(maskSf[modA_ok], modA_resps[ii][mcI,:,0][modA_ok], color=modColors[0], linestyle=modLines[0], alpha=1-col[0])
               # PLOT model B (if present)
               modB_ok = np.arange(len(maskSf)) if plt_ylim is None else modB_resps[ii][mcI,:,0]>plt_ylim;
-              ax[plt_incl_i].plot(maskSf[modB_ok], modB_resps[ii][mcI,:,0][modB_ok], color=modColors[1], alpha=1-col[0])
+              ax[plt_incl_i].plot(maskSf[modB_ok], modB_resps[ii][mcI,:,0][modB_ok], color=modColors[1], linestyle=modLines[1], alpha=1-col[0])
+
+        # Indicate the base SF
+        ax[plt_incl_i].plot(baseSf_curr, overall_ylim[0]+0.03*np.diff(overall_ylim), 'v', color='k')
 
         ax[plt_incl_i].set_xscale('log');
         if plt_incl_i==(nrow-1):
-            ax[plt_incl_i].set_xlabel('Spatial Frequency (c/deg)')
+            ax[plt_incl_i].set_xlabel('Spatial frequency (c/deg)')
             # and specify tick locations
             for jj, axis in enumerate([ax[plt_incl_i].xaxis, ax[plt_incl_i].yaxis]):
               if jj == 0:
@@ -594,16 +630,17 @@ for measure in [0,1]:
             ax[plt_incl_i].tick_params('x', labelbottom=False)
         ax[plt_incl_i].set_ylabel('Response (spikes/s)')
         #ax[plt_incl_i].set_title(labels[ii] + measure_lbl[measure, ii], fontsize='small');
-        ax[plt_incl_i].set_ylim(overall_ylim);
-        if measure == 0 and not forceLog: # only do the blank response reference for DC
-            ax[plt_incl_i].axhline(floors[0], linestyle='--', color='b', label=labels_ref[0])
-        # i.e. always put the baseOnly reference line...
-        ax[plt_incl_i].axhline(floors[1], linestyle='--', color='k', label=labels_ref[1])
-        if plt_base_band is not None and plt_incl_i!=0: # why skip 0? that's just the mask
-          # -- and as +/- X std?
-          stdTot = plt_base_band; # this will also serve as the total STD range to encompass
-          sfMin, sfMax = np.nanmin(maskSf), np.nanmax(maskSf);
-          ax[plt_incl_i].add_patch(mpl.patches.Rectangle([sfMin, floors[1]-0.5*stdTot*base_one_std], sfMax-sfMin, stdTot*base_one_std, alpha=0.1, color='k'))
+        if not asFlatDiffs: # None of these should happen if we're doing diff plots
+          ax[plt_incl_i].set_ylim(overall_ylim);
+          if measure == 0 and not forceLog: # only do the blank response reference for DC
+              ax[plt_incl_i].axhline(floors[0], linestyle='--', color='b', label=labels_ref[0])
+          # i.e. always put the baseOnly reference line...
+          ax[plt_incl_i].axhline(floors[1], linestyle='--', color='k', label=labels_ref[1])
+          if plt_base_band is not None and plt_incl_i!=0: # why skip 0? that's just the mask
+            # -- and as +/- X std?
+            stdTot = plt_base_band; # this will also serve as the total STD range to encompass
+            sfMin, sfMax = np.nanmin(maskSf), np.nanmax(maskSf);
+            ax[plt_incl_i].add_patch(mpl.patches.Rectangle([sfMin, floors[1]-0.5*stdTot*base_one_std], sfMax-sfMin, stdTot*base_one_std, alpha=0.1, color='k'))
           
         if plt_incl_i==0 and incl_legend: # only need the legend once...
             ax[plt_incl_i].legend(fontsize='small');
@@ -632,7 +669,7 @@ f.tight_layout(rect=[0, 0.03, 1, 0.98])
 
 ### now save all figures (incl model details, if specified)
 saveName = "/cell_%03d_%s%s%s.pdf" % (cellNum, hf_sf.get_resp_str(respMeasure=use_resp_measure), kstr, '_log' if forceLog else '')
-full_save = os.path.dirname(str(save_loc + 'core/'));
+full_save = os.path.dirname(str(save_loc + 'core%s/' % ('_diff' if asFlatDiffs else '')));
 if not os.path.exists(full_save):
     os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);

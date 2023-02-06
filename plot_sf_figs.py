@@ -136,17 +136,20 @@ def prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fL
 
   # now get the measured responses
   divFactor = 1;
-  #_, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd);
-  _, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
+  _, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=False); 
+  #_, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
+  '''
   if rvcAdjSigned==1 and phAmpByMean and (force_f1 or f1f0rat>1):
     try:
       respMean = hf.organize_phAdj_byMean(trialInf, expInd, all_opts, stimVals, val_con_by_disp);
       # TEMP/TODO/HORRIBLE 
-      divFactor = 1/stimDur;
+      divFactor = stimDur;
     except: # why would it fail? Only when there isn't a trial for each condition - in which case, these are disregarded cells...
       respMean = respOrg;
   else:
       respMean = respOrg;
+  '''
+  respMean = respOrg
   respStd = np.nanstd(respAll, -1); # take std of all responses for a given condition
   # compute SEM, too
   findNaN = np.isnan(respAll);
@@ -169,16 +172,19 @@ def prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fL
   v_cons = val_con_by_disp[disp];
   n_v_cons = len(v_cons);
 
-  if old_refprm:
-    ref_params = descrParams[disp, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
-    ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
-  else:
-    if joint<10:
-      ref_params = np.array([np.nanmin(descrParams[disp, v_cons, 1]), 1]) if joint>0 else None;
-    else: # if joint==10, then we allow xc2 NEQ xc1
-      ref_params = np.array([np.nanmin(descrParams[disp, v_cons, 1]), descrFits[cellNum-1]['paramList'][disp][4]]); # param[4] is the xc2 ratio, rel. xc1
+  if mod_fits is None:
+    if old_refprm:
+      ref_params = descrParams[disp, v_cons[-1]] if joint>0 else None; # the reference parameter is the highest contrast for that dispersion
+      ref_rc_val = ref_params[2] if joint>0 else None; # will be used iff joint==5 (center radius at highest con)
+    else:
+      if joint<10:
+        ref_params = np.array([np.nanmin(descrParams[disp, v_cons, 1]), 1]) if joint>0 else None;
+      else: # if joint==10, then we allow xc2 NEQ xc1
+        ref_params = np.array([np.nanmin(descrParams[disp, v_cons, 1]), descrFits[cellNum-1]['paramList'][disp][4]]); # param[4] is the xc2 ratio, rel. xc1
 
-    ref_rc_val = None;
+      ref_rc_val = None;
+  else: # don't need this!
+    ref_params = None; ref_rc_val = None;
 
   # IF applicable, organize model responses
   # -- default to modByCond = None
@@ -235,9 +241,6 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
   rvcAdjSigned = rvcAdj;
   rvcAdj = np.abs(rvcAdj);
 
-  if not forceLog:
-    minToPlot = -2.5; # it's ok to have negative..
-
   modStr  = hf.descrMod_name(descrMod)
   fLname  = hf.descrFit_name(descrLoss, descrBase=descrBase, modelName=modStr, joint=joint, phAdj=1 if rvcAdjSigned==1 else None);
   # set the save directory to save_loc, then create the save directory if needed
@@ -269,8 +272,8 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
   #maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
   #minResp = np.min(np.min(np.min(respMean[~np.isnan(respMean)]))); 
   # --- disp=0
-  maxResp = np.nanmax(respMean[0])
-  minResp = np.nanmin(respMean[0])
+  maxResp = np.nanmax(respMean[disp])
+  minResp = np.nanmin(respMean[disp])
   # -- decide which contrasts we'll plot...
   if subset_cons is not None:
     if len(subset_cons)==2: # then it's start index, how many to skip
@@ -280,6 +283,11 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
   else:
     to_plot = range(n_v_cons);
 
+  if not forceLog:
+    minToPlot = -2.5; # it's ok to have negative..
+  else:
+    minToPlot = np.maximum(minToPlot, 0.04*maxResp); # shouldn't need to plot below 2-5% of maxResp?
+
   # Plot!
   for c in reversed(range(n_v_cons)):
 
@@ -287,7 +295,7 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
         continue;
       # also make sure that we have parameters for this data
       prms_curr = descrParams[c] if isSach else descrParams[disp, v_cons[c]];
-      if np.any(np.isnan(prms_curr)):
+      if np.any(np.isnan(prms_curr)) and disp==0: # only worry about this if disp==0
         continue;
 
       if isSach:
@@ -399,10 +407,11 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
     ax[i,j].set_xlabel('Spatial frequency (c/deg)', labelpad=x_lblpad); 
 
   if subplot_title:
+    dispStr = '' if disp==0 else '_d%d' % disp;
     if mod_fits is None:
-      ax[i,j].set_title('%s%02d j%d' % (expDir, cellNum, joint));
+      ax[i,j].set_title('%s%02d j%d%s' % (expDir, cellNum, joint, dispStr));
     else:
-      ax[i,j].set_title('%s' % hf.fitList_name('', fitType=normType, excType=excType, lossType=lossType, lgnType=lgnFrontEnd, dgNormFunc=dgNormFunc).replace('.npy', '').replace('_d', 'd'));
+      ax[i,j].set_title('%s%s' % (hf.fitList_name('', fitType=normType, excType=excType, lossType=lossType, lgnType=lgnFrontEnd, dgNormFunc=dgNormFunc).replace('.npy', '').replace('_d', 'd'), dispStr));
   if incl_legend:
     ax[i,j].legend(fontsize='x-small'); 
   

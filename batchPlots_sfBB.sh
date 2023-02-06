@@ -26,7 +26,7 @@ source activate pytorch-lcv
 
 EXC_TYPE=${1:-1}
 WHICH_PLOT=${2:-1}
-KFOLD=${3:--1}
+KFOLD=${3:--1} # if 2048, then we make difference plots (why multiplexing kfold? don't want to adjust actual input arguments)
 DATA_ONLY=${4:-0}
 LOSS=${5:-1}
 HPC=${6:-1}
@@ -36,6 +36,8 @@ if [[ $WHICH_PLOT -eq 1 ]]; then
   PYCALL="plot_sfBB.py"
 elif [[ $WHICH_PLOT -eq -1 ]]; then
   PYCALL="plot_sfBB_vertical.py"
+elif [[ $WHICH_PLOT -eq -2 ]]; then
+  PYCALL="plot_sfBB_vertical_sep.py"
 else
   PYCALL="plot_sfBB_sep.py"
 fi
@@ -68,11 +70,12 @@ do
   else
     ### 23.01.29 plots
     python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 01 & # no diff, not interpolated
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 11 00 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 01 & # no diff, not interpolated
     python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 27 11 00 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 11 & # no diff, not interpolated
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 21 11 04 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 10 & # no diff, not interpolated
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 44 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 11 & # no diff, not interpolated
+    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 21 11 04 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 10 & # no diff, not interpolated
+    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 44 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 11 & # no diff, not interpolated
+    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 11 00 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 01 & # no diff, not interpolated
 
+    # ---------- less used (incl. some that already appear above)
     # modA: flat, no LGN; modB: wght, no LGN
     #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
     # modA: flat, LGN; modB: wght, LGN

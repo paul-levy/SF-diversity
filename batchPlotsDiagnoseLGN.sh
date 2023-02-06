@@ -31,49 +31,57 @@ source activate pytorch-lcv
 EXP_DIR=$1
 END=$2
 RVC_ADJ=${3:-0} # RVC ADJ should be 0 for altExp/V1_orig, 1 for V1/
-KFOLD=${4:--1}
-EXC_TYPE=${5:-1}
-DG_NORM_FUNC=${6:-0} # should be double-digit number from {00 [default], 10, 11, 01}
-LOSS=${7:-1}
-HPC=${8:-1}
-START=${9:-1}
+WHICH_PLOT=${4:-0}
+KFOLD=${5:--1}
+DIFF_PLOT=${6:--0}
+EXC_TYPE=${7:-1}
+DG_NORM_FUNC=${8:-0} # should be double-digit number from {00 [default], 10, 11, 01}
+LOSS=${9:-1}
+HPC=${10:-1}
+START=${11:-1}
 
 CORES=$(($(getconf _NPROCESSORS_ONLN)-4))
+
+if [[ $WHICH_PLOT -eq 0 ]]; then
+  PYCALL="plot_diagnose_vLGN.py"
+elif [[ $WHICH_PLOT -eq 1 ]]; then
+  PYCALL="plot_diagnose_vLGN_tex.py"
+fi
 
 for (( run=$START; run<=$END; run++ ))
 do
   ### 23.01.29 plots
   # no LGN --> flat, wght
-  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
   # no LGN --> wght (log Gauss), wght
-  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 22 11 00 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 22 11 00 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
   # no LGN --> wght, wghtMatch
-  python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 27 11 00 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD 11 & # no diff, not interpolated
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 27 11 00 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 11 & # no diff, not interpolated
   # wght, V1, flat LGNsi
-  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 21 11 04 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD 10 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 21 11 04 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 10 & # no diff, not interpolated
   # LGNsi --> fflat,wght
-  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 44 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 44 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
 
   ############## mostly unused below?
 
-  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 55 44 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
-  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 15 44 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD 00 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 55 44 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 11 15 44 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 00 & # no diff, not interpolated
 
   # asym vs. wght
-  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 02 11 00 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 02 11 00 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
 
 
   # asym, LGNsi, wght LGNsi
-  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 02 11 44 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 02 11 44 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
   
   # flat, V1, flat LGNsi
-  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 11 04 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 11 11 04 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   # w/LGN
-  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   # w/LGNsi
-  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 12 11 44 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 44 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   # flat, V1/LGNsi
-  #python3.6 plot_diagnose_vLGN.py $run $EXC_TYPE $LOSS $EXP_DIR 11 11 04 $RVC_ADJ 1 0 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 11 11 04 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
 
   # Check how many background jobs there are, and if it
   # is equal to the number of cores, wait for anyone to
