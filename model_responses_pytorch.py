@@ -258,7 +258,7 @@ def spike_fft(psth, tfs = None, stimDur = None, binWidth=1e-3, inclPhase=0):
 
 ### Datawrapper/loader
 
-def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTrials=None, shufflePh=False, shuffleTf=False, singleGratsOnly=False):
+def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTrials=None, shufflePh=False, shuffleTf=False, singleGratsOnly=False, simulate=False):
   ''' Process the trial-by-trial stimulus information for ease of use with the model
       Specifically, we stack the stimuli to be [nTr x nStimComp], where 
       - [:,0] is base, [:,1] is mask, respectively for sfBB
@@ -281,29 +281,32 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
     else: # if we did specify whichTrials, then just filter out trials that do not have either mask or base on!
       whichTrials = np.intersect1d(valTrials, whichTrials);
       #### TODO: verify this!
-    if respMeasure == 0:
-      resp = np.expand_dims(coreExp['spikeCounts'][whichTrials], axis=1); # make (nTr, 1)
-    elif respMeasure == 1: # then we're getting F1 -- first at baseTF, then maskTF
-      # NOTE: CORRECTED TO MASK, then BASE on 20.11.15
-      # -- the tranpose turns it from [2, nTr] to [nTr, 2], but keeps [:,0] as mask; [:,1] as base
-      resp = np.vstack((coreExp['f1_mask'][whichTrials], coreExp['f1_base'][whichTrials])).transpose();
-      # NOTE: Here, if spikeCount == 0 for that trial, then f1_mask/base will be NaN -- replace with zero
-      to_repl = np.where(coreExp['spikeCounts'][whichTrials] == 0)[0];
-      resp[to_repl, :] = 0;
+    if not simulate:
+      if respMeasure == 0:
+        resp = np.expand_dims(coreExp['spikeCounts'][whichTrials], axis=1); # make (nTr, 1)
+      elif respMeasure == 1: # then we're getting F1 -- first at baseTF, then maskTF
+        # NOTE: CORRECTED TO MASK, then BASE on 20.11.15
+        # -- the tranpose turns it from [2, nTr] to [nTr, 2], but keeps [:,0] as mask; [:,1] as base
+        resp = np.vstack((coreExp['f1_mask'][whichTrials], coreExp['f1_base'][whichTrials])).transpose();
+        # NOTE: Here, if spikeCount == 0 for that trial, then f1_mask/base will be NaN -- replace with zero
+        to_repl = np.where(coreExp['spikeCounts'][whichTrials] == 0)[0];
+        resp[to_repl, :] = 0;
   # --- first step, but for older experiments    
   elif expInd == 1: # i.e. sfMix original
     trialInf = coreExp;
     ######
     # First, filter out the orientation trials and blank/NaN trials!
     ######
-    mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
+    mask = np.ones_like(coreExp['num'], dtype=bool); # i.e. true
+    #mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
     # and get rid of orientation tuning curve trials
     oriBlockIDs = np.hstack((np.arange(131, 155+1, 2), np.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
-    oriInds = np.empty((0,));
-    for iB in oriBlockIDs:
-        indCond = np.where(coreExp['blockID'] == iB);
-        if len(indCond[0]) > 0:
-            oriInds = np.append(oriInds, indCond);
+    oriInds = np.empty((0,)); 
+    if not simulate: # if we're simulating, no need to check if it's ori condition --> already know that it's not
+      for iB in oriBlockIDs:
+          indCond = np.where(coreExp['blockID'] == iB);
+          if len(indCond[0]) > 0:
+              oriInds = np.append(oriInds, indCond);
     mask[oriInds.astype(np.int64)] = False;
     # and also blank/NaN trials
     whereOriNan = np.where(np.isnan(coreExp['ori'][0]))[0];
@@ -314,22 +317,24 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
       whichTrials = np.intersect1d(np.where(mask)[0], whichTrials);
       # TODO: verify this!
     # now, finally get ths responses
-    if respOverwrite is not None:
-      resp = respOverwrite;
-    else:
-      if respMeasure == 0:
-        resp = coreExp['spikeCount'].astype(int); # cast as int, since some are as uint
+    if not simulate:
+      if respOverwrite is not None:
+        resp = respOverwrite;
       else:
-        resp = coreExp['f1'];
-      resp = np.expand_dims(resp, axis=1); # expand dimensions to make it (nTr, 1)
-    resp = resp[whichTrials];
+        if respMeasure == 0:
+          resp = coreExp['spikeCount'].astype(int); # cast as int, since some are as uint
+        else:
+          resp = coreExp['f1'];
+        resp = np.expand_dims(resp, axis=1); # expand dimensions to make it (nTr, 1)
+      resp = resp[whichTrials];
   elif expInd >= 2: # the updated sfMix experiments
     trialInf = coreExp;
     ######
     # First, filter the correct/valid trials!
     ######
     # start with all trials...
-    mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
+    mask = np.ones_like(coreExp['num'], dtype=bool); # i.e. true
+    #mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
     # BUT, if we pass in trialSubset, then use this as our mask (i.e. overwrite the above mask)
     if singleGratsOnly:
       # the first line (commented out now) is single gratings AND just at one SF (1.7321, for ex.)
@@ -346,17 +351,18 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
       whichTrials = valTrials;
     else: # then we need to find the intersection of valid trials (currently called whichTrials) and 
       whichTrials = np.intersect1d(valTrials, whichTrials);
-    # TODO -- put in the proper responses... NOTE AS OF 22.11.19 -- I think these responses below are OK, already?
-    if respOverwrite is not None:
-      resp = respOverwrite;
-    else:
-      if respMeasure == 0:
-        resp = coreExp['spikeCount'].astype(int); # cast as int, since some are as uint
-      elif respMeasure == 1:
-        resp = coreExp['f1'];
-      # 23.02.01 TODO/SUSPICION --> I *think* this line should only apply for DC (i.e. respMeasure==0)
-      resp = np.expand_dims(resp, axis=1);
-    resp = resp[whichTrials];
+    if not simulate:
+      # TODO -- put in the proper responses... NOTE AS OF 22.11.19 -- I think these responses below are OK, already?
+      if respOverwrite is not None:
+        resp = respOverwrite;
+      else:
+        if respMeasure == 0:
+          resp = coreExp['spikeCount'].astype(int); # cast as int, since some are as uint
+        elif respMeasure == 1:
+          resp = coreExp['f1'];
+        # 23.02.01 TODO/SUSPICION --> I *think* this line should only apply for DC (i.e. respMeasure==0)
+        resp = np.expand_dims(resp, axis=1);
+      resp = resp[whichTrials];
 
   # then, process the raw data such that trInf is [nTr x nComp]
   # for expInd == -1, this means mask [ind=0], then base [ind=1]
@@ -381,20 +387,25 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
   trInf['con'] = _cast_as_tensor(np.transpose(np.vstack(trialInf['con']), (1,0))[whichTrials, :])
   #low_isol = np.where(trInf['con'][:,0]<0.06);
   #trInf['con'][low_isol, 0] = trInf['con'][low_isol,0]=0
-  resp = _cast_as_tensor(resp);
+  if not simulate:
+    resp = _cast_as_tensor(resp);
+  else: # if simulation, then we haven't processed responses...
+    resp = None;
 
   return trInf, resp;
 
 class dataWrapper(torchdata.Dataset):
-    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None, respOverwrite=None, shufflePh=False, shuffleTf=False, singleGratsOnly=False):
+    def __init__(self, expInfo, expInd=-1, respMeasure=0, device='cpu', whichTrials=None, respOverwrite=None, shufflePh=False, shuffleTf=False, singleGratsOnly=False, simulate=False):
         # if respMeasure == 0, then we're getting DC; otherwise, F1
         # respOverwrite means overwrite the responses; used only for expInd>=0 for now
+        # --- if simulate==True, then we ignore responses...
 
         super().__init__();
-        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite, shufflePh=shufflePh, shuffleTf=shuffleTf, singleGratsOnly=singleGratsOnly)
+        trInf, resp = process_data(expInfo, expInd, respMeasure, whichTrials=whichTrials, respOverwrite=respOverwrite, shufflePh=shufflePh, shuffleTf=shuffleTf, singleGratsOnly=singleGratsOnly, simulate=simulate)
 
         self.trInf = trInf;
-        self.resp = resp;
+        if not simulate:
+          self.resp = resp;
         self.device = device;
         self.expInd = expInd;
         self.respMeasure = respMeasure
@@ -1410,6 +1421,39 @@ class sfNormMod(torch.nn.Module):
       return to_use, respModel;
     else:
       return to_use;
+
+  def simulate(self, coreExp, respMeasure, con, sf, disp=None, nRepeats=None):
+    ''' Simulate the model for stimuli which were not necessarily presented (i.e. freqs/cons not presented!)
+        Procedure is:
+        - 1. Generate new stimuli
+        - 2. Call dataWrapper to package for model evaluation
+        - 3. Clear saved model calculations
+        - 4. Evaluate! (self.forward)
+        - 5. Clear saved model calculations
+        NOTE: We return responses as numpy array, not tensor
+    '''
+    # DETERMINE IF WE NEED TO DIVIDE BY stimDur
+    stimDur = hf.get_exp_params(self.expInd).stimDur
+
+    # We bifurcate here based on sfBB experiment or not
+    if self.expInd == -1:
+      print('yowza --> need to update!');
+      new_stims = hf_sfBB.makeStimulusRef(coreExp, con, sf, nRepeats=nRepeats);
+      new_wrap  = dataWrapper(new_stims, respMeasure=respMeasure, expInd=self.expInd, simulate=True)
+      self.clear_saved_calcs();
+      resps_sim = self.forward(new_wrap.trInf, respMeasure=respMeasure, normOverwrite=True).detach().numpy();
+      self.clear_saved_calcs();
+      pdb.set_trace();
+      return None; # TODO: THIS IS PLACEHOLDER; make equivalent hf.makeStimulusRef in hf_sfBB
+    else: # then we can use hf.makeStimulusRef
+      new_stims = hf.makeStimulusRef(coreExp, disp, con, sf, expInd=self.expInd, nRepeats=nRepeats)
+      new_wrap  = dataWrapper(new_stims, respMeasure=respMeasure, expInd=self.expInd, simulate=True)
+      self.clear_saved_calcs();
+      resps_sim = self.forward(new_wrap.trInf, respMeasure=respMeasure, normOverwrite=True).detach().numpy();
+      self.clear_saved_calcs();
+      div_factor = stimDur if respMeasure==0 else 1./stimDur; # OK --> seemingly works with plot_diagnose_vLGN?
+      #pdb.set_trace();
+      return resps_sim/div_factor;
 
 ### End of class (sfNormMod)
     

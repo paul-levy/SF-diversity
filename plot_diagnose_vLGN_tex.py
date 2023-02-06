@@ -3,10 +3,10 @@
 import os
 import sys
 import numpy as np
-import matplotlib
-matplotlib.use('Agg') # to avoid GUI/cluster issues...
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pltSave
+from matplotlib.ticker import FuncFormatter
 import seaborn as sns
 sns.set(style='ticks')
 from scipy.stats import poisson, nbinom
@@ -33,36 +33,54 @@ recenter_norm = 0;
 #singleGratsOnly = True;
 singleGratsOnly = False;
 
+sfMix_every_other_disp = False; # default is True; if False, then we plot single grats and the last two disp levels
+
+useLineStyle = True
+line_suff = '_ls' if useLineStyle else '_clr';
+
 save_varExpl = False; # save varExpl to the model fit?
 
 f1_expCutoff = 2; # if 1, then all but V1_orig/ are allowed to have F1; if 2, then altExp/ is also excluded
 
 force_full = 1;
 
-plt.style.use('https://raw.githubusercontent.com/paul-levy/SF_diversity/master/paul_plt_style.mplstyle');
+incl_annotations = False;
+
+subset_disps = True;
+
+############
+# Before any plotting, fix plotting paramaters
+############
 from matplotlib import rcParams
-# TODO: migrate this to actual .mplstyle sheet
-rcParams['font.size'] = 20;
-rcParams['pdf.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['ps.fonttype'] = 42 # should be 42, but there are kerning issues
-rcParams['lines.linewidth'] = 2.5;
-rcParams['lines.markeredgewidth'] = 0; # remove edge??
-rcParams['axes.linewidth'] = 1.5;
-rcParams['lines.markersize'] = 12; # 8 is the default
-rcParams['font.style'] = 'oblique';
+tex_width = 469; # per \layout in Overleaf on document
+sns_offset = 6; 
 
-rcParams['xtick.major.size'] = 25
-rcParams['xtick.minor.size'] = 12
-rcParams['ytick.major.size'] = 25
-rcParams['ytick.minor.size'] = 0; # i.e. don't have minor ticks on y...
+rcParams.update(mpl.rcParamsDefault)
 
-rcParams['xtick.major.width'] = 2
-rcParams['xtick.minor.width'] = 2
-rcParams['ytick.major.width'] = 2
-rcParams['ytick.minor.width'] = 0
+fontsz = 10;
+tick_scalar = 1.5;
 
-minorWid, minorLen = 2, 12;
-majorWid, majorLen = 5, 25;
+rcParams['pdf.fonttype'] = 42
+rcParams['ps.fonttype'] = 42
+useTex = False
+if useTex:
+  rcParams['text.latex.preamble']=[r"\usepackage{lmodern}"]
+  params = {'text.usetex' : True,
+#              'font.size' : fontsz,
+            'font.family': 'lmodern',
+             'font.style': 'italic'}
+  plt.rcParams.update(params)
+else:
+  rcParams['font.style'] = 'oblique';
+
+# rcParams['lines.linewidth'] = 2.5;
+rcParams['lines.markeredgewidth'] = 0; # no edge, since weird tings happen then
+# rcParams['axes.linewidth'] = 2; # was 1.5
+# rcParams['lines.markersize'] = 5;
+
+tick_adj = ['xtick.major.size', 'xtick.minor.size', 'ytick.major.size', 'ytick.minor.size']
+for adj in tick_adj:
+    rcParams[adj] = rcParams[adj] * tick_scalar;
 
 clip_on = True
 
@@ -120,12 +138,14 @@ else:
 isCV = False if whichKfold is None else True;
 
 ## used for interpolation plot
-sfSteps  = 45; # i.e. how many steps between bounds of interest
-conSteps = -1;
+sfSteps  = 30; # i.e. how many steps between bounds of interest [45 was earlier value]
+conSteps = 30;
+# --- actually do con only if not V1_orig/
+conSteps = conSteps if expDir!='V1_orig/' else -1;
+nRpts    = 10; # how many repeats for stimuli in interpolation plot?
+nRptsSingle = 3; # when disp = 1 (which is most cases), we do not need so many interpolated points
 #nRpts    = 100; # how many repeats for stimuli in interpolation plot?
-nRpts    = 5; # how many repeats for stimuli in interpolation plot?
 #nRpts    = 3000; # how many repeats for stimuli in interpolation plot? USE FOR PUBLICATION/PRESENTATION QUALITY, but SLOW
-nRptsSingle = 5; # when disp = 1 (which is most cases), we do not need so many interpolated points
 
 loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
@@ -149,8 +169,8 @@ _sigmoidScale = 10
 _sigmoidDord = 5;
 
 fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr230203qSq_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr230118_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr230201q_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
 vecF1 = 0;
@@ -417,7 +437,8 @@ else:
   gs_mean_B, gs_std_B = None, None
 
 # now organize the responses
-orgs = [hf.organize_resp(np.divide(mr, divFactor), expData, expInd) for mr in modResps];
+orgs = [hf.organize_resp(np.divide(mr, divFactor), expData, expInd, respsAsRate=True) for mr in modResps];
+#orgs = [hf.organize_resp(np.divide(mr, divFactor), expData, expInd) for mr in modResps];
 #orgs = [hf.organize_resp(mr, expData, expInd, respsAsRate=True) for mr in modResps];
 #orgs = [hf.organize_resp(mr, expData, expInd, respsAsRate=False) for mr in modResps];
 oriModResps = [org[0] for org in orgs]; # only non-empty if expInd = 1
@@ -431,6 +452,7 @@ modAvgs = [np.nanmean(resp, axis=3) for resp in allSfMixs];
 modSponRates = [fit[6] for fit in modFits];
 
 # DATA: more tabulation - stim vals, organize measured responses
+asRates = True; # TEMP. DEFAULT TO asRates (automatic when hf.get_adjusted_spikerate() called)
 _, _, respOrg, respAll = hf.organize_resp(spikes_rate, expData, expInd, respsAsRate=asRates);
 
 respMean = respOrg;
@@ -472,9 +494,10 @@ nDisps = len(all_disps);
 # ### Plots
 
 # set up model plot info
-# i.e. flat model is red, weighted model is green
+# i.e. typically, flat model is green, weighted model is red
 modColors = ['g', 'r']
 modLabels = ['A: %s' % modA_str, 'B: %s' % modB_str]
+modLines = ['--', '-']
 
 # #### Plots by dispersion
 
@@ -486,13 +509,15 @@ for d in range(nDisps):
 
     v_cons = val_con_by_disp[d];
     n_v_cons = len(v_cons);
-
-    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=(nDisps*8, n_v_cons*12), sharey=False);
+    # the 2/3 and 1.2.../2 are to align the figure size with sfMix
+    sfMixRatio = 2/3; # why 2/3? Because sfMix has 3 columns, this has only 2...
+    fCurr, dispCurr = plt.subplots(n_v_cons, 2, figsize=hf.set_size(tex_width*sfMixRatio, extra_height=1.2*n_v_cons/2/sfMixRatio), sharey='col', sharex='row');
     fDisp.append(fCurr)
     dispAx.append(dispCurr);
 
-    minResp = np.min(np.min(respMean[d, ~np.isnan(respMean[d, :, :])]));
-    maxResp = np.max(np.max(respMean[d, ~np.isnan(respMean[d, :, :])]));
+    ref_disp = 0; # either set to 0 (common axes always) or d (rescaled for each dispersion)
+    minResp = np.min(np.min(respMean[ref_disp, ~np.isnan(respMean[ref_disp, :, :])]));
+    maxResp = np.max(np.max(respMean[ref_disp, ~np.isnan(respMean[ref_disp, :, :])]));
 
     for c in reversed(range(n_v_cons)):
         c_plt_ind = len(v_cons) - c - 1;
@@ -538,18 +563,21 @@ for d in range(nDisps):
           dispAx[d][c_plt_ind, i].set_xlim((min(all_sfs), max(all_sfs)));
 
           dispAx[d][c_plt_ind, i].set_xscale('log');
-          dispAx[d][c_plt_ind, i].set_title('D%02d: contrast: %.3f (l_w %.1f, l_f %.1f)' % (d, all_cons[v_cons[c]], curr_loss, curr_loss_B));
-          dispAx[d][c_plt_ind, i].set_xlabel('Spatial frequency (c/deg)'); 
-          dispAx[d][c_plt_ind, i].set_ylabel('Response (spikes/s)');
+          if incl_annotations:
+            dispAx[d][c_plt_ind, i].set_title('D%02d: contrast: %.3f (l_w %.1f, l_f %.1f)' % (d, all_cons[v_cons[c]], curr_loss, curr_loss_B));
+          if i==0 and c_plt_ind==0:
+            dispAx[d][c_plt_ind, i].set_ylabel('Response (spikes/s)');
+          if c_plt_ind==(len(v_cons)-1) and i==0:
+            dispAx[d][c_plt_ind, i].set_xlabel('Spatial frequency (c/deg)'); 
 
           # Set ticks out, remove top/right axis, put ticks only on bottom/left
-          dispAx[d][c_plt_ind, i].tick_params(labelsize=15, width=majorWid, length=majorLen, direction='out');
-          dispAx[d][c_plt_ind, i].tick_params(which='minor', direction='out', width=minorWid, length=minorLen); # minor ticks, too...
-          sns.despine(ax=dispAx[d][c_plt_ind, i], offset=10, trim=False); 
+          #dispAx[d][c_plt_ind, i].tick_params(labelsize=15, direction='out');
+          #dispAx[d][c_plt_ind, i].tick_params(which='minor', direction='out'); # minor ticks, too...
+          sns.despine(ax=dispAx[d][c_plt_ind, i], offset=sns_offset, trim=False); 
    
           ### plot data
-          dispAx[d][c_plt_ind, i].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                           respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=False); # always show the full data
+          dispAx[d][c_plt_ind, i].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], respVar[d, v_sfs, v_cons[c]], 
+                                           alpha=all_cons[v_cons[c]], fmt='o', color='k', clip_on=False); # always show the full data
 
           ### plot model fits
           if intpMod == 1:
@@ -559,19 +587,33 @@ for d in range(nDisps):
               nRptsCurr = nRptsSingle;
             else:
               nRptsCurr = nRpts;
-            for pm, typ in zip(modFits, normTypes):
-              simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, v_cons[c], x, normType=typ, expInd=expInd, nRepeats=nRptsCurr, excType=excType)[0];
-              interpMod = [np.mean(simWrap(np.array([sfCurr]))) for sfCurr in plt_sfs];
-              interpModBoth.append(np.array(interpMod));
+            if pytorch_mod==1:
+              for mod_curr in [model_A, model_B]:
+                simWrap = lambda mod, sf: mod.simulate(expData, respMeasure, v_cons[c], sf, disp=d, nRepeats=nRptsCurr);
+                interpMod = [np.mean(simWrap(mod_curr, np.array([sfCurr]))) for sfCurr in plt_sfs];
+                interpModBoth.append(np.array(interpMod));
+            else: # OLD/DEPRECATED
+              for pm, typ in zip(modFits, normTypes):
+                simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, v_cons[c], x, normType=typ, expInd=expInd, nRepeats=nRptsCurr, excType=excType)[0];
+                interpMod = [np.mean(simWrap(np.array([sfCurr]))) for mod,sfCurr in plt_sfs];
+                interpModBoth.append(np.array(interpMod));
             # TODO plot, but recenter if diffPlot == 1...
             if diffPlot == 1:
               relTo = interpModBoth[0];
             else:
               relTo = np.zeros_like(interpModBoth[0]);
-            for rsp, cc, s in zip(interpModBoth, modColors, modLabels):
-              dispAx[d][c_plt_ind, i].plot(plt_sfs, rsp-relTo, color=cc, label=s);
+            
+            #for rsp, cc, s in zip(interpModBoth, modColors, modLabels):
+            #  dispAx[d][c_plt_ind, i].plot(plt_sfs, rsp-relTo, color=cc, label=s);
+            if diffPlot or useLineStyle:
+              [dispAx[d][c_plt_ind, i].plot(plt_sfs, modAvg-relTo, color='k', alpha=all_cons[v_cons[c]], linestyle=ls, clip_on=clip_on, label=s) for modAvg, cc, s, ls in zip(interpModBoth, modColors, modLabels, modLines)];
+            else:
+              [dispAx[d][c_plt_ind, i].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=clip_on, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
           else: # plot model evaluated only at data point
-            [dispAx[d][c_plt_ind, i].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=clip_on, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
+            if diffPlot or useLineStyle:
+              [dispAx[d][c_plt_ind, i].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color='k', alpha=all_cons[v_cons[c]], linestyle=ls, clip_on=clip_on, label=s) for modAvg, cc, s, ls in zip(modAvgs, modColors, modLabels, modLines)];
+            else:
+              [dispAx[d][c_plt_ind, i].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=clip_on, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
           '''
           sponRate = dispAx[d][c_plt_ind, 0].axhline(blankMean, color='b', linestyle='dashed', label='data spon. rate');
           [dispAx[d][c_plt_ind, 0].axhline(sponRate, color=cc, linestyle='dashed') for sponRate,cc in zip(modSponRates, modColors)];
@@ -579,31 +621,45 @@ for d in range(nDisps):
 
           ### plot model fits
           if diffPlot == 1:
+            '''
             if i == 0:
               dispAx[d][c_plt_ind, i].set_ylim((-1.5*np.abs(minResp), 1.5*maxResp));
             else:
               dispAx[d][c_plt_ind, i].set_yscale('symlog');
               dispAx[d][c_plt_ind, i].set_ylim((-1.5*np.abs(minResp), 1.5*maxResp));
+            '''
           else:
             if i == 0:
-              dispAx[d][c_plt_ind, i].set_ylim((0, 1.5*maxResp));
-              if np.array_equal(all_loss, np.nan):
-                dispAx[d][c_plt_ind, i].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True, fontsize=25);
-              dispAx[d][c_plt_ind, i].text(min(all_sfs), 1.2*maxResp, '%.2f, %.2f' % (varExplSF_A[d, v_cons[c]], varExplSF_B[d, v_cons[c]]), ha='left', wrap=True, fontsize=25);
+              dispAx[d][c_plt_ind, i].set_ylim((0, 1.2*maxResp));
+              if np.array_equal(all_loss, np.nan) and incl_annotations:
+                dispAx[d][c_plt_ind, i].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True);
+                dispAx[d][c_plt_ind, i].text(min(all_sfs), 1.2*maxResp, '%.2f, %.2f' % (varExplSF_A[d, v_cons[c]], varExplSF_B[d, v_cons[c]]), ha='left', wrap=True);
+              # also put blank response?
+              if respMeasure == 0: # if DC
+                dispAx[d][c_plt_ind, i].axhline(blankMean, alpha=0.3, linestyle='--', color='k');
             else:
               dispAx[d][c_plt_ind, i].set_yscale('symlog');
-              dispAx[d][c_plt_ind, i].set_ylim((1.1*minResp, 1.5*maxResp));
+              #dispAx[d][c_plt_ind, i].set_ylim((1.1*minResp, 1.5*maxResp));
 
-          dispAx[d][c_plt_ind, i].legend();
+          #dispAx[d][c_plt_ind, i].legend();
 
-    fCurr.suptitle('%s #%d, loss %.2f|%.2f [%s]' % (cellType, cellNum, loss_A, loss_B, respStr));
+          # and make sure not sci. notation
+          for jj, axis in enumerate([dispAx[d][c_plt_ind, i].xaxis, dispAx[d][c_plt_ind, i].yaxis]):
+            if jj == 0:
+              axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+            inter_val = 3;
+            axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val)<1e-3 else '%.1f' % x if np.square(x-inter_val/10)<1e-3 else '')) # this will make everything in non-scientific notation!
+            axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
 
+    #fCurr.tight_layout();
+    if incl_annotations:
+      fCurr.suptitle('%s #%d, loss %.2f|%.2f [%s]' % (cellType, cellNum, loss_A, loss_B, respStr));
 
 if not os.path.exists(save_loc):
   os.makedirs(save_loc);
 
-saveName = "/cell_%03d%s.pdf" % (cellNum, kstr)
-full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
+saveName = "/cell_%03d%s%s.pdf" % (cellNum, kstr, line_suff)
+full_save = os.path.dirname(str(save_loc + 'byDisp%s_tex/' % rvcFlag));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -624,11 +680,11 @@ if diffPlot != 1:
       v_cons = val_con_by_disp[d];
       n_v_cons = len(v_cons);
 
-      fCurr, dispCurr = plt.subplots(1, 3, figsize=(35, 30), sharex=True, sharey=True); # left side for flat; middle for data; right side for weighted modelb
+      fCurr, dispCurr = plt.subplots(1, 3, figsize=hf.set_size(tex_width), sharex=True, sharey=True); # left side for flat; middle for data; right side for weighted modelb
       fDisp.append(fCurr)
       dispAx.append(dispCurr);
-
-      fCurr.suptitle('%s #%d [%s]' % (cellType, cellNum, respStr));
+      if incl_annotations:
+        fCurr.suptitle('%s #%d [%s]' % (cellType, cellNum, respStr));
 
       resps_curr = [modAvgs[0], respMean, modAvgs[1]];
       labels     = [modLabels[0], 'data', modLabels[1]];
@@ -636,9 +692,9 @@ if diffPlot != 1:
       for i in range(3):
 
         # Set ticks out, remove top/right axis, put ticks only on bottom/left
-        dispAx[d][i].tick_params(labelsize=15, width=majorWid, length=majorLen, direction='out');
-        dispAx[d][i].tick_params(which='minor', direction='out'); # minor ticks, too...
-        sns.despine(ax=dispAx[d][i], offset=10, trim=False); 
+        #dispAx[d][i].tick_params(labelsize=15, direction='out');
+        #dispAx[d][i].tick_params(which='minor', direction='out'); # minor ticks, too...
+        sns.despine(ax=dispAx[d][i], offset=sns_offset, trim=False); 
 
         curr_resps = resps_curr[i];
         maxResp = np.max(np.max(np.max(curr_resps[~np.isnan(curr_resps)])));  
@@ -647,7 +703,8 @@ if diffPlot != 1:
             v_sfs = ~np.isnan(curr_resps[d, :, v_cons[c]]);        
 
             # plot data
-            col = [c/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
+            col = [(n_v_cons-c-1)/float(n_v_cons), (n_v_cons-c-1)/float(n_v_cons), (n_v_cons-c-1)/float(n_v_cons)];
+            #col = [c)/float(n_v_cons), c/float(n_v_cons), c/float(n_v_cons)];
             plot_resp = curr_resps[d, v_sfs, v_cons[c]] - to_sub[i];
 
             dispAx[d][i].plot(all_sfs[v_sfs][plot_resp>1e-1], plot_resp[plot_resp>1e-1], '-o', clip_on=False, \
@@ -660,14 +717,25 @@ if diffPlot != 1:
         dispAx[d][i].set_xscale('log');
         dispAx[d][i].set_yscale('log');
         dispAx[d][i].axis('scaled');
-        dispAx[d][i].set_xlabel('sf (c/deg)'); 
+        if i==1: # only put this in the middle
+          dispAx[d][i].set_xlabel('Spatial frequency (c/deg)'); 
+        if i==0:
+          #dispAx[d][i].legend(); 
+          dispAx[d][i].set_ylabel('Response above baseline (spikes/s)');
+        if incl_annotations:
+          dispAx[d][i].set_title('D%02d %s' % (d, labels[i]));
 
-        dispAx[d][i].set_ylabel('resp above baseline (imp/s)');
-        dispAx[d][i].set_title('D%02d - sf tuning %s' % (d, labels[i]));
-        dispAx[d][i].legend(); 
+        # and make sure not sci. notation
+        for jj, axis in enumerate([dispAx[d][i].xaxis, dispAx[d][i].yaxis]):
+          if jj == 0:
+            axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+            inter_val = 3;
+            axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val)<1e-3 else '%.1f' % x if np.square(x-inter_val/10)<1e-3 else '')) # this will make everything in non-scientific notation!
+            axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
 
-  saveName = "/allCons_cell_%03d%s.pdf" % (cellNum, kstr)
-  full_save = os.path.dirname(str(save_loc + 'byDisp%s/' % rvcFlag));
+
+  saveName = "/allCons_cell_%03d%s%s.pdf" % (cellNum, kstr, line_suff)
+  full_save = os.path.dirname(str(save_loc + 'byDisp%s_tex/' % rvcFlag));
   if not os.path.exists(full_save):
     os.makedirs(full_save);
   pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -682,22 +750,31 @@ mixCons = hf.get_exp_params(expInd).nCons;
 minResp = np.min(np.min(np.min(respMean[~np.isnan(respMean)])));
 maxResp = np.max(np.max(np.max(respMean[~np.isnan(respMean)])));
 
-f, sfMixAx = plt.subplots(mixCons, nDisps, figsize=(30, 35));
+if subset_disps and nDisps>4:
+  nDisps_plt = int(np.ceil(nDisps/2));
+  if sfMix_every_other_disp:
+    disps_plt = np.arange(0, nDisps, 2); # i.e. every other
+  else: # 1, 4, and 5
+    disps_plt = np.array([0, 3, 4]);
+else:
+  if subset_disps and nDisps>=3: # but fewer than 4 disps...
+    disps_plt = np.array([0, 2, 3]);
+  else:
+    disps_plt = np.arange(nDisps);
+
+sfMix_sharey = True
+f, sfMixAx = plt.subplots(mixCons, len(disps_plt), figsize=hf.set_size(tex_width, extra_height=1.2*mixCons/2), sharey=sfMix_sharey, sharex=True);
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);
 
-for d in range(nDisps):
+for iii,d in enumerate(disps_plt):
+  
     v_cons = np.array(val_con_by_disp[d]);
     n_v_cons = len(v_cons);
     v_cons = v_cons[np.arange(np.maximum(0, n_v_cons -mixCons), n_v_cons)]; # max(1, .) for when there are fewer contrasts than 4
     n_v_cons = len(v_cons);
     
     for c in reversed(range(n_v_cons)):
-
-	# Set ticks out, remove top/right axis, put ticks only on bottom/left
-        sfMixAx[c_plt_ind, d].tick_params(labelsize=15, width=majorWid, length=majorLen, direction='out');
-        sfMixAx[c_plt_ind, d].tick_params(which='minor', direction='out'); # minor ticks, too...
-        sns.despine(ax=sfMixAx[c_plt_ind, d], offset=10, trim=False);
 
         c_plt_ind = n_v_cons - c - 1;
         v_sfs = ~np.isnan(respMean[d, :, v_cons[c]]);
@@ -736,11 +813,14 @@ for d in range(nDisps):
         else:
           curr_loss = np.nan; curr_loss_B = np.nan;
           all_loss = np.nan; all_loss_B = np.nan;
-
-        sfMixAx[c_plt_ind, d].set_title('con: %s (l_A %.1f, l_B %.1f)' % (str(np.round(all_cons[v_cons[c]], 2)), curr_loss, curr_loss_B));
+        if incl_annotations:
+          sfMixAx[c_plt_ind, iii].set_title('con: %s (l_A %.1f, l_B %.1f)' % (str(np.round(all_cons[v_cons[c]], 2)), curr_loss, curr_loss_B));
         # plot data
-        sfMixAx[c_plt_ind, d].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], 
-                                       respVar[d, v_sfs, v_cons[c]], fmt='o', color='k', clip_on=False);
+        sfMixAx[c_plt_ind, iii].errorbar(all_sfs[v_sfs], respMean[d, v_sfs, v_cons[c]], respVar[d, v_sfs, v_cons[c]], 
+                                        alpha=all_cons[v_cons[c]], fmt='o', color='k', clip_on=False);
+        # also put blank response?
+        if respMeasure == 0 and diffPlot==0: # if DC and not a diff plot
+          sfMixAx[c_plt_ind, iii].axhline(blankMean, alpha=0.3, linestyle='--', color='k');
 
 	# plot model fits
         if intpMod == 1:
@@ -750,41 +830,74 @@ for d in range(nDisps):
             nRptsCurr = nRptsSingle;
           else:
             nRptsCurr = nRpts;
-          for pm, typ in zip(modFits, normTypes):
-            simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, v_cons[c], x, normType=typ, expInd=expInd, nRepeats=nRptsCurr, excType=excType)[0];
-            interpMod = [np.mean(simWrap(np.array([sfCurr]))) for sfCurr in plt_sfs];
-            interpModBoth.append(np.array(interpMod));
+          if pytorch_mod==1:
+            for mod_curr in [model_A, model_B]:
+              simWrap = lambda mod, sf: mod.simulate(expData, respMeasure, v_cons[c], sf, disp=d, nRepeats=nRptsCurr);
+              interpMod = [np.mean(simWrap(mod_curr, np.array([sfCurr]))) for sfCurr in plt_sfs];
+              interpModBoth.append(np.array(interpMod));
+          else: # DEPRECATED
+            for pm, typ in zip(modFits, normTypes):
+              simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, v_cons[c], x, normType=typ, expInd=expInd, nRepeats=nRptsCurr, excType=excType)[0];
+              interpMod = [np.mean(simWrap(np.array([sfCurr]))) for sfCurr in plt_sfs];
+              interpModBoth.append(np.array(interpMod));
           # TODO plot, but recenter if diffPlot == 1...
           if diffPlot == 1:
             relTo = interpModBoth[0];
           else:
             relTo = np.zeros_like(interpModBoth[0]);
-          for rsp, cc, s in zip(interpModBoth, modColors, modLabels):
+
+          if diffPlot==1 or useLineStyle: # then use color only...
             if d == 0 and c == 0:
-              sfMixAx[c_plt_ind, d].plot(plt_sfs, rsp-relTo, color=cc, label=s, clip_on=clip_on);
+              [sfMixAx[c_plt_ind, iii].plot(plt_sfs, modAvg, color='k', alpha=all_cons[v_cons[c]], linestyle=ls, clip_on=clip_on, label=s) for modAvg, cc, s, ls in zip(interpModBoth, modColors, modLabels, modLines)];
             else:
-              sfMixAx[c_plt_ind, d].plot(plt_sfs, rsp-relTo, color=cc, clip_on=clip_on);
-        else: # plot model evaluated only at data point
-          if d == 0 and c == 0:
-            [sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=clip_on, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
+              [sfMixAx[c_plt_ind, iii].plot(plt_sfs, modAvg, color='k', alpha=all_cons[v_cons[c]], linestyle=ls, clip_on=clip_on) for modAvg, cc, ls in zip(interpModBoth, modColors, modLines)];
           else:
-            [sfMixAx[c_plt_ind, d].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=clip_on) for modAvg, cc in zip(modAvgs, modColors)];
+            if d == 0 and c == 0:
+              [sfMixAx[c_plt_ind, iii].plot(plt_sfs, modAvg, color=cc, alpha=0.7, clip_on=clip_on, label=s) for modAvg, cc, s in zip(interpModBoth, modColors, modLabels)];
+            else:
+              [sfMixAx[c_plt_ind, iii].plot(plt_sfs, modAvg, color=cc, alpha=0.7, clip_on=clip_on) for modAvg, cc in zip(interpModBoth, modColors)];
 
-        sfMixAx[c_plt_ind, d].set_xlim((np.min(all_sfs), np.max(all_sfs)));
+          #for rsp, cc, s in zip(interpModBoth, modColors, modLabels):
+            #if d == 0 and c == 0:
+            #  sfMixAx[c_plt_ind, iii].plot(plt_sfs, rsp-relTo, color=cc, label=s, clip_on=clip_on);
+            #else:
+            #  sfMixAx[c_plt_ind, iii].plot(plt_sfs, rsp-relTo, color=cc, clip_on=clip_on);
+        else: # plot model evaluated only at data point
+          if diffPlot==1 or useLineStyle: # then use color only...
+            if d == 0 and c == 0:
+              [sfMixAx[c_plt_ind, iii].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color='k', alpha=all_cons[v_cons[c]], linestyle=ls, clip_on=clip_on, label=s) for modAvg, cc, s, ls in zip(modAvgs, modColors, modLabels, modLines)];
+            else:
+              [sfMixAx[c_plt_ind, iii].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color='k', alpha=all_cons[v_cons[c]], linestyle=ls, clip_on=clip_on) for modAvg, cc, ls in zip(modAvgs, modColors, modLines)];
+          else:
+            if d == 0 and c == 0:
+              [sfMixAx[c_plt_ind, iii].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=clip_on, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
+            else:
+              [sfMixAx[c_plt_ind, iii].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=clip_on) for modAvg, cc in zip(modAvgs, modColors)];
+
+        sfMixAx[c_plt_ind, iii].set_xlim((np.min(all_sfs), np.max(all_sfs)));
         if diffPlot == 1:
-          sfMixAx[c_plt_ind, d].set_ylim((-1.5*np.abs(minResp), 1.5*maxResp));
+          sfMixAx[c_plt_ind, iii].set_ylim((-1.5*np.abs(minResp), 1.5*maxResp));
         else:
-          sfMixAx[c_plt_ind, d].set_ylim((0, 1.5*maxResp));
+          sfMixAx[c_plt_ind, iii].set_ylim((0, 1.3*maxResp)); # no need for such a high max
 
-        if np.array_equal(all_loss, np.nan):
-          sfMixAx[c_plt_ind, d].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True, fontsize=10);
-        sfMixAx[c_plt_ind, d].text(min(all_sfs), 0.8*maxResp, '%.2f, %.2f' % (varExplSF_A[d, v_cons[c]], varExplSF_B[d, v_cons[c]]), ha='left', wrap=True, fontsize=25);
+        if np.array_equal(all_loss, np.nan) and incl_annotations:
+          sfMixAx[c_plt_ind, iii].text(min(all_sfs), 1.2*maxResp, ', '.join(['%.1f' % x for x in all_loss]), ha='left', wrap=True);
+          sfMixAx[c_plt_ind, iii].text(min(all_sfs), 0.8*maxResp, '%.2f, %.2f' % (varExplSF_A[d, v_cons[c]], varExplSF_B[d, v_cons[c]]), ha='left', wrap=True);
 
-        sfMixAx[c_plt_ind, d].set_xscale('log');
+        sfMixAx[c_plt_ind, iii].set_xscale('log');
         if c_plt_ind == (n_v_cons-1):
-          sfMixAx[c_plt_ind, d].set_xlabel('sf (c/deg)');
-        if d == 0:
-          sfMixAx[c_plt_ind, d].set_ylabel('resp (imp/s)');
+          sfMixAx[c_plt_ind, iii].set_xlabel('Spatial frequency (c/deg)');
+        if d == 0 and (not sfMix_sharey or c_plt_ind==0):
+          sfMixAx[c_plt_ind, iii].set_ylabel('Response (spikes/s)');
+
+        # and make sure not sci. notation
+        sns.despine(ax=sfMixAx[c_plt_ind, iii], offset=sns_offset, trim=False);
+        for jj, axis in enumerate([sfMixAx[c_plt_ind, iii].xaxis, sfMixAx[c_plt_ind, iii].yaxis]):
+          if jj == 0:
+            axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+            inter_val = 3;
+            axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val)<1e-3 else '%.1f' % x if np.square(x-inter_val/10)<1e-3 else '')) # this will make everything in non-scientific notation!
+            axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
 
 if lgnA > 0:
   mWt_A = modFit_A[-1] if pytorch_mod == 0 else 1/(1+np.exp(-modFit_A[-1])); # why? in pytorch_mod, it's a sigmoid
@@ -796,7 +909,7 @@ else:
   mWt_B = -99;
 lgnStr = ' mWt=%.2f|%.2f' % (mWt_A, mWt_B);
 
-f.legend(fontsize='large');
+#f.legend(fontsize='large');
 varExpl_A = hf.var_explained(hf.nan_rm(respMean), hf.nan_rm(modAvgs[0]), None);
 varExpl_B = hf.var_explained(hf.nan_rm(respMean), hf.nan_rm(modAvgs[1]), None);
 ###
@@ -807,65 +920,18 @@ if pytorch_mod == 1 and save_varExpl:
   print('saving varExplained in: %s' % (data_loc+fitNameA));
   np.save(data_loc + fitNameA, fitListA);
   np.save(data_loc + fitNameB, fitListB);
-f.suptitle('%s #%d (%s; %s), loss %.2f|%.2f%s [varExpl=%.2f|%.2f]' % (cellType, cellNum, cellName, respStr, loss_A, loss_B, lgnStr, varExpl_A, varExpl_B));
+if incl_annotations:
+  f.suptitle('%s #%d (%s; %s), loss %.2f|%.2f%s [varExpl=%.2f|%.2f]' % (cellType, cellNum, cellName, respStr, loss_A, loss_B, lgnStr, varExpl_A, varExpl_B));
+
+#f.tight_layout();
 	        
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc
 #########
 
-fDetails = plt.figure();
-fDetails.set_size_inches(w=25,h=15)
-
-detailSize = (3, 5);
-if ~np.any([i is None for i in oriModResps]): # then we're using an experiment with ori curves
-  curr_ax = plt.subplot2grid(detailSize, (0, 2));
-  # Remove top/right axis, put ticks only on bottom/left
-  sns.despine(ax=curr_ax, offset = 5);
-
-  # plot ori tuning
-  [plt.plot(expData['sfm']['exp']['ori'], oriResp, '%so' % c, clip_on=False, label=s) for oriResp, c, s in zip(oriModResps, modColors, modLabels)]; # Model responses
-  expPlt = plt.plot(expData['sfm']['exp']['ori'], expData['sfm']['exp']['oriRateMean'], 'o-', clip_on=clip_on); # Exp responses
-  plt.xlabel('Ori (deg)', fontsize=12);
-  plt.ylabel('Response (ips)', fontsize=12);
-
-if ~np.any([i is None for i in conModResps]): # then we're using an experiment with RVC curves
-  # CRF - with values from TF simulation and the broken down (i.e. numerator, denominator separately) values from resimulated conditions
-  curr_ax = plt.subplot2grid(detailSize, (0, 1)); # default size is 1x1
-  consUse = expData['sfm']['exp']['con'];
-  plt.semilogx(consUse, expData['sfm']['exp']['conRateMean'], 'o-', clip_on=False); # Measured responses
-  [plt.plot(consUse, conResp, '%so' % c, clip_on=clip_on, label=s) for conResp, c, s in zip(conModResps, modColors, modLabels)]; # Model responses
-  plt.xlabel('Con (%)', fontsize=20);
-
-''' DEPRECATING POISSON PLOT --> WILL NEED TO MOVE OTHERS, IF SO
-# poisson test - mean/var for each condition (i.e. sfXdispXcon)
-curr_ax = plt.subplot2grid(detailSize, (0, 0)); # set the current subplot location/size[default is 1x1]
-sns.despine(ax=curr_ax, offset=5, trim=False);
-val_conds = ~np.isnan(respMean);
-gt0 = np.logical_and(respMean[val_conds]>0, respVar[val_conds]>0);
-plt.loglog([0.01, 1000], [0.01, 1000], 'k--');
-plt.loglog(respMean[val_conds][gt0], np.square(respVar[val_conds][gt0]), 'o');
-# skeleton for plotting modulated poisson prediction
-if lossType == 3: # i.e. modPoiss
-  mean_vals = np.logspace(-1, 2, 50);
-  [plt.loglog(mean_vals, mean_vals + varGain*np.square(mean_vals), label='vG: %.2f' % varGain) for varGain in varGains];
-  plt.legend();
-plt.xlabel('Mean (imp/s)');
-plt.ylabel('Variance (imp/s^2)');
-plt.title('Super-poisson?');
-plt.axis('equal');
-'''
-
-#  RVC - pick center SF
-curr_ax = plt.subplot2grid(detailSize, (0, 0)); # default size is 1x1
-sns.despine(ax=curr_ax, offset = 5);
-disp_rvc = 0;
-val_cons = np.array(val_con_by_disp[disp_rvc]);
-v_sfs = ~np.isnan(respMean[disp_rvc, :, val_cons[0]]); # remember, for single gratings, all cons have same #/index of sfs
-sfToUse = np.int(np.floor(len(v_sfs)/2));
-plt.semilogx(all_cons[val_cons], respMean[disp_rvc, sfToUse, val_cons], 'o', clip_on=False); # Measured responses
-[plt.plot(all_cons[val_cons], modAvg[disp_rvc, sfToUse, val_cons], marker=None, color=c, clip_on=clip_on, label=s) for modAvg, c, s in zip(modAvgs, modColors, modLabels)]; # Model responses
-plt.xlabel('Con (%)', fontsize=20);
-plt.ylim([np.minimum(-5, np.nanmin(respMean[disp_rvc, sfToUse, val_cons])), 1.1*np.nanmax(respMean[disp_rvc, sfToUse, val_cons])]);
+# to keep equivalent subplot sizes with the main sfMix plot...
+detailSize = (3, 3);
+fDetails = plt.figure(figsize=hf.set_size(tex_width, extra_height=detailSize[0]/2));
 
 # plot model details - exc/suppressive components
 omega = np.logspace(-1.5, 1.5, 1000);
@@ -949,7 +1015,7 @@ for (pltNum, modPrm),modObj,lgnType,lgnConType,mWt in zip(enumerate(modFits), mo
     elif lgnConType == 5:
       jointAtLowCon = mWt*selSf_m*selCon_m[conValInd] + (1-mWt)*selSf_p*selCon_p[conValInd];
     plt.semilogx(omega, np.divide(jointAtLowCon, max_joint), label='joint - %d%% contrast' % (100*conMatch), color='k', alpha=0.3);
-    plt.title('lgn %s' % modLabels[pltNum]);
+    #plt.title('lgn %s' % modLabels[pltNum]);
     plt.legend();
     plt.xlim([1e-1, 1e1]);
 
@@ -990,49 +1056,30 @@ else:
 sfNormsSimple = [sfNormSim_A, sfNormSim_B]
 
 # Plot the filters - for LGN, this is WITH the lgn filters "acting" (assuming high contrast)
-curr_ax = plt.subplot2grid(detailSize, (1, 1));
+curr_ax = plt.subplot2grid(detailSize, (0, 0));
 # Remove top/right axis, put ticks only on bottom/left
-sns.despine(ax=curr_ax, offset=5);
-# just setting up lines
-plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
-plt.semilogx([.01, .01], [-1.5, 1], 'k--')
-plt.semilogx([.1, .1], [-1.5, 1], 'k--')
-plt.semilogx([1, 1], [-1.5, 1], 'k--')
-plt.semilogx([10, 10], [-1.5, 1], 'k--')
-plt.semilogx([100, 100], [-1.5, 1], 'k--')
+sns.despine(ax=curr_ax, offset=sns_offset);
 # now the real stuff
 [plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
 [plt.semilogx(omega, norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
 # -- this is the OLD version (note sfNorms as opposed to sfNormsSimple) with the subunits included
 #[plt.semilogx(omega, -norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNorms, modColors, modLabels)]
-plt.xlim([omega[0], omega[-1]]);
+plt.xlim((np.min(all_sfs), np.max(all_sfs)));
 plt.ylim([-0.1, 1.1]);
-plt.xlabel('spatial frequency (c/deg)', fontsize=12);
-plt.ylabel('Normalized response (a.u.)', fontsize=12);
-
-### now the raw weights/filters (i.e. with LGN filter applied for excitation, if needed)
-curr_ax = plt.subplot2grid(detailSize, (2, 1));
-# Remove top/right axis, put ticks only on bottom/left
-sns.despine(ax=curr_ax, offset=5);
-plt.semilogx([omega[0], omega[-1]], [0, 0], 'k--')
-plt.semilogx([.01, .01], [-1.5, 1], 'k--')
-plt.semilogx([.1, .1], [-1.5, 1], 'k--')
-plt.semilogx([1, 1], [-1.5, 1], 'k--')
-plt.semilogx([10, 10], [-1.5, 1], 'k--')
-plt.semilogx([100, 100], [-1.5, 1], 'k--')
-[plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExcRaw, modColors, modLabels)]
-#[plt.semilogx(omega, norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
-plt.xlim([omega[0], omega[-1]]);
-plt.ylim([-0.1, 1.1]);
-plt.title('v-- raw weights/filters --v');
-plt.xlabel('spatial frequency (c/deg)', fontsize=12);
-plt.ylabel('Normalized response (a.u.)', fontsize=12);
+plt.xlabel('Spatial frequency (c/deg)');
+plt.ylabel('Normalized response (a.u.)');
+for jj, axis in enumerate([curr_ax.xaxis, curr_ax.yaxis]):
+  if jj == 0:
+    axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+    inter_val = 3;
+    axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val)<1e-3 else '%.1f' % x if np.square(x-inter_val/10)<1e-3 else '')) # this will make everything in non-scientific notation!
+    axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
 
 # Now, plot the full denominator (including the constant term) at a few contrasts
 # --- use the debug flag to get the tuned component of the gain control as computed in the full model
-for disp_i in range(np.minimum(3, nDisps)):
-  exc_ax = plt.subplot2grid(detailSize, (0, 2+disp_i));
-  norm_ax = plt.subplot2grid(detailSize, (1, 2+disp_i));
+for disp_i in range(np.minimum(2, nDisps)):
+  exc_ax = plt.subplot2grid(detailSize, (0, 1+disp_i));
+  norm_ax = plt.subplot2grid(detailSize, (1, 1+disp_i));
 
   modRespsDebug = [mod.forward(dw.trInf, respMeasure=respMeasure, debug=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, normOverwrite=True) for mod in [model_A, model_B]];
   modA_exc, modA_norm, modA_sigma = [modRespsDebug[0][x].detach().numpy() for x in [0, 1,2]]; # returns are exc, inh, sigmaFilt (c50)
@@ -1064,6 +1111,7 @@ for disp_i in range(np.minimum(3, nDisps)):
       sf_vals = all_sfs[valSfInds];
       for respInd, whichResp in enumerate([[modA_exc, modB_exc], full_denoms]):
         whichAx = exc_ax if respInd==0 else norm_ax;
+        whichAx.set_xlim((np.min(all_sfs), np.max(all_sfs)));
         if model_A.useFullNormResp or respInd==0: # i.e. we only do this if norm. and fullNormResp
           modA_resps = [np.mean(whichResp[0][:, trs]) for trs in all_trials_modInd];
           modB_resps = [np.mean(whichResp[1][:, trs]) for trs in all_trials_modInd];
@@ -1081,78 +1129,33 @@ for disp_i in range(np.minimum(3, nDisps)):
         to_norm = to_norm_num if respInd==0 else to_norm_denom;
         [whichAx.semilogx(sf_vals, np.divide(denom, norm), alpha=conVal, color=clr, linestyle=line_styles[respInd]) for clr,denom,norm in zip(modColors, [modA_resps, modB_resps], to_norm)]
         if respInd == 0: # exc
-          whichAx.set_title('Model exc. [d=%d]' % disp_i);
+          #whichAx.set_title('Model exc. [d=%d]' % disp_i);
           if conVal==np.nanmax(conVals):
             # let's also replot the high contrast responses (faintly) on the norm. plot!
             [norm_ax.semilogx(sf_vals, np.divide(denom, norm), alpha=0.3, linestyle=line_styles[respInd], color=clr) for clr,denom,norm in zip(modColors, [modA_resps, modB_resps], to_norm)]
         elif respInd == 1: # inh
-          whichAx.set_title('Model norm. [d=%d]' % disp_i);
+          #whichAx.set_title('Model norm. [d=%d]' % disp_i);
           # also plot just the constant term (i.e. if there is NO g.c. pooled response)
           sf_vals = all_sfs[valSfInds];
           onlySigma = [sigmaFilt for sigmaFilt in [modA_sigma, modB_sigma]];
           [whichAx.plot(xCoord*sf_vals[0], sig/norm, color=clr, marker='>') for xCoord,sig,clr,norm in zip([0.95, 0.85], onlySigma, modColors, to_norm)]
-        whichAx.set_xlim([omega[0], omega[-1]]);
-        #plt.xlim([1e-1, 1e1]);
 
-# last but not least...and not last... response nonlinearity
-if _sigmoidRespExp is None:
-  modExps = [x[3] for x in modFits]; # respExp is in location [3]
-else:
-  modExps = [1 + _sigmoidRespExp/(1+np.exp(-x[3])) for x in modFits]; # respExp is in location [3]
-curr_ax = plt.subplot2grid(detailSize, (0, 1));
-# Remove top/right axis, put ticks only on bottom/left
-sns.despine(ax=curr_ax, offset=5);
-plt.plot([-1, 1], [0, 0], 'k--')
-plt.plot([0, 0], [-.1, 1], 'k--')
-[plt.plot(np.linspace(-1,1,100), np.power(np.maximum(0, np.linspace(-1,1,100)), modExp), '%s-' % cc, label=s, linewidth=2) for modExp,cc,s in zip(modExps, modColors, modLabels)]
-plt.plot(np.linspace(-1,1,100), np.maximum(0, np.linspace(-1,1,100)), 'k--', linewidth=1)
-plt.xlim([-1, 1]);
-plt.ylim([-.1, 1]);
-plt.text(0.5, 1.1, 'respExp: %.2f, %.2f' % (modExps[0], modExps[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
+        for jj, axis in enumerate([whichAx.xaxis, whichAx.yaxis]):
+          if jj == 0:
+            axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+            inter_val = 3;
+            axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val)<1e-3 else '%.1f' % x if np.square(x-inter_val/10)<1e-3 else '')) # this will make everything in non-scientific notation!
+            axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
 
-# IF available, show the loss trajectory
-if loss_traj_A is not None or loss_traj_B is not None:
-  curr_ax = plt.subplot2grid(detailSize, (2, 4));
-  if loss_traj_A is not None:
-    plt.plot(loss_traj_A, label='modA', color=modColors[0])
-  if loss_traj_B is not None:
-    plt.plot(loss_traj_B, label='modB', color=modColors[1])
-  #plt.xscale('log');
-  plt.yscale('symlog');
-  plt.legend();
-  plt.title('Loss traj. on best fit');
-  sns.despine(ax=curr_ax, offset=10);
-
-# print, in text, model parameters:
-curr_ax = plt.subplot2grid(detailSize, (2, 3)); # was (0, 4)
-plt.text(0.5, 0.5, 'prefSf: %.3f, %.3f' % (modFits[0][0], modFits[1][0]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-if excType == 1:
-  plt.text(0.5, 0.4, 'derivative order: %.3f, %.3f' % (modFits[0][1], modFits[1][1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-elif excType == 2:
-  plt.text(0.5, 0.4, 'sig: %.2f|%.2f, %.2f|%.2f' % (modFits[0][1], modFits[0][-1-np.sign(lgnTypes[0])], modFits[1][1], modFits[1][-1-np.sign(lgnTypes[1])]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-#respScalars = [_sigmoidScale/(1+np.exp(-x)) for x in [modFits[0][4], modFits[1][4]]];
-respScalars = [modFits[0][4], modFits[1][4]]; # don't transform them, since we want to know the real value of the optimized parameter
-plt.text(0.5, 0.3, 'response scalar: %.3f, %.3f' % (respScalars[0], respScalars[1]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-plt.text(0.5, 0.2, 'sigma: %.2e, %.2e | %.3f, %.3f' % (np.power(10, modFits[0][2]), np.power(10, modFits[1][2]), modFits[0][2], modFits[1][2]), fontsize=12, horizontalalignment='center', verticalalignment='center');
-normGainA = _sigmoidGainNorm/(1+np.exp(-modFits[0][10])) if normTypes[0]==5 else np.nan;
-normGainB = _sigmoidGainNorm/(1+np.exp(-modFits[1][10])) if normTypes[1]==5 else np.nan;
-if normGainA is not None or normGainB is not None:
-  plt.text(0.5, 0.1, 'normGain: %.2f, %.2f' % (normGainA, normGainB), fontsize=12, horizontalalignment='center', verticalalignment='center');
-if normTypes[0]==0 or normTypes[1]==0:
-  # assume it's inhAsym -->
-  inhA = modFits[0][8] if normTypes[0] == 0 else np.nan;
-  inhB = modFits[1][8] if normTypes[1] == 0 else np.nan;
-  plt.text(0.5, 0, 'inhAsym: %.2f, %.2f' % (inhA, inhB), fontsize=12, horizontalalignment='center', verticalalignment='center');
-plt.axis('off');
+        sns.despine(offset=sns_offset, ax=whichAx);
 
 # Now, space out the subplots...
-#f.tight_layout(pad=0.1)
-fDetails.tight_layout(pad=0.1)
+fDetails.tight_layout();
 
 ### now save all figures (sfMix contrasts, details, normalization stuff)
 allFigs = [f, fDetails];
-saveName = "/cell_%03d%s.pdf" % (cellNum, kstr)
-full_save = os.path.dirname(str(save_loc + 'sfMixOnly%s/' % rvcFlag));
+saveName = "/cell_%03d%s%s%s.pdf" % (cellNum, kstr, np.array2string(disps_plt, separator='').replace('[','_').replace(']',''), line_suff)
+full_save = os.path.dirname(str(save_loc + 'sfMixOnly%s_tex/' % (rvcFlag)));
 if not os.path.exists(full_save):
   os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -1167,19 +1170,29 @@ pdfSv.close()
 
 rvcAx = []; fRVC = [];
 
+yclip = 0.1 if diffPlot==0 else None; # don't clip...
+
 if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do this (we have this flag since sometimes we do not need to plot RVCs in interpolated way)
 
   for d in range(nDisps):
+
+      if intpMod and d>0: # don't do this for non-single gratings of we are doing interpolation
+        continue;
+
       # which sfs have at least one contrast presentation? within a dispersion, all cons have the same # of sfs
       v_sf_inds = hf.get_valid_sfs(expData, d, val_con_by_disp[d][0], expInd, stimVals, validByStimVal);
       n_v_sfs = len(v_sf_inds);
       n_rows = int(np.ceil(n_v_sfs/np.floor(np.sqrt(n_v_sfs)))); # make this close to a rectangle/square in arrangement (cycling through sfs)
       n_cols = int(np.ceil(n_v_sfs/n_rows));
-      fCurr, rvcCurr = plt.subplots(n_rows, n_cols, figsize=(n_cols*10, n_rows*15), sharex = True, sharey = True);
+
+      # the 2/3 and 1.2.../2 are to align the figure size with sfMix
+      sfMixRatio = n_cols/3; # why n_cols/3? Because sfMix has 3 columns, this has N...
+      # --- why 1.2? our plot is ever so slighly to tall (totally hueristic)
+      fCurr, rvcCurr = plt.subplots(n_rows, n_cols, figsize=hf.set_size(tex_width*sfMixRatio, extra_height=1.18*n_rows/2/sfMixRatio), sharex = True, sharey = True);
       fRVC.append(fCurr);
       rvcAx.append(rvcCurr);
-
-      fCurr.suptitle('%s #%d [%s]' % (cellType, cellNum, respStr));
+      if incl_annotations:
+        fCurr.suptitle('%s #%d [%s]' % (cellType, cellNum, respStr));
 
       #print('%d rows, %d cols\n' % (n_rows, n_cols));
       all_rvc_loss_A = [];
@@ -1197,9 +1210,9 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
           #print(plt_y);
 
           # Set ticks out, remove top/right axis, put ticks only on bottom/left
-          sns.despine(ax = rvcAx[plt_x][plt_y], offset = 10, trim=False);
-          rvcAx[plt_x][plt_y].tick_params(labelsize=25, width=majorWid, length=majorLen, direction='out');
-          rvcAx[plt_x][plt_y].tick_params(which='minor', direction='out'); # minor ticks, too...
+          sns.despine(ax = rvcAx[plt_x][plt_y], offset = sns_offset, trim=False);
+          #rvcAx[plt_x][plt_y].tick_params(labelsize=25, direction='out');
+          #rvcAx[plt_x][plt_y].tick_params(which='minor', direction='out'); # minor ticks, too...
 
           v_cons = val_con_by_disp[d];
           n_cons = len(v_cons);
@@ -1209,9 +1222,9 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
           resp_curr = np.reshape([respMean[d, sf_ind, v_cons]], (n_cons, ));
           var_curr  = np.reshape([respVar[d, sf_ind, v_cons]], (n_cons, ));
           if diffPlot == 1: # don't set a baseline (i.e. response can be negative!)
-            respPlt = rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], resp_curr, var_curr, fmt='o', color='k', clip_on=False, label='data');
+            respPlt = rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], resp_curr, var_curr, fmt='o', color='k', clip_on=False, label='data', alpha=(sf+1)/float(n_v_sfs));
           else:
-            respPlt = rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], np.maximum(resp_curr, 0.1), var_curr, fmt='o', color='k', clip_on=clip_on, label='data');
+            respPlt = rvcAx[plt_x][plt_y].errorbar(all_cons[v_cons], np.maximum(resp_curr, 0.1), var_curr, fmt='o', color='k', clip_on=clip_on, label='data', alpha=(sf+1)/float(n_v_sfs));
 
           # RVC with full model fits (i.e. flat and weighted)
           if intpMod == 1:
@@ -1221,19 +1234,35 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
               nRptsCurr = nRptsSingle;
             else:
               nRptsCurr = nRpts;
-            for pm, typ in zip(modFits, normTypes):
-              simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, x, sf_ind, normType=typ, expInd=expInd, nRepeats=nRptsCurr, excType=excType)[0];
-              interpMod = np.array([np.mean(simWrap(np.array([conCurr]))) for conCurr in plt_cons]);
-              interpModBoth.append(np.array(interpMod));
+            if pytorch_mod==1:
+              for mod_curr in [model_A, model_B]:
+                simWrap = lambda mod, con: mod.simulate(expData, respMeasure, con, sf_ind, disp=d, nRepeats=nRptsCurr);
+                interpMod = [np.mean(simWrap(mod_curr, np.array([conCurr]))) for conCurr in plt_cons];
+                interpModBoth.append(np.array(interpMod));
+            else: # DEPRECATED
+              for pm, typ in zip(modFits, normTypes):
+                simWrap = lambda x: mod_resp.SFMsimulateNew(pm, expData, d, x, sf_ind, normType=typ, expInd=expInd, nRepeats=nRptsCurr, excType=excType)[0];
+                interpMod = np.array([np.mean(simWrap(np.array([conCurr]))) for conCurr in plt_cons]);
+                interpModBoth.append(np.array(interpMod));
             if diffPlot == 1:
               relTo = interpModBoth[0];
             else:
               relTo = np.zeros_like(interpModBoth[0]);
-            for rsp, cc, s in zip(interpModBoth, modColors, modLabels):
-              rvcAx[plt_x][plt_y].plot(plt_cons, rsp-relTo, color=cc, label=s, clip_on=clip_on);
+            if diffPlot or useLineStyle: # note, we have to give one clip limit
+              [rvcAx[plt_x][plt_y].plot(plt_cons, np.clip(modAvg-relTo, yclip, 1e4), color='k', linestyle=ls, \
+                  alpha=(sf+1)/float(n_v_sfs), clip_on=clip_on, label=s) for modAvg,cc,s,ls in zip(interpModBoth, modColors, modLabels, modLines)];
+            else:
+              [rvcAx[plt_x][plt_y].plot(plt_cons , np.clip(modAvg-relTo, yclip, 1e4), color=cc, \
+                alpha=0.7, clip_on=clip_on, label=s) for modAvg,cc,s in zip(interpModBoth, modColors, modLabels)];
+            #for rsp, cc, s in zip(interpModBoth, modColors, modLabels):
+            #  rvcAx[plt_x][plt_y].plot(plt_cons, rsp-relTo, color=cc, label=s, clip_on=clip_on);
           else:
-            [rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.maximum(modAvg[d, sf_ind, v_cons], 0.1), color=cc, \
-              alpha=0.7, clip_on=clip_on, label=s) for modAvg,cc,s in zip(modAvgs, modColors, modLabels)];
+            if diffPlot or useLineStyle: # note, we have to give one clip limit
+              [rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.clip(modAvg[d, sf_ind, v_cons], yclip, 1e4), color='k', linestyle=ls, \
+                  alpha=(sf+1)/float(n_v_sfs), clip_on=clip_on, label=s) for modAvg,cc,s,ls in zip(modAvgs, modColors, modLabels, modLines)];
+            else:
+              [rvcAx[plt_x][plt_y].plot(all_cons[v_cons], np.clip(modAvg[d, sf_ind, v_cons], yclip, 1e4), color=cc, \
+                alpha=0.7, clip_on=clip_on, label=s) for modAvg,cc,s in zip(modAvgs, modColors, modLabels)];
 
           # summary plots
           '''
@@ -1250,25 +1279,31 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
           rvcAx[d+1][row_ind, col_ind].legend((expPts[0], sepPlt[0], allPlt[0]), ('data', 'model fits'), fontsize='large', loc='center left')
           '''
 
-          rvcAx[plt_x][plt_y].text(min(all_cons[v_cons]), 0.8*maxResp, '%.2f, %.2f' % (varExplCon_A[d, sf_ind], varExplCon_B[d, sf_ind]), ha='left', wrap=True, fontsize=25);
           # ALSO compute loss for these data:
           all_trials = [hf.get_valid_trials(expData, d, vc, sf, expInd, stimVals, validByStimVal)[0][0] for vc in v_cons];
-          rvc_loss = [np.sum([lbc_curr[vt] for vt in all_trials]) for lbc_curr in [lossByCond_A, lossByCond_B]];
-          rvcAx[plt_x][plt_y].text(min(all_cons[v_cons]), 0.6*maxResp, '%.2f, %.2f' % (*rvc_loss, ), ha='left', wrap=True, fontsize=25);
+          try:
+            rvc_loss = [np.sum([lbc_curr[vt] for vt in all_trials]) for lbc_curr in [lossByCond_A, lossByCond_B]];
+          except:
+            rvc_loss = [np.nan, np.nan];
+          if incl_annotations:
+            rvcAx[plt_x][plt_y].text(min(all_cons[v_cons]), 0.8*maxResp, '%.2f, %.2f' % (varExplCon_A[d, sf_ind], varExplCon_B[d, sf_ind]), ha='left', wrap=True);
+            rvcAx[plt_x][plt_y].text(min(all_cons[v_cons]), 0.6*maxResp, '%.2f, %.2f' % (*rvc_loss, ), ha='left', wrap=True);
           all_rvc_loss_A.append(rvc_loss[0]);
           all_rvc_loss_B.append(rvc_loss[1]);
 
           rvcAx[plt_x][plt_y].set_xscale('log', base=10); # was previously symlog, linthreshx=0.01
+          if diffPlot!=1:
+            rvcAx[plt_x][plt_y].set_ylim((0, 1.2*maxResp));
           if col_ind == 0:
-            rvcAx[plt_x][plt_y].set_xlabel('contrast', fontsize='medium');
-            rvcAx[plt_x][plt_y].set_ylabel('response (spikes/s)', fontsize='medium');
-            rvcAx[plt_x][plt_y].legend();
+            rvcAx[plt_x][plt_y].set_xlabel('Contrast');
+            rvcAx[plt_x][plt_y].set_ylabel('Response (spikes/s)');
+            #rvcAx[plt_x][plt_y].legend();
+          if incl_annotations:
+            rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f [%d,%d]' % (d+1, all_sfs[sf_ind], np.nansum(all_rvc_loss_A), np.nansum(all_rvc_loss_B)));
 
-          rvcAx[plt_x][plt_y].set_title('D%d: sf: %.3f [%d,%d]' % (d+1, all_sfs[sf_ind], np.sum(all_rvc_loss_A), np.sum(all_rvc_loss_B)), fontsize='large');
 
-
-  saveName = "/cell_%03d%s.pdf" % (cellNum, kstr)
-  full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
+  saveName = "/cell_%03d%s%s.pdf" % (cellNum, kstr, line_suff)
+  full_save = os.path.dirname(str(save_loc + 'CRF%s_tex/' % rvcFlag));
   if not os.path.exists(full_save):
     os.makedirs(full_save);
   pdfSv = pltSave.PdfPages(full_save + saveName);
@@ -1285,11 +1320,11 @@ if diffPlot != 1 or intpMod == 0:
 
   for d in range(nDisps):
 
-      fCurr, crfCurr = plt.subplots(1, 3, figsize=(35, 30), sharex = True, sharey = True); # left side for flat; middle for data; right side for weighted model
+      fCurr, crfCurr = plt.subplots(1, 3, figsize=hf.set_size(tex_width), sharex = True, sharey = True); # left side for flat; middle for data; right side for weighted model
       fCRF.append(fCurr)
       crfAx.append(crfCurr);
-
-      fCurr.suptitle('%s #%d [%s]' % (cellType, cellNum, respStr));
+      if incl_annotations:
+        fCurr.suptitle('%s #%d [%s]' % (cellType, cellNum, respStr));
 
       resps_curr = [modAvgs[0], respMean, modAvgs[1]];
       labels     = [modLabels[0], 'data', modLabels[1]];
@@ -1302,9 +1337,9 @@ if diffPlot != 1 or intpMod == 0:
         maxResp = np.max(np.max(np.max(curr_resps[~np.isnan(curr_resps)])));
 
         # Set ticks out, remove top/right axis, put ticks only on bottom/left
-        crfAx[d][i].tick_params(labelsize=15, width=majorWid, length=majorLen, direction='out');
-        crfAx[d][i].tick_params(which='minor', direction='out'); # minor ticks, too...
-        sns.despine(ax = crfAx[d][i], offset=10, trim=False);
+        #crfAx[d][i].tick_params(labelsize=15, direction='out');
+        #crfAx[d][i].tick_params(which='minor', direction='out'); # minor ticks, too...
+        sns.despine(ax = crfAx[d][i], offset=sns_offset, trim=False);
 
         lines_log = [];
         for sf in range(n_v_sfs):
@@ -1328,14 +1363,15 @@ if diffPlot != 1 or intpMod == 0:
         #crfAx[d][i].set_ylim([1e-2, 1.5*maxResp]);
         crfAx[d][i].axis('scaled');
         #'''
-        crfAx[d][i].set_xlabel('contrast');
+        crfAx[d][i].set_xlabel('Contrast');
+        if i==0:
+          crfAx[d][i].set_ylabel('Response above baseline (spikes/s)');
+          crfAx[d][i].legend();
+        if incl_annotations:
+          crfAx[d][i].set_title('D%d: log %s' % (d, labels[i]));
 
-        crfAx[d][i].set_ylabel('resp above baseline (imp/s)');
-        crfAx[d][i].set_title('D%d: sf:all - log resp %s' % (d, labels[i]));
-        crfAx[d][i].legend();
-
-  saveName = "/allSfs_cell_%03d%s.pdf" % (cellNum, kstr)
-  full_save = os.path.dirname(str(save_loc + 'CRF%s/' % rvcFlag));
+  saveName = "/allSfs_cell_%03d%s%s.pdf" % (cellNum, kstr, line_suff)
+  full_save = os.path.dirname(str(save_loc + 'CRF%s_tex/' % rvcFlag));
   if not os.path.exists(full_save):
     os.makedirs(full_save);
   pdfSv = pltSave.PdfPages(full_save + saveName);

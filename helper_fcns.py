@@ -5758,6 +5758,7 @@ def makeStimulusRef(data, disp, con, sf, expInd, nRepeats=None):
   all_trials['ph'] = newPh;
   all_trials['tf'] = newTf;
   all_trials['ori'] = newOr;
+  all_trials['num'] = ref_trials; # add how many/which trials we referenced
 
   return all_trials;
 

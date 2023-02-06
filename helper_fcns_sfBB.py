@@ -12,6 +12,7 @@ import pdb
 # get_mask_base_inds - the answer is in the name! 0 index for mask, 1 for base (when array is [...,2]
 # get_valid_trials - get the list of valid trials corresponding to a particular stimulus condition
 # resample_all_cond - resample an array of arbitrary size, specifying across which axis
+# makeStimulusRef - analogous to function of same name in helper_fcns
 
 ### Organize responses
 # get_baseOnly_resp - get the response to the base stimulus ONLY
@@ -113,6 +114,120 @@ def resample_all_cond(resample, array, axis=-1):
     return array;
   else:
     return array;
+
+def makeStimulusRef(expInfo, con, sf, baseOn=False, nRepeats=None):
+  ''' Based off of the similarly named function in helper_fcns
+      - One of con or sf must be an array
+      - We'll assume that we are ALWAYS varying a mask
+      - The only question is whether or not the base is on in addition to mask
+  '''
+  trialInf = expInfo['trial'];
+  maskCon, maskSf = expInfo['maskCon'], expInfo['maskSF'];
+  baseSf = expInfo['baseSF']; 
+  baseCon = expInfo['baseCon'];
+
+  if isinstance(con, np.ndarray):
+    # then, we are interpolating contrasts for a given disp/sf condition
+    if len(con) == 1:
+      conInd = np.argmin(np.square(maskCon-con[0]));
+    else:
+      conInd = maskCon[-1]; # use highest con. as reference
+    refCon = maskCon[conInd];
+    # first arg is validTr ([0]), then unpack array into indices ([0][0])
+    ref_trials = get_valid_trials(expInfo, maskOn=True, baseOn=baseOn, whichCon=conInd, whichSf=sf)
+    interpSF = 0;
+  elif isinstance(sf, np.ndarray):
+    if len(sf) == 1:
+      sfIndToUse = np.argmin(np.square(maskSf - sf[0]));
+    else:
+      sfIndToUse = maskSf[0]; # doesn't matter which value...
+    refSf = maskSf[sfIndToUse];
+    # first arg is validTr ([0]), then unpack array into indices ([0][0])
+    ref_trials = get_valid_trials(expInfo, maskOn=True, baseOn=baseOn, whichCon=con, whichSf=sfIndToUse)
+    interpSF = 1;
+  else:
+    warnings.warn('Con or Sf must be array!; returning full, original experiment at trial level');
+    return trialInf;
+
+  if nRepeats is not None:
+    ref_trials = [ref_trials[0]] * nRepeats; # just pick one...
+
+  if interpSF == 1:
+    interpVals = sf;
+  elif interpSF == 0:
+    interpVals = con;
+
+  all_trials = dict();
+  all_trCon = [];
+  all_trSf  = [];
+  # and the measures that we won't alter...
+  all_trOr  = [];
+  all_trPh  = [];
+  all_trTf  = [];
+
+  for vals in range(len(interpVals)):
+    # for every value in the interpolated dimension, get the N (usually 5 or 10) ref_trials
+    # then replace the interpolated dimension accordingly
+    valCurr = interpVals[vals];
+    if interpSF == 1:
+      sfMult = valCurr/refSf;
+    elif interpSF == 0:
+      conMult = valCurr/refCon; 
+
+    # remember, trialInf values are [nStimComp, ], where each stimComp is [nTrials]
+    conCurr = np.array([x[ref_trials] for x in trialInf['con']]);  
+    sfCurr = np.array([x[ref_trials] for x in trialInf['sf']]);
+    if nRepeats is None:
+      phCurr = np.array([x[ref_trials] for x in trialInf['ph']]);  
+    else: # then we randomize phase...
+      phCurr = np.array([random_in_range((0,360), len(ref_trials)) for x in trialInf['ph']]);  
+    tfCurr = np.array([x[ref_trials] for x in trialInf['tf']]); 
+    orCurr = np.array([x[ref_trials] for x in trialInf['ori']]); 
+
+    if interpSF == 1:
+      sfCurr = np.multiply(sfCurr, sfMult);
+    elif interpSF == 0:
+      conCurr = np.multiply(conCurr, conMult);
+
+    if all_trCon == []: # just overwrite the blank
+      all_trCon = conCurr;
+      all_trSf = sfCurr;
+      all_trPh = phCurr;
+      all_trTf = tfCurr;
+      all_trOr = orCurr;
+    else:
+      all_trCon = np.hstack((all_trCon, conCurr));
+      all_trSf = np.hstack((all_trSf, sfCurr));
+      all_trPh = np.hstack((all_trPh, phCurr));
+      all_trTf = np.hstack((all_trTf, tfCurr));
+      all_trOr = np.hstack((all_trOr, orCurr));
+
+  # but now, all_trSf/Con are [nStimpComp, nTrials] - need to reorganize as [nStimComp, ] with each entry as [nTrials]
+  nComps = all_trCon.shape[0];
+  
+  newCons = np.zeros((nComps, ), dtype='O');
+  newSf = np.zeros((nComps, ), dtype='O');
+  newPh = np.zeros((nComps, ), dtype='O');
+  newTf = np.zeros((nComps, ), dtype='O');
+  newOr = np.zeros((nComps, ), dtype='O');
+  # for each component, pack as array, which is the default/working method
+  for ci in range(nComps):
+    newCons[ci] = np.array(all_trCon[ci, :])
+    newSf[ci] = np.array(all_trSf[ci, :])
+    newPh[ci] = np.array(all_trPh[ci, :])
+    newTf[ci] = np.array(all_trTf[ci, :])
+    newOr[ci] = np.array(all_trOr[ci, :])
+
+  all_trials['con'] = newCons;
+  all_trials['sf'] = newSf;
+  all_trials['ph'] = newPh;
+  all_trials['tf'] = newTf;
+  all_trials['ori'] = newOr;
+  all_trials['num'] = ref_trials; # add how many/which trials we referenced
+  all_trials['maskOn'] = np.ones_like(ref_trials);
+  all_trials['baseOn'] = baseOn * np.ones_like(ref_trials);
+
+  return all_trials;
 
 ### ORGANIZING RESPONSES ###
 
