@@ -27,10 +27,11 @@ source activate pytorch-lcv
 EXC_TYPE=${1:-1}
 WHICH_PLOT=${2:-1}
 KFOLD=${3:--1} # if 2048, then we make difference plots (why multiplexing kfold? don't want to adjust actual input arguments)
-DATA_ONLY=${4:-0}
-LOSS=${5:-1}
-HPC=${6:-1}
-VEC_F1=${7:-1}
+INTP=${4:-0} # smooth curves from evaluating model at intermediate values
+DATA_ONLY=${5:-0}
+LOSS=${6:-1}
+HPC=${7:-1}
+VEC_F1=${8:-1}
 
 if [[ $WHICH_PLOT -eq 1 ]]; then
   PYCALL="plot_sfBB.py"
@@ -52,43 +53,43 @@ do
   # ------------------------e-------l------dir--nrm---lgn-dif-kmul--onsr--sem-----
   # -----------------------------------------------con---inp----cor-rExp-------
   # modA: flat, fixed RVC, lgn A; modB: wght, fixed RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 44 11 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 41 11 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 41 11 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # modA: flat, standard RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
   # pytorch mod; modA: wght, fixed RVC, lgn A; modB: wght, standard RVC, lgnA
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 41 11 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
   if [[ $DATA_ONLY -eq 1 ]]; then
       if [[ $WHICH_PLOT -eq 1 ]]; then
-	  python3.6 $PYCALL $run -1 -1 V1_BB/ -1 -1 -1 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
+	  python3.6 $PYCALL $run -1 -1 V1_BB/ -1 -1 -1 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
       elif [[ $WHICH_PLOT -eq -1 ]]; then
 	  # need to make sure that we don't force DC or F1 (given by -1 after VEC_F1)
 	  # --- change that -1 to 0 or 1 to force DC/F1, respectively
-	  python3.6 $PYCALL $run -1 -1 V1_BB/ -1 -1 -1 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
+	  python3.6 $PYCALL $run -1 -1 V1_BB/ -1 -1 -1 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
       fi
   else
     ### 23.01.29 plots
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 01 & # no diff, not interpolated
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 27 11 00 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 11 & # no diff, not interpolated
-    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 21 11 04 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 10 & # no diff, not interpolated
-    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 44 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 11 & # no diff, not interpolated
-    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 11 00 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 27 11 00 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 11 & # no diff, not interpolated
+    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 21 11 04 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 10 & # no diff, not interpolated
+    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 44 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 11 & # no diff, not interpolated
+    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 11 00 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 01 & # no diff, not interpolated
 
     # ---------- less used (incl. some that already appear above)
     # modA: flat, no LGN; modB: wght, no LGN
-    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
     # modA: flat, LGN; modB: wght, LGN
-    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 11 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
     # modA: flat, LGNsi; modB: wght, LGN si
-    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 44 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 44 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
     # modA: wght, no LGN; modB: flat, LGN si
-    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 21 11 04 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 21 11 04 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
     # modA: flat, LGN; modB: flat, LGN si
-    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 14 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
+    #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 14 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
   fi
   # modA: flat, LGN; modB: flat, LGN yk
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 13 0 0 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 13 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD & # no diff, not interpolated
 
   # Check how many background jobs there are, and if it
   # is equal to the number of cores, wait for anyone to

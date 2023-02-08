@@ -34,11 +34,12 @@ RVC_ADJ=${3:-0} # RVC ADJ should be 0 for altExp/V1_orig, 1 for V1/
 WHICH_PLOT=${4:-0}
 KFOLD=${5:--1}
 DIFF_PLOT=${6:--0}
-EXC_TYPE=${7:-1}
-DG_NORM_FUNC=${8:-0} # should be double-digit number from {00 [default], 10, 11, 01}
-LOSS=${9:-1}
-HPC=${10:-1}
-START=${11:-1}
+INTP=${7:-0} # smoot hmodel fits by evaluating in-between values?
+EXC_TYPE=${8:-1}
+DG_NORM_FUNC=${9:-0} # should be double-digit number from {00 [default], 10, 11, 01}
+LOSS=${10:-1}
+HPC=${11:-1}
+START=${12:-1}
 
 CORES=$(($(getconf _NPROCESSORS_ONLN)-4))
 
@@ -52,36 +53,36 @@ for (( run=$START; run<=$END; run++ ))
 do
   ### 23.01.29 plots
   # no LGN --> flat, wght
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
   # no LGN --> wght (log Gauss), wght
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 22 11 00 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 22 11 00 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
   # no LGN --> wght, wghtMatch
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 27 11 00 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 11 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 27 11 00 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 11 & # no diff, not interpolated
   # wght, V1, flat LGNsi
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 21 11 04 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 10 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 21 11 04 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 10 & # no diff, not interpolated
   # LGNsi --> fflat,wght
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 44 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 44 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
 
   ############## mostly unused below?
 
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 55 44 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 11 15 44 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 00 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 55 44 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 11 15 44 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 00 & # no diff, not interpolated
 
   # asym vs. wght
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 02 11 00 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 02 11 00 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
 
 
   # asym, LGNsi, wght LGNsi
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 02 11 44 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 02 11 44 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
   
   # flat, V1, flat LGNsi
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 11 11 04 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 11 11 04 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   # w/LGN
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 11 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   # w/LGNsi
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 44 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 44 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
   # flat, V1/LGNsi
-  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 11 11 04 $RVC_ADJ 1 $DIFF_PLOT 0 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 11 11 04 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD & # no diff, not interpolated
 
   # Check how many background jobs there are, and if it
   # is equal to the number of cores, wait for anyone to
