@@ -68,7 +68,6 @@ def get_valid_trials(expInfo, maskOn, baseOn, whichCon=None, whichSf=None, baseC
     whichBaseSf = byTrial['sf'][baseInd, :] == baseSfs[baseSf];
     whichBaseCon = np.round(byTrial['con'][baseInd, :], conDig) == baseCons[baseCon];
   whichBase = np.logical_and(whichBaseSf, whichBaseCon);
-
   val_trials = np.where(np.logical_and(np.logical_and(whichComps, whichBase), np.logical_and(whichSfs, whichCons)))[0]
 
   if returnStimConds:
@@ -125,6 +124,7 @@ def makeStimulusRef(expInfo, con, sf, baseOn=False, nRepeats=None):
   maskCon, maskSf = expInfo['maskCon'], expInfo['maskSF'];
   baseSf = expInfo['baseSF']; 
   baseCon = expInfo['baseCon'];
+  maskInd, baseInd = get_mask_base_inds();
 
   if isinstance(con, np.ndarray):
     # then, we are interpolating contrasts for a given disp/sf condition
@@ -140,7 +140,7 @@ def makeStimulusRef(expInfo, con, sf, baseOn=False, nRepeats=None):
     if len(sf) == 1:
       sfIndToUse = np.argmin(np.square(maskSf - sf[0]));
     else:
-      sfIndToUse = maskSf[0]; # doesn't matter which value...
+      sfIndToUse = 0; # doesn't matter which value...
     refSf = maskSf[sfIndToUse];
     # first arg is validTr ([0]), then unpack array into indices ([0][0])
     ref_trials = get_valid_trials(expInfo, maskOn=True, baseOn=baseOn, whichCon=con, whichSf=sfIndToUse)
@@ -180,14 +180,15 @@ def makeStimulusRef(expInfo, con, sf, baseOn=False, nRepeats=None):
     if nRepeats is None:
       phCurr = np.array([x[ref_trials] for x in trialInf['ph']]);  
     else: # then we randomize phase...
-      phCurr = np.array([random_in_range((0,360), len(ref_trials)) for x in trialInf['ph']]);  
+      phCurr = np.array([hf.random_in_range((0,360), len(ref_trials)) for x in trialInf['ph']]);  
     tfCurr = np.array([x[ref_trials] for x in trialInf['tf']]); 
     orCurr = np.array([x[ref_trials] for x in trialInf['ori']]); 
 
+    # make sure that we ONLY adjust the mask sf/con
     if interpSF == 1:
-      sfCurr = np.multiply(sfCurr, sfMult);
+      sfCurr[maskInd] = np.multiply(sfCurr[maskInd], sfMult);
     elif interpSF == 0:
-      conCurr = np.multiply(conCurr, conMult);
+      conCurr[maskInd] = np.multiply(conCurr[maskInd], conMult);
 
     if all_trCon == []: # just overwrite the blank
       all_trCon = conCurr;
@@ -224,8 +225,8 @@ def makeStimulusRef(expInfo, con, sf, baseOn=False, nRepeats=None):
   all_trials['tf'] = newTf;
   all_trials['ori'] = newOr;
   all_trials['num'] = ref_trials; # add how many/which trials we referenced
-  all_trials['maskOn'] = np.ones_like(ref_trials);
-  all_trials['baseOn'] = baseOn * np.ones_like(ref_trials);
+  all_trials['maskOn'] = np.ones_like(newCons[0]); # was previously ...(ref_trials)
+  all_trials['baseOn'] = baseOn * np.ones_like(newCons[0]);
 
   return all_trials;
 

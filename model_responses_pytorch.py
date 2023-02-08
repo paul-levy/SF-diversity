@@ -271,7 +271,10 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
 
   ### first, find out which trials we should be analyzing
   if expInd == -1: # i.e. sfBB
-    trialInf = coreExp['trial'];
+    if simulate:
+      trialInf = coreExp;
+    else:
+      trialInf = coreExp['trial'];
     ######
     # First, get the valid trials (here either mask and/or base present)
     ######
@@ -297,7 +300,8 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
     ######
     # First, filter out the orientation trials and blank/NaN trials!
     ######
-    mask = np.ones_like(coreExp['num'], dtype=bool); # i.e. true
+    mask = np.ones_like(coreExp['ori'][0], dtype=bool); # i.e. true
+    #mask = np.ones_like(coreExp['num'], dtype=bool); # i.e. true
     #mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
     # and get rid of orientation tuning curve trials
     oriBlockIDs = np.hstack((np.arange(131, 155+1, 2), np.arange(132, 136+1, 2))); # +1 to include endpoint like Matlab
@@ -332,9 +336,6 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
     ######
     # First, filter the correct/valid trials!
     ######
-    # start with all trials...
-    mask = np.ones_like(coreExp['num'], dtype=bool); # i.e. true
-    #mask = np.ones_like(coreExp['spikeCount'], dtype=bool); # i.e. true
     # BUT, if we pass in trialSubset, then use this as our mask (i.e. overwrite the above mask)
     if singleGratsOnly:
       # the first line (commented out now) is single gratings AND just at one SF (1.7321, for ex.)
@@ -347,6 +348,7 @@ def process_data(coreExp, expInd=-1, respMeasure=0, respOverwrite=None, whichTri
       valTrials = np.where(np.logical_and(~np.isnan(np.sum(coreExp['ori'], 0)), coreExp['con'][1]>0))[0]; # this will force singlegrats only!
     else:
       valTrials = np.where(~np.isnan(np.sum(coreExp['ori'], 0)))[0];
+
     if whichTrials is None: # take all valid trials
       whichTrials = valTrials;
     else: # then we need to find the intersection of valid trials (currently called whichTrials) and 
@@ -680,20 +682,26 @@ class sfNormMod(torch.nn.Module):
       self.gs_mean = self.prefSf;
       self.gs_std = self.dordSp
 
-  def transform_sigmoid_param(self, whichPrm, _sigmoidDord=_sigmoidDord, _sigmoidSigma=_sigmoidSigma, _sigmoidScale=_sigmoidScale):
+  def transform_sigmoid_param(self, whichPrm, _sigmoidDord=_sigmoidDord, _sigmoidSigma=_sigmoidSigma, _sigmoidScale=_sigmoidScale, overwriteValue=None):
     # used for outputs (e.g. prints, plots) where we don't want the sigmoided value...
     if whichPrm == 'prefSf':
-      curr_val = self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.prefSf)
+      val_to_use = self.prefSf if overwriteValue is None else _cast_as_tensor(overwriteValue);
+      curr_val = self.minPrefSf + self.maxPrefSf*torch.sigmoid(val_to_use)
+    elif whichPrm == 'dordSp':
+      val_to_use = self.dordSp if overwriteValue is None else _cast_as_tensor(overwriteValue);
+      curr_val = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(val_to_use));
     elif whichPrm == 'gs_mean':
+      val_to_use = self.gs_mean if overwriteValue is None else _cast_as_tensor(overwriteValue);
       if self.dgNormFunc:
-        curr_val = self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.gs_mean)
+        curr_val = self.minPrefSf + self.maxPrefSf*torch.sigmoid(val_to_use)
       else:
-        curr_val = self.gs_mean
+        curr_val = val_to_use
     elif whichPrm == 'gs_std':
+      val_to_use = self.gs_std if overwriteValue is None else _cast_as_tensor(overwriteValue);
       if self.dgNormFunc:
-        curr_val = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.gs_std))
+        curr_val = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(val_to_use))
       else:
-        curr_val = self.gs_std;
+        curr_val = val_to_use;
     return curr_val.detach().numpy();
       
   def clear_saved_calcs(self):
@@ -1283,6 +1291,7 @@ class sfNormMod(torch.nn.Module):
             else:
               if self.dgNormFunc:
                 sfRel = torch.div(filt_sfs, self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.gs_mean));
+                #effDord = torch.pow(torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.gs_std)), 2);
                 effDord = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(self.gs_std));
                 s     = torch.pow(filt_sfs, effDord) * torch.exp(-effDord/2 * torch.pow(sfRel, 2));
                 sMax  = torch.pow(self.minPrefSf + self.maxPrefSf*torch.sigmoid(self.gs_mean), effDord) * torch.exp(-effDord/2);
@@ -1422,7 +1431,7 @@ class sfNormMod(torch.nn.Module):
     else:
       return to_use;
 
-  def simulate(self, coreExp, respMeasure, con, sf, disp=None, nRepeats=None):
+  def simulate(self, coreExp, respMeasure, con, sf, disp=None, nRepeats=None, baseOn=False, debug=False):
     ''' Simulate the model for stimuli which were not necessarily presented (i.e. freqs/cons not presented!)
         Procedure is:
         - 1. Generate new stimuli
@@ -1437,23 +1446,31 @@ class sfNormMod(torch.nn.Module):
 
     # We bifurcate here based on sfBB experiment or not
     if self.expInd == -1:
-      print('yowza --> need to update!');
-      new_stims = hf_sfBB.makeStimulusRef(coreExp, con, sf, nRepeats=nRepeats);
+      new_stims = hf_sfBB.makeStimulusRef(coreExp, con, sf, nRepeats=nRepeats, baseOn=baseOn);
       new_wrap  = dataWrapper(new_stims, respMeasure=respMeasure, expInd=self.expInd, simulate=True)
       self.clear_saved_calcs();
-      resps_sim = self.forward(new_wrap.trInf, respMeasure=respMeasure, normOverwrite=True).detach().numpy();
+      if debug:
+        resps_sim = self.forward(new_wrap.trInf, respMeasure=respMeasure, normOverwrite=True, debug=debug)
+        resps_sim = [x.detach().numpy() for x in resps_sim]
+      else:
+        resps_sim = self.forward(new_wrap.trInf, respMeasure=respMeasure, normOverwrite=True, debug=debug).detach().numpy();
       self.clear_saved_calcs();
-      pdb.set_trace();
-      return None; # TODO: THIS IS PLACEHOLDER; make equivalent hf.makeStimulusRef in hf_sfBB
+      return resps_sim; # either nTr or [nTr, [mask,base]]
     else: # then we can use hf.makeStimulusRef
       new_stims = hf.makeStimulusRef(coreExp, disp, con, sf, expInd=self.expInd, nRepeats=nRepeats)
       new_wrap  = dataWrapper(new_stims, respMeasure=respMeasure, expInd=self.expInd, simulate=True)
       self.clear_saved_calcs();
-      resps_sim = self.forward(new_wrap.trInf, respMeasure=respMeasure, normOverwrite=True).detach().numpy();
+      if debug:
+        resps_sim = self.forward(new_wrap.trInf, respMeasure=respMeasure, normOverwrite=True, debug=debug)
+        resps_sim = [x.detach().numpy() for x in resps_sim]
+      else:
+        resps_sim = self.forward(new_wrap.trInf, respMeasure=respMeasure, normOverwrite=True, debug=debug).detach().numpy();
       self.clear_saved_calcs();
       div_factor = stimDur if respMeasure==0 else 1./stimDur; # OK --> seemingly works with plot_diagnose_vLGN?
-      #pdb.set_trace();
-      return resps_sim/div_factor;
+      if debug: # ignore div factor, at least for now...
+        return resps_sim;
+      else:
+        return resps_sim/div_factor;
 
 ### End of class (sfNormMod)
     

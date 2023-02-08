@@ -5575,8 +5575,9 @@ def fit_CRF(cons, resps, nr_c50, nr_expn, nr_gain, nr_base, v_varGain, loss_type
 
     return np.sum(loss_by_sf);
 
-def random_in_range(lims, size = 1):
-
+def random_in_range(lims, size = 1, seed=None):
+    if seed is not None:
+      random.seed(seed);
     return [random.uniform(lims[0], lims[1]) for i in range(size)]
 
 def nbinpdf_log(x, r, p):
@@ -5632,7 +5633,7 @@ def getSuppressiveSFtuning(sfs = numpy.logspace(-2, 2, 1000)):
 
     return numpy.hstack((selSf[0], selSf[1]));
 
-def makeStimulusRef(data, disp, con, sf, expInd, nRepeats=None):
+def makeStimulusRef(data, disp, con, sf, expInd, nRepeats=None, rndSeed=None):
   ''' Created 19.05.13: hacky method for creating artificial stimuli
       in: data structure (trialInf or whole is ok); disp index; con, sf; expInd; [nRepeats]
         One of con or sf will be an array, rather than index
@@ -5640,6 +5641,8 @@ def makeStimulusRef(data, disp, con, sf, expInd, nRepeats=None):
         This approach was borne out of phase-interaction issues for dispersions causing discontinuities in the simulated case
       out: trial structure with new stimuli
       In that case, we borrow from the existing stimuli but create new stimuli with the interpolated value
+      
+      --- on 23.02.06, tried seeding the random_in_range call to standardize across models  --> didn't seem to help much
 
       For both contrast and sf, we find the true stimulus with the closest con/sf (so that TF is close to as it was in the stimulus...)
       Note that this approach is only coded to work when con/sf is simulated at one value, only
@@ -5655,7 +5658,6 @@ def makeStimulusRef(data, disp, con, sf, expInd, nRepeats=None):
 
   _, stimVals, val_con_by_disp, validByStimVal, _ = tabulate_responses(data, expInd);
   all_cons, all_sfs = stimVals[1], stimVals[2];
-
   if isinstance(con, numpy.ndarray):
     # then, we are interpolating contrasts for a given disp/sf condition
     if len(con) == 1:
@@ -5715,7 +5717,7 @@ def makeStimulusRef(data, disp, con, sf, expInd, nRepeats=None):
     if nRepeats is None:
       phCurr = np.array([x[ref_trials] for x in trialInf['ph']]);  
     else: # then we randomize phase...
-      phCurr = np.array([random_in_range((0,360), len(ref_trials)) for x in trialInf['ph']]);  
+      phCurr = np.array([random_in_range((0,360), len(ref_trials), rndSeed) for x in trialInf['ph']]);  
     tfCurr = np.array([x[ref_trials] for x in trialInf['tf']]); 
     orCurr = np.array([x[ref_trials] for x in trialInf['ori']]); 
 
@@ -5739,7 +5741,6 @@ def makeStimulusRef(data, disp, con, sf, expInd, nRepeats=None):
 
   # but now, all_trSf/Con are [nStimpComp, nTrials] - need to reorganize as [nStimComp, ] with each entry as [nTrials]
   nComps = all_trCon.shape[0];
-  
   newCons = np.zeros((nComps, ), dtype='O');
   newSf = np.zeros((nComps, ), dtype='O');
   newPh = np.zeros((nComps, ), dtype='O');
