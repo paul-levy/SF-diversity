@@ -138,11 +138,11 @@ else:
 isCV = False if whichKfold is None else True;
 
 ## used for interpolation plot
-sfSteps  = 30; # i.e. how many steps between bounds of interest [45 was earlier value]
-conSteps = 30;
+sfSteps  = 50; # i.e. how many steps between bounds of interest [45 was earlier value]
+conSteps = -1 #30;
 # --- actually do con only if not V1_orig/
 conSteps = conSteps if expDir!='V1_orig/' else -1;
-nRpts    = 10; # how many repeats for stimuli in interpolation plot?
+nRpts    = 75; # how many repeats for stimuli in interpolation plot?
 nRptsSingle = 3; # when disp = 1 (which is most cases), we do not need so many interpolated points
 #nRpts    = 100; # how many repeats for stimuli in interpolation plot?
 #nRpts    = 3000; # how many repeats for stimuli in interpolation plot? USE FOR PUBLICATION/PRESENTATION QUALITY, but SLOW
@@ -166,11 +166,11 @@ expName = hf.get_datalist(expDir, force_full=force_full, new_v1=True);
 ### FITLIST
 # -- some params are sigmoid, we'll use this to unpack the true parameter
 _sigmoidScale = 10
-_sigmoidDord = 5;
+_sigmoidDord = 5; # was 5
 
 fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr230203qSq_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr230118_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr230206dosg_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
 vecF1 = 0;
@@ -499,6 +499,13 @@ modColors = ['g', 'r']
 modLabels = ['A: %s' % modA_str, 'B: %s' % modB_str]
 modLines = ['--', '-']
 
+if useLineStyle: # then undo modColors
+  modColors = ['k', 'k'];
+  modColorsRef = ['g', 'r'];
+else: # then undo linestyle
+  modLines = ['-', '-']
+  modLinesRef = ['--', '-']
+
 # #### Plots by dispersion
 
 fDisp = []; dispAx = [];
@@ -608,8 +615,9 @@ for d in range(nDisps):
             if diffPlot or useLineStyle:
               [dispAx[d][c_plt_ind, i].plot(plt_sfs, modAvg-relTo, color='k', alpha=all_cons[v_cons[c]], linestyle=ls, clip_on=clip_on, label=s) for modAvg, cc, s, ls in zip(interpModBoth, modColors, modLabels, modLines)];
             else:
-              [dispAx[d][c_plt_ind, i].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color=cc, alpha=0.7, clip_on=clip_on, label=s) for modAvg, cc, s in zip(modAvgs, modColors, modLabels)];
-          else: # plot model evaluated only at data point
+              [dispAx[d][c_plt_ind, i].plot(all_sfs[v_sfs], modAvg, color=cc, alpha=0.7, clip_on=clip_on, label=s) for modAvg, cc, s in zip(interpModBoth, modColors, modLabels)];
+          # ELSE --> not interpolated, i.e. model evaluated only at data point
+          else:
             if diffPlot or useLineStyle:
               [dispAx[d][c_plt_ind, i].plot(all_sfs[v_sfs], modAvg[d, v_sfs, v_cons[c]], color='k', alpha=all_cons[v_cons[c]], linestyle=ls, clip_on=clip_on, label=s) for modAvg, cc, s, ls in zip(modAvgs, modColors, modLabels, modLines)];
             else:
@@ -670,7 +678,7 @@ pdfSv.close();
 
 # #### All SF tuning on one graph, split by dispersion
 
-if diffPlot != 1:
+if diffPlot != 1 and intpMod != 1: # skip if either diff plot or intp mod (haven't updated for intp plot)
   fDisp = []; dispAx = [];
 
   sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
@@ -848,9 +856,9 @@ for iii,d in enumerate(disps_plt):
 
           if diffPlot==1 or useLineStyle: # then use color only...
             if d == 0 and c == 0:
-              [sfMixAx[c_plt_ind, iii].plot(plt_sfs, modAvg, color='k', alpha=all_cons[v_cons[c]], linestyle=ls, clip_on=clip_on, label=s) for modAvg, cc, s, ls in zip(interpModBoth, modColors, modLabels, modLines)];
+              [sfMixAx[c_plt_ind, iii].plot(plt_sfs, modAvg-relTo, color='k', alpha=all_cons[v_cons[c]], linestyle=ls, clip_on=clip_on, label=s) for modAvg, cc, s, ls in zip(interpModBoth, modColors, modLabels, modLines)];
             else:
-              [sfMixAx[c_plt_ind, iii].plot(plt_sfs, modAvg, color='k', alpha=all_cons[v_cons[c]], linestyle=ls, clip_on=clip_on) for modAvg, cc, ls in zip(interpModBoth, modColors, modLines)];
+              [sfMixAx[c_plt_ind, iii].plot(plt_sfs, modAvg-relTo, color='k', alpha=all_cons[v_cons[c]], linestyle=ls, clip_on=clip_on) for modAvg, cc, ls in zip(interpModBoth, modColors, modLines)];
           else:
             if d == 0 and c == 0:
               [sfMixAx[c_plt_ind, iii].plot(plt_sfs, modAvg, color=cc, alpha=0.7, clip_on=clip_on, label=s) for modAvg, cc, s in zip(interpModBoth, modColors, modLabels)];
@@ -928,232 +936,262 @@ if incl_annotations:
 #########
 # Plot secondary things - filter, normalization, nonlinearity, etc
 #########
+if not diffPlot: # only do this if not a diff plot
+  # to keep equivalent subplot sizes with the main sfMix plot...
+  detailSize = (3, 3);
+  fDetails = plt.figure(figsize=hf.set_size(tex_width, extra_height=detailSize[0]/2));
 
-# to keep equivalent subplot sizes with the main sfMix plot...
-detailSize = (3, 3);
-fDetails = plt.figure(figsize=hf.set_size(tex_width, extra_height=detailSize[0]/2));
+  # plot model details - exc/suppressive components
+  omega = np.logspace(-1.5, 1.5, 1000);
+  #omega = np.logspace(-2, 2, 1000);
+  sfExc = [];
+  sfExcRaw = [];
+  for (pltNum, modPrm),modObj,lgnType,lgnConType,mWt in zip(enumerate(modFits), modelsAsObj, lgnTypes, conTypes, [mWt_A, mWt_B]):
+    #prefSf = modPrm[0];
+    prefSf = minPrefSf + maxPrefSf*hf.sigmoid(modPrm[0])
 
-# plot model details - exc/suppressive components
-omega = np.logspace(-1.5, 1.5, 1000);
-#omega = np.logspace(-2, 2, 1000);
-sfExc = [];
-sfExcRaw = [];
-for (pltNum, modPrm),modObj,lgnType,lgnConType,mWt in zip(enumerate(modFits), modelsAsObj, lgnTypes, conTypes, [mWt_A, mWt_B]):
-  #prefSf = modPrm[0];
-  prefSf = minPrefSf + maxPrefSf*hf.sigmoid(modPrm[0])
+    if excType == 1:
+      ### deriv. gauss
+      dOrder = _sigmoidDord*1/(1+np.exp(-modPrm[1]));
+      sfRel = omega/prefSf;
+      s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
+      sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
+      sfExcV1 = s/sMax;
+      sfExcLGN = s/sMax; # will be used IF there isn't an LGN front-end...
+    if excType == 2:
+      ### flex. gauss
+      sigLow = modPrm[1] if _sigmoidSigma is None else _sigmoidSigma/(1+np.exp(-modPrm[1]));
+      sigHigh = modPrm[-1-np.sign(lgnType)] if _sigmoidSigma is None else _sigmoidSigma/(1+np.exp(-modPrm[-1-np.sign(lgnType)]))
+      sfRel = np.divide(omega, prefSf);
+      # - set the sigma appropriately, depending on what the stimulus SF is
+      sigma = np.multiply(sigLow, [1]*len(sfRel));
+      sigma[[x for x in range(len(sfRel)) if sfRel[x] > 1]] = sigHigh;
+      # - now, compute the responses (automatically normalized, since max gaussian value is 1...)
+      s     = [np.exp(-np.divide(np.square(np.log(x)), 2*np.square(y))) for x,y in zip(sfRel, sigma)];
+      sfExcV1 = s;
+      sfExcLGN = s; # will be used IF there isn't an LGN front-end...
+    # BUT. if this is an LGN model, we'll apply the filtering, eval. at 100% contrast
+    if lgnType == 1 or lgnType == 2 or lgnType == 3 or lgnType == 4:
+      params_m = modObj.rvc_m.detach().numpy(); # one tensor array, so just detach
+      params_p = modObj.rvc_p.detach().numpy();
+      DoGmodel = modObj.LGNmodel; # what DoG parameterization?
+      dog_m = np.array([x.item() for x in modObj.dog_m]) # a list of tensors, so do list comp. to undo into a normal/numpy array
+      dog_p = np.array([x.item() for x in modObj.dog_p])
+      # now compute with these parameters
+      glbl_min = 1e-6; # as in mrpt as of late 2022 and beyond --> doesn't matter for dogSach/DiffOfGauss, anyway, though...
+      resps_m = hf.get_descrResp(dog_m, omega, DoGmodel, minThresh=glbl_min)
+      resps_p = hf.get_descrResp(dog_p, omega, DoGmodel, minThresh=glbl_min)
+      # -- make sure we normalize by the true max response:
+      sfTest = np.geomspace(0.1, 10, 1000);
+      max_m = np.max(hf.get_descrResp(dog_m, sfTest, DoGmodel, minThresh=glbl_min));
+      max_p = np.max(hf.get_descrResp(dog_p, sfTest, DoGmodel, minThresh=glbl_min));
+      # -- then here's our selectivity per component for the current stimulus
+      selSf_m = np.divide(resps_m, max_m);
+      selSf_p = np.divide(resps_p, max_p);
+      # - then RVC response: # rvcMod 0 (Movshon)
+      rvc_mod = hf.get_rvc_model();
+      stimCo = np.linspace(0,1,100);
+      selCon_m = rvc_mod(*params_m, stimCo)
+      selCon_p = rvc_mod(*params_p, stimCo)
+      if lgnConType == 1: # DEFAULT
+        # -- then here's our final responses per component for the current stimulus
+        # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
+        lgnSel = mWt*selSf_m*selCon_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
+      elif lgnConType == 2 or lgnConType == 3 or lgnConType == 4:
+        # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
+        selCon_avg = mWt*selCon_m + (1-mWt)*selCon_p;
+        lgnSel = mWt*selSf_m*selCon_avg[-1] + (1-mWt)*selSf_p*selCon_avg[-1];
+      elif lgnConType == 5: # TEMP
+        # -- then here's our final responses per component for the current stimulus
+        # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
+        lgnSel = mWt*selSf_m*selCon_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
+      withLGN = s*lgnSel;
+      sfExcLGN = withLGN/np.max(withLGN);
 
-  if excType == 1:
-    ### deriv. gauss
-    dOrder = _sigmoidDord*1/(1+np.exp(-modPrm[1]));
-    sfRel = omega/prefSf;
-    s     = np.power(omega, dOrder) * np.exp(-dOrder/2 * np.square(sfRel));
-    sMax  = np.power(prefSf, dOrder) * np.exp(-dOrder/2);
-    sfExcV1 = s/sMax;
-    sfExcLGN = s/sMax; # will be used IF there isn't an LGN front-end...
-  if excType == 2:
-    ### flex. gauss
-    sigLow = modPrm[1] if _sigmoidSigma is None else _sigmoidSigma/(1+np.exp(-modPrm[1]));
-    sigHigh = modPrm[-1-np.sign(lgnType)] if _sigmoidSigma is None else _sigmoidSigma/(1+np.exp(-modPrm[-1-np.sign(lgnType)]))
-    sfRel = np.divide(omega, prefSf);
-    # - set the sigma appropriately, depending on what the stimulus SF is
-    sigma = np.multiply(sigLow, [1]*len(sfRel));
-    sigma[[x for x in range(len(sfRel)) if sfRel[x] > 1]] = sigHigh;
-    # - now, compute the responses (automatically normalized, since max gaussian value is 1...)
-    s     = [np.exp(-np.divide(np.square(np.log(x)), 2*np.square(y))) for x,y in zip(sfRel, sigma)];
-    sfExcV1 = s;
-    sfExcLGN = s; # will be used IF there isn't an LGN front-end...
-  # BUT. if this is an LGN model, we'll apply the filtering, eval. at 100% contrast
-  if lgnType == 1 or lgnType == 2 or lgnType == 3 or lgnType == 4:
-    params_m = modObj.rvc_m.detach().numpy(); # one tensor array, so just detach
-    params_p = modObj.rvc_p.detach().numpy();
-    DoGmodel = modObj.LGNmodel; # what DoG parameterization?
-    dog_m = np.array([x.item() for x in modObj.dog_m]) # a list of tensors, so do list comp. to undo into a normal/numpy array
-    dog_p = np.array([x.item() for x in modObj.dog_p])
-    # now compute with these parameters
-    glbl_min = 1e-6; # as in mrpt as of late 2022 and beyond --> doesn't matter for dogSach/DiffOfGauss, anyway, though...
-    resps_m = hf.get_descrResp(dog_m, omega, DoGmodel, minThresh=glbl_min)
-    resps_p = hf.get_descrResp(dog_p, omega, DoGmodel, minThresh=glbl_min)
-    # -- make sure we normalize by the true max response:
-    sfTest = np.geomspace(0.1, 10, 1000);
-    max_m = np.max(hf.get_descrResp(dog_m, sfTest, DoGmodel, minThresh=glbl_min));
-    max_p = np.max(hf.get_descrResp(dog_p, sfTest, DoGmodel, minThresh=glbl_min));
-    # -- then here's our selectivity per component for the current stimulus
-    selSf_m = np.divide(resps_m, max_m);
-    selSf_p = np.divide(resps_p, max_p);
-    # - then RVC response: # rvcMod 0 (Movshon)
-    rvc_mod = hf.get_rvc_model();
-    stimCo = np.linspace(0,1,100);
-    selCon_m = rvc_mod(*params_m, stimCo)
-    selCon_p = rvc_mod(*params_p, stimCo)
-    if lgnConType == 1: # DEFAULT
-      # -- then here's our final responses per component for the current stimulus
-      # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
-      lgnSel = mWt*selSf_m*selCon_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
-    elif lgnConType == 2 or lgnConType == 3 or lgnConType == 4:
-      # -- Unlike the above (default) case, we don't allow for a separate M & P RVC - instead we just take the average of the two
-      selCon_avg = mWt*selCon_m + (1-mWt)*selCon_p;
-      lgnSel = mWt*selSf_m*selCon_avg[-1] + (1-mWt)*selSf_p*selCon_avg[-1];
-    elif lgnConType == 5: # TEMP
-      # -- then here's our final responses per component for the current stimulus
-      # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1
-      lgnSel = mWt*selSf_m*selCon_m[-1] + (1-mWt)*selSf_p*selCon_p[-1];
-    withLGN = s*lgnSel;
-    sfExcLGN = withLGN/np.max(withLGN);
+      # plot LGN front-end, if we're here
+      curr_ax = plt.subplot2grid(detailSize, (1+pltNum, 0));
+      plt.semilogx(omega, selSf_m, label='magno [%.1f]' % dog_m[1], color='r', linestyle='--');
+      plt.semilogx(omega, selSf_p, label='parvo [%.1f]' % dog_p[1], color='b', linestyle='--');
+      max_joint = np.max(lgnSel);
+      plt.semilogx(omega, np.divide(lgnSel, max_joint), label='joint - 100% contrast', color='k');
+      conMatch = 0.20
+      conValInd = np.argmin(np.square(stimCo-conMatch));
+      if lgnConType == 1:
+        jointAtLowCon = mWt*selSf_m*selCon_m[conValInd] + (1-mWt)*selSf_p*selCon_p[conValInd];
+      elif lgnConType == 2 or lgnConType == 3 or lgnConType == 4:
+        jointAtLowCon = mWt*selSf_m*selCon_avg[conValInd] + (1-mWt)*selSf_p*selCon_avg[conValInd];
+      elif lgnConType == 5:
+        jointAtLowCon = mWt*selSf_m*selCon_m[conValInd] + (1-mWt)*selSf_p*selCon_p[conValInd];
+      plt.semilogx(omega, np.divide(jointAtLowCon, max_joint), label='joint - %d%% contrast' % (100*conMatch), color='k', alpha=0.3);
+      #plt.title('lgn %s' % modLabels[pltNum]);
+      plt.legend();
+      plt.xlim([1e-1, 1e1]);
 
-    # plot LGN front-end, if we're here
-    curr_ax = plt.subplot2grid(detailSize, (1+pltNum, 0));
-    plt.semilogx(omega, selSf_m, label='magno [%.1f]' % dog_m[1], color='r', linestyle='--');
-    plt.semilogx(omega, selSf_p, label='parvo [%.1f]' % dog_p[1], color='b', linestyle='--');
-    max_joint = np.max(lgnSel);
-    plt.semilogx(omega, np.divide(lgnSel, max_joint), label='joint - 100% contrast', color='k');
-    conMatch = 0.20
-    conValInd = np.argmin(np.square(stimCo-conMatch));
-    if lgnConType == 1:
-      jointAtLowCon = mWt*selSf_m*selCon_m[conValInd] + (1-mWt)*selSf_p*selCon_p[conValInd];
-    elif lgnConType == 2 or lgnConType == 3 or lgnConType == 4:
-      jointAtLowCon = mWt*selSf_m*selCon_avg[conValInd] + (1-mWt)*selSf_p*selCon_avg[conValInd];
-    elif lgnConType == 5:
-      jointAtLowCon = mWt*selSf_m*selCon_m[conValInd] + (1-mWt)*selSf_p*selCon_p[conValInd];
-    plt.semilogx(omega, np.divide(jointAtLowCon, max_joint), label='joint - %d%% contrast' % (100*conMatch), color='k', alpha=0.3);
-    #plt.title('lgn %s' % modLabels[pltNum]);
-    plt.legend();
-    plt.xlim([1e-1, 1e1]);
+    sfExcRaw.append(sfExcV1);
+    sfExc.append(sfExcLGN);
 
-  sfExcRaw.append(sfExcV1);
-  sfExc.append(sfExcLGN);
+  # Compute the reference, untuned gain control (apply as necessary)
+  inhAsym = 0;
+  inhWeight = [];
+  try:
+    inhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
+  except: # if that didn't work, then we need to create the norm_resp
+    norm_resp = mod_resp.GetNormResp(cellNum, data_loc, expDir='', dataListName=expName); # in GetNormResp, expDir added to data_loc; already included here
+    inhChan = norm_resp['pref']['sf']
+    expData  = hf.np_smart_load(str(data_loc + cellName + '_sfm.npy')); # then we have to reload expData...
+  inhSfTuning = hf.getSuppressiveSFtuning();
+  for iP in range(len(inhChan)):
+      inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(inhChan[iP]) - np.mean(np.log(inhChan[iP]))));
+  sfNorm_flat = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
+  sfNorm_flat = sfNorm_flat/np.amax(np.abs(sfNorm_flat));
 
-# Compute the reference, untuned gain control (apply as necessary)
-inhAsym = 0;
-inhWeight = [];
-try:
-  inhChan = expData['sfm']['mod']['normalization']['pref']['sf'];
-except: # if that didn't work, then we need to create the norm_resp
-  norm_resp = mod_resp.GetNormResp(cellNum, data_loc, expDir='', dataListName=expName); # in GetNormResp, expDir added to data_loc; already included here
-  inhChan = norm_resp['pref']['sf']
-  expData  = hf.np_smart_load(str(data_loc + cellName + '_sfm.npy')); # then we have to reload expData...
-inhSfTuning = hf.getSuppressiveSFtuning();
-for iP in range(len(inhChan)):
-    inhWeight = np.append(inhWeight, 1 + inhAsym * (np.log(inhChan[iP]) - np.mean(np.log(inhChan[iP]))));
-sfNorm_flat = np.sum(-.5*(inhWeight*np.square(inhSfTuning)), 1);
-sfNorm_flat = sfNorm_flat/np.amax(np.abs(sfNorm_flat));
+  ### Compute weights for suppressive signals
+  unwt_weights = np.sqrt(hf.genNormWeightsSimple(omega, None, None));
+  sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
+  # - tuned
+  if gs_mean_A is not None:
+    wt_weights_A = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean_A, gs_std_A, normType=normA, dgNormFunc=dgnfA));
+    sfNormTuneSim_A = wt_weights_A/np.amax(np.abs(wt_weights_A));
+    sfNormSim_A = sfNormTuneSim_A;
+  else:
+    sfNormSim_A = sfNormSim;
+  if gs_mean_B is not None:
+    wt_weights_B = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean_B, gs_std_B, normType=normB, dgNormFunc=dgnfB));
+    sfNormTuneSim_B = wt_weights_B/np.amax(np.abs(wt_weights_B));
+    sfNormSim_B = sfNormTuneSim_B;
+  else:
+    sfNormSim_B = sfNormSim;
+  sfNormsSimple = [sfNormSim_A, sfNormSim_B]
 
-### Compute weights for suppressive signals
-unwt_weights = np.sqrt(hf.genNormWeightsSimple(omega, None, None));
-sfNormSim = unwt_weights/np.amax(np.abs(unwt_weights));
-# - tuned
-if gs_mean_A is not None:
-  wt_weights_A = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean_A, gs_std_A, normType=normA, dgNormFunc=dgnfA));
-  sfNormTuneSim_A = wt_weights_A/np.amax(np.abs(wt_weights_A));
-  sfNormSim_A = sfNormTuneSim_A;
-else:
-  sfNormSim_A = sfNormSim;
-if gs_mean_B is not None:
-  wt_weights_B = np.sqrt(hf.genNormWeightsSimple(omega, gs_mean_B, gs_std_B, normType=normB, dgNormFunc=dgnfB));
-  sfNormTuneSim_B = wt_weights_B/np.amax(np.abs(wt_weights_B));
-  sfNormSim_B = sfNormTuneSim_B;
-else:
-  sfNormSim_B = sfNormSim;
-sfNormsSimple = [sfNormSim_A, sfNormSim_B]
+  # Plot the filters - for LGN, this is WITH the lgn filters "acting" (assuming high contrast)
+  curr_ax = plt.subplot2grid(detailSize, (0, 0));
+  # Remove top/right axis, put ticks only on bottom/left
+  sns.despine(ax=curr_ax, offset=sns_offset);
+  # now the real stuff
+  exc_line_colors = [modColorsRef[0], modColorsRef[0]] if useLineStyle else modColors
+  inh_line_colors = [modColorsRef[1], modColorsRef[1]] if useLineStyle else modColors
+  exc_line_styles = modLines if useLineStyle else [modLinesRef[0], modLinesRef[0]]
+  inh_line_styles = modLines if useLineStyle else [modLinesRef[1], modLinesRef[1]]
 
-# Plot the filters - for LGN, this is WITH the lgn filters "acting" (assuming high contrast)
-curr_ax = plt.subplot2grid(detailSize, (0, 0));
-# Remove top/right axis, put ticks only on bottom/left
-sns.despine(ax=curr_ax, offset=sns_offset);
-# now the real stuff
-[plt.semilogx(omega, exc, '%s' % cc, label=s) for exc, cc, s in zip(sfExc, modColors, modLabels)]
-[plt.semilogx(omega, norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNormsSimple, modColors, modLabels)]
-# -- this is the OLD version (note sfNorms as opposed to sfNormsSimple) with the subunits included
-#[plt.semilogx(omega, -norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNorms, modColors, modLabels)]
-plt.xlim((np.min(all_sfs), np.max(all_sfs)));
-plt.ylim([-0.1, 1.1]);
-plt.xlabel('Spatial frequency (c/deg)');
-plt.ylabel('Normalized response (a.u.)');
-for jj, axis in enumerate([curr_ax.xaxis, curr_ax.yaxis]):
-  if jj == 0:
-    axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
-    inter_val = 3;
-    axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val)<1e-3 else '%.1f' % x if np.square(x-inter_val/10)<1e-3 else '')) # this will make everything in non-scientific notation!
-    axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
+  [plt.semilogx(omega, exc, '%s' % cc, linestyle=ls, label=s) for exc,cc,s,ls in zip(sfExc, exc_line_colors, modLabels, exc_line_styles)]
+  [plt.semilogx(omega, norm, '%s--' % cc, linestyle=ls, label=s) for norm,cc,s,ls in zip(sfNormsSimple, inh_line_colors, modLabels, inh_line_styles)]
+  # -- this is the OLD version (note sfNorms as opposed to sfNormsSimple) with the subunits included
+  #[plt.semilogx(omega, -norm, '%s--' % cc, label=s) for norm, cc, s in zip(sfNorms, modColors, modLabels)]
+  plt.xlim((np.min(all_sfs), np.max(all_sfs)));
+  plt.ylim([-0.1, 1.1]);
+  plt.xlabel('Spatial frequency (c/deg)');
+  plt.ylabel('Normalized response (a.u.)');
+  for jj, axis in enumerate([curr_ax.xaxis, curr_ax.yaxis]):
+    if jj == 0:
+      axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+      inter_val = 3;
+      axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val)<1e-3 else '%.1f' % x if np.square(x-inter_val/10)<1e-3 else '')) # this will make everything in non-scientific notation!
+      axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
 
-# Now, plot the full denominator (including the constant term) at a few contrasts
-# --- use the debug flag to get the tuned component of the gain control as computed in the full model
-for disp_i in range(np.minimum(2, nDisps)):
-  exc_ax = plt.subplot2grid(detailSize, (0, 1+disp_i));
-  norm_ax = plt.subplot2grid(detailSize, (1, 1+disp_i));
+  # Now, plot the full denominator (including the constant term) at a few contrasts
+  # --- use the debug flag to get the tuned component of the gain control as computed in the full model
+  for disp_i in range(np.minimum(2, nDisps)):
+    exc_ax = plt.subplot2grid(detailSize, (0, 1+disp_i));
+    norm_ax = plt.subplot2grid(detailSize, (1, 1+disp_i));
 
-  modRespsDebug = [mod.forward(dw.trInf, respMeasure=respMeasure, debug=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, normOverwrite=True) for mod in [model_A, model_B]];
-  modA_exc, modA_norm, modA_sigma = [modRespsDebug[0][x].detach().numpy() for x in [0, 1,2]]; # returns are exc, inh, sigmaFilt (c50)
-  modB_exc, modB_norm, modB_sigma = [modRespsDebug[1][x].detach().numpy() for x in [0, 1,2]]; # returns are exc, inh, sigmaFilt (c50)
-  # --- then, simply mirror the calculation as done in the full model
-  full_denoms = [sigmaFilt+norm for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
-  #full_denoms = [np.power(sigmaFilt + np.power(norm, 2), 0.5) for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
-  # --- use hf.get_valid_trials to get high/low con, single gratings
-  v_cons = np.array(val_con_by_disp[disp_i]);
-  if disp_i == 0: # single gratings
-    conVals = [0.10, 0.33, 0.5, 1]; # try to get the normResp at these contrast values; MUST BE ASCENDING
-  elif disp_i == 1: # e.x. mixture
-    conVals = [0.33, 0.69, 1]; # try to get the normResp at these contrast values; MUST BE ASCENDING
-  elif disp_i == 2: # e.x. mixture
-    conVals = [0.47, 0.69, 1]; # try to get the normResp at these contrast values; MUST BE ASCENDING
-  modTrials = dw.trInf['num']; # these are the trials eval. by the model
-  # then, let's go through for the above contrasts and get the in-model response
-  # as of 23.01.08, we normalize the normalization response to the high-contrast value
-  line_styles = ['-', '--'] # solid for exc, dashed for norm.
-  for cI, conVal in enumerate(reversed(conVals)):
-    closest_ind = np.argmin(np.abs(conVal - all_cons[v_cons]));
-    close_enough = np.abs(all_cons[v_cons[closest_ind]] - conVal) < 0.03 # must be within 3% contrast
-    if close_enough:
-      valSfInds = hf.get_valid_sfs(None, disp_i, v_cons[closest_ind], expInd, stimVals, validByStimVal);
-      # highest contrast, first
-      all_trials = [hf.get_valid_trials(expData, disp_i, v_cons[closest_ind], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in valSfInds];
-      # then, find which corresponding index into model-eval-only trials this is
-      all_trials_modInd = [np.intersect1d(modTrials, trs, return_indices=True)[1] for trs in all_trials];
-      sf_vals = all_sfs[valSfInds];
-      for respInd, whichResp in enumerate([[modA_exc, modB_exc], full_denoms]):
-        whichAx = exc_ax if respInd==0 else norm_ax;
-        whichAx.set_xlim((np.min(all_sfs), np.max(all_sfs)));
-        if model_A.useFullNormResp or respInd==0: # i.e. we only do this if norm. and fullNormResp
-          modA_resps = [np.mean(whichResp[0][:, trs]) for trs in all_trials_modInd];
-          modB_resps = [np.mean(whichResp[1][:, trs]) for trs in all_trials_modInd];
-          #print('respInd %d, con %.2f:\t' % (respInd, conVal))
-          #print(modA_resps);
-        else:
-          modA_resps = [np.mean(whichResp[0][trs]) for trs in all_trials_modInd];
-          modB_resps = [np.mean(whichResp[1][trs]) for trs in all_trials_modInd];
-        # as of 23.01.08, normalize the denominator!
-        if conVal==np.nanmax(conVals):
-          if respInd == 0:
-            to_norm_num  = [np.nanmax(denom) for denom in [modA_resps, modB_resps]];
-          elif respInd == 1:
-            to_norm_denom = [np.nanmax(denom) for denom in [modA_resps, modB_resps]];
-        to_norm = to_norm_num if respInd==0 else to_norm_denom;
-        [whichAx.semilogx(sf_vals, np.divide(denom, norm), alpha=conVal, color=clr, linestyle=line_styles[respInd]) for clr,denom,norm in zip(modColors, [modA_resps, modB_resps], to_norm)]
-        if respInd == 0: # exc
-          #whichAx.set_title('Model exc. [d=%d]' % disp_i);
+    modRespsDebug = [mod.forward(dw.trInf, respMeasure=respMeasure, debug=1, sigmoidSigma=_sigmoidSigma, recenter_norm=recenter_norm, normOverwrite=True) for mod in [model_A, model_B]];
+    modA_exc, modA_norm, modA_sigma = [modRespsDebug[0][x].detach().numpy() for x in [0,1,2]]; # returns are exc, inh, sigmaFilt (c50)
+    modB_exc, modB_norm, modB_sigma = [modRespsDebug[1][x].detach().numpy() for x in [0,1,2]]; # returns are exc, inh, sigmaFilt (c50)
+    # --- then, simply mirror the calculation as done in the full model
+    full_denoms = [sigmaFilt+norm for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
+    #full_denoms = [np.power(sigmaFilt + np.power(norm, 2), 0.5) for sigmaFilt, norm in zip([modA_sigma, modB_sigma], [modA_norm, modB_norm])];
+    # --- use hf.get_valid_trials to get high/low con, single gratings
+    v_cons = np.array(val_con_by_disp[disp_i]);
+    if disp_i == 0: # single gratings
+      conVals = [0.10, 0.33, 0.5, 1]; # try to get the normResp at these contrast values; MUST BE ASCENDING
+    elif disp_i == 1: # e.x. mixture
+      conVals = [0.33, 0.69, 1]; # try to get the normResp at these contrast values; MUST BE ASCENDING
+    elif disp_i == 2: # e.x. mixture
+      conVals = [0.47, 0.69, 1]; # try to get the normResp at these contrast values; MUST BE ASCENDING
+    modTrials = dw.trInf['num']; # these are the trials eval. by the model
+    # then, let's go through for the above contrasts and get the in-model response
+    # as of 23.01.08, we normalize the normalization response to the high-contrast value
+    for cI, conVal in enumerate(reversed(conVals)):
+      closest_ind = np.argmin(np.abs(conVal - all_cons[v_cons]));
+      close_enough = np.abs(all_cons[v_cons[closest_ind]] - conVal) < 0.03 # must be within 3% contrast
+      if close_enough:
+        valSfInds = hf.get_valid_sfs(None, disp_i, v_cons[closest_ind], expInd, stimVals, validByStimVal);
+        # highest contrast, first
+        all_trials = [hf.get_valid_trials(expData, disp_i, v_cons[closest_ind], sf_i, expInd, stimVals, validByStimVal)[0] for sf_i in valSfInds];
+        # then, find which corresponding index into model-eval-only trials this is
+        all_trials_modInd = [np.intersect1d(modTrials, trs, return_indices=True)[1] for trs in all_trials];
+        sf_vals = all_sfs[valSfInds];
+        for respInd, whichResp in enumerate([[modA_exc, modB_exc], full_denoms]):
+
+          # if we are use_linestyle (i.e. both models in black, only linestyle differentiates the two models
+          # --- then we will use color to differentiate exc/inh
+          # otherwise, as it's been before (line style to differentiate exc/inh)
+          line_styles = modLines if useLineStyle else [modLines[respInd], modLines[respInd]] # solid for exc, dashed for norm.
+          line_colors = [modColorsRef[respInd], modColorsRef[respInd]] if useLineStyle else ['g', 'r'];
+
+          whichAx = exc_ax if respInd==0 else norm_ax;
+          whichAx.set_xlim((np.min(all_sfs), np.max(all_sfs)));
+          if model_A.useFullNormResp or respInd==0: # i.e. we only do this if norm. and fullNormResp
+            modA_resps = [np.mean(whichResp[0][:, trs]) for trs in all_trials_modInd];
+            modB_resps = [np.mean(whichResp[1][:, trs]) for trs in all_trials_modInd];
+            #print('respInd %d, con %.2f:\t' % (respInd, conVal))
+            #print(modA_resps);
+          else:
+            modA_resps = [np.mean(whichResp[0][trs]) for trs in all_trials_modInd];
+            modB_resps = [np.mean(whichResp[1][trs]) for trs in all_trials_modInd];
+          # as of 23.01.08, normalize the denominator!
           if conVal==np.nanmax(conVals):
-            # let's also replot the high contrast responses (faintly) on the norm. plot!
-            [norm_ax.semilogx(sf_vals, np.divide(denom, norm), alpha=0.3, linestyle=line_styles[respInd], color=clr) for clr,denom,norm in zip(modColors, [modA_resps, modB_resps], to_norm)]
-        elif respInd == 1: # inh
-          #whichAx.set_title('Model norm. [d=%d]' % disp_i);
-          # also plot just the constant term (i.e. if there is NO g.c. pooled response)
-          sf_vals = all_sfs[valSfInds];
-          onlySigma = [sigmaFilt for sigmaFilt in [modA_sigma, modB_sigma]];
-          [whichAx.plot(xCoord*sf_vals[0], sig/norm, color=clr, marker='>') for xCoord,sig,clr,norm in zip([0.95, 0.85], onlySigma, modColors, to_norm)]
+            if respInd == 0:
+              to_norm_num  = [np.nanmax(denom) for denom in [modA_resps, modB_resps]];
+            elif respInd == 1:
+              to_norm_denom = [np.nanmax(denom) for denom in [modA_resps, modB_resps]];
+          to_norm = to_norm_num if respInd==0 else to_norm_denom;
+          [whichAx.semilogx(sf_vals, np.divide(denom, norm), alpha=conVal, color=clr, linestyle=ls) for clr,denom,norm,ls in zip(line_colors, [modA_resps, modB_resps], to_norm, line_styles)]
+          if respInd == 0: # exc
+            #whichAx.set_title('Model exc. [d=%d]' % disp_i);
+            if conVal==np.nanmax(conVals):
+              # let's also replot the high contrast responses (faintly) on the norm. plot!
+              [norm_ax.semilogx(sf_vals, np.divide(denom, norm), alpha=0.3, linestyle=ls, color=clr) for clr,denom,norm,ls in zip(line_colors, [modA_resps, modB_resps], to_norm, line_styles)]
+          elif respInd == 1: # inh
+            #whichAx.set_title('Model norm. [d=%d]' % disp_i);
+            # also plot just the constant term (i.e. if there is NO g.c. pooled response)
+            sf_vals = all_sfs[valSfInds];
+            onlySigma = [sigmaFilt for sigmaFilt in [modA_sigma, modB_sigma]];
+            [whichAx.plot(xCoord*sf_vals[0], sig/norm, color=clr, marker='>') for xCoord,sig,clr,norm in zip([0.95, 0.85], onlySigma, line_colors, to_norm)]
 
-        for jj, axis in enumerate([whichAx.xaxis, whichAx.yaxis]):
-          if jj == 0:
-            axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
-            inter_val = 3;
-            axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val)<1e-3 else '%.1f' % x if np.square(x-inter_val/10)<1e-3 else '')) # this will make everything in non-scientific notation!
-            axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
+          for jj, axis in enumerate([whichAx.xaxis, whichAx.yaxis]):
+            if jj == 0:
+              axis.set_major_formatter(FuncFormatter(lambda x,y: '%d' % x if x>=1 else '%.1f' % x)) # this will make everything in non-scientific notation!
+              inter_val = 3;
+              axis.set_minor_formatter(FuncFormatter(lambda x,y: '%d' % x if np.square(x-inter_val)<1e-3 else '%.1f' % x if np.square(x-inter_val/10)<1e-3 else '')) # this will make everything in non-scientific notation!
+              axis.set_tick_params(which='minor', pad=5.5); # Determined by trial and error: make the minor/major align??
 
-        sns.despine(offset=sns_offset, ax=whichAx);
+          sns.despine(offset=sns_offset, ax=whichAx);
 
-# Now, space out the subplots...
-fDetails.tight_layout();
+          # NOW, if disp_i==0, let's also plot: the average denominator relative to the excitation
+          if disp_i==0 and conVal==conVals[-1]:
+            sfs = np.geomspace(all_sfs[0], all_sfs[-1], 50)
+            # always do intp here...first, norm. response next to full response
+            raw_ax = plt.subplot2grid(detailSize, (1,0))
+            mn_ax = plt.subplot2grid(detailSize, (2,0))
+            for (jjj,md),clr,ls in zip(enumerate([model_A, model_B]), modColors, modLines):
+              resps = md.simulate(trialInf, respMeasure, con=val_con_by_disp[disp_i][-1], sf=sfs, disp=disp_i, nRepeats=1, debug=True);
+              numer, denom = np.mean(resps[0], axis=0),  np.mean(resps[1], axis=0) + resps[2]
+              output = numer/denom;
+              raw_ax.semilogx(sfs, output/np.max(output), linestyle=ls, color=clr, alpha=0.3, label='ref.' if jjj==1 else '');
+              raw_ax.semilogx(sfs, denom/np.max(denom), linestyle=ls, color=clr, label='denom' if jjj==1 else '')
+              raw_ax.legend(fontsize='xx-small');
+              # then, averaged denom
+              mn_ax.semilogx(sfs, denom-np.mean(denom), linestyle=ls, color=clr, label='d-mn(d)' if jjj==1 else '')
+              mn_ax.axvline(sfs[np.argmax(output)], linestyle=ls, color=clr, alpha=0.3, label='pref' if jjj==1 else '')
+              mn_ax.legend(fontsize='xx-small');
+              mn_ax.axhline(0, linestyle=':', color='k', alpha=0.3);
+
+  # Now, space out the subplots...
+  fDetails.tight_layout();
 
 ### now save all figures (sfMix contrasts, details, normalization stuff)
-allFigs = [f, fDetails];
+allFigs = [f, fDetails] if diffPlot!=1 else [f];
 saveName = "/cell_%03d%s%s%s.pdf" % (cellNum, kstr, np.array2string(disps_plt, separator='').replace('[','_').replace(']',''), line_suff)
 full_save = os.path.dirname(str(save_loc + 'sfMixOnly%s_tex/' % (rvcFlag)));
 if not os.path.exists(full_save):

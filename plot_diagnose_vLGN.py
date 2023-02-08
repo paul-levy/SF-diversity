@@ -150,7 +150,7 @@ _sigmoidDord = 5;
 
 fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 #fitBase = 'fitList%s_pyt_nr230118_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr230201q_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr230206doSH_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
 vecF1 = 0;
@@ -1253,7 +1253,10 @@ if intpMod == 0 or (intpMod == 1 and conSteps > 0): # i.e. we've chosen to do th
           rvcAx[plt_x][plt_y].text(min(all_cons[v_cons]), 0.8*maxResp, '%.2f, %.2f' % (varExplCon_A[d, sf_ind], varExplCon_B[d, sf_ind]), ha='left', wrap=True, fontsize=25);
           # ALSO compute loss for these data:
           all_trials = [hf.get_valid_trials(expData, d, vc, sf, expInd, stimVals, validByStimVal)[0][0] for vc in v_cons];
-          rvc_loss = [np.sum([lbc_curr[vt] for vt in all_trials]) for lbc_curr in [lossByCond_A, lossByCond_B]];
+          try:
+            rvc_loss = [np.sum([lbc_curr[vt] for vt in all_trials]) for lbc_curr in [lossByCond_A, lossByCond_B]];
+          except: # this isn't essential to have, so just give NaNs and move on...
+            rvc_loss = [-999, -999];
           rvcAx[plt_x][plt_y].text(min(all_cons[v_cons]), 0.6*maxResp, '%.2f, %.2f' % (*rvc_loss, ), ha='left', wrap=True, fontsize=25);
           all_rvc_loss_A.append(rvc_loss[0]);
           all_rvc_loss_B.append(rvc_loss[1]);

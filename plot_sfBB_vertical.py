@@ -147,12 +147,12 @@ plt_ylim = 1 if forceLog else None
 fix_ylim = 0;
 
 ## used for interpolation plot
-sfSteps  = 45; # i.e. how many steps between bounds of interest
-conSteps = -1;
-#nRpts    = 100; # how many repeats for stimuli in interpolation plot?
-nRpts    = 5; # how many repeats for stimuli in interpolation plot?
-#nRpts    = 3000; # how many repeats for stimuli in interpolation plot? USE FOR PUBLICATION/PRESENTATION QUALITY, but SLOW
-nRptsSingle = 5; # when disp = 1 (which is most cases), we do not need so many interpolated points
+sfSteps  = 60; # i.e. how many steps between bounds of interest [45 was earlier value]
+conSteps = 30; # CON NOT USED IN THIS PLOT
+# --- actually do con only if not V1_orig/
+conSteps = conSteps if expDir!='V1_orig/' else -1;
+nRpts    = 50; # how many repeats for stimuli in interpolation plot?
+nRptsSingle = 3; # when disp = 1 (which is most cases), we do not need so many interpolated points (really only need 1...)
 
 loc_base = os.getcwd() + '/';
 data_loc = loc_base + expDir + 'structures/';
@@ -179,16 +179,12 @@ _applyLGNtoNorm = 1;
 
 # -- some params are sigmoid, we'll use this to unpack the true parameter
 _sigmoidScale = 10
-_sigmoidDord = 5;
+_sigmoidDord = 20; # was 5
+#_sigmoidDord = 5;
 
-#fitBase = 'fitList%s_pyt_nr221031j_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr221109f_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-#fitBase = 'fitList%s_pyt_nr221116wwww_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-#fitBase = 'fitList%s_pyt_nr221119d_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-#fitBase = 'fitList%s_pyt_nr221231_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-#fitBase = 'fitList%s_pyt_nr230107_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
 #fitBase = 'fitList%s_pyt_nr230118_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+#fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+fitBase = 'fitList%s_pyt_nr230206dosg_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 # NOT model for now (23.01.25)
 #fitBase = None;
@@ -286,14 +282,11 @@ else: # we will just plot the data
 if fitBase is not None:
   lossSuf = hf.lossType_suffix(lossType).replace('.npy', ''); # get the loss suffix, remove the file type ending
   excType_str = hf.excType_suffix(excType);
-  if diffPlot == 1: 
-    compDir  = str(fitBase + '_diag%s_%s_%s' % (excType_str, modA_str, modB_str) + lossSuf + '/diff');
-  else:
-    compDir  = str(fitBase + '_diag%s_%s_%s' % (excType_str, modA_str, modB_str) + lossSuf);
-  if intpMod == 1:
-    compDir = str(compDir + '/intp');
+  compDir  = str(fitBase + '_diag%s_%s_%s' % (excType_str, modA_str, modB_str) + lossSuf);
   subDir   = compDir.replace('fitList', 'fits').replace('.npy', '');
   save_loc = str(save_loc + subDir + '_vertical/');
+  if intpMod == 1:
+    save_loc = str(save_loc + 'intp/');
 else:
   save_loc = str(save_loc + 'data_only_vertical/');
 
@@ -601,12 +594,38 @@ for measure in [0,1]:
             if fitBase is None: # then just plot a line for the data
               ax[plt_incl_i].plot(maskSf[data_ok], rsps[mcI,:,0][data_ok], clip_on=False, color=col)
             else:
-              # PLOT model A (if present)
-              modA_ok = np.arange(len(maskSf)) if plt_ylim is None else modA_resps[ii][mcI,:,0]>plt_ylim;
-              ax[plt_incl_i].plot(maskSf[modA_ok], modA_resps[ii][mcI,:,0][modA_ok], color=modColors[0], linestyle=modLines[0], alpha=1-col[0])
-              # PLOT model B (if present)
-              modB_ok = np.arange(len(maskSf)) if plt_ylim is None else modB_resps[ii][mcI,:,0]>plt_ylim;
-              ax[plt_incl_i].plot(maskSf[modB_ok], modB_resps[ii][mcI,:,0][modB_ok], color=modColors[1], linestyle=modLines[1], alpha=1-col[0])
+              ### plot model fits
+              if intpMod == 1:
+                base_on = plt_incl_i>0; # if we're done with the first plot, then we have the base stimulus present, too
+                nRptsCurr = nRpts if base_on else nRptsSingle; # need more repeats if not single grating
+                plt_sfs = np.geomspace(maskSf[0], maskSf[-1], sfSteps);
+                interpModBoth = []; # well, flat is first, so we will subtract that off...
+                curr_mods = [mod_A_dc, mod_B_dc] if use_resp_measure==0 else [mod_A_f1, mod_B_f1]
+                for mod_curr in curr_mods:
+                  simWrap = lambda mod, sf: mod.simulate(expInfo, use_resp_measure, mcI, sf, nRepeats=nRptsCurr, baseOn=base_on);
+                  if use_resp_measure == 0: # nothing special to do
+                    interpMod = [np.mean(simWrap(mod_curr, np.array([sfCurr]))) for sfCurr in plt_sfs];
+                  else: # take only the mask (or base) response here
+                    curr_ind = baseInd if base_on else maskInd;
+                    interpMod = [np.mean(simWrap(mod_curr, np.array([sfCurr]))[:,curr_ind]) for sfCurr in plt_sfs];
+                  interpModBoth.append(np.array(interpMod));
+                if asFlatDiffs == 1:
+                  relTo = interpModBoth[0];
+                else:
+                  relTo = np.zeros_like(interpModBoth[0]);
+                
+                # PLOT model A (if present)
+                modA_ok = np.arange(len(plt_sfs)) if plt_ylim is None else interpModBoth[0]>plt_ylim;
+                modB_ok = np.arange(len(plt_sfs)) if plt_ylim is None else interpModBoth[1]>plt_ylim;
+                [ax[plt_incl_i].plot(plt_sfs[oks], curr_intp_resps[oks]-relTo, color=curr_clr, linestyle=curr_ls, alpha=1-col[0]) for curr_intp_resps, oks, curr_clr, curr_ls in zip(interpModBoth, [modA_ok, modB_ok], modColors, modLines)]
+              # ELSE --> not interpolated, i.e. model evaluated only at data point
+              else:
+                # PLOT model A (if present)
+                modA_ok = np.arange(len(maskSf)) if plt_ylim is None else modA_resps[ii][mcI,:,0]>plt_ylim;
+                ax[plt_incl_i].plot(maskSf[modA_ok], modA_resps[ii][mcI,:,0][modA_ok], color=modColors[0], linestyle=modLines[0], alpha=1-col[0])
+                # PLOT model B (if present)
+                modB_ok = np.arange(len(maskSf)) if plt_ylim is None else modB_resps[ii][mcI,:,0]>plt_ylim;
+                ax[plt_incl_i].plot(maskSf[modB_ok], modB_resps[ii][mcI,:,0][modB_ok], color=modColors[1], linestyle=modLines[1], alpha=1-col[0])
 
         # Indicate the base SF
         ax[plt_incl_i].plot(baseSf_curr, overall_ylim[0]+0.03*np.diff(overall_ylim), 'v', color='k')
