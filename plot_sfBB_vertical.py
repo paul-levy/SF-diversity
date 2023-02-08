@@ -27,6 +27,7 @@ warnings.filterwarnings('once');
 import pdb
 
 useTex = False
+inclDetails = True;
 # using fits where the filter sigma is sigmoid?
 _sigmoidRespExp = None; # 3 or None, as of 21.03.14
 _sigmoidSigma = 5; # put a value (5) or None (see model_responses_pytorch.py for details)
@@ -183,8 +184,8 @@ _sigmoidDord = 20; # was 5
 #_sigmoidDord = 5;
 
 #fitBase = 'fitList%s_pyt_nr230118_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-#fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
-fitBase = 'fitList%s_pyt_nr230206dosg_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '') 
+#fitBase = 'fitList%s_pyt_nr230206dosg_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 # NOT model for now (23.01.25)
 #fitBase = None;
@@ -686,12 +687,41 @@ f.suptitle('%s%s%s' % (coreTitle, lossTitle, varExplTitle), fontsize='xx-small')
 f.subplots_adjust(hspace=0.15);
 f.tight_layout(rect=[0, 0.03, 1, 0.98])
 
+if inclDetails: # then let's plot the normalization response
+
+  fDetails, axDet = plt.subplots(nrows=nrow, ncols=ncol, figsize=hf.set_size(width_frac*tex_width, extra_height=extra_height), sharex=True);
+
+  curr_mods = [mod_A_dc, mod_B_dc] if use_resp_measure==0 else [mod_A_f1, mod_B_f1]
+  # automatically interpolated...
+  sfs = np.geomspace(maskSf[0], maskSf[-1], 50)
+  for (jjj,md),clr,ls in zip(enumerate(curr_mods), modColors, modLines):
+    resps = md.simulate(expInfo, use_resp_measure, con=(len(maskCon)-1), sf=sfs, nRepeats=1, debug=True);
+    numer, denom = np.mean(resps[0], axis=0),  np.mean(resps[1], axis=0) + resps[2]
+    output = numer/denom;
+    axDet[0].semilogx(sfs, output/np.max(output), linestyle=ls, color=clr, alpha=0.3, label='ref.' if jjj==1 else '');
+    axDet[0].semilogx(sfs, denom/np.max(denom), linestyle=ls, color=clr, label='denom' if jjj==1 else '')
+    axDet[0].legend(fontsize='xx-small');
+    # then, averaged denom
+    #axDet[1].semilogx(sfs, denom/np.maximum(0.05, output), linestyle=ls, color=clr, label='d-mn(d)' if jjj==1 else '')
+    axDet[1].semilogx(sfs, denom-np.mean(denom), linestyle=ls, color=clr, label='d-mn(d)' if jjj==1 else '')
+    axDet[1].axvline(sfs[np.argmax(output)], linestyle=ls, color=clr, alpha=0.3, label='pref' if jjj==1 else '')
+    axDet[1].legend(fontsize='xx-small');
+    axDet[1].axhline(0, linestyle=':', color='k', alpha=0.3);
+
+  fDetails.tight_layout();
+
+
 ### now save all figures (incl model details, if specified)
+allFigs = [f, fDetails] if inclDetails else [f];
 saveName = "/cell_%03d_%s%s%s.pdf" % (cellNum, hf_sf.get_resp_str(respMeasure=use_resp_measure), kstr, '_log' if forceLog else '')
 full_save = os.path.dirname(str(save_loc + 'core%s/' % ('_diff' if asFlatDiffs else '')));
 if not os.path.exists(full_save):
     os.makedirs(full_save);
 pdfSv = pltSave.PdfPages(full_save + saveName);
-pdfSv.savefig(f);
-plt.close(f);
+for fig in range(len(allFigs)):
+    pdfSv.savefig(allFigs[fig])
+    plt.close(allFigs[fig])
 pdfSv.close()
+#pdfSv.savefig(f);
+#plt.close(f);
+#pdfSv.close()
