@@ -1178,8 +1178,18 @@ if not diffPlot: # only do this if not a diff plot
               resps = md.simulate(trialInf, respMeasure, con=val_con_by_disp[disp_i][-1], sf=sfs, disp=disp_i, nRepeats=1, debug=True);
               numer, denom = np.mean(resps[0], axis=0),  np.mean(resps[1], axis=0) + resps[2]
               output = numer/denom;
+              if jjj==1:
+                raw_ax.semilogx(sfs, numer/np.max(numer), linestyle=':', color=clr, alpha=0.3, label='exc' if jjj==1 else '');
               raw_ax.semilogx(sfs, output/np.max(output), linestyle=ls, color=clr, alpha=0.3, label='ref.' if jjj==1 else '');
               raw_ax.semilogx(sfs, denom/np.max(denom), linestyle=ls, color=clr, label='denom' if jjj==1 else '')
+              # --- trying out a 1/3 con. norm, too?
+              lowcon_match = 0.3*all_cons[val_con_by_disp[disp_i][-1]]
+              closest_ind = np.argmin(np.abs(lowcon_match - all_cons[val_con_by_disp[disp_i]]));
+              close_enough = np.abs(all_cons[v_cons[closest_ind]] - lowcon_match) < 0.04 # must be within 4% contrast
+              if close_enough:
+                resps_lower = md.simulate(trialInf, respMeasure, con=val_con_by_disp[disp_i][closest_ind], sf=sfs, disp=disp_i, nRepeats=1, debug=True);
+                rl = np.mean(resps_lower[1], axis=0) + resps[2];
+                raw_ax.semilogx(sfs, rl/np.max(denom), linestyle=ls, color=clr, label='denom' if jjj==1 else '', alpha=lowcon_match)
               raw_ax.legend(fontsize='xx-small');
               # then, averaged denom
               mn_ax.semilogx(sfs, denom-np.mean(denom), linestyle=ls, color=clr, label='d-mn(d)' if jjj==1 else '')

@@ -86,13 +86,21 @@ def _cast_as_param(x, requires_grad=True):
 ### Helper -- other
 
 ## rvc
-def get_rvc_model(params, cons):
+def naka_rushton(params, cons):
+
+  base, gain, expon, c50 = params;
+  return torch.add(base, gain * torch.div(torch.pow(cons, expon), torch.pow(cons, expon) + torch.pow(c50, expon)));
+
+def get_rvc_model(params, cons, whichRVC=0):
   ''' simply return the rvc model used in the fits (type 0; should be used only for LGN)
       --- from Eq. 3 of Movshon, Kiorpes, Hawken, Cavanaugh; 2005
   '''
-  b = params[0]; k = params[1]; c0 = params[2];
 
-  return torch.add(b, torch.mul(k, torch.log(1+torch.div(cons, c0))));
+  if whichRVC==1:
+    return naka_rushton(params, cons);
+  else: # default
+    b = params[0]; k = params[1]; c0 = params[2];
+    return torch.add(b, torch.mul(k, torch.log(1+torch.div(cons, c0))));
 
 ## sf tuning
 def flexible_Gauss(params, stim_sf, minThresh=0.1, sigmoidValue=_sigmoidSigma):
@@ -448,7 +456,7 @@ class dataWrapper(torchdata.Dataset):
 ### The model
 class sfNormMod(torch.nn.Module):
   # inherit methods/fields from torch.nn.Module(); [12,15] and [0.75, 1.5] are defaults!
-  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=1, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=False, forceLateNoise=None, _lgnOctDiff=np.log2(9/3), dgNormFunc=False):
+  def __init__(self, modParams, expInd=-1, excType=2, normType=1, lossType=1, lgnFrontEnd=0, newMethod=1, lgnConType=1, applyLGNtoNorm=1, device='cpu', pSfBound=14.9, pSfBound_low=0.1, fixRespExp=False, normToOne=True, norm_nFilters=[12,15], norm_dOrd=[0.75, 1.5], norm_gain=[0.57, 0.614], norm_range=[0.1,30], useFullNormResp=True, fullDataset=True, toFit=True, normFiltersToOne=False, forceLateNoise=None, _lgnOctDiff=np.log2(9/3), dgNormFunc=False, rvcMod=0):
 
     super().__init__();
 
@@ -643,9 +651,13 @@ class sfNormMod(torch.nn.Module):
       self.P_js = _cast_as_param(self.modParams[-1]);
     # specify rvc parameters (not true "parameters", i.e. not optimized)
     if self.lgnFrontEnd > 0:
-      self.rvcMod = 0; # Tony formulation of RVC
-      self.rvc_m = _cast_as_tensor([0, 12.5, 0.05]); # magno has lower gain, c50
-      self.rvc_p = _cast_as_tensor([0, 17.5, 0.50]);
+      self.rvcMod = rvcMod;
+      if self.rvcMod==1: # Naka-Rushton (base, gain, expon, c50)
+        self.rvc_m = _cast_as_tensor([0, 1, 1.5, 0.15]); # magno has lower c50
+        self.rvc_p = _cast_as_tensor([0, 1, 1.5, 0.55]);
+      else: # Tony formulation of RVC
+        self.rvc_m = _cast_as_tensor([0, 12.5, 0.05]); # magno has lower gain, c50
+        self.rvc_p = _cast_as_tensor([0, 17.5, 0.50]);
       # --- and pack the DoG parameters we specified above
       self.dog_m = [self.M_k, self.M_fc, self.M_ks, self.M_js] 
       self.dog_p = [self.P_k, self.P_fc, self.P_ks, self.P_js]
@@ -839,8 +851,8 @@ class sfNormMod(torch.nn.Module):
         #scm = torch.max(stimCo, axis=1)[0];
         #selCon_m = get_rvc_model(self.rvc_m, scm).unsqueeze(dim=1);
         #selCon_p = get_rvc_model(self.rvc_p, scm).unsqueeze(dim=1);
-        selCon_m = get_rvc_model(self.rvc_m, stimCo); # could evaluate at torch.max(stimCo,axis=1)[0] rather than stimCo, i.e. highest grating con, not per grating
-        selCon_p = get_rvc_model(self.rvc_p, stimCo);
+        selCon_m = get_rvc_model(self.rvc_m, stimCo, self.rvcMod); # could evaluate at torch.max(stimCo,axis=1)[0] rather than stimCo, i.e. highest grating con, not per grating
+        selCon_p = get_rvc_model(self.rvc_p, stimCo, self.rvcMod);
 
         # and save the values/flag that we 've done it
         self.selSf_p = selSf_p;
@@ -1018,8 +1030,8 @@ class sfNormMod(torch.nn.Module):
         selSf_m = torch.div(resps_m, max_m);
         selSf_p = torch.div(resps_p, max_p);
         # - then RVC response: # ASSUMES rvcMod 0 (Movshon)
-        selCon_m = get_rvc_model(self.rvc_m, cons);
-        selCon_p = get_rvc_model(self.rvc_p, cons);
+        selCon_m = get_rvc_model(self.rvc_m, cons, self.rvcMod);
+        selCon_p = get_rvc_model(self.rvc_p, cons, self.rvcMod);
       # -- then here's our final responses per component for the current stimulus
       if self.lgnConType == 1 or self.lgnConType == 5: # DEFAULT
         # -- then here's our final responses per component for the current stimulus

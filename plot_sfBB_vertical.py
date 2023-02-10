@@ -698,9 +698,20 @@ if inclDetails: # then let's plot the normalization response
     resps = md.simulate(expInfo, use_resp_measure, con=(len(maskCon)-1), sf=sfs, nRepeats=1, debug=True);
     numer, denom = np.mean(resps[0], axis=0),  np.mean(resps[1], axis=0) + resps[2]
     output = numer/denom;
+    if jjj==1:
+      axDet[0].semilogx(sfs, numer/np.max(numer), linestyle=':', color=clr, alpha=0.3, label='exc' if jjj==1 else '');
     axDet[0].semilogx(sfs, output/np.max(output), linestyle=ls, color=clr, alpha=0.3, label='ref.' if jjj==1 else '');
     axDet[0].semilogx(sfs, denom/np.max(denom), linestyle=ls, color=clr, label='denom' if jjj==1 else '')
     axDet[0].legend(fontsize='xx-small');
+    # --- trying out a 1/3 con. norm, too?
+    lowcon_match = 0.3*maskCon[-1];
+    closest_ind = np.argmin(np.abs(lowcon_match - maskCon));
+    close_enough = np.abs(lowcon_match - maskCon[closest_ind]) < 0.04 # must be within 4% contrast
+    if close_enough:
+      resps_lower = md.simulate(expInfo, use_resp_measure, con=closest_ind, sf=sfs, nRepeats=1, debug=True);
+      rl = np.mean(resps_lower[1], axis=0) + resps[2];
+      axDet[0].semilogx(sfs, rl/np.max(denom), linestyle=ls, color=clr, label='denom' if jjj==1 else '', alpha=lowcon_match)
+
     # then, averaged denom
     #axDet[1].semilogx(sfs, denom/np.maximum(0.05, output), linestyle=ls, color=clr, label='d-mn(d)' if jjj==1 else '')
     axDet[1].semilogx(sfs, denom-np.mean(denom), linestyle=ls, color=clr, label='d-mn(d)' if jjj==1 else '')
