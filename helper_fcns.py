@@ -3770,6 +3770,7 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
        val_con_by_disp = [range(0,len(stimVals[1]))]; # all cons are valid, since we don't have dispersions
        # F1 means, expanded to have disp dimension at front; we also transpose so that it's [disp X sf X con], as it is in other expts
        sfTuning = np.expand_dims(np.transpose(tabulated[0][1]['mean']), axis=0);
+       stimSize = np.max(np.unique(dataList[cell_ind]["data"]["cntr_size"])) # take the max since 2 cells have different sizes, but we analyze the larger one 
      if isBB:
        ### As of 21.05.10, we will only consider the maskOnly responses, at the corresponding response measure (DC or F1, by f1:f0 ratio)
        expName = dataList['unitName'][cell_ind]
@@ -3795,6 +3796,7 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
          maskAll = maskResps[f1f0_ind + 2]; # this gets all, organized as [con,sf,trial], just for DC or F1, appropriately
        # means by condition, expanded to have disp dimension at front; we also transpose so that it's [disp X sf X con], as it is in other expts
        sfTuning = np.expand_dims(np.transpose(maskMeans), axis=0);
+       stimSize = tr["size"]
    else:
      expName = dataList['unitName'][cell_ind];
      expInd = get_exp_ind(data_loc, expName)[0];
@@ -3803,6 +3805,7 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
      resps, stimVals, val_con_by_disp, validByStimVal, _ = tabulate_responses(cell, expInd);
      # get SF responses (for model-free metrics)
      tr = cell['sfm']['exp']['trial']
+     stimSize = cell['sfm']['exp']['size']
      spks = get_spikes(tr, get_f0=1, expInd=expInd, rvcFits=None); # just to be explciit - no RVC fits right now
      sfTuning = organize_resp(spks, tr, expInd=expInd)[2]; # responses: nDisp x nSf x nCon
      try:
@@ -3828,6 +3831,7 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
                ('mInd', mInd),
                ('expInd', expInd),
                ('stimVals', stimVals),
+               ('stimSize', stimSize),
                ('cellType', cellType),
                ('isFlexModels', flexModels),
                ('val_con_by_disp', val_con_by_disp)]);
