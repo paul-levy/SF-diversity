@@ -696,8 +696,11 @@ class sfNormMod(torch.nn.Module):
 
   def transform_sigmoid_param(self, whichPrm, _sigmoidDord=_sigmoidDord, _sigmoidSigma=_sigmoidSigma, _sigmoidScale=_sigmoidScale, overwriteValue=None):
     # used for outputs (e.g. prints, plots) where we don't want the sigmoided value...
-    if whichPrm == 'prefSf':
-      val_to_use = self.prefSf if overwriteValue is None else _cast_as_tensor(overwriteValue);
+    if whichPrm == 'prefSf' or whichPrm=='lgnCtrSf':
+      if overwriteValue is not None:
+        val_to_use = _cast_as_tensor(overwriteValue);
+      else:
+        val_to_use = self.prefSf if whichPrm=='prefSf' else 'lgnCtrSf';
       curr_val = self.minPrefSf + self.maxPrefSf*torch.sigmoid(val_to_use)
     elif whichPrm == 'dordSp':
       val_to_use = self.dordSp if overwriteValue is None else _cast_as_tensor(overwriteValue);
@@ -714,6 +717,9 @@ class sfNormMod(torch.nn.Module):
         curr_val = torch.mul(_cast_as_tensor(_sigmoidDord), torch.sigmoid(val_to_use))
       else:
         curr_val = val_to_use;
+    elif whichPrm == 'mWt':
+      val_to_use = self.mWeight if overwriteValue is None else _cast_as_tensor(overwriteValue);
+      curr_val = torch.sigmoid(val_to_use);
     return curr_val.detach().numpy();
       
   def clear_saved_calcs(self):

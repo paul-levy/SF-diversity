@@ -136,8 +136,8 @@ def prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fL
 
   # now get the measured responses
   divFactor = 1;
-  _, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=False); 
-  #_, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
+  #_, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=False); 
+  _, _, respOrg, respAll = hf.organize_resp(spikes_rate, trialInf, expInd, respsAsRate=True);
   '''
   if rvcAdjSigned==1 and phAmpByMean and (force_f1 or f1f0rat>1):
     try:
@@ -224,7 +224,7 @@ def prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fL
 
   return respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val, (modByCond, mod_to_sub);
 
-def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvcAdj, phBase=None, descrLoss=2, rvcMod=1, phAmpByMean=1, respVar=1, plot_sem_on_log=1, disp=0, forceLog=1, subplot_title=False, specify_ticks=True, old_refprm=False, fracSig=1, incl_legend=False, nrow=2, subset_cons=None, minToPlot = 1, despine_offset=2, incl_zfreq=True, use_tex=True, mod_fits=None, normType=1, lgnFrontEnd=0, excType=1, lossType=1, dgNormFunc=True, incl_data=True):
+def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvcAdj, phBase=None, descrLoss=2, rvcMod=1, phAmpByMean=1, respVar=1, plot_sem_on_log=1, disp=0, forceLog=1, subplot_title=False, specify_ticks=True, old_refprm=False, fracSig=1, incl_legend=False, nrow=2, subset_cons=None, minToPlot = 1, despine_offset=2, incl_zfreq=True, use_tex=True, mod_fits=None, normType=1, lgnFrontEnd=0, excType=1, lossType=1, dgNormFunc=True, incl_data=True, plot_charFreq=False):
   # --- IF mod_fits is not None, then we've passed in the model responses (as generated from mrpt.sfNormMod.forward()
 
   # Set up, load some files
@@ -345,6 +345,11 @@ def plot_sfs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rvc
         descrResp = hf.get_descrResp(prms_curr, sfs_plot, descrMod, baseline=baseline_resp, fracSig=fracSig, ref_params=ref_params, ref_rc_val=ref_rc_val);
         plt_resp = descrResp-to_sub;
         sfs_plot_curr = sfs_plot
+        
+        if plot_charFreq:
+          char_freq = hf.dog_charFreq(prms_curr, descrMod)
+          ax[i,j].plot(char_freq, 1, linestyle='None', marker='v', color=col, alpha=1);
+
       else:
         modResp = mod_resps[0][disp, v_sfs, v_cons[c]];
         mod_to_sub = mod_resps[1] if to_sub!=0 else 0;
@@ -449,10 +454,10 @@ def plot_rvcs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rv
 
   # call the necessary function
   if not isSach and not isBB: # this works for altExp, V1, V1_orig, LGN
-    respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val = prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, disp, old_refprm);
+    respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val, _ = prepare_sfs_plot(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, disp, old_refprm);
   else:
     if isSach:
-      respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val = prepare_sfs_plot_sach(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, old_refprm);
+      respMean, respSem, baseline_resp, n_v_cons, v_cons, all_cons, all_sfs, descrParams, ref_params, ref_rc_val, _ = prepare_sfs_plot_sach(data_loc, expDir, cellNum, rvcAdj, rvcAdjSigned, rvcMod, fLname, rvcBase, phBase, phAmpByMean, respVar, joint, old_refprm);
     else: # only here if isBB
       # TODO: not written as of 22.08.08
       pass;
@@ -527,6 +532,7 @@ def plot_rvcs(ax, i, j, cellNum, expDir, rvcBase, descrBase, descrMod, joint, rv
   sns.despine(ax=curr_ax, offset=despine_offset, trim=False); 
   curr_ax.set_xscale('log');
   curr_ax.set_yscale('log');
+  curr_ax.axis('scaled');
 
   for jj, axis in enumerate([curr_ax.xaxis, curr_ax.yaxis]):
     if jj==0: # i.e. x-axis
