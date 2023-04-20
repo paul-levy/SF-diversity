@@ -88,7 +88,7 @@ if area == 'V1':
   # dir. order is 'V1_orig/', 'altExp/', 'V1/', 'V1_BB/'
   if jointType == 10:
     # TEMPORARY UNTIL WE RUN V1/joint10 on the V1-only dataList [currently running on 22.11.27]
-    dogNames = ['descrFitsHPC_221126vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_221126vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_221126vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_221126vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy']
+    dogNames = ['descrFitsHPC_230416vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_230416vEs_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_230416vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy', 'descrFitsHPC_230415vEs_phAdj_sqrt_ddogs_JTflankShiftCopyCtrRaSlope.npy']
   # THE BELOW ARE NOT UPDATED AS OF 22.11.27
   if jointType == 0:
     dogNames = ['descrFitsHPC_220811vEs_sqrt_ddogs.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs.npy', 'descrFitsHPC_220811vEs_phAdj_sqrt_ddogs.npy'];
@@ -100,7 +100,7 @@ if area == 'V1':
   descrMod = 0; # which model for the diff. of gauss fits (0/1/2: flex/sach/tony)
   descrNames = ['descrFits_210304_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210914_sqrt_flex.npy', 'descrFits_210916_sqrt_flex.npy'];
 
-  rvcNames = ['rvcFitsHPC_221126_f0_NR.npy', 'rvcFitsHPC_221126_f0_NR.npy', 'rvcFitsHPC_221126_NR_pos.npy', 'rvcFitsHPC_221126_vecF1_NR.npy']
+  rvcNames = ['rvcFitsHPC_230416_f0_NR.npy', 'rvcFitsHPC_230416_f0_NR.npy', 'rvcFitsHPC_230416_NR_pos.npy', 'rvcFitsHPC_230416_vecF1_NR.npy']
   rvcMods = [1];
   # pack to easily tile
   expt = [expDirs, expNames, descrNames, dogNames, rvcNames, rvcMods];
@@ -121,8 +121,8 @@ if area == 'V1':
   # any parameters we need for analysis below?
   varExplThresh = -np.Inf; # i.e. only include if the fit explains >X (e.g. 75)% variance
   dog_varExplThresh = -np.Inf; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  #varExplThresh = 70; # i.e. only include if the fit explains >X (e.g. 75)% variance
-  #dog_varExplThresh = 70; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  #varExplThresh = 60; # i.e. only include if the fit explains >X (e.g. 75)% variance
+  #dog_varExplThresh = 60; # i.e. only include if the fit explains >X (e.g. 75)% variance
 
   sf_range = [0.1, 10]; # allowed values of 'mu' for fits - see descr_fit.py for details
 
@@ -135,7 +135,6 @@ if area == 'V1':
 
   from datetime import datetime
   suffix = datetime.today().strftime('%y%m%d')
-  #suffix = '220926'
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;
@@ -230,7 +229,6 @@ if area == 'LGN':
 
   from datetime import datetime
   suffix = datetime.today().strftime('%y%m%d')
-  #suffix = '220926';
 
   varExplThresh_str = varExplThresh if varExplThresh > 0 else 0;
   dog_varExplThresh_str = dog_varExplThresh if dog_varExplThresh > 0 else 0;

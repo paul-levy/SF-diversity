@@ -3720,7 +3720,6 @@ def modelSpecs_to_key(normType, lossType, lgnFrontEnd, lgnConType=1, excType=1, 
   # Order is: (normType, lossType, lgnFrontEnd, lgnConType, excType, fixRespExp, scheduler)
   return (normType, lossType, lgnFrontEnd, lgnConType, excType, fixRespExp, scheduler);
 
-#def jl_perCell(cell_ind, dataList, descrFits, dogFits, rvcFits, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0, reducedSave=False, briefVersion=False, fitListWght=None, fitListFlat=None, cv_fitListWght=None, cv_fitListFlat=None):
 def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_nm, dog_nm, rv_nm, superAnalysis=None, conDig=1, sf_range=[0.1, 10], rawInd=0, muLoc=2, varExplThresh=75, dog_varExplThresh=60, descrMod=0, dogMod=1, isSach=0, isBB=0, rvcMod=1, bootThresh=0.25, oldVersion=False, jointType=0, reducedSave=False, briefVersion=False, modSpecs=None, flexModels=True, flBase_name=None, clip_modVarExpl=True):
 
    ''' - bootThresh (fraction of time for which a boot metric must be defined in order to be included in analysis)
@@ -3771,6 +3770,8 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
        # F1 means, expanded to have disp dimension at front; we also transpose so that it's [disp X sf X con], as it is in other expts
        sfTuning = np.expand_dims(np.transpose(tabulated[0][1]['mean']), axis=0);
        stimSize = np.max(np.unique(dataList[cell_ind]["data"]["cntr_size"])) # take the max since 2 cells have different sizes, but we analyze the larger one 
+       if isinstance(stimSize, np.ndarray):
+          stimSize = stimSize[0] # guaranteed to just be 1 value; get it
      if isBB:
        ### As of 21.05.10, we will only consider the maskOnly responses, at the corresponding response measure (DC or F1, by f1:f0 ratio)
        expName = dataList['unitName'][cell_ind]
@@ -3796,7 +3797,9 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
          maskAll = maskResps[f1f0_ind + 2]; # this gets all, organized as [con,sf,trial], just for DC or F1, appropriately
        # means by condition, expanded to have disp dimension at front; we also transpose so that it's [disp X sf X con], as it is in other expts
        sfTuning = np.expand_dims(np.transpose(maskMeans), axis=0);
-       stimSize = tr["size"]
+       stimSize = np.unique(tr["size"])[0] # will be only one size, anyway; just unpack so not an array
+       if isinstance(stimSize, np.ndarray):
+          stimSize = stimSize[0] # guaranteed to just be 1 value; get it
    else:
      expName = dataList['unitName'][cell_ind];
      expInd = get_exp_ind(data_loc, expName)[0];
@@ -3806,6 +3809,8 @@ def jl_perCell(cell_ind, dataList, expDir, data_loc, dL_nm, fLW_nm, fLF_nm, dF_n
      # get SF responses (for model-free metrics)
      tr = cell['sfm']['exp']['trial']
      stimSize = cell['sfm']['exp']['size']
+     if isinstance(stimSize, np.ndarray):
+        stimSize = stimSize[0] # guaranteed to just be 1 value; get it
      spks = get_spikes(tr, get_f0=1, expInd=expInd, rvcFits=None); # just to be explciit - no RVC fits right now
      sfTuning = organize_resp(spks, tr, expInd=expInd)[2]; # responses: nDisp x nSf x nCon
      try:
