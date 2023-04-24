@@ -73,9 +73,10 @@ do
     #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 00 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 01 & # no diff, not interpolated
     #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 27 11 00 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 11 & # no diff, not interpolated
     #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 21 11 04 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 10 & # no diff, not interpolated
+    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 11 11 04 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 11 & # no diff, not interpolated
     python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 12 11 44 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 11 & # no diff, not interpolated
     python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 17 11 44 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 11 & # no diff, not interpolated
-    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 77 11 44 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+    python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 77 11 04 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 11 & # no diff, not interpolated
     #python3.6 $PYCALL $run $EXC_TYPE $LOSS V1_BB/ 22 11 00 0 $INTP 0.05 $VEC_F1 -1 -1 1 $HPC $KFOLD 01 & # no diff, not interpolated
 
     # ---------- less used (incl. some that already appear above)

@@ -53,7 +53,7 @@ for (( run=$START; run<=$END; run++ ))
 do
   ### 23.01.29 plots
   # no LGN --> flat, wght
-  python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 00 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
   # no LGN --> wght (log Gauss), wght
   #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 22 11 00 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
   # no LGN --> wght, wghtMatch
@@ -61,7 +61,11 @@ do
   # wght, V1, flat LGNsi
   #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 21 11 04 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 10 & # no diff, not interpolated
   # LGNsi --> fflat,wght
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 11 11 04 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
   #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 12 11 44 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 17 11 44 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 01 & # no diff, not interpolated
+  #python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 77 11 04 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 11 & # no diff, not interpolated
+  python3.6 $PYCALL $run $EXC_TYPE $LOSS $EXP_DIR 21 11 04 $RVC_ADJ 1 $DIFF_PLOT $INTP 0.05 -1 1 1 $HPC $KFOLD 11 & # no diff, not interpolated
 
   ############## mostly unused below?
 
