@@ -26,7 +26,7 @@ else:
   hpcSuff = '';
 
 expName = hf.get_datalist(sys.argv[3], force_full=1, new_v1=True); # sys.argv[3] is experiment dir
-dogName = 'descrFits%s_230111vEs' % hpcSuff;
+dogName = 'descrFits%s_230416vEs' % hpcSuff;
 #dogName = 'descrFits%s_221126vEs' % hpcSuff;
 #dogName = 'descrFits%s_220926vEs' % hpcSuff;
 if sys.argv[3] == 'LGN/':
@@ -34,7 +34,7 @@ if sys.argv[3] == 'LGN/':
   rvcName_f1 = 'rvcFits%s_220928' % hpcSuff;
   rvcName_f0 = 'rvcFits_220928_f0'; # _pos.npy will be added later, as will suffix assoc. w/particular RVC model
 else:
-  dt_suff = '230111' # intended largely for V1, now that we've trimmed non-V1 cells
+  dt_suff = '230416' # intended largely for V1, now that we've trimmed non-V1 cells
   #dt_suff = '221126' # intended largely for V1, now that we've trimmed non-V1 cells
   #dt_suff = '220928' # as used for ch. 1
   phAdvName = 'phaseAdvanceFits%s_%s' % (hpcSuff, dt_suff)
@@ -1168,7 +1168,7 @@ if __name__ == '__main__':
     
     resp_thresh = (-1e5,0); #(5,2); # at least 2 responses must be g.t.e. 5 spks/s (22.07.05 addition/try)
     #veThresh = -np.Inf; # allow all...
-    veThresh = 60; 
+    veThresh = 60; # threshold
     
     # get the full data directory
     dataPath = basePath + data_dir + data_suff;

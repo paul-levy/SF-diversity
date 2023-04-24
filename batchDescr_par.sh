@@ -64,7 +64,7 @@ JOINT=${5:-0}
 MOD_RECOV=${6:-0}
 LOSS=${7:-2}
 CROSS_VAL=${8:--1}
-PH_ADJ=${9:-1} # used only for LGN
+PH_ADJ=${9:-1}
 DOGMOD=${10:-3} # used only for V1
 
 if [ "$EXP_DIR" = "V1/" ]; then
