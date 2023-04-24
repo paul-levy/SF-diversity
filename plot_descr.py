@@ -35,6 +35,7 @@ except:
 lblSize = 40;
 y_lblpad = 6;
 x_lblpad = 8;
+DDOGS_MODEL = 3
 
 subplot_title = False; # have subplot title? Not really necessary for pub. figures
 subplot_title_rvc = True; # as above, but only for CRF/RVC plot
@@ -238,7 +239,7 @@ fDisp = []; dispAx = [];
 
 sfs_plot = np.logspace(np.log10(all_sfs[0]), np.log10(all_sfs[-1]), 100);    
 
-if ddogs_pred and descrMod==3: # i.e. is d-DoG-S model
+if ddogs_pred and descrMod==DDOGS_MODEL: # i.e. is d-DoG-S model
     all_preds = hf.parker_hawken_all_stim(trialInf, expInd, descrParams, comm_s_calc=comm_S_calc&(joint>0));
     _, _, pred_org, pred_all = hf.organize_resp(all_preds, trialInf, expInd, respsAsRate=True)
 else:
@@ -296,21 +297,21 @@ for d in range(nDisps):
 
         ## if flexGauss plot peak & frac of peak
         frac_freq = hf.sf_highCut(prms_curr, descrMod, frac=peakFrac, sfRange=(0.1, 15), baseline_sub=baseline_resp);
-        if not hf.is_mod_DoG(descrMod): # i.e. non DoG models
+        if not hf.is_mod_DoG(descrMod) and descrMod!=DDOGS_MODEL: # i.e. non DoG models and not d-DoG-S
           #ctr = hf.sf_com(resps, sfVals);
           pSf = hf.descr_prefSf(prms_curr, dog_model=descrMod, all_sfs=all_sfs);
           for ii in range(2):
             dispAx[d][c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
             #dispAx[d][c_plt_ind, ii].plot(pSf, 1, linestyle='None', marker='v', label='pSF', color=currClr, alpha=1); # plot at y=1
         ## otherwise, let's plot the char freq. and frac of peak
-        elif hf.is_mod_DoG(descrMod): # (single) DoG models
+        elif hf.is_mod_DoG(descrMod) or descrMod==DDOGS_MODEL: # (single) DoG models
           char_freq = hf.dog_charFreq(prms_curr, descrMod);
           # if it's a DoG, let's also put the parameters in text (left side only)
           try:
-            dispAx[d][c_plt_ind, 0].text(0.05, 0.075, '%d,%.2f' % (*prms_curr[0:2], ), transform=dispAx[d][c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
-            dispAx[d][c_plt_ind, 0].text(0.05, 0.025, '%.2f,%.2f' % (*prms_curr[2:], ), transform=dispAx[d][c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
+            if descrMod!=DDOGS_MODEL:
+              dispAx[d][c_plt_ind, 0].text(0.05, 0.075, '%d,%.2f' % (*prms_curr[0:2], ), transform=dispAx[d][c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
+              dispAx[d][c_plt_ind, 0].text(0.05, 0.025, '%.2f,%.2f' % (*prms_curr[2:], ), transform=dispAx[d][c_plt_ind,0].transAxes, horizontalalignment='left', fontsize='small', verticalalignment='bottom');
             for ii in range(2):
-              #dispAx[d][c_plt_ind, ii].plot(frac_freq, 2, linestyle='None', marker='v', label='(%.2f) highCut(%.1f)' % (peakFrac, frac_freq), color=currClr, alpha=1); # plot at y=1
               dispAx[d][c_plt_ind, ii].plot(char_freq, 1, linestyle='None', marker='v', label='$f_c$', color=currClr, alpha=1); # plot at y=1
           except:
             pass; # why might this not work? If we only fit disp=0!

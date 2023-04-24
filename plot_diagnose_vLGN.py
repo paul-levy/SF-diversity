@@ -149,8 +149,7 @@ _sigmoidScale = 10
 _sigmoidDord = 5;
 
 fitBase = 'fitList%s_pyt_nr230118a_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr230118_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
-#fitBase = 'fitList%s_pyt_nr230206doSH_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
+#fitBase = 'fitList%s_pyt_nr230210qn_noRE_noSched%s' % (loc_str, '_sg' if singleGratsOnly else '')
 
 rvcDir = 1;
 vecF1 = 0;
@@ -915,10 +914,15 @@ for (pltNum, modPrm),modObj,lgnType,lgnConType,mWt in zip(enumerate(modFits), mo
     selSf_m = np.divide(resps_m, max_m);
     selSf_p = np.divide(resps_p, max_p);
     # - then RVC response: # rvcMod 0 (Movshon)
-    rvc_mod = hf.get_rvc_model();
     stimCo = np.linspace(0,1,100);
+    '''
+    rvc_mod = hf.get_rvc_model();
     selCon_m = rvc_mod(*params_m, stimCo)
     selCon_p = rvc_mod(*params_p, stimCo)
+    '''
+    selCon_m = mrpt.get_rvc_model(modObj.rvc_m, mrpt._cast_as_tensor(stimCo), modObj.rvcMod).detach().numpy();
+    selCon_p = mrpt.get_rvc_model(modObj.rvc_p, mrpt._cast_as_tensor(stimCo), modObj.rvcMod).detach().numpy();
+
     if lgnConType == 1: # DEFAULT
       # -- then here's our final responses per component for the current stimulus
       # ---- NOTE: The real mWeight will be sigmoid(mWeight), such that it's bounded between 0 and 1

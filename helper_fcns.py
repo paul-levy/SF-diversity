@@ -347,6 +347,8 @@ def sf_var(resps, sfs, sf_cm, logSF=True):
     return np.nan
 
 def get_datalist(expDir, force_full=0, new_v1=False):
+  if not expDir.endswith("/"):
+    expDir = expDir + "/" 
   if expDir == 'V1_orig/':
     return 'dataList_200507.npy' if force_full==0 else 'dataList.npy'; # limited set of data
     #return 'dataList.npy';
@@ -366,6 +368,8 @@ def get_datalist(expDir, force_full=0, new_v1=False):
   elif expDir == 'V1_BB/':
     return 'dataList_210721.npy';
     #return 'dataList_210222.npy';
+  elif "time" in expDir:
+    return 'dataList_230423.npy' 
 
 def exp_name_to_ind(expName):
     ''' static mapping from name of experiment to expInd
@@ -957,6 +961,39 @@ def make_psth_slide(spikeTimes, binWidth=25e-3, stimDur=1, binSlide=1e-3, debug=
         return counts, time_centers, idx1, idx2, div_factor
     else:
         return counts, time_centers
+
+def create_time_subset(spikeTimes, stimDur, windowStart, windowDur):
+   ''' Create a new set of spikes by copying the spikes in the specified window to fill the full stimulus duration
+       - Trial-level function! i.e. spikeTimes is just array of len(#spikes)
+       -- e.g. with stimDur=1, (windowStart, windowDur) = (0, 0.2), a spike at time 0.1s will also occur at 0.3, 0.5, 0.7, and 0.9s
+       ---- assert: windowDur must be integer divisible into stimDur!
+       ---- assumes that spikeTimes and windowStart/Dur are in the same units (e.g. s or ms)
+   '''
+   np = numpy
+   assert stimDur/windowDur==int(stimDur/windowDur), f"windowDur {windowDur} must divide evenly into stimDur {stimDur}"
+   spikeTimes = np.array([spikeTimes]) if not isinstance(spikeTimes, np.ndarray) else spikeTimes # make sure it's an array rather than just one value
+   ok_times = np.logical_and(spikeTimes>=(windowStart), 
+                              spikeTimes<=((windowDur+windowStart)))
+   times_reset = spikeTimes[ok_times] - windowStart # reset the spike times back to 0
+   frac_copy = int(stimDur/windowDur)
+   new_times = np.array([])
+   for frac_i in range(frac_copy):
+      new_times = np.concatenate((new_times, frac_i*windowDur + times_reset))
+   return new_times
+
+def replace_spike_times(spikeTimes, stimDur, windowStart, windowDur):
+   ''' Cell-level function to replace (by returning) spikeTimes and spikeCounts based on copying portion of response
+   '''
+   np = numpy
+   new_times = np.zeros_like(spikeTimes, dtype='O')
+   for tr_i, spikes in enumerate(spikeTimes):
+      new_times[tr_i] = create_time_subset(spikes, stimDur, windowStart, windowDur)
+
+   # Now, also create replacement for spikeCounts!
+   spikeCounts = np.array([len(tms) for tms in new_times])
+   
+   return new_times, spikeCounts
+
 
 def fit_onset_transient(psth, bins, onsetWidth=100, stimDur=1, whichMod=0, toNorm=1):
    ''' psth, bins should be from the make_psth_slide call
